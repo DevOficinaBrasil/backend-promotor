@@ -64,3 +64,11 @@ export const UpdateCampanhaResponseSchema = z.object({
   message: z.string(),
   data: CampanhaSchema,
 });
+
+/**
+ * Delete campanha response schema
+ */
+export const DeleteCampanhaResponseSchema = z.object({
+  message: z.string(),
+  data: CampanhaSchema,
+});

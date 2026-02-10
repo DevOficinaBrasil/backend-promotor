@@ -1,35 +1,35 @@
 import { Router } from "express";
-import CampanhaController from "../controllers/campanhaController";
+import PromotorController from "../controllers/promotorController";
 import { createDocumentedRoute } from "../utils/routeDocumentation";
 import {
-  CreateCampanhaSchema,
-  UpdateCampanhaSchema,
-  CampanhaIdParamsSchema,
-  CreateCampanhaResponseSchema,
-  UpdateCampanhaResponseSchema,
-  DeleteCampanhaResponseSchema,
-} from "../schemas/campanha";
+  CreatePromotorSchema,
+  UpdatePromotorSchema,
+  PromotorIdParamsSchema,
+  CreatePromotorResponseSchema,
+  UpdatePromotorResponseSchema,
+  DeletePromotorResponseSchema,
+} from "../schemas/promotor";
 import { ErrorResponseSchema } from "../schemas/common";
 
 const router = Router();
 
-// Create a new campaign
+// Create a new promoter
 createDocumentedRoute(router, {
   method: 'post',
   path: '/create',
-  handler: CampanhaController.createCampanha,
-  basePath: '/campanha',
+  handler: PromotorController.createPromotor,
+  basePath: '/promotor',
   schemas: {
-    body: CreateCampanhaSchema,
+    body: CreatePromotorSchema,
   },
   documentation: {
-    tags: ['Campanha'],
-    summary: 'Create a new campaign',
-    description: 'Creates a new campaign with the provided data',
+    tags: ['Promotor'],
+    summary: 'Create a new promoter',
+    description: 'Creates a new promoter with the provided data',
     responses: {
       201: {
-        description: 'Campaign created successfully',
-        schema: CreateCampanhaResponseSchema,
+        description: 'Promoter created successfully',
+        schema: CreatePromotorResponseSchema,
       },
       400: {
         description: 'Bad request - validation error',
@@ -43,31 +43,31 @@ createDocumentedRoute(router, {
   },
 });
 
-// Update an existing campaign
+// Update an existing promoter
 createDocumentedRoute(router, {
   method: 'put',
   path: '/edit/:id',
-  handler: CampanhaController.updateCampanha,
-  basePath: '/campanha',
+  handler: PromotorController.updatePromotor,
+  basePath: '/promotor',
   schemas: {
-    params: CampanhaIdParamsSchema,
-    body: UpdateCampanhaSchema,
+    params: PromotorIdParamsSchema,
+    body: UpdatePromotorSchema,
   },
   documentation: {
-    tags: ['Campanha'],
-    summary: 'Update an existing campaign',
-    description: 'Updates a campaign with the provided data',
+    tags: ['Promotor'],
+    summary: 'Update an existing promoter',
+    description: 'Updates a promoter with the provided data',
     responses: {
       200: {
-        description: 'Campaign updated successfully',
-        schema: UpdateCampanhaResponseSchema,
+        description: 'Promoter updated successfully',
+        schema: UpdatePromotorResponseSchema,
       },
       400: {
         description: 'Bad request - validation error',
         schema: ErrorResponseSchema,
       },
       404: {
-        description: 'Campaign not found',
+        description: 'Promoter not found',
         schema: ErrorResponseSchema,
       },
       500: {
@@ -78,30 +78,30 @@ createDocumentedRoute(router, {
   },
 });
 
-// Soft delete a campaign
+// Soft delete a promoter
 createDocumentedRoute(router, {
   method: 'delete',
   path: '/delete/:id',
-  handler: CampanhaController.deleteCampanha,
-  basePath: '/campanha',
+  handler: PromotorController.deletePromotor,
+  basePath: '/promotor',
   schemas: {
-    params: CampanhaIdParamsSchema,
+    params: PromotorIdParamsSchema,
   },
   documentation: {
-    tags: ['Campanha'],
-    summary: 'Delete a campaign (soft delete)',
-    description: 'Soft deletes a campaign by ID',
+    tags: ['Promotor'],
+    summary: 'Delete a promoter (soft delete)',
+    description: 'Soft deletes a promoter by ID',
     responses: {
       200: {
-        description: 'Campaign deleted successfully',
-        schema: DeleteCampanhaResponseSchema,
+        description: 'Promoter deleted successfully',
+        schema: DeletePromotorResponseSchema,
       },
       400: {
         description: 'Bad request - validation error',
         schema: ErrorResponseSchema,
       },
       404: {
-        description: 'Campaign not found',
+        description: 'Promoter not found',
         schema: ErrorResponseSchema,
       },
       500: {
