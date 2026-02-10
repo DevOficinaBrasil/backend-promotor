@@ -142,7 +142,7 @@ Updates a route's options (STATUS, SUCCESS, CHECKIN_TIME, DONE_AT, OBS). All fie
 The STATUS field accepts the following values:
 - `BACKLOG`
 - `A CAMINHO`
-- `EM ANDANMENTO` (note: this is the database value with typo)
+- `EM ANDANMENTO` (note: this is the actual database value - the typo is preserved for compatibility)
 - `FINALIZADO`
 - `CANCELADO`
 

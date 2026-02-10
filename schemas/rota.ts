@@ -2,11 +2,12 @@ import { z } from 'zod';
 
 /**
  * Status Rota enum schema
+ * Note: 'EM ANDANMENTO' preserves the database typo for compatibility
  */
 export const StatusRotaSchema = z.enum([
   'BACKLOG',
   'A CAMINHO',
-  'EM ANDANMENTO', // Note: keeping the typo as it is in the database
+  'EM ANDANMENTO', // Database has typo - kept for compatibility
   'FINALIZADO',
   'CANCELADO',
 ]);

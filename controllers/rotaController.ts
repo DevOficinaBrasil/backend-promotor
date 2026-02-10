@@ -87,7 +87,7 @@ export default class RotaController {
       }
 
       // Create update data object (only include provided fields)
-      const updateData: any = {};
+      const updateData: Partial<RotaPromotor> = {};
       if (STATUS !== undefined) updateData.STATUS = STATUS as StatusRota;
       if (SUCCESS !== undefined) updateData.SUCCESS = SUCCESS;
       if (CHECKIN_TIME !== undefined)
