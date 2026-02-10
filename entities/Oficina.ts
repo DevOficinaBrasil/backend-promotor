@@ -72,10 +72,10 @@ export default class Oficina {
   DELETED_AT?: Date;
 
   @OneToMany(() => RotaPromotor, (rotaPromotor) => rotaPromotor.oficina)
-  rotasPromotor: RotaPromotor[] = [];
+  rotasPromotor: RotaPromotor[];
 
   @OneToMany(() => Usuario, (usuario) => usuario.oficina)
-  usuarios: Usuario[] = [];
+  usuarios: Usuario[];
 
   constructor(init?: Partial<Oficina>) {
     Object.assign(this, init);
