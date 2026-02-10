@@ -11,6 +11,8 @@ import {
   DeletePromotorResponseSchema,
   LoginPromotorSchema,
   LoginPromotorResponseSchema,
+  GetAllPromotoresResponseSchema,
+  GetPromotorByIdResponseSchema,
 } from "../schemas/promotor";
 import { ErrorResponseSchema } from "../schemas/common";
 
@@ -142,6 +144,75 @@ createDocumentedRoute(router, {
       200: {
         description: 'Promoter deleted successfully',
         schema: DeletePromotorResponseSchema,
+      },
+      400: {
+        description: 'Bad request - validation error',
+        schema: ErrorResponseSchema,
+      },
+      401: {
+        description: 'Unauthorized - token missing or invalid',
+        schema: ErrorResponseSchema,
+      },
+      404: {
+        description: 'Promoter not found',
+        schema: ErrorResponseSchema,
+      },
+      500: {
+        description: 'Internal server error',
+        schema: ErrorResponseSchema,
+      },
+    },
+  },
+});
+
+// Get all promoters
+createDocumentedRoute(router, {
+  method: 'get',
+  path: '/',
+  handler: PromotorController.getAllPromotores,
+  basePath: '/promotor',
+  middlewares: [authMiddleware],
+  documentation: {
+    tags: ['Promotor'],
+    summary: 'Get all promoters',
+    description: 'Returns a list of all promoters (non-deleted, without passwords)',
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: {
+        description: 'Promoters retrieved successfully',
+        schema: GetAllPromotoresResponseSchema,
+      },
+      401: {
+        description: 'Unauthorized - token missing or invalid',
+        schema: ErrorResponseSchema,
+      },
+      500: {
+        description: 'Internal server error',
+        schema: ErrorResponseSchema,
+      },
+    },
+  },
+});
+
+// Get promoter by ID
+createDocumentedRoute(router, {
+  method: 'get',
+  path: '/:id',
+  handler: PromotorController.getPromotoresById,
+  basePath: '/promotor',
+  middlewares: [authMiddleware],
+  schemas: {
+    params: PromotorIdParamsSchema,
+  },
+  documentation: {
+    tags: ['Promotor'],
+    summary: 'Get promoter by ID',
+    description: 'Returns a promoter by ID (without password)',
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: {
+        description: 'Promoter found successfully',
+        schema: GetPromotorByIdResponseSchema,
       },
       400: {
         description: 'Bad request - validation error',

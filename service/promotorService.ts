@@ -143,4 +143,20 @@ export default class PromotorService {
     
     return null;
   }
+
+  /**
+   * Gets all promoters (non-deleted)
+   * @returns Array of all promoters
+   */
+  static async getAllPromotores(): Promise<Promotor[]> {
+    const promotorRepository = AppDataSourceSync.getRepository(Promotor);
+    
+    const promotores = await promotorRepository.find({
+      order: {
+        CREATED_AT: 'DESC',
+      },
+    });
+
+    return promotores;
+  }
 }

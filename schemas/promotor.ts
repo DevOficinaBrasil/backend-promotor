@@ -86,3 +86,24 @@ export const LoginPromotorResponseSchema = z.object({
   token: z.string(),
   promotor: PromotorSchema.omit({ SENHA: true }),
 });
+
+/**
+ * Promotor without password schema
+ */
+export const PromotorWithoutPasswordSchema = PromotorSchema.omit({ SENHA: true });
+
+/**
+ * Get all promotores response schema
+ */
+export const GetAllPromotoresResponseSchema = z.object({
+  message: z.string(),
+  data: z.array(PromotorWithoutPasswordSchema),
+});
+
+/**
+ * Get promotor by ID response schema
+ */
+export const GetPromotorByIdResponseSchema = z.object({
+  message: z.string(),
+  data: PromotorWithoutPasswordSchema,
+});

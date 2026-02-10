@@ -145,4 +145,36 @@ export default class CampanhaService {
       oficinas,
     };
   }
+
+  /**
+   * Gets all campaigns (non-deleted)
+   * @returns Array of all campaigns
+   */
+  static async getAllCampanhas(): Promise<Campanha[]> {
+    const campanhaRepository = AppDataSourceSync.getRepository(Campanha);
+    
+    const campanhas = await campanhaRepository.find({
+      order: {
+        CREATED_AT: 'DESC',
+      },
+    });
+
+    return campanhas;
+  }
+
+  /**
+   * Gets a campaign by ID with its relationships
+   * @param id - The campaign ID
+   * @returns The campaign with related promoters and questions, or null if not found
+   */
+  static async getCampanhaByIdWithRelations(id: number): Promise<Campanha | null> {
+    const campanhaRepository = AppDataSourceSync.getRepository(Campanha);
+    
+    const campanha = await campanhaRepository.findOne({
+      where: { ID_CAMPANHA: id },
+      relations: ['campanhaPromotores', 'campanhaPromotores.promotor', 'campanhaPerguntas'],
+    });
+
+    return campanha;
+  }
 }
