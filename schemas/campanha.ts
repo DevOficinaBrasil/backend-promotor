@@ -72,3 +72,43 @@ export const DeleteCampanhaResponseSchema = z.object({
   message: z.string(),
   data: CampanhaSchema,
 });
+
+/**
+ * Get active campanha query schema
+ */
+export const GetCampanhaAtivaQuerySchema = z.object({
+  ID_PROMOTOR: z.coerce.number().int().positive(),
+  datetime: z.string().datetime().optional(),
+});
+
+/**
+ * Oficina schema for active campanha
+ */
+export const OficinaSchema = z.object({
+  ID_OFICINA: z.number(),
+});
+
+/**
+ * Campanha Ativa schema with oficinas
+ */
+export const CampanhaAtivaSchema = z.object({
+  ID_CAMPANHA: z.number(),
+  NOME: z.string(),
+  OBEJTIVO: z.string().optional(),
+  PONTO_INICIAL: z.string().optional(),
+  ID_CLIENT: z.number().optional(),
+  START_TIME: z.date().optional(),
+  END_TIME: z.date().optional(),
+  CREATED_BY: z.number().optional(),
+  CREATED_AT: z.date().optional(),
+  UPDATED_AT: z.date().optional(),
+  oficinas: z.array(OficinaSchema),
+});
+
+/**
+ * Get campanha ativa response schema
+ */
+export const GetCampanhaAtivaResponseSchema = z.object({
+  message: z.string(),
+  data: CampanhaAtivaSchema.nullable(),
+});

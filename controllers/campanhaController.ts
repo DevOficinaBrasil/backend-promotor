@@ -145,4 +145,66 @@ export default class CampanhaController {
       });
     }
   };
+
+  /**
+   * Gets the active campaign for a promoter
+   * GET /campanha/ativa?ID_PROMOTOR=X&datetime=Y
+   */
+  static getCampanhaAtiva = async (req: Request, res: Response) => {
+    try {
+      const { ID_PROMOTOR, datetime } = req.query;
+
+      // Validate required field
+      if (!ID_PROMOTOR) {
+        return res.status(400).json({
+          message: "O parâmetro ID_PROMOTOR é obrigatório."
+        });
+      }
+
+      const promotorId = parseInt(ID_PROMOTOR as string, 10);
+      
+      if (isNaN(promotorId)) {
+        return res.status(400).json({
+          message: "ID_PROMOTOR inválido."
+        });
+      }
+
+      // Parse datetime if provided, otherwise use current time
+      let currentDatetime: Date;
+      if (datetime) {
+        currentDatetime = new Date(datetime as string);
+        if (isNaN(currentDatetime.getTime())) {
+          return res.status(400).json({
+            message: "Formato de datetime inválido."
+          });
+        }
+      } else {
+        currentDatetime = new Date();
+      }
+
+      // Get the active campaign
+      const campanhaAtiva = await CampanhaService.getActiveCampanhaByPromotor(
+        promotorId,
+        currentDatetime
+      );
+
+      if (!campanhaAtiva) {
+        return res.status(200).json({
+          message: "Nenhuma campanha ativa encontrada para este promotor.",
+          data: null
+        });
+      }
+
+      return res.status(200).json({
+        message: "Campanha ativa encontrada com sucesso.",
+        data: campanhaAtiva
+      });
+    } catch (error) {
+      console.error("Erro ao buscar campanha ativa:", error);
+      return res.status(500).json({
+        message: "Erro interno ao buscar campanha ativa.",
+        error: error instanceof Error ? error.message : "Erro desconhecido"
+      });
+    }
+  };
 }
