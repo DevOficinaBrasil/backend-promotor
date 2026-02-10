@@ -123,11 +123,22 @@ export default class PromotorService {
     try {
       const decryptedPassword = decrypt(promotor.SENHA);
       
-      if (decryptedPassword === senha) {
+      // Use crypto.timingSafeEqual for constant-time comparison to prevent timing attacks
+      const crypto = require('crypto');
+      const expectedBuffer = Buffer.from(decryptedPassword, 'utf8');
+      const providedBuffer = Buffer.from(senha, 'utf8');
+      
+      // Ensure buffers are the same length for timingSafeEqual
+      if (expectedBuffer.length !== providedBuffer.length) {
+        return null;
+      }
+      
+      if (crypto.timingSafeEqual(expectedBuffer, providedBuffer)) {
         return promotor;
       }
     } catch (error) {
-      console.error('Error decrypting password:', error);
+      // Log error with context but don't expose details
+      console.error('Error during login credential validation:', error instanceof Error ? error.message : 'Unknown error');
     }
     
     return null;

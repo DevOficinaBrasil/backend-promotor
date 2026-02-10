@@ -140,8 +140,9 @@ export default class PromotorController {
   static loginPromotor = async (req: Request, res: Response) => {
     try {
       if (!SECRET_KEY) {
+        console.error('JWT_SECRET is not configured');
         return res.status(500).json({
-          message: "JWT secret não configurado."
+          message: "Erro interno no servidor."
         });
       }
 
@@ -182,8 +183,7 @@ export default class PromotorController {
     } catch (error) {
       console.error("Erro ao fazer login:", error);
       return res.status(500).json({
-        message: "Erro interno ao fazer login.",
-        error: error instanceof Error ? error.message : "Erro desconhecido"
+        message: "Erro interno ao fazer login."
       });
     }
   };
