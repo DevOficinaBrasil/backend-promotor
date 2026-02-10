@@ -15,7 +15,7 @@ const router = Router();
 // Create a new campaign
 createDocumentedRoute(router, {
   method: 'post',
-  path: '/',
+  path: '/create',
   handler: CampanhaController.createCampanha,
   schemas: {
     body: CreateCampanhaSchema,
@@ -44,7 +44,7 @@ createDocumentedRoute(router, {
 // Update an existing campaign
 createDocumentedRoute(router, {
   method: 'put',
-  path: '/:id',
+  path: '/edit/:id',
   handler: CampanhaController.updateCampanha,
   schemas: {
     params: CampanhaIdParamsSchema,
