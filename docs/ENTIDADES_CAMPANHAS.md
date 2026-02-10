@@ -293,7 +293,10 @@ const rotaComOficina = await rotaRepository.findOne({
   relations: ['oficina', 'campanhaPromotor'],
 });
 
-console.log(rotaComOficina.oficina.NOME); // Nome da oficina
+// Acessar nome da oficina com verificação de null
+if (rotaComOficina?.oficina) {
+  console.log(rotaComOficina.oficina.NOME); // Nome da oficina
+}
 ```
 
 ## Soft Delete
