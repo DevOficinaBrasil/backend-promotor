@@ -1,6 +1,9 @@
 import { AppDataSourceSync } from "../data-source";
 import Oficina from "../entities/Oficina";
 
+// Earth's radius in kilometers (used for Haversine formula)
+const EARTH_RADIUS_KM = 6371;
+
 export default class OficinaService {
   /**
    * Finds the nearest oficinas based on latitude and longitude
@@ -24,7 +27,7 @@ export default class OficinaService {
       SELECT 
         *,
         (
-          6371 * acos(
+          ${EARTH_RADIUS_KM} * acos(
             cos(radians($1)) * 
             cos(radians(CAST(LATITUDE AS DOUBLE PRECISION))) * 
             cos(radians(CAST(LONGITUDE AS DOUBLE PRECISION)) - radians($2)) + 
@@ -51,7 +54,10 @@ export default class OficinaService {
 
       return results;
     } catch (error) {
-      console.error("Error finding nearest oficinas:", error);
+      console.error(
+        `Error finding nearest oficinas (lat: ${latitude}, lon: ${longitude}, limit: ${limit}):`,
+        error
+      );
       throw error;
     }
   }

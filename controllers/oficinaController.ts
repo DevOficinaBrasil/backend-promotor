@@ -8,13 +8,13 @@ export default class OficinaController {
    */
   static getNearbyOficinas = async (req: Request, res: Response) => {
     try {
-      // Schema validation is handled by middleware
-      const { latitude, longitude, limit = 40 } = req.query;
+      // Schema validation is handled by middleware and stored in validatedQuery
+      const { latitude, longitude, limit = 40 } = (req as any).validatedQuery;
 
       const oficinas = await OficinaService.findNearestOficinas(
-        Number(latitude),
-        Number(longitude),
-        Number(limit)
+        latitude,
+        longitude,
+        limit
       );
 
       return res.status(200).json({
