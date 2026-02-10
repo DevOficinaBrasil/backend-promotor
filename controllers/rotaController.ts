@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import RotaService from "../service/rotaService";
-import { StatusRota } from "../entities/RotaPromotor";
+import RotaPromotor, { StatusRota } from "../entities/RotaPromotor";
 
 export default class RotaController {
   /**
