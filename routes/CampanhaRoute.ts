@@ -215,7 +215,7 @@ createDocumentedRoute(router, {
   documentation: {
     tags: ['Campanha'],
     summary: 'Get campaign by ID',
-    description: 'Returns a campaign by ID with its relationships (promoters and questions)',
+    description: 'Returns a campaign by ID with its relationships (promoters with their routes and oficinas, and questions)',
     security: [{ bearerAuth: [] }],
     responses: {
       200: {
@@ -255,7 +255,7 @@ createDocumentedRoute(router, {
   documentation: {
     tags: ['Campanha'],
     summary: 'Get campaigns by client ID',
-    description: 'Returns all campaigns for a specific client with relationships (promoters and questions)',
+    description: 'Returns all campaigns for a specific client with relationships (promoters with their routes and oficinas, and questions)',
     security: [{ bearerAuth: [] }],
     responses: {
       200: {
