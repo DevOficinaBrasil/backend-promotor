@@ -17,7 +17,7 @@ import Oficina from "./Oficina";
 export enum StatusRota {
   BACKLOG = "BACKLOG",
   A_CAMINHO = "A CAMINHO",
-  EM_ANDAMENTO = "EM ANDANMENTO",
+  EM_ANDAMENTO = "EM ANDAMENTO",
   FINALIZADO = "FINALIZADO",
   CANCELADO = "CANCELADO",
 }
