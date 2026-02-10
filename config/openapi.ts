@@ -46,8 +46,8 @@ export class OpenAPIDocumentGenerator {
       openapi: '3.0.0',
       info: {
         version: '1.0.0',
-        title: 'Backend Hijack API',
-        description: 'API documentation for Backend Hijack project',
+        title: 'Backend Promotor API',
+        description: 'API documentation for Backend Promotor project',
         contact: {
           name: 'API Support',
         },
@@ -56,26 +56,12 @@ export class OpenAPIDocumentGenerator {
         {
           url: process.env.NODE_ENV === 'development'
             ? process.env.API_URL || 'http://localhost:8185'
-            : 'https://manualadmin.oficinabrasil.com.br',
+            : 'https://apipromotor.oficinabrasil.com.br',
           description: 'Development server',
         },
       ],
       tags: [
-        { name: 'Campanha', description: 'Operations related to campaigns' },
-        { name: 'Marca', description: 'Operations related to marcas' },
-        { name: 'Modelo', description: 'Operations related to modelos' },
-        { name: 'Versao', description: 'Operations related to versões' },
-        { name: 'Sistema', description: 'Operations related to sistemas' },
-        { name: 'Peca', description: 'Operations related to peças' },
-        { name: 'Manual', description: 'Operations related to manuais' },
-        { name: 'ManualUsuario', description: 'Operations related to manuais usuario' },
-        { name: 'ManualSolicitacao', description: 'Operations related to manual solicitacao' },
-        { name: 'ManualSteps', description: 'Operations related to manual steps' },
-        { name: 'Logs', description: 'Operations related to logs' },
-        { name: "UsuarioSatisfacao", description: "Operations related to UsuarioSatisfacao" },
-        { name: 'SolicitacaoAcessoAntecipado', description: 'Operations related to solicitacao acesso antecipado' },
-        { name: 'RAG', description: 'Operations related to Retrieval-Augmented Generation' },
-        { name: 'ManualFonte', description: 'Operations related to manual fontes' },
+        { name: 'Campanha', description: 'Operations related to campaigns' }
       ],
       security: [
         {
