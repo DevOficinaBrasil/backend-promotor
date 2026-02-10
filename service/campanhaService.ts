@@ -2,6 +2,7 @@ import { AppDataSourceSync } from "../data-source";
 import Campanha from "../entities/Campanha";
 import CampanhaPromotor from "../entities/CampanhaPromotor";
 import RotaPromotor from "../entities/RotaPromotor";
+import Oficina from "../entities/Oficina";
 import { Between, LessThanOrEqual, MoreThanOrEqual, IsNull } from "typeorm";
 
 export default class CampanhaService {
@@ -92,7 +93,7 @@ export default class CampanhaService {
   static async getActiveCampanhaByPromotor(
     idPromotor: number,
     datetime?: Date
-  ): Promise<(Campanha & { oficinas: { ID_OFICINA: number }[] }) | null> {
+  ): Promise<(Campanha & { oficinas: Oficina[] }) | null> {
     const currentDatetime = datetime || new Date();
     const campanhaRepository = AppDataSourceSync.getRepository(Campanha);
     const campanhaPromotorRepository = AppDataSourceSync.getRepository(CampanhaPromotor);
@@ -126,19 +127,19 @@ export default class CampanhaService {
 
     const campanha = activeCampanha.campanha;
 
-    // Get the oficinas (workshops) for this campaign promoter
+    // Get the oficinas (workshops) for this campaign promoter with join to OFICINA table
     const rotasPromotor = await rotaPromotorRepository.find({
       where: {
         ID_CAMPANHA_PROMOTOR: activeCampanha.ID_CAMPANHA_PROMOTOR,
         DELETED_AT: IsNull(),
       },
+      relations: ['oficina'],
     });
 
-    // Extract oficina IDs (filter is needed for type safety in case ID_OFICINA is null/undefined)
+    // Extract oficina data (filter out null/undefined oficinas)
     const oficinas = rotasPromotor
-      .map(rota => rota.ID_OFICINA)
-      .filter((id): id is number => id != null)
-      .map(id => ({ ID_OFICINA: id }));
+      .map(rota => rota.oficina)
+      .filter((oficina): oficina is Oficina => oficina != null);
 
     return {
       ...campanha,
