@@ -11,8 +11,8 @@ export default class PromotorService {
   static async createPromotor(promotorData: Partial<Promotor>): Promise<Promotor> {
     const promotorRepository = AppDataSourceSync.getRepository(Promotor);
     
-    // Encrypt password if provided and not empty (preserving original password as-is)
-    if (promotorData.SENHA && promotorData.SENHA !== "") {
+    // Encrypt password if provided
+    if (promotorData.SENHA) {
       promotorData.SENHA = encrypt(promotorData.SENHA);
     }
     
@@ -40,8 +40,8 @@ export default class PromotorService {
       return null;
     }
 
-    // Encrypt password if being updated and not empty (preserving original password as-is)
-    if (promotorData.SENHA && promotorData.SENHA !== "") {
+    // Encrypt password if being updated
+    if (promotorData.SENHA) {
       promotorData.SENHA = encrypt(promotorData.SENHA);
     }
 
