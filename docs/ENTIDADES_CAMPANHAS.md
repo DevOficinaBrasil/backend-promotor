@@ -2,6 +2,10 @@
 
 Este documento descreve as entidades TypeORM criadas para o sistema de gerenciamento de campanhas.
 
+## ⚠️ Nota Importante sobre Nomenclatura
+
+Os nomes dos campos nas entidades seguem **exatamente** a nomenclatura definida no schema do banco de dados PostgreSQL, incluindo possíveis erros de ortografia (ex: `OBEJTIVO` ao invés de `OBJETIVO`, `EM ANDANMENTO` ao invés de `EM ANDAMENTO`). Esta decisão foi tomada para garantir compatibilidade total com o schema existente.
+
 ## Estrutura do Schema
 
 Todas as entidades estão no schema `CAMPANHAS_OB` do PostgreSQL.
