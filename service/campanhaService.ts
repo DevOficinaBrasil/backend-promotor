@@ -128,6 +128,7 @@ export default class CampanhaService {
     const campanha = activeCampanha.campanha;
 
     // Get the rotas (routes) for this campaign promoter with join to OFICINA table
+    // We return both the routes and extract their oficinas for backward compatibility
     const rotasPromotor = await rotaPromotorRepository.find({
       where: {
         ID_CAMPANHA_PROMOTOR: activeCampanha.ID_CAMPANHA_PROMOTOR,
