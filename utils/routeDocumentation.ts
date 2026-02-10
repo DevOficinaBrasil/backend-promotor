@@ -35,6 +35,9 @@ interface RouteConfig {
     >;
     security?: Array<Record<string, string[]>>;
   };
+
+  // Base path prefix for OpenAPI documentation (e.g., '/campanha')
+  basePath?: string;
 }
 
 /**
@@ -50,6 +53,7 @@ export function createDocumentedRoute(router: Router, config: RouteConfig) {
     schemas,
     middlewares = [],
     documentation,
+    basePath = '',
   } = config;
 
   // Build middleware array
@@ -67,7 +71,7 @@ export function createDocumentedRoute(router: Router, config: RouteConfig) {
   router[method](path, ...allMiddlewares, handler);
 
   // Register the route with OpenAPI documentation
-  const openApiPath = path.replace(/:(\w+)/g, '{$1}'); // Convert :id to {id}
+  const openApiPath = (basePath + path).replace(/:(\w+)/g, '{$1}'); // Convert :id to {id}
 
   const openApiConfig: any = {
     method,

@@ -17,6 +17,7 @@ createDocumentedRoute(router, {
   method: 'post',
   path: '/create',
   handler: CampanhaController.createCampanha,
+  basePath: '/campanha',
   schemas: {
     body: CreateCampanhaSchema,
   },
@@ -46,6 +47,7 @@ createDocumentedRoute(router, {
   method: 'put',
   path: '/edit/:id',
   handler: CampanhaController.updateCampanha,
+  basePath: '/campanha',
   schemas: {
     params: CampanhaIdParamsSchema,
     body: UpdateCampanhaSchema,
