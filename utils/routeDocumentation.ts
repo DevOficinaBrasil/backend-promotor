@@ -1,7 +1,11 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
+import { extendZodWithOpenApi } from '@asteasolutions/zod-to-openapi';
 import { openAPIGenerator } from '../config/openapi';
 import { validateSchema } from '../middlewares/validation';
+
+// Extend Zod with OpenAPI support
+extendZodWithOpenApi(z);
 
 interface RouteConfig {
   method: 'get' | 'post' | 'put' | 'delete' | 'patch';
@@ -71,49 +75,43 @@ export function createDocumentedRoute(router: Router, config: RouteConfig) {
     tags: documentation.tags || [],
     summary: documentation.summary,
     description: documentation.description || '',
+    request: {},
     responses: {},
     security: documentation.security,
   };
 
   // Build request object if we have schemas
-  if (schemas) {
-    const request: any = {};
-
-    if (schemas.body) {
-      request.body = {
-        content: {
-          'application/json': {
-            schema: schemas.body,
-          },
+  if (schemas?.body) {
+    openApiConfig.request.body = {
+      content: {
+        'application/json': {
+          schema: schemas.body,
         },
-      };
-    }
+      },
+    };
+  }
 
-    if (schemas.params) {
-      request.params = schemas.params;
-    }
+  if (schemas?.params) {
+    openApiConfig.request.params = schemas.params;
+  }
 
-    if (schemas.query) {
-      request.query = schemas.query;
-    }
-
-    if (Object.keys(request).length > 0) {
-      openApiConfig.request = request;
-    }
+  if (schemas?.query) {
+    openApiConfig.request.query = schemas.query;
   }
 
   // Build responses
   for (const [statusCode, response] of Object.entries(documentation.responses)) {
     openApiConfig.responses[statusCode] = {
       description: response.description,
-      content: response.schema
-        ? {
-            'application/json': {
-              schema: response.schema,
-            },
-          }
-        : undefined,
     };
+    
+    if (response.schema) {
+      openApiConfig.responses[statusCode].content = {
+        'application/json': {
+          schema: response.schema,
+        },
+      };
+    }
   }
 
   // Register with OpenAPI generator
