@@ -33,6 +33,12 @@ export default class Oficina {
   @Column({ type: "varchar", length: 255, nullable: true, name: "ENDERECO" })
   ENDERECO?: string;
 
+  @Column({ type: "varchar", length: 200, nullable: true, name: "BAIRRO" })
+  BAIRRO?: string;
+
+  @Column({ type: "varchar", length: 200, nullable: true, name: "NUMERO" })
+  NUMERO?: string;
+
   @Column({ type: "varchar", length: 100, nullable: true, name: "CIDADE" })
   CIDADE?: string;
 

@@ -89,6 +89,8 @@ export const OficinaSchema = z.object({
   EMAIL: z.string().optional(),
   TELEFONE: z.string().optional(),
   ENDERECO: z.string().optional(),
+  BAIRRO: z.string().optional(),
+  NUMERO: z.string().optional(),
   CIDADE: z.string().optional(),
   ESTADO: z.string().optional(),
   CEP: z.string().optional(),
