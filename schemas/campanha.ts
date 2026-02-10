@@ -96,24 +96,44 @@ export const OficinaSchema = z.object({
   CEP: z.string().optional(),
   LOCALIZACAO: z.string().optional(),
   ATIVO: z.string().optional(),
-  CREATED_AT: z.date().optional(),
-  UPDATED_AT: z.date().optional(),
+  CREATED_AT: z.string().optional(),
+  UPDATED_AT: z.string().optional(),
 });
 
 /**
- * Campanha Ativa schema with oficinas
+ * RotaPromotor schema for active campanha
+ */
+export const RotaPromotorSchema = z.object({
+  ID_ROTA_PROMOTOR: z.number(),
+  ID_OFICINA: z.number().optional(),
+  ID_CAMPANHA_PROMOTOR: z.number().optional(),
+  STATUS: z.string().optional(),
+  SUCCESS: z.boolean().optional(),
+  CHECKIN_TIME: z.string().optional(),
+  DONE_AT: z.string().optional(),
+  OBS: z.string().optional(),
+  REDIRECT: z.string().optional(),
+  CREATED_BY: z.number().optional(),
+  CREATED_AT: z.string().optional(),
+  UPDATED_AT: z.string().optional(),
+  DELETED_AT: z.string().optional(),
+  oficina: OficinaSchema.optional(),
+});
+
+/**
+ * Campanha Ativa schema with rotas
  */
 export const CampanhaAtivaSchema = z.object({
   ID_CAMPANHA: z.number(),
   NOME: z.string(),
   OBEJTIVO: z.string().optional(),
   ID_CLIENT: z.number().optional(),
-  START_TIME: z.date().optional(),
-  END_TIME: z.date().optional(),
+  START_TIME: z.string().optional(),
+  END_TIME: z.string().optional(),
   CREATED_BY: z.number().optional(),
-  CREATED_AT: z.date().optional(),
-  UPDATED_AT: z.date().optional(),
-  oficinas: z.array(OficinaSchema),
+  CREATED_AT: z.string().optional(),
+  UPDATED_AT: z.string().optional(),
+  rotas: z.array(RotaPromotorSchema),
 });
 
 /**

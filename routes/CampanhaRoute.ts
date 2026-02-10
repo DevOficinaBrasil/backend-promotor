@@ -148,7 +148,7 @@ createDocumentedRoute(router, {
   documentation: {
     tags: ['Campanha'],
     summary: 'Get active campaign for a promoter',
-    description: 'Returns the active campaign for a promoter based on the current datetime (between START_TIME and END_TIME)',
+    description: 'Returns the active campaign for a promoter based on the current datetime (between START_TIME and END_TIME). The response includes campaign details with a rotas array, where each rota contains its associated oficina details.',
     security: [{ bearerAuth: [] }],
     responses: {
       200: {
