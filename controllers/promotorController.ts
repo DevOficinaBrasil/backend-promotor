@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import PromotorService from "../service/promotorService";
+import Promotor from "../entities/Promotor";
 
 export default class PromotorController {
   /**
@@ -16,13 +17,6 @@ export default class PromotorController {
         ID_CLIENT,
         CREATED_BY
       } = req.body;
-
-      // Validate required fields
-      if (!NOME) {
-        return res.status(400).json({ 
-          message: "O campo NOME é obrigatório." 
-        });
-      }
 
       // Create promoter data object
       const promotorData = {
@@ -59,12 +53,6 @@ export default class PromotorController {
       const { id } = req.params;
       const promotorId = parseInt(id, 10);
 
-      if (isNaN(promotorId)) {
-        return res.status(400).json({
-          message: "ID do promotor inválido."
-        });
-      }
-
       const {
         NOME,
         EMAIL,
@@ -84,7 +72,7 @@ export default class PromotorController {
       }
 
       // Create update data object (only include provided fields)
-      const updateData: any = {};
+      const updateData: Partial<Promotor> = {};
       if (NOME !== undefined) updateData.NOME = NOME;
       if (EMAIL !== undefined) updateData.EMAIL = EMAIL;
       if (CPF !== undefined) updateData.CPF = CPF;
@@ -116,12 +104,6 @@ export default class PromotorController {
     try {
       const { id } = req.params;
       const promotorId = parseInt(id, 10);
-
-      if (isNaN(promotorId)) {
-        return res.status(400).json({
-          message: "ID do promotor inválido."
-        });
-      }
 
       // Check if promoter exists
       const promotorExistente = await PromotorService.findPromotorById(promotorId);

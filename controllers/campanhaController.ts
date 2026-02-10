@@ -121,12 +121,6 @@ export default class CampanhaController {
       const { id } = req.params;
       const campanhaId = parseInt(id, 10);
 
-      if (isNaN(campanhaId)) {
-        return res.status(400).json({
-          message: "ID da campanha inválido."
-        });
-      }
-
       // Check if campaign exists
       const campanhaExistente = await CampanhaService.findCampanhaById(campanhaId);
       

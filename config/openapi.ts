@@ -61,7 +61,8 @@ export class OpenAPIDocumentGenerator {
         },
       ],
       tags: [
-        { name: 'Campanha', description: 'Operations related to campaigns' }
+        { name: 'Campanha', description: 'Operations related to campaigns' },
+        { name: 'Promotor', description: 'Operations related to promoters' }
       ],
       security: [
         {
