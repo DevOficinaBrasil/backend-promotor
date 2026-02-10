@@ -237,4 +237,34 @@ export default class CampanhaController {
       });
     }
   };
+
+  /**
+   * Gets all campaigns by client ID
+   * GET /campanha/client/:clientId
+   */
+  static getCampanhaByClientId = async (req: Request, res: Response) => {
+    try {
+      const { clientId } = req.params;
+      const idClient = parseInt(clientId, 10);
+
+      if (isNaN(idClient)) {
+        return res.status(400).json({
+          message: "ID do cliente inválido."
+        });
+      }
+
+      const campanhas = await CampanhaService.getCampanhasByClientId(idClient);
+
+      return res.status(200).json({
+        message: "Campanhas do cliente listadas com sucesso.",
+        data: campanhas
+      });
+    } catch (error) {
+      console.error("Erro ao buscar campanhas por cliente:", error);
+      return res.status(500).json({
+        message: "Erro interno ao buscar campanhas.",
+        error: error instanceof Error ? error.message : "Erro desconhecido"
+      });
+    }
+  };
 }

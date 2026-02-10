@@ -6,6 +6,7 @@ import {
   CreateCampanhaSchema,
   UpdateCampanhaSchema,
   CampanhaIdParamsSchema,
+  ClientIdParamsSchema,
   CreateCampanhaResponseSchema,
   UpdateCampanhaResponseSchema,
   DeleteCampanhaResponseSchema,
@@ -13,6 +14,7 @@ import {
   GetCampanhaAtivaResponseSchema,
   GetAllCampanhasResponseSchema,
   GetCampanhaByIdResponseSchema,
+  GetCampanhasByClientIdResponseSchema,
 } from "../schemas/campanha";
 import { ErrorResponseSchema } from "../schemas/common";
 
@@ -230,6 +232,42 @@ createDocumentedRoute(router, {
       },
       404: {
         description: 'Campaign not found',
+        schema: ErrorResponseSchema,
+      },
+      500: {
+        description: 'Internal server error',
+        schema: ErrorResponseSchema,
+      },
+    },
+  },
+});
+
+// Get campaigns by client ID
+createDocumentedRoute(router, {
+  method: 'get',
+  path: '/client/:clientId',
+  handler: CampanhaController.getCampanhaByClientId,
+  basePath: '/campanha',
+  middlewares: [authMiddleware],
+  schemas: {
+    params: ClientIdParamsSchema,
+  },
+  documentation: {
+    tags: ['Campanha'],
+    summary: 'Get campaigns by client ID',
+    description: 'Returns all campaigns for a specific client with relationships (promoters and questions)',
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: {
+        description: 'Campaigns found successfully',
+        schema: GetCampanhasByClientIdResponseSchema,
+      },
+      400: {
+        description: 'Bad request - validation error',
+        schema: ErrorResponseSchema,
+      },
+      401: {
+        description: 'Unauthorized - token missing or invalid',
         schema: ErrorResponseSchema,
       },
       500: {
