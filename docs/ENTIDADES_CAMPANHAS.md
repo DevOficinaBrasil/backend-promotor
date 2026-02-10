@@ -124,6 +124,7 @@ Entidade que representa a rota de um promotor em uma campanha.
 
 **Relacionamentos**:
 - `campanhaPromotor`: ManyToOne com CampanhaPromotor
+- `oficina`: ManyToOne com Oficina
 - `campanhaResults`: OneToMany com CampanhaResults
 
 **Enum StatusRota**:
@@ -159,6 +160,34 @@ Entidade que armazena os resultados/respostas das perguntas em cada rota.
 
 ---
 
+### 7. Oficina
+Entidade que representa uma oficina mecânica/automotiva.
+
+**Tabela**: `MAIN_REGISTER.OFICINA`
+
+**Campos**:
+- `ID_OFICINA` (PK): Identificador único da oficina
+- `NOME`: Nome da oficina
+- `RAZAO_SOCIAL`: Razão social da oficina
+- `CNPJ`: CNPJ da oficina (20 caracteres)
+- `EMAIL`: E-mail de contato
+- `TELEFONE`: Telefone de contato (20 caracteres)
+- `ENDERECO`: Endereço completo
+- `CIDADE`: Cidade (100 caracteres)
+- `ESTADO`: Estado (2 caracteres - sigla UF)
+- `CEP`: CEP (10 caracteres)
+- `LOCALIZACAO`: Localização geográfica (tipo LOCATION no PostgreSQL, armazenado como TEXT)
+- `ATIVO`: Indicador se a oficina está ativa (1 caractere)
+- `CREATED_AT`: Data de criação (automático)
+- `UPDATED_AT`: Data de atualização (automático)
+- `DELETED_AT`: Data de exclusão lógica (soft delete)
+
+**Relacionamentos**:
+- `rotasPromotor`: OneToMany com RotaPromotor
+- `usuarios`: OneToMany com Usuario
+
+---
+
 ## Diagrama de Relacionamentos
 
 ```
@@ -166,11 +195,15 @@ Campanha (1) ─────< (N) CampanhaPromotor (N) >───── (1) Prom
     │                           │
     │                           │
     │                           │
-    └──< (N) CampanhaPerguntas  └──< (N) RotaPromotor
-                 │                          │
-                 │                          │
-                 └─────> (N) CampanhaResults (N) <─────┘
+    └──< (N) CampanhaPerguntas  └──< (N) RotaPromotor (N) >───── (1) Oficina
+                 │                          │                         │
+                 │                          │                         │
+                 └─────> (N) CampanhaResults (N) <─────┘              │
+                                                                       │
+                                                        Usuario (N) >──┘
 ```
+
+**Observação**: A entidade Oficina está no schema `MAIN_REGISTER`, enquanto as outras entidades do sistema de campanhas estão no schema `CAMPANHAS_OB`.
 
 ## Uso
 
@@ -205,6 +238,62 @@ const associacao = new CampanhaPromotor({
 });
 
 await campanhaPromotorRepository.save(associacao);
+```
+
+### Exemplo de criação de uma oficina:
+
+```typescript
+import Oficina from './entities/Oficina';
+
+const oficinaRepository = AppDataSourceSync.getRepository(Oficina);
+
+const novaOficina = new Oficina({
+  NOME: "Auto Mecânica São Paulo",
+  RAZAO_SOCIAL: "Auto Mecânica SP Ltda",
+  CNPJ: "12.345.678/0001-90",
+  EMAIL: "contato@automecsp.com.br",
+  TELEFONE: "(11) 98765-4321",
+  ENDERECO: "Rua das Oficinas, 123",
+  CIDADE: "São Paulo",
+  ESTADO: "SP",
+  CEP: "01234-567",
+  ATIVO: "S",
+});
+
+await oficinaRepository.save(novaOficina);
+```
+
+### Exemplo de criação de rota com oficina:
+
+```typescript
+import RotaPromotor from './entities/RotaPromotor';
+
+const rotaRepository = AppDataSourceSync.getRepository(RotaPromotor);
+
+const novaRota = new RotaPromotor({
+  ID_CAMPANHA_PROMOTOR: 1,
+  ID_OFICINA: 1,
+  STATUS: StatusRota.BACKLOG,
+});
+
+await rotaRepository.save(novaRota);
+```
+
+### Exemplo de consulta com relacionamentos:
+
+```typescript
+import { AppDataSourceSync } from './data-source';
+import RotaPromotor from './entities/RotaPromotor';
+
+const rotaRepository = AppDataSourceSync.getRepository(RotaPromotor);
+
+// Buscar rota com oficina relacionada
+const rotaComOficina = await rotaRepository.findOne({
+  where: { ID_ROTA_PROMOTOR: 1 },
+  relations: ['oficina', 'campanhaPromotor'],
+});
+
+console.log(rotaComOficina.oficina.NOME); // Nome da oficina
 ```
 
 ## Soft Delete
