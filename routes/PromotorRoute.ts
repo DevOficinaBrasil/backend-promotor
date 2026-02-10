@@ -1,6 +1,7 @@
 import { Router } from "express";
 import PromotorController from "../controllers/promotorController";
 import { createDocumentedRoute } from "../utils/routeDocumentation";
+import { authMiddleware } from "../middlewares/authMiddleware";
 import {
   CreatePromotorSchema,
   UpdatePromotorSchema,
@@ -19,6 +20,7 @@ createDocumentedRoute(router, {
   path: '/create',
   handler: PromotorController.createPromotor,
   basePath: '/promotor',
+  middlewares: [authMiddleware],
   schemas: {
     body: CreatePromotorSchema,
   },
@@ -26,6 +28,7 @@ createDocumentedRoute(router, {
     tags: ['Promotor'],
     summary: 'Create a new promoter',
     description: 'Creates a new promoter with the provided data',
+    security: [{ bearerAuth: [] }],
     responses: {
       201: {
         description: 'Promoter created successfully',
@@ -33,6 +36,10 @@ createDocumentedRoute(router, {
       },
       400: {
         description: 'Bad request - validation error',
+        schema: ErrorResponseSchema,
+      },
+      401: {
+        description: 'Unauthorized - token missing or invalid',
         schema: ErrorResponseSchema,
       },
       500: {
@@ -49,6 +56,7 @@ createDocumentedRoute(router, {
   path: '/edit/:id',
   handler: PromotorController.updatePromotor,
   basePath: '/promotor',
+  middlewares: [authMiddleware],
   schemas: {
     params: PromotorIdParamsSchema,
     body: UpdatePromotorSchema,
@@ -57,6 +65,7 @@ createDocumentedRoute(router, {
     tags: ['Promotor'],
     summary: 'Update an existing promoter',
     description: 'Updates a promoter with the provided data',
+    security: [{ bearerAuth: [] }],
     responses: {
       200: {
         description: 'Promoter updated successfully',
@@ -64,6 +73,10 @@ createDocumentedRoute(router, {
       },
       400: {
         description: 'Bad request - validation error',
+        schema: ErrorResponseSchema,
+      },
+      401: {
+        description: 'Unauthorized - token missing or invalid',
         schema: ErrorResponseSchema,
       },
       404: {
@@ -84,6 +97,7 @@ createDocumentedRoute(router, {
   path: '/delete/:id',
   handler: PromotorController.deletePromotor,
   basePath: '/promotor',
+  middlewares: [authMiddleware],
   schemas: {
     params: PromotorIdParamsSchema,
   },
@@ -91,6 +105,7 @@ createDocumentedRoute(router, {
     tags: ['Promotor'],
     summary: 'Delete a promoter (soft delete)',
     description: 'Soft deletes a promoter by ID',
+    security: [{ bearerAuth: [] }],
     responses: {
       200: {
         description: 'Promoter deleted successfully',
@@ -98,6 +113,10 @@ createDocumentedRoute(router, {
       },
       400: {
         description: 'Bad request - validation error',
+        schema: ErrorResponseSchema,
+      },
+      401: {
+        description: 'Unauthorized - token missing or invalid',
         schema: ErrorResponseSchema,
       },
       404: {

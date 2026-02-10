@@ -1,6 +1,7 @@
 import { Router } from "express";
 import CampanhaController from "../controllers/campanhaController";
 import { createDocumentedRoute } from "../utils/routeDocumentation";
+import { authMiddleware } from "../middlewares/authMiddleware";
 import {
   CreateCampanhaSchema,
   UpdateCampanhaSchema,
@@ -19,6 +20,7 @@ createDocumentedRoute(router, {
   path: '/create',
   handler: CampanhaController.createCampanha,
   basePath: '/campanha',
+  middlewares: [authMiddleware],
   schemas: {
     body: CreateCampanhaSchema,
   },
@@ -26,6 +28,7 @@ createDocumentedRoute(router, {
     tags: ['Campanha'],
     summary: 'Create a new campaign',
     description: 'Creates a new campaign with the provided data',
+    security: [{ bearerAuth: [] }],
     responses: {
       201: {
         description: 'Campaign created successfully',
@@ -33,6 +36,10 @@ createDocumentedRoute(router, {
       },
       400: {
         description: 'Bad request - validation error',
+        schema: ErrorResponseSchema,
+      },
+      401: {
+        description: 'Unauthorized - token missing or invalid',
         schema: ErrorResponseSchema,
       },
       500: {
@@ -49,6 +56,7 @@ createDocumentedRoute(router, {
   path: '/edit/:id',
   handler: CampanhaController.updateCampanha,
   basePath: '/campanha',
+  middlewares: [authMiddleware],
   schemas: {
     params: CampanhaIdParamsSchema,
     body: UpdateCampanhaSchema,
@@ -57,6 +65,7 @@ createDocumentedRoute(router, {
     tags: ['Campanha'],
     summary: 'Update an existing campaign',
     description: 'Updates a campaign with the provided data',
+    security: [{ bearerAuth: [] }],
     responses: {
       200: {
         description: 'Campaign updated successfully',
@@ -64,6 +73,10 @@ createDocumentedRoute(router, {
       },
       400: {
         description: 'Bad request - validation error',
+        schema: ErrorResponseSchema,
+      },
+      401: {
+        description: 'Unauthorized - token missing or invalid',
         schema: ErrorResponseSchema,
       },
       404: {
@@ -84,6 +97,7 @@ createDocumentedRoute(router, {
   path: '/delete/:id',
   handler: CampanhaController.deleteCampanha,
   basePath: '/campanha',
+  middlewares: [authMiddleware],
   schemas: {
     params: CampanhaIdParamsSchema,
   },
@@ -91,6 +105,7 @@ createDocumentedRoute(router, {
     tags: ['Campanha'],
     summary: 'Delete a campaign (soft delete)',
     description: 'Soft deletes a campaign by ID',
+    security: [{ bearerAuth: [] }],
     responses: {
       200: {
         description: 'Campaign deleted successfully',
@@ -98,6 +113,10 @@ createDocumentedRoute(router, {
       },
       400: {
         description: 'Bad request - validation error',
+        schema: ErrorResponseSchema,
+      },
+      401: {
+        description: 'Unauthorized - token missing or invalid',
         schema: ErrorResponseSchema,
       },
       404: {

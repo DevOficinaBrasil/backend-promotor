@@ -1,5 +1,6 @@
 import { AppDataSourceSync } from "../data-source";
 import Promotor from "../entities/Promotor";
+import { encrypt, decrypt } from "../utils/encryption";
 
 export default class PromotorService {
   /**
@@ -9,6 +10,11 @@ export default class PromotorService {
    */
   static async createPromotor(promotorData: Partial<Promotor>): Promise<Promotor> {
     const promotorRepository = AppDataSourceSync.getRepository(Promotor);
+    
+    // Encrypt password if provided
+    if (promotorData.SENHA) {
+      promotorData.SENHA = encrypt(promotorData.SENHA);
+    }
     
     const novoPromotor = promotorRepository.create(promotorData);
     const promotorSalvo = await promotorRepository.save(novoPromotor);
@@ -32,6 +38,11 @@ export default class PromotorService {
 
     if (!promotorExistente) {
       return null;
+    }
+
+    // Encrypt password if being updated
+    if (promotorData.SENHA) {
+      promotorData.SENHA = encrypt(promotorData.SENHA);
     }
 
     // Update the promoter fields
