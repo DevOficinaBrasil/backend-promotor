@@ -185,32 +185,35 @@ export default class PromotorService {
     // Normalize to array
     const idsArray = Array.isArray(campanhaIds) ? campanhaIds : [campanhaIds];
     
-    // Create relationships for each campaign
-    const relationships: CampanhaPromotor[] = [];
+    // Check all existing relationships in a single query
+    const existingRelationships = await campanhaPromotorRepository.find({
+      where: {
+        ID_PROMOTOR: promotorId,
+      },
+    });
+    
+    // Create a Set of existing campaign IDs for quick lookup
+    const existingCampanhaIds = new Set(
+      existingRelationships
+        .filter(rel => rel.ID_CAMPANHA !== undefined)
+        .map(rel => rel.ID_CAMPANHA!)
+    );
+    
+    // Create relationships for campaigns that don't exist yet
+    const newRelationships: CampanhaPromotor[] = [];
     
     for (const campanhaId of idsArray) {
-      // Check if relationship already exists
-      const existing = await campanhaPromotorRepository.findOne({
-        where: {
-          ID_CAMPANHA: campanhaId,
-          ID_PROMOTOR: promotorId,
-        },
-      });
-      
-      // Only create if it doesn't exist
-      if (!existing) {
+      if (!existingCampanhaIds.has(campanhaId)) {
         const campanhaPromotor = campanhaPromotorRepository.create({
           ID_CAMPANHA: campanhaId,
           ID_PROMOTOR: promotorId,
         });
         
         const saved = await campanhaPromotorRepository.save(campanhaPromotor);
-        relationships.push(saved);
-      } else {
-        relationships.push(existing);
+        newRelationships.push(saved);
       }
     }
     
-    return relationships;
+    return newRelationships;
   }
 }

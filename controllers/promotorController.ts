@@ -269,13 +269,13 @@ export default class PromotorController {
       }
 
       // Call the service to link the promoter with campaigns
-      const relationships = await PromotorService.linkCampanhaPromotor(ID_CAMPANHA, ID_PROMOTOR);
+      const newRelationships = await PromotorService.linkCampanhaPromotor(ID_CAMPANHA, ID_PROMOTOR);
 
       return res.status(201).json({
         message: "Vínculo entre campanha(s) e promotor criado com sucesso.",
         data: {
-          created: relationships.length,
-          relationships
+          created: newRelationships.length,
+          relationships: newRelationships
         }
       });
     } catch (error) {

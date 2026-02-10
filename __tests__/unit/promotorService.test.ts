@@ -66,7 +66,7 @@ describe('PromotorService', () => {
       };
 
       const mockCampanhaPromotorRepository = {
-        findOne: jest.fn().mockResolvedValue(null),
+        find: jest.fn().mockResolvedValue([]),
         create: jest.fn().mockReturnValue(mockCampanhaPromotor),
         save: jest.fn().mockResolvedValue(mockCampanhaPromotor),
       };
@@ -86,6 +86,11 @@ describe('PromotorService', () => {
       const result = await PromotorService.createPromotor(promotorData, 10);
 
       expect(result).toEqual(mockPromotor);
+      expect(mockCampanhaPromotorRepository.find).toHaveBeenCalledWith({
+        where: {
+          ID_PROMOTOR: 1,
+        },
+      });
       expect(mockCampanhaPromotorRepository.create).toHaveBeenCalledWith({
         ID_CAMPANHA: 10,
         ID_PROMOTOR: 1,
@@ -106,7 +111,7 @@ describe('PromotorService', () => {
       };
 
       const mockCampanhaPromotorRepository = {
-        findOne: jest.fn().mockResolvedValue(null),
+        find: jest.fn().mockResolvedValue([]),
         create: jest.fn((data) => ({ ...data, ID_CAMPANHA_PROMOTOR: Math.random() })),
         save: jest.fn((data) => Promise.resolve(data)),
       };
@@ -126,6 +131,11 @@ describe('PromotorService', () => {
       const result = await PromotorService.createPromotor(promotorData, [10, 20, 30]);
 
       expect(result).toEqual(mockPromotor);
+      expect(mockCampanhaPromotorRepository.find).toHaveBeenCalledWith({
+        where: {
+          ID_PROMOTOR: 1,
+        },
+      });
       expect(mockCampanhaPromotorRepository.create).toHaveBeenCalledTimes(3);
       expect(mockCampanhaPromotorRepository.save).toHaveBeenCalledTimes(3);
     });
@@ -140,7 +150,7 @@ describe('PromotorService', () => {
       };
 
       const mockRepository = {
-        findOne: jest.fn().mockResolvedValue(null),
+        find: jest.fn().mockResolvedValue([]),
         create: jest.fn().mockReturnValue(mockCampanhaPromotor),
         save: jest.fn().mockResolvedValue(mockCampanhaPromotor),
       };
@@ -151,9 +161,8 @@ describe('PromotorService', () => {
 
       expect(result).toHaveLength(1);
       expect(result[0]).toEqual(mockCampanhaPromotor);
-      expect(mockRepository.findOne).toHaveBeenCalledWith({
+      expect(mockRepository.find).toHaveBeenCalledWith({
         where: {
-          ID_CAMPANHA: 10,
           ID_PROMOTOR: 5,
         },
       });
@@ -165,7 +174,7 @@ describe('PromotorService', () => {
 
     it('should link a promotor to multiple campaigns', async () => {
       const mockRepository = {
-        findOne: jest.fn().mockResolvedValue(null),
+        find: jest.fn().mockResolvedValue([]),
         create: jest.fn((data) => ({ ...data, ID_CAMPANHA_PROMOTOR: Math.random() })),
         save: jest.fn((data) => Promise.resolve(data)),
       };
@@ -187,7 +196,7 @@ describe('PromotorService', () => {
       };
 
       const mockRepository = {
-        findOne: jest.fn().mockResolvedValue(existingRelationship),
+        find: jest.fn().mockResolvedValue([existingRelationship]),
         create: jest.fn(),
         save: jest.fn(),
       };
@@ -196,8 +205,7 @@ describe('PromotorService', () => {
 
       const result = await PromotorService.linkCampanhaPromotor(10, 5);
 
-      expect(result).toHaveLength(1);
-      expect(result[0]).toEqual(existingRelationship);
+      expect(result).toHaveLength(0);
       expect(mockRepository.create).not.toHaveBeenCalled();
       expect(mockRepository.save).not.toHaveBeenCalled();
     });
@@ -216,9 +224,7 @@ describe('PromotorService', () => {
       };
 
       const mockRepository = {
-        findOne: jest.fn()
-          .mockResolvedValueOnce(existingRelationship)
-          .mockResolvedValueOnce(null),
+        find: jest.fn().mockResolvedValue([existingRelationship]),
         create: jest.fn().mockReturnValue(newRelationship),
         save: jest.fn().mockResolvedValue(newRelationship),
       };
@@ -227,7 +233,8 @@ describe('PromotorService', () => {
 
       const result = await PromotorService.linkCampanhaPromotor([10, 20], 5);
 
-      expect(result).toHaveLength(2);
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual(newRelationship);
       expect(mockRepository.create).toHaveBeenCalledTimes(1);
       expect(mockRepository.save).toHaveBeenCalledTimes(1);
     });
