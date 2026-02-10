@@ -25,6 +25,7 @@ export const CreatePromotorSchema = z.object({
   SENHA: z.string().min(6, 'SENHA deve ter pelo menos 6 caracteres').optional(),
   ID_CLIENT: z.number().optional(),
   CREATED_BY: z.number().optional(),
+  ID_CAMPANHA: z.union([z.number(), z.array(z.number())]).optional(),
 });
 
 /**
@@ -106,4 +107,27 @@ export const GetAllPromotoresResponseSchema = z.object({
 export const GetPromotorByIdResponseSchema = z.object({
   message: z.string(),
   data: PromotorWithoutPasswordSchema,
+});
+
+/**
+ * Link campanha-promotor request schema
+ */
+export const LinkCampanhaPromotorSchema = z.object({
+  ID_CAMPANHA: z.union([z.number(), z.array(z.number())]),
+  ID_PROMOTOR: z.number(),
+});
+
+/**
+ * Link campanha-promotor response schema
+ */
+export const LinkCampanhaPromotorResponseSchema = z.object({
+  message: z.string(),
+  data: z.object({
+    created: z.number(),
+    relationships: z.array(z.object({
+      ID_CAMPANHA_PROMOTOR: z.number().optional(),
+      ID_CAMPANHA: z.number().optional(),
+      ID_PROMOTOR: z.number().optional(),
+    })),
+  }),
 });

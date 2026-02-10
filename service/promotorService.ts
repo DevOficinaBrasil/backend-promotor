@@ -1,14 +1,19 @@
 import { AppDataSourceSync } from "../data-source";
 import Promotor from "../entities/Promotor";
+import CampanhaPromotor from "../entities/CampanhaPromotor";
 import { encrypt, decrypt } from "../utils/encryption";
 
 export default class PromotorService {
   /**
    * Creates a new promoter in the database
    * @param promotorData - The promoter data to create
+   * @param campanhaIds - Optional campaign ID or array of campaign IDs to associate
    * @returns The created promoter
    */
-  static async createPromotor(promotorData: Partial<Promotor>): Promise<Promotor> {
+  static async createPromotor(
+    promotorData: Partial<Promotor>, 
+    campanhaIds?: number | number[]
+  ): Promise<Promotor> {
     const promotorRepository = AppDataSourceSync.getRepository(Promotor);
     
     // Encrypt password if provided
@@ -18,6 +23,11 @@ export default class PromotorService {
     
     const novoPromotor = promotorRepository.create(promotorData);
     const promotorSalvo = await promotorRepository.save(novoPromotor);
+    
+    // If campaign IDs are provided, create the associations
+    if (campanhaIds !== undefined && promotorSalvo.ID_PROMOTOR) {
+      await this.linkCampanhaPromotor(campanhaIds, promotorSalvo.ID_PROMOTOR);
+    }
     
     return promotorSalvo;
   }
@@ -158,5 +168,49 @@ export default class PromotorService {
     });
 
     return promotores;
+  }
+
+  /**
+   * Links a promoter to one or more campaigns
+   * @param campanhaIds - Campaign ID or array of campaign IDs
+   * @param promotorId - The promoter ID
+   * @returns Array of created CampanhaPromotor relationships
+   */
+  static async linkCampanhaPromotor(
+    campanhaIds: number | number[], 
+    promotorId: number
+  ): Promise<CampanhaPromotor[]> {
+    const campanhaPromotorRepository = AppDataSourceSync.getRepository(CampanhaPromotor);
+    
+    // Normalize to array
+    const idsArray = Array.isArray(campanhaIds) ? campanhaIds : [campanhaIds];
+    
+    // Create relationships for each campaign
+    const relationships: CampanhaPromotor[] = [];
+    
+    for (const campanhaId of idsArray) {
+      // Check if relationship already exists
+      const existing = await campanhaPromotorRepository.findOne({
+        where: {
+          ID_CAMPANHA: campanhaId,
+          ID_PROMOTOR: promotorId,
+        },
+      });
+      
+      // Only create if it doesn't exist
+      if (!existing) {
+        const campanhaPromotor = campanhaPromotorRepository.create({
+          ID_CAMPANHA: campanhaId,
+          ID_PROMOTOR: promotorId,
+        });
+        
+        const saved = await campanhaPromotorRepository.save(campanhaPromotor);
+        relationships.push(saved);
+      } else {
+        relationships.push(existing);
+      }
+    }
+    
+    return relationships;
   }
 }
