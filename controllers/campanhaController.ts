@@ -247,12 +247,6 @@ export default class CampanhaController {
       const { clientId } = req.params;
       const idClient = parseInt(clientId, 10);
 
-      if (isNaN(idClient)) {
-        return res.status(400).json({
-          message: "ID do cliente inválido."
-        });
-      }
-
       const campanhas = await CampanhaService.getCampanhasByClientId(idClient);
 
       return res.status(200).json({

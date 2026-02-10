@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import CampanhaPerguntasService from "../service/campanhaPerguntasService";
+import CampanhaPerguntas from "../entities/CampanhaPerguntas";
 
 export default class CampanhaPerguntasController {
   /**
@@ -9,25 +10,6 @@ export default class CampanhaPerguntasController {
   static createCampanhaPergunta = async (req: Request, res: Response) => {
     try {
       const { ID_CAMPANHA, PERGUNTA, TIPO } = req.body;
-
-      // Validate required fields
-      if (!ID_CAMPANHA) {
-        return res.status(400).json({ 
-          message: "O campo ID_CAMPANHA é obrigatório." 
-        });
-      }
-
-      if (!PERGUNTA) {
-        return res.status(400).json({ 
-          message: "O campo PERGUNTA é obrigatório." 
-        });
-      }
-
-      if (!TIPO) {
-        return res.status(400).json({ 
-          message: "O campo TIPO é obrigatório." 
-        });
-      }
 
       // Create pergunta data object
       const perguntaData = {
@@ -61,12 +43,6 @@ export default class CampanhaPerguntasController {
       const { id } = req.params;
       const perguntaId = parseInt(id, 10);
 
-      if (isNaN(perguntaId)) {
-        return res.status(400).json({
-          message: "ID da pergunta inválido."
-        });
-      }
-
       const { ID_CAMPANHA, PERGUNTA, TIPO } = req.body;
 
       // Check if pergunta exists
@@ -79,7 +55,7 @@ export default class CampanhaPerguntasController {
       }
 
       // Create update data object (only include provided fields)
-      const updateData: any = {};
+      const updateData: Partial<CampanhaPerguntas> = {};
       if (ID_CAMPANHA !== undefined) updateData.ID_CAMPANHA = ID_CAMPANHA;
       if (PERGUNTA !== undefined) updateData.PERGUNTA = PERGUNTA;
       if (TIPO !== undefined) updateData.TIPO = TIPO;
@@ -163,12 +139,6 @@ export default class CampanhaPerguntasController {
     try {
       const { id } = req.params;
       const perguntaId = parseInt(id, 10);
-
-      if (isNaN(perguntaId)) {
-        return res.status(400).json({
-          message: "ID da pergunta inválido."
-        });
-      }
 
       const pergunta = await CampanhaPerguntasService.findCampanhaPerguntaById(perguntaId);
 
