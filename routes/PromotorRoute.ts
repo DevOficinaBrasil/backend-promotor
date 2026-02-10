@@ -13,6 +13,8 @@ import {
   LoginPromotorResponseSchema,
   GetAllPromotoresResponseSchema,
   GetPromotorByIdResponseSchema,
+  LinkCampanhaPromotorSchema,
+  LinkCampanhaPromotorResponseSchema,
 } from "../schemas/promotor";
 import { ErrorResponseSchema } from "../schemas/common";
 
@@ -213,6 +215,46 @@ createDocumentedRoute(router, {
       200: {
         description: 'Promoter found successfully',
         schema: GetPromotorByIdResponseSchema,
+      },
+      400: {
+        description: 'Bad request - validation error',
+        schema: ErrorResponseSchema,
+      },
+      401: {
+        description: 'Unauthorized - token missing or invalid',
+        schema: ErrorResponseSchema,
+      },
+      404: {
+        description: 'Promoter not found',
+        schema: ErrorResponseSchema,
+      },
+      500: {
+        description: 'Internal server error',
+        schema: ErrorResponseSchema,
+      },
+    },
+  },
+});
+
+// Link promoter to campaign(s)
+createDocumentedRoute(router, {
+  method: 'post',
+  path: '/link-campanha',
+  handler: PromotorController.linkCampanhaPromotor,
+  basePath: '/promotor',
+  middlewares: [authMiddleware],
+  schemas: {
+    body: LinkCampanhaPromotorSchema,
+  },
+  documentation: {
+    tags: ['Promotor'],
+    summary: 'Link promoter to campaign(s)',
+    description: 'Creates a relationship between a promoter and one or more campaigns',
+    security: [{ bearerAuth: [] }],
+    responses: {
+      201: {
+        description: 'Link created successfully',
+        schema: LinkCampanhaPromotorResponseSchema,
       },
       400: {
         description: 'Bad request - validation error',

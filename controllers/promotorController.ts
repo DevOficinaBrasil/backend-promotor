@@ -18,7 +18,8 @@ export default class PromotorController {
         CPF,
         SENHA,
         ID_CLIENT,
-        CREATED_BY
+        CREATED_BY,
+        ID_CAMPANHA
       } = req.body;
 
       // Create promoter data object
@@ -31,8 +32,8 @@ export default class PromotorController {
         CREATED_BY
       };
 
-      // Call the service to create the promoter
-      const novoPromotor = await PromotorService.createPromotor(promotorData);
+      // Call the service to create the promoter with optional campaign associations
+      const novoPromotor = await PromotorService.createPromotor(promotorData, ID_CAMPANHA);
 
       return res.status(201).json({
         message: "Promotor criado com sucesso.",
@@ -246,6 +247,41 @@ export default class PromotorController {
       console.error("Erro ao buscar promotor:", error);
       return res.status(500).json({
         message: "Erro interno ao buscar promotor.",
+        error: error instanceof Error ? error.message : "Erro desconhecido"
+      });
+    }
+  };
+
+  /**
+   * Links a promoter to one or more campaigns
+   * POST /promotor/link-campanha
+   */
+  static linkCampanhaPromotor = async (req: Request, res: Response) => {
+    try {
+      const { ID_CAMPANHA, ID_PROMOTOR } = req.body;
+
+      // Validate that promoter exists
+      const promotor = await PromotorService.findPromotorById(ID_PROMOTOR);
+      if (!promotor) {
+        return res.status(404).json({
+          message: "Promotor não encontrado."
+        });
+      }
+
+      // Call the service to link the promoter with campaigns
+      const newRelationships = await PromotorService.linkCampanhaPromotor(ID_CAMPANHA, ID_PROMOTOR);
+
+      return res.status(201).json({
+        message: "Vínculo entre campanha(s) e promotor criado com sucesso.",
+        data: {
+          created: newRelationships.length,
+          relationships: newRelationships
+        }
+      });
+    } catch (error) {
+      console.error("Erro ao vincular campanha e promotor:", error);
+      return res.status(500).json({
+        message: "Erro interno ao vincular campanha e promotor.",
         error: error instanceof Error ? error.message : "Erro desconhecido"
       });
     }
