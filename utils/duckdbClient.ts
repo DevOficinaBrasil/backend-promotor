@@ -39,7 +39,16 @@ export class DuckDBClient {
       const instance = await this.getInstance();
       const connection = await instance.connect();
 
-      // Build IN clause with direct values (DuckDB doesn't support parameterized IN clauses well)
+      // Validate all IDs are valid numbers to prevent SQL injection
+      const validIds = oficinaIds.filter(id => 
+        Number.isInteger(id) && id > 0 && Number.isSafeInteger(id)
+      );
+
+      if (validIds.length === 0) {
+        return new Map();
+      }
+
+      // Build IN clause with validated numeric values
       const query = `
         SELECT 
           id_oficina,
@@ -48,7 +57,7 @@ export class DuckDBClient {
           flag_sentimento,
           cor_icone
         FROM oficinas
-        WHERE id_oficina IN (${oficinaIds.join(', ')})
+        WHERE id_oficina IN (${validIds.join(', ')})
       `;
 
       const result = await connection.run(query);
@@ -65,20 +74,21 @@ export class DuckDBClient {
       // Convert to map for efficient lookup
       const dataMap = new Map<number, DuckDBOficinaData>();
 
-      rows.forEach((row: any) => {
-        const obj: any = {};
+      rows.forEach((row: unknown[]) => {
+        const obj: Record<string, unknown> = {};
         columnNames.forEach((colName, idx) => {
           // Convert BigInt to Number for id_oficina
           obj[colName] = typeof row[idx] === 'bigint' ? Number(row[idx]) : row[idx];
         });
 
-        if (obj.id_oficina) {
-          dataMap.set(obj.id_oficina, {
-            id_oficina: obj.id_oficina,
-            flag_engajamento: obj.flag_engajamento?.toLowerCase() || 'baixo',
-            flag_treinamento: obj.flag_treinamento?.toLowerCase() || 'baixo',
-            flag_sentimento: obj.flag_sentimento?.toLowerCase() || 'neutro',
-            cor_icone: obj.cor_icone || 'cinza',
+        const idOficina = obj.id_oficina;
+        if (typeof idOficina === 'number') {
+          dataMap.set(idOficina, {
+            id_oficina: idOficina,
+            flag_engajamento: typeof obj.flag_engajamento === 'string' ? obj.flag_engajamento.toLowerCase() : 'baixo',
+            flag_treinamento: typeof obj.flag_treinamento === 'string' ? obj.flag_treinamento.toLowerCase() : 'baixo',
+            flag_sentimento: typeof obj.flag_sentimento === 'string' ? obj.flag_sentimento.toLowerCase() : 'neutro',
+            cor_icone: typeof obj.cor_icone === 'string' ? obj.cor_icone : 'cinza',
           });
         }
       });
