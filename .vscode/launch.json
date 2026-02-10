@@ -1,0 +1,18 @@
+{
+    "configurations": [
+      {
+        "type": "node-terminal",
+        "name": "Run Script: start",
+        "request": "launch",
+        "command": "npm run start",
+        "cwd": "${workspaceFolder}"
+      },
+      {
+        "type": "node-terminal",
+        "name": "JavaScript Debug Terminal",
+        "request": "launch",
+        "cwd": "${workspaceFolder}"
+      }
+    ]
+  }
+   

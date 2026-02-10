@@ -1,0 +1,138 @@
+{
+  "containerDefinitions": [
+    {
+      "name": "${CONTAINER_NAME}",
+      "image": "${REPOSITORY_ECR_URL}:${IMAGE_NAME}-${IMAGE_TAG_ECR}",
+      "cpu": 0,
+      "portMappings": [
+        {
+          "containerPort": 3008,
+          "hostPort": 0,
+          "protocol": "tcp"
+        }
+      ],
+      "essential": true,
+      "environment": [
+        {
+          "name": "DB_TYPE",
+          "value": "${DB_TYPE}"
+        },
+        {
+          "name": "MONGODB_URI",
+          "value": "${MONGODB_URI}"
+        },
+        {
+          "name": "API_COMMUNITIES",
+          "value": "${API_COMMUNITIES}"
+        },
+        {
+          "name": "DB_HOST",
+          "value": "${DB_HOST}"
+        },
+        {
+          "name": "DB_PORT",
+          "value": "${DB_PORT}"
+        },
+        {
+          "name": "DB_USERNAME",
+          "value": "${DB_USERNAME}"
+        },
+        {
+          "name": "DB_PASSWORD",
+          "value": "${DB_PASSWORD}"
+        },
+        {
+          "name": "DB_DATABASE",
+          "value": "${DB_DATABASE}"
+        },
+        {
+          "name": "JWT_SECRET",
+          "value": "${JWT_SECRET}"
+        },
+        {
+          "name": "JWT_EXPIRES_IN",
+          "value": "${JWT_EXPIRES_IN}"
+        },
+        {
+          "name": "AWS_ACCESS_KEY_ID",
+          "value": "${AWS_ACCESS_KEY_ID}"
+        },
+        {
+          "name": "AWS_SECRET_ACCESS_KEY",
+          "value": "${AWS_SECRET_ACCESS_KEY}"
+        },
+        {
+          "name": "AWS_REGION",
+          "value": "${AWS_REGION}"
+        },
+        {
+          "name": "AWS_BUCKET_NAME",
+          "value": "${AWS_BUCKET_NAME}"
+        },
+        {
+          "name": "NEXT_PUBLIC_AWS_BUCKET_NAME",
+          "value": "${NEXT_PUBLIC_AWS_BUCKET_NAME}"
+        },
+        {
+          "name": "AWS_S3",
+          "value": "${AWS_S3}"
+        },
+        {
+          "name": "NEXT_PUBLIC_AWS_S3",
+          "value": "${NEXT_PUBLIC_AWS_S3}"
+        },
+        {
+          "name": "CORS_ORIGIN",
+          "value": "${CORS_ORIGIN}"
+        },
+        {
+          "name": "NODE_ENV",
+          "value": "${NODE_ENV}"
+        },
+        {
+          "name": "PORT",
+          "value": "${PORT}"
+        },
+        {
+          "name": "API_URL",
+          "value": "${API_URL}"
+        },
+        {
+          "name": "OPENAI_API_KEY",
+          "value": "${OPENAI_API_KEY}"
+        },
+        {
+          "name": "SKIP_AUTH",
+          "value": "${SKIP_AUTH}"
+        },
+        {
+          "name": "PUSH_NOTIFICATION_URL",
+          "value": "${PUSH_NOTIFICATION_URL}"
+        },
+        {
+          "name": "OB_ADS_API_URL",
+          "value": "${OB_ADS_API_URL}"
+        }
+      ],
+      "secrets": [],
+      "mountPoints": [],
+      "volumesFrom": [],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "${LOG_GROUP}",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "${LOG_STREAM_PREFIX}"
+        }
+      },
+      "systemControls": []
+    }
+  ],
+  "volumes": [],
+  "family": "${TASK_DEF_NAME}",
+  "taskRoleArn": "${ARN_ROLE_ECS}",
+  "executionRoleArn": "${ARN_ROLE_ECS}",
+  "networkMode": "${NETWORK_MODE}",
+  "cpu": "${CPU}",
+  "memory": "${MEMORY}"
+}

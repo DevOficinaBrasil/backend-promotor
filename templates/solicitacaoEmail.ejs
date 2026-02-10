@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+            <%= css %>
+        </style>
+        <title></title>
+    </head>
+    <body>
+        <div class="container">
+            <h1 class="titleEmail">Uma nova solicitação de manual foi criada.</h1>
+            <div class="infoContainer">
+                <p class="description"><%= DESCRIPTION %></p>
+                <div class="infoDetails">
+                    <h3 class="sessionTitle">Detalhes da Solicitação)</h3>
+                    <div class="detailsContainer"> 
+                        <div class="userInfo">
+                            <p class="data"><span class="info">ID_USUARIO:</span> <%= ID_USUARIO %></p>
+                            <p class="data"><span class="info">Celular:</span> <%= CELULAR %></p>
+                            <p class="data"><span class="info">Email:</span> <%= EMAIL %></p>
+                        </div>
+                        <div class="manualInfo">
+                            <% if (NOME_MARCA) { %>
+                                <p class="data"><span class="info">Marca:</span> <%= NOME_MARCA %></p>
+                            <% } %>
+
+                            <% if (NOME_MODELO) { %>
+                                <p class="data"><span class="info">Modelo:</span> <%= NOME_MODELO %></p>
+                            <% } %>
+
+                            <% if (NOME_SISTEMA) { %>
+                                <p class="data"><span class="info">Sistema:</span> <%= NOME_SISTEMA %></p>
+                            <% } %>
+
+                            <% if (NOME_PECA) { %>
+                                <p class="data"><span class="info">Peça:</span> <%= NOME_PECA %></p>
+                            <% } %>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="imgContainer">
+                <img src="https://oficina-brasil-public.s3.sa-east-1.amazonaws.com/uploads/Logo_positivo_Oficina-Brasil.png" alt="Logo Oficina Brasil" style="max-width: 200px; margin-top: 16px;" />
+                <a class="adminButton" href="https://manuais.oficinabrasil.com.br/solicitacao">Acessar Solicitações</a>
+            </div>
+        </div>
+    </body>
+</html>

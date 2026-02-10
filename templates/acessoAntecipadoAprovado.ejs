@@ -1,0 +1,81 @@
+<!-- Alguns provedores de email não suportam css, logo aqui estara tudo inline -->
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Acesso aos Manuais Aprovado</title>
+</head>
+<body style="margin:0; padding:0; background:#18328A; font-family:system-ui; color:white;">
+
+    <!-- Container principal (table layout) -->
+    <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#18328A; padding:30px;">
+        <tr>
+            <td align="left">
+
+                <!-- Bloco principal -->
+                <table width="100%" cellpadding="0" cellspacing="0" border="0">
+
+                    <tr>
+                        <td style="padding-bottom:20px;">
+                            <h1 style="font-size:32px; font-weight:bold; margin:0; color:#92F455;">
+                                Acesso Antecipado Aprovado
+                            </h1>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <td style="font-size:16px; line-height:22px;">
+                            <p>Olá <%= nomeUsuario %>,</p>
+
+                            <p>Recebemos a sua solicitação e seu acesso foi aprovado! 🎉</p>
+
+                            <p><b>Aproveite os recursos exclusivos:</b></p>
+
+                            <ul style="padding-left:18px; margin-top:10px;">
+                                <li style="margin-bottom:15px;">
+                                    Manuais técnicos e guias de reparação com informações detalhadas sobre reparos de veículos.
+                                </li>
+                                <li style="margin-bottom:15px;">
+                                    Um agente de inteligência artificial pronto pra te ajudar com dúvidas e diagnósticos.
+                                </li>
+                            </ul>
+
+                            <p>Tudo isso está disponível no site da Oficina Brasil!</p>
+                        </td>
+                    </tr>
+
+                    <!-- Botão -->
+                    <tr>
+                        <td align="left" style="padding-top:20px; padding-bottom:30px;">
+                            <a href="https://oficinabrasil.com.br/manuais?utm_source=convite-wpp-comunidade"
+                               style="background:#92F455; color:#18328A; padding:12px 20px;
+                                      text-decoration:none; font-weight:bold; border-radius:20px;
+                                      font-size:18px; display:inline-block;">
+                                Acesse agora os manuais técnicos e guias de reparação
+                            </a>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <td style="font-size:16px; line-height:22px;">
+                            <p>Use o mesmo login que você já tem na OB e mergulhe nesse material exclusivo.</p>
+                            <p><b>Você é um dos primeiros. Aproveite cada recurso! 🚗💪</b></p>
+                        </td>
+                    </tr>
+
+                    <!-- Rodapé -->
+                    <tr>
+                        <td style="padding-top:30px;">
+                            <img src="https://oficina-brasil-public.s3.sa-east-1.amazonaws.com/uploads/Logo_positivo_Oficina-Brasil.png"
+                                 alt="Logo Oficina Brasil"
+                                 width="200"
+                                 style="display:block;">
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
