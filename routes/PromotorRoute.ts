@@ -9,10 +9,42 @@ import {
   CreatePromotorResponseSchema,
   UpdatePromotorResponseSchema,
   DeletePromotorResponseSchema,
+  LoginPromotorSchema,
+  LoginPromotorResponseSchema,
 } from "../schemas/promotor";
 import { ErrorResponseSchema } from "../schemas/common";
 
 const router = Router();
+
+// Login promoter (public route - no auth middleware)
+createDocumentedRoute(router, {
+  method: 'post',
+  path: '/login',
+  handler: PromotorController.loginPromotor,
+  basePath: '/promotor',
+  schemas: {
+    body: LoginPromotorSchema,
+  },
+  documentation: {
+    tags: ['Promotor'],
+    summary: 'Login a promoter',
+    description: 'Authenticates a promoter with email and password, returning a JWT token',
+    responses: {
+      200: {
+        description: 'Login successful',
+        schema: LoginPromotorResponseSchema,
+      },
+      401: {
+        description: 'Unauthorized - invalid credentials',
+        schema: ErrorResponseSchema,
+      },
+      500: {
+        description: 'Internal server error',
+        schema: ErrorResponseSchema,
+      },
+    },
+  },
+});
 
 // Create a new promoter
 createDocumentedRoute(router, {

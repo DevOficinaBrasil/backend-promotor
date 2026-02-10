@@ -69,3 +69,20 @@ export const DeletePromotorResponseSchema = z.object({
   message: z.string(),
   data: PromotorSchema,
 });
+
+/**
+ * Login promotor request schema
+ */
+export const LoginPromotorSchema = z.object({
+  EMAIL: z.string().email('Email inválido'),
+  SENHA: z.string().min(1, 'SENHA é obrigatória'),
+});
+
+/**
+ * Login promotor response schema
+ */
+export const LoginPromotorResponseSchema = z.object({
+  message: z.string(),
+  token: z.string(),
+  promotor: PromotorSchema.omit({ SENHA: true }),
+});

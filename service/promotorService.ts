@@ -90,4 +90,57 @@ export default class PromotorService {
 
     return promotor;
   }
+
+  /**
+   * Finds a promoter by email
+   * @param email - The promoter email to find
+   * @returns The promoter or null if not found
+   */
+  static async findPromotorByEmail(email: string): Promise<Promotor | null> {
+    const promotorRepository = AppDataSourceSync.getRepository(Promotor);
+    
+    const promotor = await promotorRepository.findOne({
+      where: { EMAIL: email }
+    });
+
+    return promotor;
+  }
+
+  /**
+   * Validates promoter login credentials
+   * @param email - The promoter email
+   * @param senha - The plain text password
+   * @returns The promoter if credentials are valid, null otherwise
+   */
+  static async loginPromotor(email: string, senha: string): Promise<Promotor | null> {
+    const promotor = await this.findPromotorByEmail(email);
+    
+    if (!promotor || !promotor.SENHA) {
+      return null;
+    }
+
+    // Decrypt the stored password and compare with the provided password
+    try {
+      const decryptedPassword = decrypt(promotor.SENHA);
+      
+      // Use crypto.timingSafeEqual for constant-time comparison to prevent timing attacks
+      const crypto = require('crypto');
+      const expectedBuffer = Buffer.from(decryptedPassword, 'utf8');
+      const providedBuffer = Buffer.from(senha, 'utf8');
+      
+      // Ensure buffers are the same length for timingSafeEqual
+      if (expectedBuffer.length !== providedBuffer.length) {
+        return null;
+      }
+      
+      if (crypto.timingSafeEqual(expectedBuffer, providedBuffer)) {
+        return promotor;
+      }
+    } catch (error) {
+      // Log error with context but don't expose details
+      console.error('Error during login credential validation:', error instanceof Error ? error.message : 'Unknown error');
+    }
+    
+    return null;
+  }
 }
