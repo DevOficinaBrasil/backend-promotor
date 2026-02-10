@@ -86,6 +86,19 @@ export const GetCampanhaAtivaQuerySchema = z.object({
  */
 export const OficinaSchema = z.object({
   ID_OFICINA: z.number(),
+  NOME: z.string().optional(),
+  RAZAO_SOCIAL: z.string().optional(),
+  CNPJ: z.string().optional(),
+  EMAIL: z.string().optional(),
+  TELEFONE: z.string().optional(),
+  ENDERECO: z.string().optional(),
+  CIDADE: z.string().optional(),
+  ESTADO: z.string().optional(),
+  CEP: z.string().optional(),
+  LOCALIZACAO: z.string().optional(),
+  ATIVO: z.string().optional(),
+  CREATED_AT: z.date().optional(),
+  UPDATED_AT: z.date().optional(),
 });
 
 /**
