@@ -25,8 +25,8 @@ export default class PromotorService {
     const promotorSalvo = await promotorRepository.save(novoPromotor);
     
     // If campaign IDs are provided, create the associations
-    if (campanhaIds !== undefined && promotorSalvo.ID_PROMOTOR) {
-      await this.linkCampanhaPromotor(campanhaIds, promotorSalvo.ID_PROMOTOR);
+    if (campanhaIds !== undefined) {
+      await this.linkCampanhaPromotor(campanhaIds, promotorSalvo.ID_PROMOTOR!);
     }
     
     return promotorSalvo;
@@ -194,9 +194,7 @@ export default class PromotorService {
     
     // Create a Set of existing campaign IDs for quick lookup
     const existingCampanhaIds = new Set(
-      existingRelationships
-        .filter(rel => rel.ID_CAMPANHA !== undefined)
-        .map(rel => rel.ID_CAMPANHA!)
+      existingRelationships.map(rel => rel.ID_CAMPANHA!)
     );
     
     // Create relationships for campaigns that don't exist yet
