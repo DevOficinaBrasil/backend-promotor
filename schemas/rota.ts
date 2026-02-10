@@ -52,7 +52,7 @@ export const UpdateRotaOptionsSchema = z.object({
   SUCCESS: z.boolean().optional(),
   CHECKIN_TIME: z.string().datetime().optional().or(z.date().optional()),
   DONE_AT: z.string().datetime().optional().or(z.date().optional()),
-  OBS: z.string().optional(),
+  OBS: z.string().optional(), // No length restriction - maps to TEXT column in database
   REDIRECT: RedirectRotaSchema.optional(),
 });
 

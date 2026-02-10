@@ -25,7 +25,7 @@ export enum StatusRota {
 export enum RedirectRota {
   SAC = "SAC",
   VENDAS = "VENDAS",
-  LOGISTICA = "LOGÍSTICA",
+  LOGISTICA = "LOGÍSTICA", // Note: Constant name without accent, value with accent to match database
 }
 
 @Entity({ schema: "CAMPANHAS_OB", name: "ROTA_PROMOTOR" })
