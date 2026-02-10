@@ -175,6 +175,7 @@ export const CampanhaPromotorSchema = z.object({
   CREATED_AT: z.date().optional(),
   UPDATED_AT: z.date().optional(),
   promotor: PromotorWithoutPasswordSchema.optional(),
+  rotasPromotor: z.array(RotaPromotorSchema).optional(),
 });
 
 /**
