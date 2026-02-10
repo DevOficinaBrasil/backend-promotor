@@ -112,3 +112,75 @@ export const GetCampanhaAtivaResponseSchema = z.object({
   message: z.string(),
   data: CampanhaAtivaSchema.nullable(),
 });
+
+/**
+ * Promotor schema without password for campanha relationships
+ */
+export const PromotorWithoutPasswordSchema = z.object({
+  ID_PROMOTOR: z.number(),
+  NOME: z.string(),
+  EMAIL: z.string().optional(),
+  CPF: z.string().optional(),
+  ID_CLIENT: z.number().optional(),
+  CREATED_BY: z.number().optional(),
+  CREATED_AT: z.date().optional(),
+  UPDATED_AT: z.date().optional(),
+});
+
+/**
+ * CampanhaPromotor schema
+ */
+export const CampanhaPromotorSchema = z.object({
+  ID_CAMPANHA_PROMOTOR: z.number(),
+  ID_CAMPANHA: z.number().optional(),
+  ID_PROMOTOR: z.number().optional(),
+  CREATED_AT: z.date().optional(),
+  UPDATED_AT: z.date().optional(),
+  promotor: PromotorWithoutPasswordSchema.optional(),
+});
+
+/**
+ * CampanhaPergunta schema (simplified)
+ */
+export const CampanhaPerguntaSchema = z.object({
+  ID_CAMPANHA_PERGUNTAS: z.number(),
+  ID_CAMPANHA: z.number().optional(),
+  TIPO_PERGUNTA: z.string().optional(),
+  PERGUNTA: z.string().optional(),
+  CREATED_AT: z.date().optional(),
+  UPDATED_AT: z.date().optional(),
+});
+
+/**
+ * Campanha with relationships schema
+ */
+export const CampanhaWithRelationsSchema = z.object({
+  ID_CAMPANHA: z.number(),
+  NOME: z.string(),
+  OBEJTIVO: z.string().optional(),
+  PONTO_INICIAL: z.string().optional(),
+  ID_CLIENT: z.number().optional(),
+  START_TIME: z.date().optional(),
+  END_TIME: z.date().optional(),
+  CREATED_BY: z.number().optional(),
+  CREATED_AT: z.date().optional(),
+  UPDATED_AT: z.date().optional(),
+  campanhaPromotores: z.array(CampanhaPromotorSchema).optional(),
+  campanhaPerguntas: z.array(CampanhaPerguntaSchema).optional(),
+});
+
+/**
+ * Get all campanhas response schema
+ */
+export const GetAllCampanhasResponseSchema = z.object({
+  message: z.string(),
+  data: z.array(CampanhaSchema),
+});
+
+/**
+ * Get campanha by ID response schema
+ */
+export const GetCampanhaByIdResponseSchema = z.object({
+  message: z.string(),
+  data: CampanhaWithRelationsSchema,
+});

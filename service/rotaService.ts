@@ -152,4 +152,20 @@ export default class RotaService {
 
     return rota;
   }
+
+  /**
+   * Gets a route by ID with its relationships
+   * @param id - The route ID
+   * @returns The route with related campaign promoter and results, or null if not found
+   */
+  static async getRotaByIdWithRelations(id: number): Promise<RotaPromotor | null> {
+    const rotaRepository = AppDataSourceSync.getRepository(RotaPromotor);
+
+    const rota = await rotaRepository.findOne({
+      where: { ID_ROTA_PROMOTOR: id },
+      relations: ['campanhaPromotor', 'campanhaPromotor.campanha', 'campanhaPromotor.promotor', 'campanhaResults'],
+    });
+
+    return rota;
+  }
 }

@@ -10,6 +10,7 @@ import {
   CreateRotaResponseSchema,
   UpdateRotaWorkshopsResponseSchema,
   UpdateRotaOptionsResponseSchema,
+  GetRotaByIdResponseSchema,
 } from "../schemas/rota";
 import { ErrorResponseSchema } from "../schemas/common";
 
@@ -115,6 +116,48 @@ createDocumentedRoute(router, {
       200: {
         description: "Route options updated successfully",
         schema: UpdateRotaOptionsResponseSchema,
+      },
+      400: {
+        description: "Bad request - validation error",
+        schema: ErrorResponseSchema,
+      },
+      401: {
+        description: "Unauthorized - token missing or invalid",
+        schema: ErrorResponseSchema,
+      },
+      404: {
+        description: "Route not found",
+        schema: ErrorResponseSchema,
+      },
+      500: {
+        description: "Internal server error",
+        schema: ErrorResponseSchema,
+      },
+    },
+  },
+});
+
+// Get route by ID with relationships
+createDocumentedRoute(router, {
+  method: "get",
+  path: "/:id",
+  handler: RotaController.getRotaByIdROTA_PROMOTOR,
+  basePath: "/rota",
+  middlewares: [authMiddleware],
+  schemas: {
+    params: RotaIdParamsSchema,
+  },
+  documentation: {
+    tags: ["Rota"],
+    summary: "Get route by ID",
+    description:
+      "Returns a route by ID with its relationships " +
+      "(campaign promoter, campaign, promoter, and results).",
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: {
+        description: "Route found successfully",
+        schema: GetRotaByIdResponseSchema,
       },
       400: {
         description: "Bad request - validation error",

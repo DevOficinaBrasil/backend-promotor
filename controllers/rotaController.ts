@@ -113,4 +113,40 @@ export default class RotaController {
       });
     }
   };
+
+  /**
+   * Gets a route by ID with its relationships
+   * GET /rota/:id
+   */
+  static getRotaByIdROTA_PROMOTOR = async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const rotaId = parseInt(id, 10);
+
+      if (isNaN(rotaId)) {
+        return res.status(400).json({
+          message: "ID da rota inválido.",
+        });
+      }
+
+      const rota = await RotaService.getRotaByIdWithRelations(rotaId);
+
+      if (!rota) {
+        return res.status(404).json({
+          message: "Rota não encontrada.",
+        });
+      }
+
+      return res.status(200).json({
+        message: "Rota encontrada com sucesso.",
+        data: rota,
+      });
+    } catch (error) {
+      console.error("Erro ao buscar rota:", error);
+      return res.status(500).json({
+        message: "Erro interno ao buscar rota.",
+        error: error instanceof Error ? error.message : "Erro desconhecido",
+      });
+    }
+  };
 }

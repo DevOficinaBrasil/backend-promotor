@@ -187,4 +187,67 @@ export default class PromotorController {
       });
     }
   };
+
+  /**
+   * Gets all promoters
+   * GET /promotor
+   */
+  static getAllPromotores = async (req: Request, res: Response) => {
+    try {
+      const promotores = await PromotorService.getAllPromotores();
+
+      // Remove passwords from response
+      const promotoresSemSenha = promotores.map(({ SENHA, ...rest }) => rest);
+
+      return res.status(200).json({
+        message: "Promotores listados com sucesso.",
+        data: promotoresSemSenha
+      });
+    } catch (error) {
+      console.error("Erro ao listar promotores:", error);
+      return res.status(500).json({
+        message: "Erro interno ao listar promotores.",
+        error: error instanceof Error ? error.message : "Erro desconhecido"
+      });
+    }
+  };
+
+  /**
+   * Gets a promoter by ID
+   * GET /promotor/:id
+   */
+  static getPromotoresById = async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const promotorId = parseInt(id, 10);
+
+      if (isNaN(promotorId)) {
+        return res.status(400).json({
+          message: "ID do promotor inválido."
+        });
+      }
+
+      const promotor = await PromotorService.findPromotorById(promotorId);
+
+      if (!promotor) {
+        return res.status(404).json({
+          message: "Promotor não encontrado."
+        });
+      }
+
+      // Remove password from response
+      const { SENHA, ...promotorSemSenha } = promotor;
+
+      return res.status(200).json({
+        message: "Promotor encontrado com sucesso.",
+        data: promotorSemSenha
+      });
+    } catch (error) {
+      console.error("Erro ao buscar promotor:", error);
+      return res.status(500).json({
+        message: "Erro interno ao buscar promotor.",
+        error: error instanceof Error ? error.message : "Erro desconhecido"
+      });
+    }
+  };
 }

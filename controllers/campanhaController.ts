@@ -184,4 +184,61 @@ export default class CampanhaController {
       });
     }
   };
+
+  /**
+   * Gets all campaigns
+   * GET /campanha
+   */
+  static getAllCampanha = async (req: Request, res: Response) => {
+    try {
+      const campanhas = await CampanhaService.getAllCampanhas();
+
+      return res.status(200).json({
+        message: "Campanhas listadas com sucesso.",
+        data: campanhas
+      });
+    } catch (error) {
+      console.error("Erro ao listar campanhas:", error);
+      return res.status(500).json({
+        message: "Erro interno ao listar campanhas.",
+        error: error instanceof Error ? error.message : "Erro desconhecido"
+      });
+    }
+  };
+
+  /**
+   * Gets a campaign by ID with its relationships
+   * GET /campanha/:id
+   */
+  static getCampanhaById = async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const campanhaId = parseInt(id, 10);
+
+      if (isNaN(campanhaId)) {
+        return res.status(400).json({
+          message: "ID da campanha inválido."
+        });
+      }
+
+      const campanha = await CampanhaService.getCampanhaByIdWithRelations(campanhaId);
+
+      if (!campanha) {
+        return res.status(404).json({
+          message: "Campanha não encontrada."
+        });
+      }
+
+      return res.status(200).json({
+        message: "Campanha encontrada com sucesso.",
+        data: campanha
+      });
+    } catch (error) {
+      console.error("Erro ao buscar campanha:", error);
+      return res.status(500).json({
+        message: "Erro interno ao buscar campanha.",
+        error: error instanceof Error ? error.message : "Erro desconhecido"
+      });
+    }
+  };
 }
