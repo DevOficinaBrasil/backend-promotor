@@ -1,5 +1,8 @@
 import { AppDataSourceSync } from "../data-source";
 import Campanha from "../entities/Campanha";
+import CampanhaPromotor from "../entities/CampanhaPromotor";
+import RotaPromotor from "../entities/RotaPromotor";
+import { Between, LessThanOrEqual, MoreThanOrEqual, IsNull } from "typeorm";
 
 export default class CampanhaService {
   /**
@@ -78,5 +81,68 @@ export default class CampanhaService {
     });
 
     return campanha;
+  }
+
+  /**
+   * Gets the active campaign for a promoter based on current datetime
+   * @param idPromotor - The promoter ID
+   * @param datetime - Optional datetime to check (defaults to current time)
+   * @returns The active campaign with oficinas array or null if not found
+   */
+  static async getActiveCampanhaByPromotor(
+    idPromotor: number,
+    datetime?: Date
+  ): Promise<(Campanha & { oficinas: { ID_OFICINA: number }[] }) | null> {
+    const currentDatetime = datetime || new Date();
+    const campanhaRepository = AppDataSourceSync.getRepository(Campanha);
+    const campanhaPromotorRepository = AppDataSourceSync.getRepository(CampanhaPromotor);
+    const rotaPromotorRepository = AppDataSourceSync.getRepository(RotaPromotor);
+
+    // Find all campanha_promotor relationships for this promoter
+    const campanhasPromotor = await campanhaPromotorRepository.find({
+      where: {
+        ID_PROMOTOR: idPromotor,
+        DELETED_AT: IsNull(),
+      },
+      relations: ['campanha'],
+    });
+
+    // Filter to find active campaigns (current datetime is between START_TIME and END_TIME)
+    const activeCampanha = campanhasPromotor.find((cp) => {
+      const campanha = cp.campanha;
+      
+      // If START_TIME or END_TIME is not set, the campaign is not considered active
+      if (!campanha || !campanha.START_TIME || !campanha.END_TIME) {
+        return false;
+      }
+
+      // Check if current datetime is within the campaign period
+      return currentDatetime >= campanha.START_TIME && currentDatetime <= campanha.END_TIME;
+    });
+
+    if (!activeCampanha || !activeCampanha.campanha) {
+      return null;
+    }
+
+    const campanha = activeCampanha.campanha;
+
+    // Get the oficinas (workshops) for this campaign promoter
+    const rotasPromotor = await rotaPromotorRepository.find({
+      where: {
+        ID_CAMPANHA_PROMOTOR: activeCampanha.ID_CAMPANHA_PROMOTOR,
+        DELETED_AT: IsNull(),
+      },
+    });
+
+    // Extract oficina IDs (filter is needed for type safety in case ID_OFICINA is null/undefined)
+    const oficinas = rotasPromotor
+      .map(rota => rota.ID_OFICINA)
+      .filter((id): id is number => id != null)
+      .map(id => ({ ID_OFICINA: id }));
+
+    return {
+      ...campanha,
+      oficinas,
+    };
   }
 }

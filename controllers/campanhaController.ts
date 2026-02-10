@@ -145,4 +145,43 @@ export default class CampanhaController {
       });
     }
   };
+
+  /**
+   * Gets the active campaign for a promoter
+   * GET /campanha/ativa?ID_PROMOTOR=X&datetime=Y
+   */
+  static getCampanhaAtiva = async (req: Request, res: Response) => {
+    try {
+      // Use validated query data from validation middleware
+      const validatedQuery = (req as any).validatedQuery || {};
+      const { ID_PROMOTOR, datetime } = validatedQuery;
+
+      // Parse datetime if provided, otherwise use current time
+      const currentDatetime = datetime ? new Date(datetime) : new Date();
+
+      // Get the active campaign
+      const campanhaAtiva = await CampanhaService.getActiveCampanhaByPromotor(
+        ID_PROMOTOR,
+        currentDatetime
+      );
+
+      if (!campanhaAtiva) {
+        return res.status(200).json({
+          message: "Nenhuma campanha ativa encontrada para este promotor.",
+          data: null
+        });
+      }
+
+      return res.status(200).json({
+        message: "Campanha ativa encontrada com sucesso.",
+        data: campanhaAtiva
+      });
+    } catch (error) {
+      console.error("Erro ao buscar campanha ativa:", error);
+      return res.status(500).json({
+        message: "Erro interno ao buscar campanha ativa.",
+        error: error instanceof Error ? error.message : "Erro desconhecido"
+      });
+    }
+  };
 }

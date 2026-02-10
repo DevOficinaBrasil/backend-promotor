@@ -9,6 +9,8 @@ import {
   CreateCampanhaResponseSchema,
   UpdateCampanhaResponseSchema,
   DeleteCampanhaResponseSchema,
+  GetCampanhaAtivaQuerySchema,
+  GetCampanhaAtivaResponseSchema,
 } from "../schemas/campanha";
 import { ErrorResponseSchema } from "../schemas/common";
 
@@ -121,6 +123,42 @@ createDocumentedRoute(router, {
       },
       404: {
         description: 'Campaign not found',
+        schema: ErrorResponseSchema,
+      },
+      500: {
+        description: 'Internal server error',
+        schema: ErrorResponseSchema,
+      },
+    },
+  },
+});
+
+// Get active campaign for a promoter
+createDocumentedRoute(router, {
+  method: 'get',
+  path: '/ativa',
+  handler: CampanhaController.getCampanhaAtiva,
+  basePath: '/campanha',
+  middlewares: [authMiddleware],
+  schemas: {
+    query: GetCampanhaAtivaQuerySchema,
+  },
+  documentation: {
+    tags: ['Campanha'],
+    summary: 'Get active campaign for a promoter',
+    description: 'Returns the active campaign for a promoter based on the current datetime (between START_TIME and END_TIME)',
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: {
+        description: 'Active campaign found or no active campaign',
+        schema: GetCampanhaAtivaResponseSchema,
+      },
+      400: {
+        description: 'Bad request - validation error',
+        schema: ErrorResponseSchema,
+      },
+      401: {
+        description: 'Unauthorized - token missing or invalid',
         schema: ErrorResponseSchema,
       },
       500: {
