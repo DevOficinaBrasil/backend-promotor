@@ -1,0 +1,72 @@
+{
+  "395444": {
+    "id_oficina": 395444,
+    "flag_engajamento": "alto",
+    "flag_treinamento": "baixo",
+    "flag_sentimento": "neutro",
+    "cor_icone": "azul"
+  },
+  "393991": {
+    "id_oficina": 393991,
+    "flag_engajamento": "alto",
+    "flag_treinamento": "alto",
+    "flag_sentimento": "neutro",
+    "cor_icone": "azul"
+  },
+  "322983": {
+    "id_oficina": 322983,
+    "flag_engajamento": "alto",
+    "flag_treinamento": "alto",
+    "flag_sentimento": "neutro",
+    "cor_icone": "azul"
+  },
+  "233249": {
+    "id_oficina": 233249,
+    "flag_engajamento": "baixo",
+    "flag_treinamento": "baixo",
+    "flag_sentimento": "neutro",
+    "cor_icone": "cinza"
+  },
+  "408156": {
+    "id_oficina": 408156,
+    "flag_engajamento": "alto",
+    "flag_treinamento": "baixo",
+    "flag_sentimento": "neutro",
+    "cor_icone": "azul"
+  },
+  "406673": {
+    "id_oficina": 406673,
+    "flag_engajamento": "baixo",
+    "flag_treinamento": "baixo",
+    "flag_sentimento": "neutro",
+    "cor_icone": "cinza"
+  },
+  "129854": {
+    "id_oficina": 129854,
+    "flag_engajamento": "baixo",
+    "flag_treinamento": "alto",
+    "flag_sentimento": "neutro",
+    "cor_icone": "azul"
+  },
+  "408882": {
+    "id_oficina": 408882,
+    "flag_engajamento": "alto",
+    "flag_treinamento": "alto",
+    "flag_sentimento": "neutro",
+    "cor_icone": "azul"
+  },
+  "406014": {
+    "id_oficina": 406014,
+    "flag_engajamento": "baixo",
+    "flag_treinamento": "baixo",
+    "flag_sentimento": "neutro",
+    "cor_icone": "cinza"
+  },
+  "133510": {
+    "id_oficina": 133510,
+    "flag_engajamento": "alto",
+    "flag_treinamento": "alto",
+    "flag_sentimento": "neutro",
+    "cor_icone": "azul"
+  }
+}

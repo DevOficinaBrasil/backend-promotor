@@ -33,6 +33,10 @@ export const OficinaSchema = z.object({
   ATIVO: z.string().optional(),
   STATUS: z.string().optional(),
   distance: z.number().optional(), // Distance in kilometers (calculated)
+  flag_engajamento: z.string().optional(), // From DuckDB
+  flag_sentimento: z.string().optional(), // From DuckDB
+  flag_treinamento: z.string().optional(), // From DuckDB
+  cor_icone: z.string().optional(), // From DuckDB
 });
 
 /**
