@@ -4,15 +4,13 @@ const ALGORITHM = "aes-256-cbc";
 const ENCRYPTION_KEY = process.env.CRIPTKEY || "";
 
 // Validate encryption key on startup
-if (!ENCRYPTION_KEY || ENCRYPTION_KEY.length < 32) {
-  throw new Error("CRIPTKEY must be configured and at least 32 characters long for secure encryption");
+if (!ENCRYPTION_KEY) {
+  throw new Error("CRIPTKEY must be configured in environment variables");
 }
 
-// Ensure key is exactly 32 bytes for AES-256
+// Derive a proper 32-byte key from the provided CRIPTKEY using SHA-256
 const getKey = (): Buffer => {
-  // Take first 32 bytes or pad with zeros if needed
-  const key = ENCRYPTION_KEY.substring(0, 32).padEnd(32, "0");
-  return Buffer.from(key, "utf8");
+  return crypto.createHash('sha256').update(ENCRYPTION_KEY).digest();
 };
 
 /**
@@ -52,7 +50,12 @@ export const decrypt = (text: string): string => {
     throw new Error("Invalid encrypted text format - expected format: iv:encryptedData");
   }
   
-  const [ivHex, encryptedData] = text.split(":");
+  const parts = text.split(":");
+  if (parts.length !== 2) {
+    throw new Error("Invalid encrypted text format - expected exactly one colon separator");
+  }
+  
+  const [ivHex, encryptedData] = parts;
   const iv = Buffer.from(ivHex, "hex");
   const decipher = crypto.createDecipheriv(ALGORITHM, getKey(), iv);
   
