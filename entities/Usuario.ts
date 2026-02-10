@@ -116,7 +116,7 @@ export default class Usuario {
 
   @ManyToOne(() => Oficina, (oficina) => oficina.usuarios)
   @JoinColumn({ name: "ID_OFICINA" })
-  oficina: Oficina;
+  oficina?: Oficina;
 
   constructor(init?: Partial<Usuario>) {
     Object.assign(this, init);

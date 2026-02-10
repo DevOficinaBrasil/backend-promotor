@@ -82,7 +82,7 @@ export default class RotaPromotor {
 
   @ManyToOne(() => Oficina, (oficina) => oficina.rotasPromotor)
   @JoinColumn({ name: "ID_OFICINA" })
-  oficina: Oficina;
+  oficina?: Oficina;
 
   @OneToMany(
     () => CampanhaResults,
