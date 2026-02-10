@@ -21,7 +21,6 @@ Entidade principal que representa uma campanha de marketing/promoção.
 - `ID_CAMPANHA` (PK): Identificador único da campanha
 - `NOME`: Nome da campanha (obrigatório)
 - `OBEJTIVO`: Objetivo da campanha
-- `PONTO_INICIAL`: Ponto inicial (tipo LOCATION no PostgreSQL, armazenado como TEXT)
 - `ID_CLIENT`: ID do cliente externo
 - `START_TIME`: Data/hora de início
 - `END_TIME`: Data/hora de término
@@ -87,7 +86,11 @@ Entidade que representa as perguntas de uma campanha.
 - `ID_PERGUNTAS` (PK): Identificador único da pergunta
 - `ID_CAMPANHA` (FK): Referência para Campanha
 - `PERGUNTA`: Texto da pergunta (500 caracteres)
-- `TIPO`: Tipo da pergunta (ex: múltipla escolha, texto livre, etc.)
+- `TIPO`: Tipo da pergunta (enum TipoPergunta)
+  - String
+  - Integer
+  - Boolean
+  - Date
 - `CREATED_AT`: Data de criação (automático)
 - `UPDATED_AT`: Data de atualização (automático)
 - `DELETED_AT`: Data de exclusão lógica (soft delete)
@@ -95,6 +98,16 @@ Entidade que representa as perguntas de uma campanha.
 **Relacionamentos**:
 - `campanha`: ManyToOne com Campanha
 - `campanhaResults`: OneToMany com CampanhaResults
+
+**Enum TipoPergunta**:
+```typescript
+export enum TipoPergunta {
+  String = "String",
+  Integer = "Integer",
+  Boolean = "Boolean",
+  Date = "Date",
+}
+```
 
 ---
 
@@ -116,7 +129,11 @@ Entidade que representa a rota de um promotor em uma campanha.
 - `SUCCESS`: Indica se foi bem-sucedido (boolean)
 - `CHECKIN_TIME`: Data/hora do check-in
 - `DONE_AT`: Data/hora de conclusão
-- `OBS`: Observações (1000 caracteres)
+- `OBS`: Observações (texto sem limite de caracteres)
+- `REDIRECT`: Tipo de redirecionamento (enum RedirectRota)
+  - SAC
+  - VENDAS
+  - LOGÍSTICA
 - `CREATED_BY`: ID do usuário que criou
 - `CREATED_AT`: Data de criação (automático)
 - `UPDATED_AT`: Data de atualização (automático)
@@ -135,6 +152,15 @@ export enum StatusRota {
   EM_ANDAMENTO = "EM ANDANMENTO",
   FINALIZADO = "FINALIZADO",
   CANCELADO = "CANCELADO",
+}
+```
+
+**Enum RedirectRota**:
+```typescript
+export enum RedirectRota {
+  SAC = "SAC",
+  VENDAS = "VENDAS",
+  LOGISTICA = "LOGÍSTICA",
 }
 ```
 

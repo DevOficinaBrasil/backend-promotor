@@ -11,7 +11,6 @@ export default class CampanhaController {
       const {
         NOME,
         OBEJTIVO,
-        PONTO_INICIAL,
         ID_CLIENT,
         START_TIME,
         END_TIME,
@@ -29,7 +28,6 @@ export default class CampanhaController {
       const campanhaData = {
         NOME,
         OBEJTIVO,
-        PONTO_INICIAL,
         ID_CLIENT,
         START_TIME: START_TIME ? new Date(START_TIME) : undefined,
         END_TIME: END_TIME ? new Date(END_TIME) : undefined,
@@ -70,7 +68,6 @@ export default class CampanhaController {
       const {
         NOME,
         OBEJTIVO,
-        PONTO_INICIAL,
         ID_CLIENT,
         START_TIME,
         END_TIME,
@@ -90,7 +87,6 @@ export default class CampanhaController {
       const updateData: any = {};
       if (NOME !== undefined) updateData.NOME = NOME;
       if (OBEJTIVO !== undefined) updateData.OBEJTIVO = OBEJTIVO;
-      if (PONTO_INICIAL !== undefined) updateData.PONTO_INICIAL = PONTO_INICIAL;
       if (ID_CLIENT !== undefined) updateData.ID_CLIENT = ID_CLIENT;
       if (START_TIME !== undefined) updateData.START_TIME = new Date(START_TIME);
       if (END_TIME !== undefined) updateData.END_TIME = new Date(END_TIME);

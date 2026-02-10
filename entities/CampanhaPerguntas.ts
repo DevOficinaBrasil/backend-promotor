@@ -12,6 +12,13 @@ import {
 import Campanha from "./Campanha";
 import CampanhaResults from "./CampanhaResults";
 
+export enum TipoPergunta {
+  String = "String",
+  Integer = "Integer",
+  Boolean = "Boolean",
+  Date = "Date",
+}
+
 @Entity({ schema: "CAMPANHAS_OB", name: "CAMPANHA_PERGUNTAS" })
 export default class CampanhaPerguntas {
   @PrimaryGeneratedColumn({ type: "int", name: "ID_PERGUNTAS" })
@@ -23,8 +30,13 @@ export default class CampanhaPerguntas {
   @Column({ type: "varchar", length: 500, nullable: true, name: "PERGUNTA" })
   PERGUNTA?: string;
 
-  @Column({ type: "varchar", length: 50, nullable: true, name: "TIPO" })
-  TIPO?: string;
+  @Column({
+    type: "enum",
+    enum: TipoPergunta,
+    nullable: true,
+    name: "TIPO",
+  })
+  TIPO?: TipoPergunta;
 
   @UpdateDateColumn({
     type: "timestamp",
