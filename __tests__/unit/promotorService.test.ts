@@ -68,7 +68,7 @@ describe('PromotorService', () => {
       const mockCampanhaPromotorRepository = {
         find: jest.fn().mockResolvedValue([]),
         create: jest.fn().mockReturnValue(mockCampanhaPromotor),
-        save: jest.fn().mockResolvedValue(mockCampanhaPromotor),
+        save: jest.fn().mockResolvedValue([mockCampanhaPromotor]),
       };
 
       (AppDataSourceSync.getRepository as jest.Mock)
@@ -95,7 +95,7 @@ describe('PromotorService', () => {
         ID_CAMPANHA: 10,
         ID_PROMOTOR: 1,
       });
-      expect(mockCampanhaPromotorRepository.save).toHaveBeenCalled();
+      expect(mockCampanhaPromotorRepository.save).toHaveBeenCalledTimes(1);
     });
 
     it('should create a promotor with multiple campaign IDs', async () => {
@@ -105,6 +105,12 @@ describe('PromotorService', () => {
         EMAIL: 'test@example.com',
       };
 
+      const mockRelationships = [
+        { ID_CAMPANHA_PROMOTOR: 1, ID_CAMPANHA: 10, ID_PROMOTOR: 1 },
+        { ID_CAMPANHA_PROMOTOR: 2, ID_CAMPANHA: 20, ID_PROMOTOR: 1 },
+        { ID_CAMPANHA_PROMOTOR: 3, ID_CAMPANHA: 30, ID_PROMOTOR: 1 },
+      ];
+
       const mockPromotorRepository = {
         create: jest.fn().mockReturnValue(mockPromotor),
         save: jest.fn().mockResolvedValue(mockPromotor),
@@ -113,7 +119,7 @@ describe('PromotorService', () => {
       const mockCampanhaPromotorRepository = {
         find: jest.fn().mockResolvedValue([]),
         create: jest.fn((data) => ({ ...data, ID_CAMPANHA_PROMOTOR: Math.random() })),
-        save: jest.fn((data) => Promise.resolve(data)),
+        save: jest.fn().mockResolvedValue(mockRelationships),
       };
 
       (AppDataSourceSync.getRepository as jest.Mock)
@@ -137,7 +143,7 @@ describe('PromotorService', () => {
         },
       });
       expect(mockCampanhaPromotorRepository.create).toHaveBeenCalledTimes(3);
-      expect(mockCampanhaPromotorRepository.save).toHaveBeenCalledTimes(3);
+      expect(mockCampanhaPromotorRepository.save).toHaveBeenCalledTimes(1); // Bulk save
     });
   });
 
@@ -152,7 +158,7 @@ describe('PromotorService', () => {
       const mockRepository = {
         find: jest.fn().mockResolvedValue([]),
         create: jest.fn().mockReturnValue(mockCampanhaPromotor),
-        save: jest.fn().mockResolvedValue(mockCampanhaPromotor),
+        save: jest.fn().mockResolvedValue([mockCampanhaPromotor]),
       };
 
       (AppDataSourceSync.getRepository as jest.Mock).mockReturnValue(mockRepository);
@@ -170,13 +176,20 @@ describe('PromotorService', () => {
         ID_CAMPANHA: 10,
         ID_PROMOTOR: 5,
       });
+      expect(mockRepository.save).toHaveBeenCalledTimes(1);
     });
 
     it('should link a promotor to multiple campaigns', async () => {
+      const mockRelationships = [
+        { ID_CAMPANHA_PROMOTOR: 1, ID_CAMPANHA: 10, ID_PROMOTOR: 5 },
+        { ID_CAMPANHA_PROMOTOR: 2, ID_CAMPANHA: 20, ID_PROMOTOR: 5 },
+        { ID_CAMPANHA_PROMOTOR: 3, ID_CAMPANHA: 30, ID_PROMOTOR: 5 },
+      ];
+
       const mockRepository = {
         find: jest.fn().mockResolvedValue([]),
         create: jest.fn((data) => ({ ...data, ID_CAMPANHA_PROMOTOR: Math.random() })),
-        save: jest.fn((data) => Promise.resolve(data)),
+        save: jest.fn().mockResolvedValue(mockRelationships),
       };
 
       (AppDataSourceSync.getRepository as jest.Mock).mockReturnValue(mockRepository);
@@ -185,7 +198,7 @@ describe('PromotorService', () => {
 
       expect(result).toHaveLength(3);
       expect(mockRepository.create).toHaveBeenCalledTimes(3);
-      expect(mockRepository.save).toHaveBeenCalledTimes(3);
+      expect(mockRepository.save).toHaveBeenCalledTimes(1); // Bulk save
     });
 
     it('should not create duplicate relationships', async () => {
@@ -226,7 +239,7 @@ describe('PromotorService', () => {
       const mockRepository = {
         find: jest.fn().mockResolvedValue([existingRelationship]),
         create: jest.fn().mockReturnValue(newRelationship),
-        save: jest.fn().mockResolvedValue(newRelationship),
+        save: jest.fn().mockResolvedValue([newRelationship]),
       };
 
       (AppDataSourceSync.getRepository as jest.Mock).mockReturnValue(mockRepository);

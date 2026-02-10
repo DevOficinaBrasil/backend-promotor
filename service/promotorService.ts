@@ -208,12 +208,16 @@ export default class PromotorService {
           ID_CAMPANHA: campanhaId,
           ID_PROMOTOR: promotorId,
         });
-        
-        const saved = await campanhaPromotorRepository.save(campanhaPromotor);
-        newRelationships.push(saved);
+        newRelationships.push(campanhaPromotor);
       }
     }
     
-    return newRelationships;
+    // Bulk save all new relationships
+    if (newRelationships.length > 0) {
+      const savedRelationships = await campanhaPromotorRepository.save(newRelationships);
+      return savedRelationships;
+    }
+    
+    return [];
   }
 }
