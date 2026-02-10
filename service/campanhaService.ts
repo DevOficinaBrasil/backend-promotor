@@ -136,8 +136,9 @@ export default class CampanhaService {
 
     // Extract oficina IDs (filter is needed for type safety in case ID_OFICINA is null/undefined)
     const oficinas = rotasPromotor
-      .filter(rota => rota.ID_OFICINA != null)
-      .map(rota => ({ ID_OFICINA: rota.ID_OFICINA! }));
+      .map(rota => rota.ID_OFICINA)
+      .filter((id): id is number => id != null)
+      .map(id => ({ ID_OFICINA: id }));
 
     return {
       ...campanha,
