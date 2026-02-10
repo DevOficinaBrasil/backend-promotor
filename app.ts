@@ -3,12 +3,19 @@ import * as dotenv from "dotenv";
 import routes from "./api";
 import { AppDataSourceSync } from "./data-source";
 import cors from "cors";
+import { openAPIGenerator } from "./config/openapi";
 
 dotenv.config();
 
 const app = express();
 app.use(cors());
 app.use(express.json());
+
+// OpenAPI JSON endpoint
+app.get("/openapi.json", (req, res) => {
+  const openApiDocument = openAPIGenerator.generateDocument();
+  res.json(openApiDocument);
+});
 
 // API documentation route
 app.get("/docs", (req, res) => {
