@@ -1,6 +1,9 @@
 import { Request, Response } from "express";
 import PromotorService from "../service/promotorService";
 import Promotor from "../entities/Promotor";
+import jwt from "jsonwebtoken";
+
+const SECRET_KEY = process.env.JWT_SECRET;
 
 export default class PromotorController {
   /**
@@ -125,6 +128,61 @@ export default class PromotorController {
       console.error("Erro ao deletar promotor:", error);
       return res.status(500).json({
         message: "Erro interno ao deletar promotor.",
+        error: error instanceof Error ? error.message : "Erro desconhecido"
+      });
+    }
+  };
+
+  /**
+   * Login a promoter
+   * POST /promotor/login
+   */
+  static loginPromotor = async (req: Request, res: Response) => {
+    try {
+      if (!SECRET_KEY) {
+        return res.status(500).json({
+          message: "JWT secret não configurado."
+        });
+      }
+
+      const { EMAIL, SENHA } = req.body;
+
+      // Validate credentials
+      const promotor = await PromotorService.loginPromotor(EMAIL, SENHA);
+      
+      if (!promotor) {
+        return res.status(401).json({
+          message: "Email ou senha inválidos."
+        });
+      }
+
+      // Generate JWT token
+      const token = jwt.sign(
+        { 
+          promotor: {
+            ID_PROMOTOR: promotor.ID_PROMOTOR,
+            NOME: promotor.NOME,
+            EMAIL: promotor.EMAIL,
+            CPF: promotor.CPF,
+            ID_CLIENT: promotor.ID_CLIENT
+          }
+        },
+        SECRET_KEY,
+        { expiresIn: '24h' }
+      );
+
+      // Remove password from response
+      const { SENHA: _, ...promotorSemSenha } = promotor;
+
+      return res.status(200).json({
+        message: "Login realizado com sucesso.",
+        token,
+        promotor: promotorSemSenha
+      });
+    } catch (error) {
+      console.error("Erro ao fazer login:", error);
+      return res.status(500).json({
+        message: "Erro interno ao fazer login.",
         error: error instanceof Error ? error.message : "Erro desconhecido"
       });
     }

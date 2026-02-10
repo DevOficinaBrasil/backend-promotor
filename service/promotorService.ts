@@ -90,4 +90,46 @@ export default class PromotorService {
 
     return promotor;
   }
+
+  /**
+   * Finds a promoter by email
+   * @param email - The promoter email to find
+   * @returns The promoter or null if not found
+   */
+  static async findPromotorByEmail(email: string): Promise<Promotor | null> {
+    const promotorRepository = AppDataSourceSync.getRepository(Promotor);
+    
+    const promotor = await promotorRepository.findOne({
+      where: { EMAIL: email }
+    });
+
+    return promotor;
+  }
+
+  /**
+   * Validates promoter login credentials
+   * @param email - The promoter email
+   * @param senha - The plain text password
+   * @returns The promoter if credentials are valid, null otherwise
+   */
+  static async loginPromotor(email: string, senha: string): Promise<Promotor | null> {
+    const promotor = await this.findPromotorByEmail(email);
+    
+    if (!promotor || !promotor.SENHA) {
+      return null;
+    }
+
+    // Decrypt the stored password and compare with the provided password
+    try {
+      const decryptedPassword = decrypt(promotor.SENHA);
+      
+      if (decryptedPassword === senha) {
+        return promotor;
+      }
+    } catch (error) {
+      console.error('Error decrypting password:', error);
+    }
+    
+    return null;
+  }
 }
