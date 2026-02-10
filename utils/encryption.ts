@@ -3,13 +3,15 @@ import crypto from "crypto";
 const ALGORITHM = "aes-256-cbc";
 const ENCRYPTION_KEY = process.env.CRIPTKEY || "";
 
-if (!ENCRYPTION_KEY) {
-  console.warn("CRIPTKEY não configurada no ambiente");
+// Validate encryption key on startup
+if (!ENCRYPTION_KEY || ENCRYPTION_KEY.length < 32) {
+  throw new Error("CRIPTKEY must be configured and at least 32 characters long for secure encryption");
 }
 
-// Ensure key is 32 bytes for AES-256
+// Ensure key is exactly 32 bytes for AES-256
 const getKey = (): Buffer => {
-  const key = ENCRYPTION_KEY.padEnd(32, "0").substring(0, 32);
+  // Take first 32 bytes or pad with zeros if needed
+  const key = ENCRYPTION_KEY.substring(0, 32).padEnd(32, "0");
   return Buffer.from(key, "utf8");
 };
 
@@ -19,7 +21,13 @@ const getKey = (): Buffer => {
  * @returns The encrypted text in format: iv:encryptedData
  */
 export const encrypt = (text: string): string => {
-  if (!text) return text;
+  if (text === null || text === undefined) {
+    throw new Error("Cannot encrypt null or undefined value");
+  }
+  
+  if (text === "") {
+    throw new Error("Cannot encrypt empty string");
+  }
   
   const iv = crypto.randomBytes(16);
   const cipher = crypto.createCipheriv(ALGORITHM, getKey(), iv);
@@ -36,7 +44,13 @@ export const encrypt = (text: string): string => {
  * @returns The decrypted text
  */
 export const decrypt = (text: string): string => {
-  if (!text || !text.includes(":")) return text;
+  if (text === null || text === undefined) {
+    throw new Error("Cannot decrypt null or undefined value");
+  }
+  
+  if (!text.includes(":")) {
+    throw new Error("Invalid encrypted text format - expected format: iv:encryptedData");
+  }
   
   const [ivHex, encryptedData] = text.split(":");
   const iv = Buffer.from(ivHex, "hex");
