@@ -9,42 +9,110 @@ The oficinas nearby API (`/oficina/nearby`) has been enhanced to include additio
 - `flag_treinamento` - Training flag (baixo/alto)
 - `cor_icone` - Icon color (cinza/azul/etc.)
 
-## Database Location
+## ⚠️ Security Note
 
-The DuckDB database is located at: `/duckdb/oficinas_mock 1.duckdb`
+**IMPORTANT**: The original implementation used `@duckdb/node-api` which was flagged as malware by GitHub security advisories. 
 
-The database contains a table named `oficinas` with the following structure:
-- `id_usuario` - User ID (can be NULL)
-- `id_oficina` - Workshop ID (used for joining)
-- `flag_engajamento` - Engagement level
-- `flag_treinamento` - Training level
-- `flag_sentimento` - Sentiment
-- `cor_icone` - Icon color
+The implementation has been changed to use a **secure JSON-based approach** instead:
+- DuckDB data is exported to `duckdb/oficinas_data.json`
+- Data is loaded into memory at startup
+- No vulnerable packages are used
+- Fast O(1) lookups using Map data structure
+
+## Data Source
+
+### JSON File Location
+The oficinas data is stored at: `/duckdb/oficinas_data.json`
+
+This JSON file contains oficina data with the structure:
+```json
+{
+  "395444": {
+    "id_oficina": 395444,
+    "flag_engajamento": "alto",
+    "flag_treinamento": "baixo",
+    "flag_sentimento": "neutro",
+    "cor_icone": "azul"
+  }
+}
+```
+
+### Updating the Data
+
+To update the oficinas data, you need to export it from the DuckDB file:
+
+**Option 1: Using Python with DuckDB**
+```python
+import duckdb
+import json
+
+conn = duckdb.connect('duckdb/oficinas_mock 1.duckdb', read_only=True)
+result = conn.execute("""
+    SELECT 
+        id_oficina,
+        LOWER(flag_engajamento) as flag_engajamento,
+        LOWER(flag_treinamento) as flag_treinamento,
+        LOWER(flag_sentimento) as flag_sentimento,
+        cor_icone
+    FROM oficinas
+    WHERE id_oficina IS NOT NULL
+""").fetchall()
+
+data = {}
+for row in result:
+    data[str(row[0])] = {
+        "id_oficina": row[0],
+        "flag_engajamento": row[1] or "baixo",
+        "flag_treinamento": row[2] or "baixo",
+        "flag_sentimento": row[3] or "neutro",
+        "cor_icone": row[4] or "cinza"
+    }
+
+with open('duckdb/oficinas_data.json', 'w') as f:
+    json.dump(data, f, indent=2)
+
+conn.close()
+```
+
+**Option 2: Using DuckDB CLI**
+```bash
+duckdb "duckdb/oficinas_mock 1.duckdb" -json "
+SELECT 
+    id_oficina,
+    LOWER(flag_engajamento) as flag_engajamento,
+    LOWER(flag_treinamento) as flag_treinamento,
+    LOWER(flag_sentimento) as flag_sentimento,
+    cor_icone
+FROM oficinas
+WHERE id_oficina IS NOT NULL
+" > duckdb/oficinas_data.json
+```
 
 ## Implementation Details
 
 ### DuckDBClient Utility
 
-A new utility class `DuckDBClient` has been created in `utils/duckdbClient.ts` that:
+The `DuckDBClient` in `utils/duckdbClient.ts`:
 
-1. Creates and maintains a singleton DuckDB instance
-2. Queries the oficinas table by ID
-3. Returns results as a Map for efficient lookup
-4. Handles errors gracefully by returning empty data instead of failing
+1. Loads the JSON file once at first use (cached in memory)
+2. Provides O(1) lookup performance using Map
+3. Validates IDs before querying
+4. Returns empty data on errors (fault-tolerant)
+5. **Zero external dependencies** (uses only Node.js `fs` module)
 
 ### Service Integration
 
-The `OficinaService.findNearestOficinas()` method has been updated to:
+The `OficinaService.findNearestOficinas()` method:
 
-1. Query PostgreSQL for nearby oficinas using the Haversine formula
-2. Extract all oficina IDs from the results
-3. Query DuckDB for additional data using the IDs
-4. Merge the DuckDB data into the PostgreSQL results
-5. Provide default values if DuckDB data is not found
+1. Queries PostgreSQL for nearby oficinas
+2. Extracts oficina IDs from results
+3. Queries the JSON data using DuckDBClient
+4. Merges data into PostgreSQL results
+5. Provides default values if data is missing
 
 ### Response Schema
 
-The `OficinaSchema` has been updated to include the new optional fields:
+The `OficinaSchema` includes the optional fields:
 - `flag_engajamento?: string`
 - `flag_sentimento?: string`
 - `flag_treinamento?: string`
@@ -54,31 +122,24 @@ The `OficinaSchema` has been updated to include the new optional fields:
 
 ### Manual Testing
 
-To test the integration manually:
-
-1. Ensure the DuckDB file exists at `/duckdb/oficinas_mock 1.duckdb`
-2. Start the server
-3. Make a request to `/oficina/nearby` with authentication:
-
 ```bash
 curl -X GET "http://localhost:3333/oficina/nearby?latitude=-23.675817&longitude=-46.6800146&limit=10" \
   -H "Authorization: Bearer YOUR_TOKEN"
 ```
 
-Expected response format:
+Expected response:
 ```json
 {
   "message": "Oficinas encontradas com sucesso.",
   "data": [
     {
-      "ID_OFICINA": 410815,
-      "NOME_FANTASIA": "50.165.954 FABIANO CESAR DA ROSA",
-      ...
+      "ID_OFICINA": 395444,
+      "NOME_FANTASIA": "...",
       "distance": 0,
-      "flag_engajamento": "baixo",
+      "flag_engajamento": "alto",
       "flag_sentimento": "neutro",
-      "flag_treinamento": "alto",
-      "cor_icone": "cinza"
+      "flag_treinamento": "baixo",
+      "cor_icone": "azul"
     }
   ],
   "count": 1
@@ -87,8 +148,6 @@ Expected response format:
 
 ### Unit Testing
 
-The DuckDB utility can be tested independently:
-
 ```typescript
 import { DuckDBClient } from './utils/duckdbClient';
 
@@ -96,21 +155,18 @@ async function test() {
   const data = await DuckDBClient.getOficinaDataByIds([395444, 393991]);
   console.log(data);
 }
-
-test();
 ```
 
 ## Error Handling
 
-The integration is designed to be fault-tolerant:
-
-- If DuckDB query fails, it returns an empty Map
-- Missing DuckDB data for an oficina results in default values being used
-- The PostgreSQL query is independent and will work even if DuckDB fails
+The integration is fault-tolerant:
+- JSON file errors return an empty Map
+- Missing data results in default values
+- PostgreSQL query works independently
 
 ## Default Values
 
-When DuckDB data is not available for an oficina:
+When data is not available for an oficina:
 - `flag_engajamento`: "baixo"
 - `flag_sentimento`: "neutro"
 - `flag_treinamento`: "baixo"
@@ -118,6 +174,18 @@ When DuckDB data is not available for an oficina:
 
 ## Performance Considerations
 
-- DuckDB queries use a Map-based lookup for O(1) merge performance
-- The DuckDB instance is reused across requests (singleton pattern)
-- Only one DuckDB query is made per API request, regardless of the number of results
+- **Fast**: Data is loaded into memory once and cached
+- **Efficient**: O(1) lookup performance using Map
+- **Lightweight**: No database connections or native modules
+- **Secure**: No vulnerable packages, pure JavaScript/TypeScript
+
+## Reloading Data
+
+To reload the JSON data without restarting the server:
+
+```typescript
+import { DuckDBClient } from './utils/duckdbClient';
+
+// Reload the data
+DuckDBClient.reloadData();
+```

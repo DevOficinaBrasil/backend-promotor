@@ -1,4 +1,4 @@
-import { DuckDBInstance } from '@duckdb/node-api';
+import * as fs from 'fs';
 import path from 'path';
 
 interface DuckDBOficinaData {
@@ -10,23 +10,43 @@ interface DuckDBOficinaData {
 }
 
 export class DuckDBClient {
-  private static instance: DuckDBInstance | null = null;
-  private static dbPath = path.join(__dirname, '..', 'duckdb', 'oficinas_mock 1.duckdb');
+  private static dataCache: Map<number, DuckDBOficinaData> | null = null;
+  private static jsonPath = path.join(__dirname, '..', 'duckdb', 'oficinas_data.json');
 
   /**
-   * Gets or creates a DuckDB instance
+   * Loads the oficinas data from JSON file into memory
+   * This is a secure alternative to using the malware-flagged @duckdb/node-api package
    */
-  private static async getInstance(): Promise<DuckDBInstance> {
-    if (!this.instance) {
-      this.instance = await DuckDBInstance.create(this.dbPath);
+  private static loadData(): Map<number, DuckDBOficinaData> {
+    if (this.dataCache) {
+      return this.dataCache;
     }
-    return this.instance;
+
+    try {
+      const jsonData = fs.readFileSync(this.jsonPath, 'utf-8');
+      const data: Record<string, DuckDBOficinaData> = JSON.parse(jsonData);
+      
+      this.dataCache = new Map();
+      Object.values(data).forEach(oficina => {
+        if (oficina.id_oficina) {
+          this.dataCache!.set(oficina.id_oficina, oficina);
+        }
+      });
+
+      console.log(`Loaded ${this.dataCache.size} oficinas records from JSON`);
+      return this.dataCache;
+    } catch (error) {
+      console.error('Error loading oficinas data from JSON:', error);
+      this.dataCache = new Map(); // Return empty map on error
+      return this.dataCache;
+    }
   }
 
   /**
-   * Queries the oficinas table in DuckDB for a specific set of oficina IDs
+   * Queries the oficinas data for a specific set of oficina IDs
+   * Now uses a secure JSON-based approach instead of the malware-flagged @duckdb/node-api
    * @param oficinaIds - Array of oficina IDs to query
-   * @returns Map of oficina IDs to their DuckDB data
+   * @returns Map of oficina IDs to their data
    */
   static async getOficinaDataByIds(
     oficinaIds: number[]
@@ -36,10 +56,10 @@ export class DuckDBClient {
     }
 
     try {
-      const instance = await this.getInstance();
-      const connection = await instance.connect();
+      // Load data from JSON (cached after first load)
+      const allData = this.loadData();
 
-      // Validate all IDs are valid numbers to prevent SQL injection
+      // Validate IDs and filter
       const validIds = oficinaIds.filter(id => 
         Number.isInteger(id) && id > 0 && Number.isSafeInteger(id)
       );
@@ -48,67 +68,35 @@ export class DuckDBClient {
         return new Map();
       }
 
-      // Build IN clause with validated numeric values
-      const query = `
-        SELECT 
-          id_oficina,
-          flag_engajamento,
-          flag_treinamento,
-          flag_sentimento,
-          cor_icone
-        FROM oficinas
-        WHERE id_oficina IN (${validIds.join(', ')})
-      `;
-
-      const result = await connection.run(query);
-
-      // Get column names
-      const columnNames: string[] = [];
-      for (let i = 0; i < result.columnCount; i++) {
-        columnNames.push(result.columnName(i));
-      }
-
-      // Get rows
-      const rows = await result.getRows();
-
-      // Convert to map for efficient lookup
-      const dataMap = new Map<number, DuckDBOficinaData>();
-
-      rows.forEach((row: unknown[]) => {
-        const obj: Record<string, unknown> = {};
-        columnNames.forEach((colName, idx) => {
-          // Convert BigInt to Number for id_oficina
-          obj[colName] = typeof row[idx] === 'bigint' ? Number(row[idx]) : row[idx];
-        });
-
-        const idOficina = obj.id_oficina;
-        if (typeof idOficina === 'number') {
-          dataMap.set(idOficina, {
-            id_oficina: idOficina,
-            flag_engajamento: typeof obj.flag_engajamento === 'string' ? obj.flag_engajamento.toLowerCase() : 'baixo',
-            flag_treinamento: typeof obj.flag_treinamento === 'string' ? obj.flag_treinamento.toLowerCase() : 'baixo',
-            flag_sentimento: typeof obj.flag_sentimento === 'string' ? obj.flag_sentimento.toLowerCase() : 'neutro',
-            cor_icone: typeof obj.cor_icone === 'string' ? obj.cor_icone : 'cinza',
-          });
+      // Extract requested IDs
+      const result = new Map<number, DuckDBOficinaData>();
+      validIds.forEach(id => {
+        const data = allData.get(id);
+        if (data) {
+          result.set(id, data);
         }
       });
 
-      return dataMap;
+      return result;
     } catch (error) {
-      console.error('Error querying DuckDB:', error);
+      console.error('Error querying oficinas data:', error);
       // Return empty map on error to not break the API
       return new Map();
     }
   }
 
   /**
-   * Closes the DuckDB instance (call on application shutdown)
+   * Clears the data cache (useful for testing or reloading data)
    */
   static async close(): Promise<void> {
-    if (this.instance) {
-      // DuckDB instance doesn't have a close method in this version
-      // Just set to null to allow garbage collection
-      this.instance = null;
-    }
+    this.dataCache = null;
+  }
+
+  /**
+   * Reloads the data from the JSON file
+   */
+  static reloadData(): void {
+    this.dataCache = null;
+    this.loadData();
   }
 }
