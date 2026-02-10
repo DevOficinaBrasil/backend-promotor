@@ -61,6 +61,7 @@ export class OpenAPIDocumentGenerator {
         },
       ],
       tags: [
+        { name: 'Campanha', description: 'Operations related to campaigns' },
         { name: 'Marca', description: 'Operations related to marcas' },
         { name: 'Modelo', description: 'Operations related to modelos' },
         { name: 'Versao', description: 'Operations related to versões' },
