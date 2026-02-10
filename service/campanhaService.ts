@@ -173,4 +173,23 @@ export default class CampanhaService {
 
     return campanha;
   }
+
+  /**
+   * Gets all campaigns by client ID
+   * @param clientId - The client ID
+   * @returns Array of campaigns for the client or empty array if none found
+   */
+  static async getCampanhasByClientId(clientId: number): Promise<Campanha[]> {
+    const campanhaRepository = AppDataSourceSync.getRepository(Campanha);
+    
+    const campanhas = await campanhaRepository.find({
+      where: { ID_CLIENT: clientId },
+      relations: ['campanhaPromotores', 'campanhaPromotores.promotor', 'campanhaPerguntas'],
+      order: {
+        CREATED_AT: 'DESC',
+      },
+    });
+
+    return campanhas;
+  }
 }

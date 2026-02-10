@@ -47,6 +47,13 @@ export const CampanhaIdParamsSchema = z.object({
 });
 
 /**
+ * Client ID params schema
+ */
+export const ClientIdParamsSchema = z.object({
+  clientId: z.coerce.number().int().positive(),
+});
+
+/**
  * Create campanha response schema
  */
 export const CreateCampanhaResponseSchema = z.object({
@@ -174,9 +181,9 @@ export const CampanhaPromotorSchema = z.object({
  * CampanhaPergunta schema (simplified)
  */
 export const CampanhaPerguntaSchema = z.object({
-  ID_CAMPANHA_PERGUNTAS: z.number(),
+  ID_PERGUNTAS: z.number(),
   ID_CAMPANHA: z.number().optional(),
-  TIPO_PERGUNTA: z.string().optional(),
+  TIPO: z.string().optional(),
   PERGUNTA: z.string().optional(),
   CREATED_AT: z.date().optional(),
   UPDATED_AT: z.date().optional(),
@@ -213,4 +220,12 @@ export const GetAllCampanhasResponseSchema = z.object({
 export const GetCampanhaByIdResponseSchema = z.object({
   message: z.string(),
   data: CampanhaWithRelationsSchema,
+});
+
+/**
+ * Get campanhas by client ID response schema
+ */
+export const GetCampanhasByClientIdResponseSchema = z.object({
+  message: z.string(),
+  data: z.array(CampanhaWithRelationsSchema),
 });
