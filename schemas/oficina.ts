@@ -11,6 +11,8 @@ export const GetOficinasByLocationQuerySchema = z.object({
 
 /**
  * Oficina schema (simplified for API response)
+ * Note: LATITUDE and LONGITUDE are stored as strings in the database
+ * but are used as numbers for calculations
  */
 export const OficinaSchema = z.object({
   ID_OFICINA: z.number(),
@@ -26,11 +28,11 @@ export const OficinaSchema = z.object({
   CIDADE: z.string().optional(),
   CEP: z.string().optional(),
   COMPLEMENTO: z.string().optional(),
-  LATITUDE: z.string().optional(),
-  LONGITUDE: z.string().optional(),
+  LATITUDE: z.string().optional(), // Stored as string in DB
+  LONGITUDE: z.string().optional(), // Stored as string in DB
   ATIVO: z.string().optional(),
   STATUS: z.string().optional(),
-  distance: z.number().optional(), // Distance in kilometers
+  distance: z.number().optional(), // Distance in kilometers (calculated)
 });
 
 /**

@@ -19,6 +19,7 @@ export default class OficinaService {
 
     // The Haversine formula to calculate distance between two points on Earth
     // Distance in kilometers
+    // Note: LATITUDE and LONGITUDE are stored as strings in DB, so we check for empty strings
     const query = `
       SELECT 
         *,
