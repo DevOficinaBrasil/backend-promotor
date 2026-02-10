@@ -4,8 +4,7 @@ import {
   Column,
   OneToMany,
   CreateDateColumn,
-  UpdateDateColumn,
-  DeleteDateColumn,
+  UpdateDateColumn
 } from "typeorm";
 import RotaPromotor from "./RotaPromotor";
 import Usuario from "./Usuario";
@@ -68,8 +67,7 @@ export default class Oficina {
   })
   UPDATED_AT?: Date;
 
-  @DeleteDateColumn({ type: "timestamp", nullable: true, name: "DELETED_AT" })
-  DELETED_AT?: Date;
+
 
   @OneToMany(() => RotaPromotor, (rotaPromotor) => rotaPromotor.oficina)
   rotasPromotor: RotaPromotor[];
