@@ -29,18 +29,18 @@ export default class OficinaService {
         (
           ${EARTH_RADIUS_KM} * acos(
             cos(radians($1)) * 
-            cos(radians(CAST(LATITUDE AS DOUBLE PRECISION))) * 
-            cos(radians(CAST(LONGITUDE AS DOUBLE PRECISION)) - radians($2)) + 
+            cos(radians(CAST("LATITUDE" AS DOUBLE PRECISION))) * 
+            cos(radians(CAST("LONGITUDE" AS DOUBLE PRECISION)) - radians($2)) + 
             sin(radians($1)) * 
-            sin(radians(CAST(LATITUDE AS DOUBLE PRECISION)))
+            sin(radians(CAST("LATITUDE" AS DOUBLE PRECISION)))
           )
         ) AS distance
       FROM "MAIN_REGISTER"."OFICINA"
       WHERE 
-        LATITUDE IS NOT NULL 
-        AND LONGITUDE IS NOT NULL
-        AND LATITUDE != ''
-        AND LONGITUDE != ''
+        "LATITUDE" IS NOT NULL 
+        AND "LONGITUDE" IS NOT NULL
+        AND "LATITUDE" != ''
+        AND "LONGITUDE" != ''
       ORDER BY distance ASC
       LIMIT $3
     `;
