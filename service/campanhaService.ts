@@ -88,12 +88,12 @@ export default class CampanhaService {
    * Gets the active campaign for a promoter based on current datetime
    * @param idPromotor - The promoter ID
    * @param datetime - Optional datetime to check (defaults to current time)
-   * @returns The active campaign with oficinas and rotas arrays or null if not found
+   * @returns The active campaign with rotas array (each rota includes nested oficina) or null if not found
    */
   static async getActiveCampanhaByPromotor(
     idPromotor: number,
     datetime?: Date
-  ): Promise<(Campanha & { oficinas: Oficina[], rotas: RotaPromotor[] }) | null> {
+  ): Promise<(Campanha & { rotas: RotaPromotor[] }) | null> {
     const currentDatetime = datetime || new Date();
     const campanhaRepository = AppDataSourceSync.getRepository(Campanha);
     const campanhaPromotorRepository = AppDataSourceSync.getRepository(CampanhaPromotor);
@@ -128,7 +128,6 @@ export default class CampanhaService {
     const campanha = activeCampanha.campanha;
 
     // Get the rotas (routes) for this campaign promoter with join to OFICINA table
-    // We return both the routes and extract their oficinas for backward compatibility
     const rotasPromotor = await rotaPromotorRepository.find({
       where: {
         ID_CAMPANHA_PROMOTOR: activeCampanha.ID_CAMPANHA_PROMOTOR,
@@ -137,14 +136,8 @@ export default class CampanhaService {
       relations: ['oficina'],
     });
 
-    // Extract oficina data (filter out null/undefined oficinas)
-    const oficinas = rotasPromotor
-      .map(rota => rota.oficina)
-      .filter((oficina): oficina is Oficina => oficina != null);
-
     return {
       ...campanha,
-      oficinas,
       rotas: rotasPromotor,
     };
   }
