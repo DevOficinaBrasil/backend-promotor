@@ -13,6 +13,15 @@ export const StatusRotaSchema = z.enum([
 ]);
 
 /**
+ * Redirect Rota enum schema
+ */
+export const RedirectRotaSchema = z.enum([
+  'SAC',
+  'VENDAS',
+  'LOGÍSTICA',
+]);
+
+/**
  * Create rota(s) request schema
  * Receives ID_CAMPANHA_PROMOTOR and ID_OFICINA (or array of ID_OFICINA)
  */
@@ -43,7 +52,8 @@ export const UpdateRotaOptionsSchema = z.object({
   SUCCESS: z.boolean().optional(),
   CHECKIN_TIME: z.string().datetime().optional().or(z.date().optional()),
   DONE_AT: z.string().datetime().optional().or(z.date().optional()),
-  OBS: z.string().max(1000, 'OBS deve ter no máximo 1000 caracteres').optional(),
+  OBS: z.string().optional(),
+  REDIRECT: RedirectRotaSchema.optional(),
 });
 
 /**
@@ -65,6 +75,7 @@ export const RotaSchema = z.object({
   CHECKIN_TIME: z.date().optional(),
   DONE_AT: z.date().optional(),
   OBS: z.string().optional(),
+  REDIRECT: RedirectRotaSchema.optional(),
   CREATED_BY: z.number().optional(),
   CREATED_AT: z.date().optional(),
   UPDATED_AT: z.date().optional(),
@@ -108,7 +119,6 @@ export const CampanhaSimplifiedSchema = z.object({
   ID_CAMPANHA: z.number(),
   NOME: z.string(),
   OBEJTIVO: z.string().optional(),
-  PONTO_INICIAL: z.string().optional(),
   ID_CLIENT: z.number().optional(),
   START_TIME: z.date().optional(),
   END_TIME: z.date().optional(),
@@ -168,6 +178,7 @@ export const RotaWithRelationsSchema = z.object({
   CHECKIN_TIME: z.date().optional(),
   DONE_AT: z.date().optional(),
   OBS: z.string().optional(),
+  REDIRECT: RedirectRotaSchema.optional(),
   CREATED_BY: z.number().optional(),
   CREATED_AT: z.date().optional(),
   UPDATED_AT: z.date().optional(),

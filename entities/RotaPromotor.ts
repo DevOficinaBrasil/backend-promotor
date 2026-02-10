@@ -22,6 +22,12 @@ export enum StatusRota {
   CANCELADO = "CANCELADO",
 }
 
+export enum RedirectRota {
+  SAC = "SAC",
+  VENDAS = "VENDAS",
+  LOGISTICA = "LOGÍSTICA",
+}
+
 @Entity({ schema: "CAMPANHAS_OB", name: "ROTA_PROMOTOR" })
 export default class RotaPromotor {
   @PrimaryGeneratedColumn({ type: "int", name: "ID_ROTA_PROMOTOR" })
@@ -50,8 +56,16 @@ export default class RotaPromotor {
   @Column({ type: "timestamp", nullable: true, name: "DONE_AT" })
   DONE_AT?: Date;
 
-  @Column({ type: "varchar", length: 1000, nullable: true, name: "OBS" })
+  @Column({ type: "text", nullable: true, name: "OBS" })
   OBS?: string;
+
+  @Column({
+    type: "enum",
+    enum: RedirectRota,
+    nullable: true,
+    name: "REDIRECT",
+  })
+  REDIRECT?: RedirectRota;
 
   @Column({ type: "int", nullable: true, name: "CREATED_BY" })
   CREATED_BY?: number;

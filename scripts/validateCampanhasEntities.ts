@@ -7,8 +7,8 @@ import "reflect-metadata";
 import Campanha from "../entities/Campanha";
 import Promotor from "../entities/Promotor";
 import CampanhaPromotor from "../entities/CampanhaPromotor";
-import CampanhaPerguntas from "../entities/CampanhaPerguntas";
-import RotaPromotor, { StatusRota } from "../entities/RotaPromotor";
+import CampanhaPerguntas, { TipoPergunta } from "../entities/CampanhaPerguntas";
+import RotaPromotor, { StatusRota, RedirectRota } from "../entities/RotaPromotor";
 import CampanhaResults from "../entities/CampanhaResults";
 
 console.log("🔍 Validando entidades do sistema de campanhas...\n");
@@ -39,7 +39,7 @@ try {
   const campanhaPerguntas = new CampanhaPerguntas({
     ID_CAMPANHA: 1,
     PERGUNTA: "Qual é o produto?",
-    TIPO: "texto",
+    TIPO: TipoPergunta.String,
   });
   console.log("✅ CampanhaPerguntas: Entidade validada com sucesso");
 
@@ -62,7 +62,7 @@ try {
   console.log("\n✨ Todas as entidades foram validadas com sucesso!");
   console.log("\n📊 Resumo:");
   console.log("   - 6 entidades criadas");
-  console.log("   - 1 enum (StatusRota) com 5 valores");
+  console.log("   - 3 enums: StatusRota (5 valores), TipoPergunta (4 valores), RedirectRota (3 valores)");
   console.log("   - Soft delete habilitado em todas as entidades");
   console.log("   - Timestamps automáticos configurados");
   

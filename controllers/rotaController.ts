@@ -1,6 +1,6 @@
 import { Request, Response } from "express";
 import RotaService from "../service/rotaService";
-import RotaPromotor, { StatusRota } from "../entities/RotaPromotor";
+import RotaPromotor, { StatusRota, RedirectRota } from "../entities/RotaPromotor";
 
 export default class RotaController {
   /**
@@ -75,7 +75,7 @@ export default class RotaController {
         });
       }
 
-      const { STATUS, SUCCESS, CHECKIN_TIME, DONE_AT, OBS } = req.body;
+      const { STATUS, SUCCESS, CHECKIN_TIME, DONE_AT, OBS, REDIRECT } = req.body;
 
       // Check if route exists
       const rotaExistente = await RotaService.findRotaById(rotaId);
@@ -94,6 +94,7 @@ export default class RotaController {
         updateData.CHECKIN_TIME = new Date(CHECKIN_TIME);
       if (DONE_AT !== undefined) updateData.DONE_AT = new Date(DONE_AT);
       if (OBS !== undefined) updateData.OBS = OBS;
+      if (REDIRECT !== undefined) updateData.REDIRECT = REDIRECT as RedirectRota;
 
       // Call the service to update the route
       const rotaAtualizada = await RotaService.updateRotaOptions(

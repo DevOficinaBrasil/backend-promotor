@@ -22,9 +22,6 @@ export default class Campanha {
   @Column({ type: "varchar", length: 50, nullable: true, name: "OBEJTIVO" })
   OBEJTIVO?: string;
 
-  @Column({ type: "text", nullable: true, name: "PONTO_INICIAL" })
-  PONTO_INICIAL?: string;
-
   @Column({ type: "int", nullable: true, name: "ID_CLIENT" })
   ID_CLIENT?: number;
 
