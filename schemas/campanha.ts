@@ -181,9 +181,9 @@ export const CampanhaPromotorSchema = z.object({
  * CampanhaPergunta schema (simplified)
  */
 export const CampanhaPerguntaSchema = z.object({
-  ID_CAMPANHA_PERGUNTAS: z.number(),
+  ID_PERGUNTAS: z.number(),
   ID_CAMPANHA: z.number().optional(),
-  TIPO_PERGUNTA: z.string().optional(),
+  TIPO: z.string().optional(),
   PERGUNTA: z.string().optional(),
   CREATED_AT: z.date().optional(),
   UPDATED_AT: z.date().optional(),
