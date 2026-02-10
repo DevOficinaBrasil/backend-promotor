@@ -27,3 +27,11 @@
 ```bash
 docker-compose up -d
 ```
+
+## 📚 Documentação
+
+- [Documentação de API](docs/DOCUMENTACAO_API.md) - Guia para documentação automática de APIs
+- [Entidades de Campanhas](docs/ENTIDADES_CAMPANHAS.md) - Documentação das entidades do sistema de campanhas
+- [Entidade OFICINA](docs/ENTIDADE_OFICINA.md) - Documentação completa da entidade OFICINA
+- [API de Rotas](docs/ROTA_API_TESTING.md) - Testes e documentação da API de rotas
+- [Login de Promotor](docs/LOGIN_PROMOTOR.md) - Documentação do sistema de login
