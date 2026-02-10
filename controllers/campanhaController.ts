@@ -111,4 +111,44 @@ export default class CampanhaController {
       });
     }
   };
+
+  /**
+   * Soft deletes a campaign
+   * DELETE /campanha/delete/:id
+   */
+  static deleteCampanha = async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const campanhaId = parseInt(id, 10);
+
+      if (isNaN(campanhaId)) {
+        return res.status(400).json({
+          message: "ID da campanha inválido."
+        });
+      }
+
+      // Check if campaign exists
+      const campanhaExistente = await CampanhaService.findCampanhaById(campanhaId);
+      
+      if (!campanhaExistente) {
+        return res.status(404).json({
+          message: "Campanha não encontrada."
+        });
+      }
+
+      // Call the service to soft delete the campaign
+      await CampanhaService.deleteCampanha(campanhaId);
+
+      return res.status(200).json({
+        message: "Campanha deletada com sucesso.",
+        data: campanhaExistente
+      });
+    } catch (error) {
+      console.error("Erro ao deletar campanha:", error);
+      return res.status(500).json({
+        message: "Erro interno ao deletar campanha.",
+        error: error instanceof Error ? error.message : "Erro desconhecido"
+      });
+    }
+  };
 }

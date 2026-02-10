@@ -43,6 +43,29 @@ export default class CampanhaService {
   }
 
   /**
+   * Soft deletes a campaign by ID
+   * @param id - The campaign ID to delete
+   * @returns The deleted campaign or null if not found
+   */
+  static async deleteCampanha(id: number): Promise<Campanha | null> {
+    const campanhaRepository = AppDataSourceSync.getRepository(Campanha);
+    
+    // Find the campaign by ID
+    const campanhaExistente = await campanhaRepository.findOne({
+      where: { ID_CAMPANHA: id }
+    });
+
+    if (!campanhaExistente) {
+      return null;
+    }
+
+    // Soft delete the campaign
+    await campanhaRepository.softDelete(id);
+    
+    return campanhaExistente;
+  }
+
+  /**
    * Finds a campaign by ID
    * @param id - The campaign ID to find
    * @returns The campaign or null if not found
