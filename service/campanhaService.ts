@@ -168,7 +168,7 @@ export default class CampanhaService {
     
     const campanha = await campanhaRepository.findOne({
       where: { ID_CAMPANHA: id },
-      relations: ['campanhaPromotores', 'campanhaPromotores.promotor', 'campanhaPerguntas'],
+      relations: ['campanhaPromotores', 'campanhaPromotores.promotor', 'campanhaPromotores.rotasPromotor', 'campanhaPromotores.rotasPromotor.oficina', 'campanhaPerguntas'],
     });
 
     return campanha;
@@ -184,7 +184,7 @@ export default class CampanhaService {
     
     const campanhas = await campanhaRepository.find({
       where: { ID_CLIENT: clientId },
-      relations: ['campanhaPromotores', 'campanhaPromotores.promotor', 'campanhaPerguntas'],
+      relations: ['campanhaPromotores', 'campanhaPromotores.promotor', 'campanhaPromotores.rotasPromotor', 'campanhaPromotores.rotasPromotor.oficina', 'campanhaPerguntas'],
       order: {
         CREATED_AT: 'DESC',
       },
