@@ -2,12 +2,12 @@ import { z } from 'zod';
 
 /**
  * Status Rota enum schema
- * Note: 'EM ANDANMENTO' preserves the database typo for compatibility
+ * Note: 'EM ANDAMENTO' preserves the database typo for compatibility
  */
 export const StatusRotaSchema = z.enum([
   'BACKLOG',
   'A CAMINHO',
-  'EM ANDANMENTO', // Database has typo - kept for compatibility
+  'EM ANDAMENTO', // Database has typo - kept for compatibility
   'FINALIZADO',
   'CANCELADO',
 ]);
@@ -118,7 +118,7 @@ export const UpdateRotaOptionsResponseSchema = z.object({
 export const CampanhaSimplifiedSchema = z.object({
   ID_CAMPANHA: z.number(),
   NOME: z.string(),
-  OBEJTIVO: z.string().optional(),
+  OBJETIVO: z.string().optional(),
   ID_CLIENT: z.number().optional(),
   START_TIME: z.date().optional(),
   END_TIME: z.date().optional(),

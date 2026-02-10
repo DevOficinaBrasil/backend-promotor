@@ -18,9 +18,9 @@ export default class Campanha {
   @Column({ type: "varchar", length: 255, nullable: false, name: "NOME" })
   NOME: string;
 
-  // Note: Field name matches database schema exactly (OBEJTIVO), not corrected to OBJETIVO
-  @Column({ type: "varchar", length: 50, nullable: true, name: "OBEJTIVO" })
-  OBEJTIVO?: string;
+  // Note: Field name matches database schema exactly (OBJETIVO), not corrected to OBJETIVO
+  @Column({ type: "varchar", length: 50, nullable: true, name: "OBJETIVO" })
+  OBJETIVO?: string;
 
   @Column({ type: "int", nullable: true, name: "ID_CLIENT" })
   ID_CLIENT?: number;

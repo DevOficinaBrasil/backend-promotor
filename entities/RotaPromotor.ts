@@ -13,7 +13,6 @@ import CampanhaPromotor from "./CampanhaPromotor";
 import CampanhaResults from "./CampanhaResults";
 import Oficina from "./Oficina";
 
-// Note: Status names match database enum exactly, including typo 'EM ANDANMENTO' instead of 'EM ANDAMENTO'
 export enum StatusRota {
   BACKLOG = "BACKLOG",
   A_CAMINHO = "A CAMINHO",

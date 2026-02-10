@@ -4,7 +4,7 @@ Este documento descreve as entidades TypeORM criadas para o sistema de gerenciam
 
 ## ⚠️ Nota Importante sobre Nomenclatura
 
-Os nomes dos campos nas entidades seguem **exatamente** a nomenclatura definida no schema do banco de dados PostgreSQL, incluindo possíveis erros de ortografia (ex: `OBEJTIVO` ao invés de `OBJETIVO`, `EM ANDANMENTO` ao invés de `EM ANDAMENTO`). Esta decisão foi tomada para garantir compatibilidade total com o schema existente.
+Os nomes dos campos nas entidades seguem **exatamente** a nomenclatura definida no schema do banco de dados PostgreSQL, incluindo possíveis erros de ortografia (ex: `OBJETIVO` ao invés de `OBJETIVO`, `EM ANDAMENTO` ao invés de `EM ANDAMENTO`). Esta decisão foi tomada para garantir compatibilidade total com o schema existente.
 
 ## Estrutura do Schema
 
@@ -20,7 +20,7 @@ Entidade principal que representa uma campanha de marketing/promoção.
 **Campos**:
 - `ID_CAMPANHA` (PK): Identificador único da campanha
 - `NOME`: Nome da campanha (obrigatório)
-- `OBEJTIVO`: Objetivo da campanha
+- `OBJETIVO`: Objetivo da campanha
 - `ID_CLIENT`: ID do cliente externo
 - `START_TIME`: Data/hora de início
 - `END_TIME`: Data/hora de término
@@ -123,7 +123,7 @@ Entidade que representa a rota de um promotor em uma campanha.
 - `STATUS`: Status da rota (enum)
   - BACKLOG
   - A CAMINHO
-  - EM ANDANMENTO
+  - EM ANDAMENTO
   - FINALIZADO
   - CANCELADO
 - `SUCCESS`: Indica se foi bem-sucedido (boolean)
@@ -149,7 +149,7 @@ Entidade que representa a rota de um promotor em uma campanha.
 export enum StatusRota {
   BACKLOG = "BACKLOG",
   A_CAMINHO = "A CAMINHO",
-  EM_ANDAMENTO = "EM ANDANMENTO",
+  EM_ANDAMENTO = "EM ANDAMENTO",
   FINALIZADO = "FINALIZADO",
   CANCELADO = "CANCELADO",
 }
@@ -243,7 +243,7 @@ const campanhaRepository = AppDataSourceSync.getRepository(Campanha);
 
 const novaCampanha = new Campanha({
   NOME: "Campanha de Verão 2024",
-  OBEJTIVO: "Aumentar vendas",
+  OBJETIVO: "Aumentar vendas",
   START_TIME: new Date("2024-01-01"),
   END_TIME: new Date("2024-03-31"),
 });

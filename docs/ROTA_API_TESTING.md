@@ -110,7 +110,7 @@ Updates a route's options (STATUS, SUCCESS, CHECKIN_TIME, DONE_AT, OBS). All fie
 #### Request Body (Partial Update)
 ```json
 {
-  "STATUS": "EM ANDANMENTO",
+  "STATUS": "EM ANDAMENTO",
   "CHECKIN_TIME": "2026-02-10T08:30:00Z"
 }
 ```
@@ -142,7 +142,7 @@ Updates a route's options (STATUS, SUCCESS, CHECKIN_TIME, DONE_AT, OBS). All fie
 The STATUS field accepts the following values:
 - `BACKLOG`
 - `A CAMINHO`
-- `EM ANDANMENTO` (note: this is the actual database value - the typo is preserved for compatibility)
+- `EM ANDAMENTO` (note: this is the actual database value - the typo is preserved for compatibility)
 - `FINALIZADO`
 - `CANCELADO`
 

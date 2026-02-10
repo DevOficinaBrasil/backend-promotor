@@ -17,7 +17,7 @@ try {
   // Validar Campanha
   const campanha = new Campanha({
     NOME: "Campanha Teste",
-    OBEJTIVO: "Teste",
+    OBJETIVO: "Teste",
   });
   console.log("✅ Campanha: Entidade validada com sucesso");
 

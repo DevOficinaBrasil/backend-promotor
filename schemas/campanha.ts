@@ -6,7 +6,7 @@ import { z } from 'zod';
 export const CampanhaSchema = z.object({
   ID: z.number(),
   NOME: z.string(),
-  OBEJTIVO: z.string().optional(),
+  OBJETIVO: z.string().optional(),
   ID_CLIENT: z.number().optional(),
   START_TIME: z.date().optional(),
   END_TIME: z.date().optional(),
@@ -20,7 +20,7 @@ export const CampanhaSchema = z.object({
  */
 export const CreateCampanhaSchema = z.object({
   NOME: z.string().min(1, 'NOME é obrigatório'),
-  OBEJTIVO: z.string().optional(),
+  OBJETIVO: z.string().optional(),
   ID_CLIENT: z.number().optional(),
   START_TIME: z.string().datetime().optional().or(z.date().optional()),
   END_TIME: z.string().datetime().optional().or(z.date().optional()),
@@ -32,7 +32,7 @@ export const CreateCampanhaSchema = z.object({
  */
 export const UpdateCampanhaSchema = z.object({
   NOME: z.string().min(1).optional(),
-  OBEJTIVO: z.string().optional(),
+  OBJETIVO: z.string().optional(),
   ID_CLIENT: z.number().optional(),
   START_TIME: z.string().datetime().optional().or(z.date().optional()),
   END_TIME: z.string().datetime().optional().or(z.date().optional()),
@@ -126,7 +126,7 @@ export const RotaPromotorSchema = z.object({
 export const CampanhaAtivaSchema = z.object({
   ID_CAMPANHA: z.number(),
   NOME: z.string(),
-  OBEJTIVO: z.string().optional(),
+  OBJETIVO: z.string().optional(),
   ID_CLIENT: z.number().optional(),
   START_TIME: z.string().optional(),
   END_TIME: z.string().optional(),
@@ -188,7 +188,7 @@ export const CampanhaPerguntaSchema = z.object({
 export const CampanhaWithRelationsSchema = z.object({
   ID_CAMPANHA: z.number(),
   NOME: z.string(),
-  OBEJTIVO: z.string().optional(),
+  OBJETIVO: z.string().optional(),
   ID_CLIENT: z.number().optional(),
   START_TIME: z.date().optional(),
   END_TIME: z.date().optional(),
