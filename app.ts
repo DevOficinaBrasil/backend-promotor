@@ -1,8 +1,24 @@
+import express from "express";
+import * as dotenv from "dotenv";
+import routes from "./api";
+import { AppDataSourceSync } from "./data-source";
+import cors from "cors";
+
 dotenv.config();
-routes(app);
+
 const app = express();
+app.use(cors());
 app.use(express.json());
-routes(app);
+
+// API documentation route
+app.get("/docs", (req, res) => {
+  const html = `
+    <!doctype html>
+    <html>
+      <head>
+        <title>API Reference</title>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
       </head>
       <body>
         <script
@@ -15,6 +31,9 @@ routes(app);
   `;
   res.send(html);
 });
+
+routes(app);
+
 AppDataSourceSync.initialize()
   .then(() => {
     console.log("Data Source synced has been initialized!");
@@ -32,4 +51,5 @@ AppDataSourceSync.initialize()
 app.listen(process.env.PORT || 8185);
 
 app.get("/ping", (req, res) => res.send({ message: "pong" }));
+
 export default app;
