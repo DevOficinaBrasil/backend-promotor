@@ -4,7 +4,7 @@ Este documento descreve as entidades TypeORM criadas para o sistema de gerenciam
 
 ## ⚠️ Nota Importante sobre Nomenclatura
 
-Os nomes dos campos nas entidades seguem **exatamente** a nomenclatura definida no schema do banco de dados PostgreSQL, incluindo possíveis erros de ortografia (ex: `OBJETIVO` ao invés de `OBJETIVO`, `EM ANDAMENTO` ao invés de `EM ANDAMENTO`). Esta decisão foi tomada para garantir compatibilidade total com o schema existente.
+Os nomes dos campos nas entidades seguem **exatamente** a nomenclatura definida no schema do banco de dados PostgreSQL, incluindo possíveis erros de ortografia Esta decisão foi tomada para garantir compatibilidade total com o schema existente.
 
 ## Estrutura do Schema
 
