@@ -152,39 +152,16 @@ export default class CampanhaController {
    */
   static getCampanhaAtiva = async (req: Request, res: Response) => {
     try {
-      const { ID_PROMOTOR, datetime } = req.query;
-
-      // Validate required field
-      if (!ID_PROMOTOR) {
-        return res.status(400).json({
-          message: "O parâmetro ID_PROMOTOR é obrigatório."
-        });
-      }
-
-      const promotorId = parseInt(ID_PROMOTOR as string, 10);
-      
-      if (isNaN(promotorId)) {
-        return res.status(400).json({
-          message: "ID_PROMOTOR inválido."
-        });
-      }
+      // Use validated query data from validation middleware
+      const validatedQuery = (req as any).validatedQuery || {};
+      const { ID_PROMOTOR, datetime } = validatedQuery;
 
       // Parse datetime if provided, otherwise use current time
-      let currentDatetime: Date;
-      if (datetime) {
-        currentDatetime = new Date(datetime as string);
-        if (isNaN(currentDatetime.getTime())) {
-          return res.status(400).json({
-            message: "Formato de datetime inválido."
-          });
-        }
-      } else {
-        currentDatetime = new Date();
-      }
+      const currentDatetime = datetime ? new Date(datetime) : new Date();
 
       // Get the active campaign
       const campanhaAtiva = await CampanhaService.getActiveCampanhaByPromotor(
-        promotorId,
+        ID_PROMOTOR,
         currentDatetime
       );
 
