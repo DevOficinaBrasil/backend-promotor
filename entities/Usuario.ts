@@ -8,6 +8,7 @@ import {
   OneToMany,
   ManyToOne,
 } from "typeorm";
+import Oficina from "./Oficina";
 
 @Entity({ schema: "MAIN_REGISTER", name: "USUARIO" })
 export default class Usuario {
@@ -112,6 +113,10 @@ export default class Usuario {
 
   @Column({ type: "varchar", nullable: true })
   UTM_CAMPAIGN?: string;
+
+  @ManyToOne(() => Oficina, (oficina) => oficina.usuarios)
+  @JoinColumn({ name: "ID_OFICINA" })
+  oficina: Oficina;
 
   constructor(init?: Partial<Usuario>) {
     Object.assign(this, init);

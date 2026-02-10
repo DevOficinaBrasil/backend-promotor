@@ -11,6 +11,7 @@ import {
 } from "typeorm";
 import CampanhaPromotor from "./CampanhaPromotor";
 import CampanhaResults from "./CampanhaResults";
+import Oficina from "./Oficina";
 
 // Note: Status names match database enum exactly, including typo 'EM ANDANMENTO' instead of 'EM ANDAMENTO'
 export enum StatusRota {
@@ -78,6 +79,10 @@ export default class RotaPromotor {
   )
   @JoinColumn({ name: "ID_CAMPANHA_PROMOTOR" })
   campanhaPromotor: CampanhaPromotor;
+
+  @ManyToOne(() => Oficina, (oficina) => oficina.rotasPromotor)
+  @JoinColumn({ name: "ID_OFICINA" })
+  oficina: Oficina;
 
   @OneToMany(
     () => CampanhaResults,
