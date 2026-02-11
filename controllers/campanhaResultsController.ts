@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import CampanhaResultsService from "../service/campanhaResultsService";
+import CampanhaResults from "../entities/CampanhaResults";
 
 export default class CampanhaResultsController {
   /**
@@ -9,13 +10,6 @@ export default class CampanhaResultsController {
   static saveResult = async (req: Request, res: Response) => {
     try {
       const { ID_ROTA, ID_PERGUNTA, RESPOSTA } = req.body;
-
-      // Validate required fields
-      if (!ID_ROTA || !ID_PERGUNTA || !RESPOSTA) {
-        return res.status(400).json({
-          message: "Os campos ID_ROTA, ID_PERGUNTA e RESPOSTA são obrigatórios."
-        });
-      }
 
       // Create result data object
       const resultData = {
@@ -49,12 +43,6 @@ export default class CampanhaResultsController {
       const { id } = req.params;
       const resultId = parseInt(id, 10);
 
-      if (isNaN(resultId)) {
-        return res.status(400).json({
-          message: "ID do resultado inválido."
-        });
-      }
-
       const { ID_ROTA, ID_PERGUNTA, RESPOSTA } = req.body;
 
       // Check if result exists
@@ -67,7 +55,7 @@ export default class CampanhaResultsController {
       }
 
       // Create update data object (only include provided fields)
-      const updateData: any = {};
+      const updateData: Partial<CampanhaResults> = {};
       if (ID_ROTA !== undefined) updateData.ID_ROTA = ID_ROTA;
       if (ID_PERGUNTA !== undefined) updateData.ID_PERGUNTA = ID_PERGUNTA;
       if (RESPOSTA !== undefined) updateData.RESPOSTA = RESPOSTA;
@@ -96,12 +84,6 @@ export default class CampanhaResultsController {
     try {
       const { id } = req.params;
       const resultId = parseInt(id, 10);
-
-      if (isNaN(resultId)) {
-        return res.status(400).json({
-          message: "ID do resultado inválido."
-        });
-      }
 
       const result = await CampanhaResultsService.findResultById(resultId);
 
@@ -132,12 +114,6 @@ export default class CampanhaResultsController {
     try {
       const { rotaId } = req.params;
       const idRota = parseInt(rotaId, 10);
-
-      if (isNaN(idRota)) {
-        return res.status(400).json({
-          message: "ID da rota inválido."
-        });
-      }
 
       const results = await CampanhaResultsService.getResultsByRotaId(idRota);
 
