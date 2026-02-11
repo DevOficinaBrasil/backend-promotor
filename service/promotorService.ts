@@ -262,4 +262,22 @@ export default class PromotorService {
     });
     return relationships.map(rel => rel.ID_CAMPANHA!);
   }
+
+  /**
+   * Gets all promotors by client ID
+   * @param clientId - The client ID
+   * @returns Array of promotors
+   */
+  static async getPromotoresByClientId(clientId: number): Promise<Promotor[]> {
+    const promotorRepository = AppDataSourceSync.getRepository(Promotor);
+    
+    const promotores = await promotorRepository.find({
+      where: { ID_CLIENT: clientId },
+      order: {
+        CREATED_AT: 'DESC',
+      },
+    });
+
+    return promotores;
+  }
 }

@@ -163,3 +163,18 @@ export const GetPromotorCampanhasResponseSchema = z.object({
   message: z.string(),
   data: z.array(z.number()),
 });
+
+/**
+ * Client ID params schema
+ */
+export const ClientIdParamsSchema = z.object({
+  clientId: z.coerce.number().int().positive(),
+});
+
+/**
+ * Get promotores by client ID response schema
+ */
+export const GetPromotoresByClientIdResponseSchema = z.object({
+  message: z.string(),
+  data: z.array(PromotorWithoutPasswordSchema),
+});
