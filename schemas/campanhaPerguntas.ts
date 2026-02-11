@@ -3,7 +3,14 @@ import { z } from 'zod';
 /**
  * Tipo Pergunta enum
  */
-export const TipoPerguntaEnum = z.enum(['String', 'Integer', 'Boolean', 'Date']);
+export const TipoPerguntaEnum = z.enum([
+  'String', 
+  'Integer', 
+  'Boolean', 
+  'Date',
+  'Float',
+  'Image',
+]);
 
 /**
  * CampanhaPerguntas entity schema

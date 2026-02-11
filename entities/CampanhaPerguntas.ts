@@ -17,6 +17,8 @@ export enum TipoPergunta {
   Integer = "Integer",
   Boolean = "Boolean",
   Date = "Date",
+  Float = "Float",
+  Image = "Image",
 }
 
 @Entity({ schema: "CAMPANHAS_OB", name: "CAMPANHA_PERGUNTAS" })
