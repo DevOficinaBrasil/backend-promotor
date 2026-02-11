@@ -144,4 +144,26 @@ export default class CampanhaResultsService {
 
     return results;
   }
+
+  /**
+   * Gets all results for a specific campanha
+   * @param campanhaId - The campanha ID
+   * @returns Array of results for the campanha
+   */
+  static async getResultsByCampanhaId(campanhaId: number): Promise<CampanhaResults[]> {
+    const resultRepository = AppDataSourceSync.getRepository(CampanhaResults);
+    
+    // Query results by joining through the relationship chain:
+    // CampanhaResults -> RotaPromotor -> CampanhaPromotor -> Campanha
+    const results = await resultRepository
+      .createQueryBuilder('result')
+      .leftJoinAndSelect('result.rota', 'rota')
+      .leftJoinAndSelect('result.pergunta', 'pergunta')
+      .leftJoin('rota.campanhaPromotor', 'campanhaPromotor')
+      .where('campanhaPromotor.ID_CAMPANHA = :campanhaId', { campanhaId })
+      .orderBy('result.CREATED_AT', 'DESC')
+      .getMany();
+
+    return results;
+  }
 }
