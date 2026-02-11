@@ -1,7 +1,7 @@
 import { Router } from "express";
 import CampanhaController from "../controllers/campanhaController";
 import { createDocumentedRoute } from "../utils/routeDocumentation";
-import { authMiddleware } from "../middlewares/authMiddleware";
+
 import {
   CreateCampanhaSchema,
   UpdateCampanhaSchema,
@@ -26,7 +26,7 @@ createDocumentedRoute(router, {
   path: '/create',
   handler: CampanhaController.createCampanha,
   basePath: '/campanha',
-  middlewares: [authMiddleware],
+  middlewares: [],
   schemas: {
     body: CreateCampanhaSchema,
   },
@@ -62,7 +62,7 @@ createDocumentedRoute(router, {
   path: '/edit/:id',
   handler: CampanhaController.updateCampanha,
   basePath: '/campanha',
-  middlewares: [authMiddleware],
+  middlewares: [],
   schemas: {
     params: CampanhaIdParamsSchema,
     body: UpdateCampanhaSchema,
@@ -103,7 +103,7 @@ createDocumentedRoute(router, {
   path: '/delete/:id',
   handler: CampanhaController.deleteCampanha,
   basePath: '/campanha',
-  middlewares: [authMiddleware],
+  middlewares: [],
   schemas: {
     params: CampanhaIdParamsSchema,
   },
@@ -143,7 +143,7 @@ createDocumentedRoute(router, {
   path: '/ativa',
   handler: CampanhaController.getCampanhaAtiva,
   basePath: '/campanha',
-  middlewares: [authMiddleware],
+  middlewares: [],
   schemas: {
     query: GetCampanhaAtivaQuerySchema,
   },
@@ -179,7 +179,7 @@ createDocumentedRoute(router, {
   path: '/',
   handler: CampanhaController.getAllCampanha,
   basePath: '/campanha',
-  middlewares: [authMiddleware],
+  middlewares: [],
   documentation: {
     tags: ['Campanha'],
     summary: 'Get all campaigns',
@@ -208,7 +208,7 @@ createDocumentedRoute(router, {
   path: '/:id',
   handler: CampanhaController.getCampanhaById,
   basePath: '/campanha',
-  middlewares: [authMiddleware],
+  middlewares: [],
   schemas: {
     params: CampanhaIdParamsSchema,
   },
@@ -248,7 +248,7 @@ createDocumentedRoute(router, {
   path: '/client/:clientId',
   handler: CampanhaController.getCampanhaByClientId,
   basePath: '/campanha',
-  middlewares: [authMiddleware],
+  middlewares: [],
   schemas: {
     params: ClientIdParamsSchema,
   },

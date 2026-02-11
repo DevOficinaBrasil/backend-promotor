@@ -2,7 +2,7 @@
 import { Router } from "express";
 import PromotorController from "../controllers/promotorController";
 import { createDocumentedRoute } from "../utils/routeDocumentation";
-import { authMiddleware } from "../middlewares/authMiddleware";
+
 import {
   CreatePromotorSchema,
   UpdatePromotorSchema,
@@ -62,7 +62,7 @@ createDocumentedRoute(router, {
   path: '/create',
   handler: PromotorController.createPromotor,
   basePath: '/promotor',
-  middlewares: [authMiddleware],
+  middlewares: [],
   schemas: {
     body: CreatePromotorSchema,
   },
@@ -98,7 +98,7 @@ createDocumentedRoute(router, {
   path: '/edit/:id',
   handler: PromotorController.updatePromotor,
   basePath: '/promotor',
-  middlewares: [authMiddleware],
+  middlewares: [],
   schemas: {
     params: PromotorIdParamsSchema,
     body: UpdatePromotorSchema,
@@ -139,7 +139,7 @@ createDocumentedRoute(router, {
   path: '/delete/:id',
   handler: PromotorController.deletePromotor,
   basePath: '/promotor',
-  middlewares: [authMiddleware],
+  middlewares: [],
   schemas: {
     params: PromotorIdParamsSchema,
   },
@@ -179,7 +179,7 @@ createDocumentedRoute(router, {
   path: '/',
   handler: PromotorController.getAllPromotores,
   basePath: '/promotor',
-  middlewares: [authMiddleware],
+  middlewares: [],
   documentation: {
     tags: ['Promotor'],
     summary: 'Get all promoters',
@@ -208,7 +208,7 @@ createDocumentedRoute(router, {
   path: '/:id',
   handler: PromotorController.getPromotoresById,
   basePath: '/promotor',
-  middlewares: [authMiddleware],
+  middlewares: [],
   schemas: {
     params: PromotorIdParamsSchema,
   },
@@ -248,7 +248,7 @@ createDocumentedRoute(router, {
   path: '/link-campanha',
   handler: PromotorController.linkCampanhaPromotor,
   basePath: '/promotor',
-  middlewares: [authMiddleware],
+  middlewares: [],
   schemas: {
     body: LinkCampanhaPromotorSchema,
   },
@@ -288,7 +288,7 @@ createDocumentedRoute(router, {
   path: '/unlink-campanha',
   handler: PromotorController.unlinkCampanhaPromotor,
   basePath: '/promotor',
-  middlewares: [authMiddleware],
+  middlewares: [],
   schemas: {
     body: UnlinkCampanhaPromotorSchema,
   },
@@ -328,7 +328,7 @@ createDocumentedRoute(router, {
   path: '/:id/campanhas',
   handler: PromotorController.getCampanhasByPromotor,
   basePath: '/promotor',
-  middlewares: [authMiddleware],
+  middlewares: [],
   schemas: {
     params: PromotorIdParamsSchema,
   },
@@ -364,7 +364,7 @@ createDocumentedRoute(router, {
   path: '/client/:clientId',
   handler: PromotorController.getPromotoresByClientId,
   basePath: '/promotor',
-  middlewares: [authMiddleware],
+  middlewares: [],
   schemas: {
     params: ClientIdParamsSchema,
   },

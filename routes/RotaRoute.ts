@@ -1,7 +1,6 @@
 import { Router } from "express";
 import RotaController from "../controllers/rotaController";
 import { createDocumentedRoute } from "../utils/routeDocumentation";
-import { authMiddleware } from "../middlewares/authMiddleware";
 import {
   CreateRotaSchema,
   UpdateRotaWorkshopsSchema,
@@ -24,7 +23,7 @@ createDocumentedRoute(router, {
   path: "/create",
   handler: RotaController.createRotas,
   basePath: "/rota",
-  middlewares: [authMiddleware],
+  middlewares: [],
   schemas: {
     body: CreateRotaSchema,
   },
@@ -62,7 +61,7 @@ createDocumentedRoute(router, {
   path: "/workshops",
   handler: RotaController.updateRotaWorkshops,
   basePath: "/rota",
-  middlewares: [authMiddleware],
+  middlewares: [],
   schemas: {
     body: UpdateRotaWorkshopsSchema,
   },
@@ -101,7 +100,7 @@ createDocumentedRoute(router, {
   path: "/:id/options",
   handler: RotaController.updateRotaOptions,
   basePath: "/rota",
-  middlewares: [authMiddleware],
+  middlewares: [],
   schemas: {
     params: RotaIdParamsSchema,
     body: UpdateRotaOptionsSchema,
@@ -145,7 +144,7 @@ createDocumentedRoute(router, {
   path: "/:id",
   handler: RotaController.getRotaByIdROTA_PROMOTOR,
   basePath: "/rota",
-  middlewares: [authMiddleware],
+  middlewares: [],
   schemas: {
     params: RotaIdParamsSchema,
   },
@@ -187,7 +186,7 @@ createDocumentedRoute(router, {
   path: "/geolocation",
   handler: RotaController.getGeolocationDataByCep,
   basePath: "/rota",
-  middlewares: [authMiddleware],
+  middlewares: [],
   schemas: {
     body: GetGeolocationByCepRequestSchema,
   },

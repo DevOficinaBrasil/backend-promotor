@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import CampanhaResultsController from "../controllers/campanhaResultsController";
 import { createDocumentedRoute } from "../utils/routeDocumentation";
-import { authMiddleware } from "../middlewares/authMiddleware";
+
 import {
   SaveCampanhaResultSchema,
   UpdateCampanhaResultSchema,
@@ -23,7 +23,7 @@ createDocumentedRoute(router, {
   path: '/save',
   handler: CampanhaResultsController.saveResult,
   basePath: '/campanha-results',
-  middlewares: [authMiddleware],
+  middlewares: [],
   schemas: {
     body: SaveCampanhaResultSchema,
   },
@@ -59,7 +59,7 @@ createDocumentedRoute(router, {
   path: '/edit/:id',
   handler: CampanhaResultsController.updateResult,
   basePath: '/campanha-results',
-  middlewares: [authMiddleware],
+  middlewares: [],
   schemas: {
     params: CampanhaResultsIdParamsSchema,
     body: UpdateCampanhaResultSchema,
@@ -100,7 +100,7 @@ createDocumentedRoute(router, {
   path: '/:id',
   handler: CampanhaResultsController.getResultById,
   basePath: '/campanha-results',
-  middlewares: [authMiddleware],
+  middlewares: [],
   schemas: {
     params: CampanhaResultsIdParamsSchema,
   },
@@ -140,7 +140,7 @@ createDocumentedRoute(router, {
   path: '/rota/:rotaId',
   handler: CampanhaResultsController.getResultsByRotaId,
   basePath: '/campanha-results',
-  middlewares: [authMiddleware],
+  middlewares: [],
   schemas: {
     params: z.object({ rotaId: z.coerce.number().int().positive() }),
   },
@@ -176,7 +176,7 @@ createDocumentedRoute(router, {
   path: '/campanha/:campanhaId',
   handler: CampanhaResultsController.getResultsByCampanhaId,
   basePath: '/campanha-results',
-  middlewares: [authMiddleware],
+  middlewares: [],
   schemas: {
     params: z.object({ campanhaId: z.coerce.number().int().positive() }),
   },

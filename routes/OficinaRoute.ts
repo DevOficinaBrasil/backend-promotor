@@ -1,7 +1,7 @@
 import { Router } from "express";
 import OficinaController from "../controllers/oficinaController";
 import { createDocumentedRoute } from "../utils/routeDocumentation";
-import { authMiddleware } from "../middlewares/authMiddleware";
+
 import {
   GetOficinasByLocationQuerySchema,
   GetOficinasByLocationResponseSchema,
@@ -16,7 +16,7 @@ createDocumentedRoute(router, {
   path: "/nearby",
   handler: OficinaController.getNearbyOficinas,
   basePath: "/oficina",
-  middlewares: [authMiddleware],
+  middlewares: [],
   schemas: {
     query: GetOficinasByLocationQuerySchema,
   },

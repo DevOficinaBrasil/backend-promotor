@@ -22,7 +22,7 @@ createDocumentedRoute(router, {
   path: '/create',
   handler: CampanhaPerguntasController.createCampanhaPergunta,
   basePath: '/campanha-perguntas',
-  middlewares: [authMiddleware],
+  middlewares: [],
   schemas: {
     body: CreateCampanhaPerguntasSchema,
   },
