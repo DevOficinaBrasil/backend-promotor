@@ -67,3 +67,8 @@ export const GetCampanhaResultsByRotaIdResponseSchema = z.object({
   message: z.string(),
   data: z.array(CampanhaResultsSchema),
 });
+
+export const GetCampanhaResultsByCampanhaIdResponseSchema = z.object({
+  message: z.string(),
+  data: z.array(CampanhaResultsSchema),
+});

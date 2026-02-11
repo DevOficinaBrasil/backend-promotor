@@ -129,4 +129,28 @@ export default class CampanhaResultsController {
       });
     }
   };
+
+  /**
+   * Gets all campaign results for a specific campanha
+   * GET /campanha-results/campanha/:campanhaId
+   */
+  static getResultsByCampanhaId = async (req: Request, res: Response) => {
+    try {
+      const { campanhaId } = req.params;
+      const idCampanha = parseInt(campanhaId, 10);
+
+      const results = await CampanhaResultsService.getResultsByCampanhaId(idCampanha);
+
+      return res.status(200).json({
+        message: "Resultados da campanha listados com sucesso.",
+        data: results
+      });
+    } catch (error) {
+      console.error("Erro ao buscar resultados da campanha:", error);
+      return res.status(500).json({
+        message: "Erro interno ao buscar resultados da campanha.",
+        error: error instanceof Error ? error.message : "Erro desconhecido"
+      });
+    }
+  };
 }

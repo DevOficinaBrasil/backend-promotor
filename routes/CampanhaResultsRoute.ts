@@ -11,6 +11,7 @@ import {
   UpdateCampanhaResultResponseSchema,
   GetCampanhaResultResponseSchema,
   GetCampanhaResultsByRotaIdResponseSchema,
+  GetCampanhaResultsByCampanhaIdResponseSchema,
 } from "../schemas/campanhaResults";
 import { ErrorResponseSchema } from "../schemas/common";
 
@@ -152,6 +153,42 @@ createDocumentedRoute(router, {
       200: {
         description: 'Campaign results found successfully',
         schema: GetCampanhaResultsByRotaIdResponseSchema,
+      },
+      400: {
+        description: 'Bad request - validation error',
+        schema: ErrorResponseSchema,
+      },
+      401: {
+        description: 'Unauthorized - token missing or invalid',
+        schema: ErrorResponseSchema,
+      },
+      500: {
+        description: 'Internal server error',
+        schema: ErrorResponseSchema,
+      },
+    },
+  },
+});
+
+// Get campaign results by campanha ID
+createDocumentedRoute(router, {
+  method: 'get',
+  path: '/campanha/:campanhaId',
+  handler: CampanhaResultsController.getResultsByCampanhaId,
+  basePath: '/campanha-results',
+  middlewares: [authMiddleware],
+  schemas: {
+    params: z.object({ campanhaId: z.coerce.number().int().positive() }),
+  },
+  documentation: {
+    tags: ['Campanha Results'],
+    summary: 'Get campaign results by campanha ID',
+    description: 'Returns all campaign results for a specific campanha',
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: {
+        description: 'Campaign results found successfully',
+        schema: GetCampanhaResultsByCampanhaIdResponseSchema,
       },
       400: {
         description: 'Bad request - validation error',

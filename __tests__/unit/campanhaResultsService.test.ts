@@ -341,4 +341,70 @@ describe('CampanhaResultsService', () => {
       expect(result).toEqual([]);
     });
   });
+
+  describe('getResultsByCampanhaId', () => {
+    it('should get all results for a campanha', async () => {
+      const mockResults = [
+        {
+          ID_CAMPANHA_RESULTS: 1,
+          ID_ROTA: 10,
+          ID_PERGUNTA: 5,
+          RESPOSTA: 'Answer 1',
+        },
+        {
+          ID_CAMPANHA_RESULTS: 2,
+          ID_ROTA: 11,
+          ID_PERGUNTA: 6,
+          RESPOSTA: 'Answer 2',
+        },
+      ];
+
+      const mockQueryBuilder = {
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        leftJoin: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue(mockResults),
+      };
+
+      const mockRepository = {
+        createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
+      };
+
+      (AppDataSourceSync.getRepository as jest.Mock).mockReturnValue(mockRepository);
+
+      const result = await CampanhaResultsService.getResultsByCampanhaId(5);
+
+      expect(result).toEqual(mockResults);
+      expect(mockRepository.createQueryBuilder).toHaveBeenCalledWith('result');
+      expect(mockQueryBuilder.leftJoinAndSelect).toHaveBeenCalledWith('result.rota', 'rota');
+      expect(mockQueryBuilder.leftJoinAndSelect).toHaveBeenCalledWith('result.pergunta', 'pergunta');
+      expect(mockQueryBuilder.leftJoin).toHaveBeenCalledWith('rota.campanhaPromotor', 'campanhaPromotor');
+      expect(mockQueryBuilder.where).toHaveBeenCalledWith(
+        'campanhaPromotor.ID_CAMPANHA = :campanhaId',
+        { campanhaId: 5 }
+      );
+      expect(mockQueryBuilder.orderBy).toHaveBeenCalledWith('result.CREATED_AT', 'DESC');
+    });
+
+    it('should return empty array if no results found for campanha', async () => {
+      const mockQueryBuilder = {
+        leftJoinAndSelect: jest.fn().mockReturnThis(),
+        leftJoin: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue([]),
+      };
+
+      const mockRepository = {
+        createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
+      };
+
+      (AppDataSourceSync.getRepository as jest.Mock).mockReturnValue(mockRepository);
+
+      const result = await CampanhaResultsService.getResultsByCampanhaId(999);
+
+      expect(result).toEqual([]);
+    });
+  });
 });
