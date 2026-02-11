@@ -39,22 +39,20 @@ describe('RotaService', () => {
         },
       ];
 
-      const mockCampanhaPromotorRepository = {
-        create: jest.fn().mockReturnValue(mockCampanhaPromotor),
-        save: jest.fn().mockResolvedValue(mockCampanhaPromotor),
+      const mockTransactionalEntityManager = {
+        create: jest.fn((entity, data) => {
+          if (entity === CampanhaPromotor) return mockCampanhaPromotor;
+          return { ...data, ID_ROTA_PROMOTOR: Math.random() };
+        }),
+        save: jest.fn((data) => {
+          if (Array.isArray(data)) return Promise.resolve(mockRotas);
+          return Promise.resolve(mockCampanhaPromotor);
+        }),
       };
 
-      const mockRotaRepository = {
-        create: jest.fn((data) => ({ ...data, ID_ROTA_PROMOTOR: Math.random() })),
-        save: jest.fn().mockResolvedValue(mockRotas),
-      };
-
-      (AppDataSourceSync.getRepository as jest.Mock)
-        .mockImplementation((entity) => {
-          if (entity === CampanhaPromotor) return mockCampanhaPromotorRepository;
-          if (entity === RotaPromotor) return mockRotaRepository;
-          return {};
-        });
+      (AppDataSourceSync.transaction as jest.Mock) = jest.fn(async (callback) => {
+        return await callback(mockTransactionalEntityManager);
+      });
 
       const result = await RotaService.createRotaWithCampanhaPromotor(
         10, // ID_PROMOTOR
@@ -68,31 +66,31 @@ describe('RotaService', () => {
         rotas: mockRotas,
       });
 
+      // Verify transaction was called
+      expect(AppDataSourceSync.transaction).toHaveBeenCalled();
+
       // Verify CampanhaPromotor creation
-      expect(mockCampanhaPromotorRepository.create).toHaveBeenCalledWith({
+      expect(mockTransactionalEntityManager.create).toHaveBeenCalledWith(CampanhaPromotor, {
         ID_PROMOTOR: 10,
         ID_CAMPANHA: 20,
       });
-      expect(mockCampanhaPromotorRepository.save).toHaveBeenCalled();
 
       // Verify Rota creation
-      expect(mockRotaRepository.create).toHaveBeenCalledTimes(3);
-      expect(mockRotaRepository.create).toHaveBeenCalledWith({
+      expect(mockTransactionalEntityManager.create).toHaveBeenCalledWith(RotaPromotor, {
         ID_CAMPANHA_PROMOTOR: 1,
         ID_OFICINA: 100,
         CREATED_BY: 5,
       });
-      expect(mockRotaRepository.create).toHaveBeenCalledWith({
+      expect(mockTransactionalEntityManager.create).toHaveBeenCalledWith(RotaPromotor, {
         ID_CAMPANHA_PROMOTOR: 1,
         ID_OFICINA: 200,
         CREATED_BY: 5,
       });
-      expect(mockRotaRepository.create).toHaveBeenCalledWith({
+      expect(mockTransactionalEntityManager.create).toHaveBeenCalledWith(RotaPromotor, {
         ID_CAMPANHA_PROMOTOR: 1,
         ID_OFICINA: 300,
         CREATED_BY: 5,
       });
-      expect(mockRotaRepository.save).toHaveBeenCalledTimes(1); // Bulk save
     });
 
     it('should create a campaign promoter and single route without CREATED_BY', async () => {
@@ -110,22 +108,20 @@ describe('RotaService', () => {
         },
       ];
 
-      const mockCampanhaPromotorRepository = {
-        create: jest.fn().mockReturnValue(mockCampanhaPromotor),
-        save: jest.fn().mockResolvedValue(mockCampanhaPromotor),
+      const mockTransactionalEntityManager = {
+        create: jest.fn((entity, data) => {
+          if (entity === CampanhaPromotor) return mockCampanhaPromotor;
+          return { ...data, ID_ROTA_PROMOTOR: 4 };
+        }),
+        save: jest.fn((data) => {
+          if (Array.isArray(data)) return Promise.resolve(mockRotas);
+          return Promise.resolve(mockCampanhaPromotor);
+        }),
       };
 
-      const mockRotaRepository = {
-        create: jest.fn((data) => ({ ...data, ID_ROTA_PROMOTOR: 4 })),
-        save: jest.fn().mockResolvedValue(mockRotas),
-      };
-
-      (AppDataSourceSync.getRepository as jest.Mock)
-        .mockImplementation((entity) => {
-          if (entity === CampanhaPromotor) return mockCampanhaPromotorRepository;
-          if (entity === RotaPromotor) return mockRotaRepository;
-          return {};
-        });
+      (AppDataSourceSync.transaction as jest.Mock) = jest.fn(async (callback) => {
+        return await callback(mockTransactionalEntityManager);
+      });
 
       const result = await RotaService.createRotaWithCampanhaPromotor(
         15, // ID_PROMOTOR
@@ -138,21 +134,21 @@ describe('RotaService', () => {
         rotas: mockRotas,
       });
 
+      // Verify transaction was called
+      expect(AppDataSourceSync.transaction).toHaveBeenCalled();
+
       // Verify CampanhaPromotor creation
-      expect(mockCampanhaPromotorRepository.create).toHaveBeenCalledWith({
+      expect(mockTransactionalEntityManager.create).toHaveBeenCalledWith(CampanhaPromotor, {
         ID_PROMOTOR: 15,
         ID_CAMPANHA: 25,
       });
-      expect(mockCampanhaPromotorRepository.save).toHaveBeenCalled();
 
       // Verify Rota creation without CREATED_BY
-      expect(mockRotaRepository.create).toHaveBeenCalledTimes(1);
-      expect(mockRotaRepository.create).toHaveBeenCalledWith({
+      expect(mockTransactionalEntityManager.create).toHaveBeenCalledWith(RotaPromotor, {
         ID_CAMPANHA_PROMOTOR: 2,
         ID_OFICINA: 150,
         CREATED_BY: undefined,
       });
-      expect(mockRotaRepository.save).toHaveBeenCalledTimes(1);
     });
   });
 

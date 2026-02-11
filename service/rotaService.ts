@@ -56,30 +56,30 @@ export default class RotaService {
     campanhaPromotor: CampanhaPromotor;
     rotas: RotaPromotor[];
   }> {
-    const campanhaPromotorRepository = AppDataSourceSync.getRepository(CampanhaPromotor);
-    const rotaRepository = AppDataSourceSync.getRepository(RotaPromotor);
+    // Use transaction to ensure atomicity
+    return await AppDataSourceSync.transaction(async (transactionalEntityManager) => {
+      // Create the CampanhaPromotor
+      const novaCampanhaPromotor = transactionalEntityManager.create(CampanhaPromotor, {
+        ID_PROMOTOR,
+        ID_CAMPANHA,
+      });
+      const campanhaPromotorSalva = await transactionalEntityManager.save(novaCampanhaPromotor);
 
-    // Create the CampanhaPromotor
-    const novaCampanhaPromotor = campanhaPromotorRepository.create({
-      ID_PROMOTOR,
-      ID_CAMPANHA,
+      // Create routes for each workshop
+      const novasRotas = ID_OFICINA.map((oficinaId) =>
+        transactionalEntityManager.create(RotaPromotor, {
+          ID_CAMPANHA_PROMOTOR: campanhaPromotorSalva.ID_CAMPANHA_PROMOTOR,
+          ID_OFICINA: oficinaId,
+          CREATED_BY,
+        })
+      );
+      const rotasSalvas = await transactionalEntityManager.save(novasRotas);
+
+      return {
+        campanhaPromotor: campanhaPromotorSalva,
+        rotas: rotasSalvas,
+      };
     });
-    const campanhaPromotorSalva = await campanhaPromotorRepository.save(novaCampanhaPromotor);
-
-    // Create routes for each workshop
-    const novasRotas = ID_OFICINA.map((oficinaId) =>
-      rotaRepository.create({
-        ID_CAMPANHA_PROMOTOR: campanhaPromotorSalva.ID_CAMPANHA_PROMOTOR,
-        ID_OFICINA: oficinaId,
-        CREATED_BY,
-      })
-    );
-    const rotasSalvas = await rotaRepository.save(novasRotas);
-
-    return {
-      campanhaPromotor: campanhaPromotorSalva,
-      rotas: rotasSalvas,
-    };
   }
 
   /**
