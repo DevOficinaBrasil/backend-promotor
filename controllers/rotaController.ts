@@ -34,6 +34,35 @@ export default class RotaController {
   };
 
   /**
+   * Creates a campaign promoter and its associated routes with workshops
+   * POST /rota/create-with-campanha-promotor
+   */
+  static createRotaWithCampanhaPromotor = async (req: Request, res: Response) => {
+    try {
+      const { ID_PROMOTOR, ID_CAMPANHA, ID_OFICINA, CREATED_BY } = req.body;
+
+      // Call the service to create the campaign promoter and routes
+      const resultado = await RotaService.createRotaWithCampanhaPromotor(
+        ID_PROMOTOR,
+        ID_CAMPANHA,
+        ID_OFICINA,
+        CREATED_BY
+      );
+
+      return res.status(201).json({
+        message: "Campanha promotor e rotas criadas com sucesso.",
+        data: resultado,
+      });
+    } catch (error) {
+      console.error("Erro ao criar campanha promotor e rotas:", error);
+      return res.status(500).json({
+        message: "Erro interno ao criar campanha promotor e rotas.",
+        error: error instanceof Error ? error.message : "Erro desconhecido",
+      });
+    }
+  };
+
+  /**
    * Updates workshops for a route (campaign promoter)
    * PUT /rota/workshops
    */

@@ -36,6 +36,17 @@ export const CreateRotaSchema = z.object({
 });
 
 /**
+ * Create rota with campaign promoter request schema
+ * Receives ID_PROMOTOR, ID_CAMPANHA and array of ID_OFICINA
+ */
+export const CreateRotaWithCampanhaPromotorSchema = z.object({
+  ID_PROMOTOR: z.number().int().positive('ID_PROMOTOR deve ser um número positivo'),
+  ID_CAMPANHA: z.number().int().positive('ID_CAMPANHA deve ser um número positivo'),
+  ID_OFICINA: z.array(z.number().int().positive('Cada ID_OFICINA deve ser um número positivo')).min(1, 'Deve fornecer pelo menos uma oficina'),
+  CREATED_BY: z.number().int().positive().optional(),
+});
+
+/**
  * Update workshops for a route request schema
  * Receives ID_CAMPANHA_PROMOTOR and array of ID_OFICINA
  */
@@ -92,6 +103,23 @@ export const CreateRotaResponseSchema = z.object({
     RotaSchema,
     z.array(RotaSchema),
   ]),
+});
+
+/**
+ * Create rota with campaign promoter response schema
+ */
+export const CreateRotaWithCampanhaPromotorResponseSchema = z.object({
+  message: z.string(),
+  data: z.object({
+    campanhaPromotor: z.object({
+      ID_CAMPANHA_PROMOTOR: z.number(),
+      ID_CAMPANHA: z.number().optional(),
+      ID_PROMOTOR: z.number().optional(),
+      CREATED_AT: z.date().optional(),
+      UPDATED_AT: z.date().optional(),
+    }),
+    rotas: z.array(RotaSchema),
+  }),
 });
 
 /**
