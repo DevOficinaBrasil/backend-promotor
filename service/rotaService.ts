@@ -1,5 +1,6 @@
 import { AppDataSourceSync } from "../data-source";
 import RotaPromotor from "../entities/RotaPromotor";
+import CampanhaPromotor from "../entities/CampanhaPromotor";
 import { In, IsNull } from "typeorm";
 
 export default class RotaService {
@@ -36,6 +37,49 @@ export default class RotaService {
       })
     );
     return await rotaRepository.save(novasRotas);
+  }
+
+  /**
+   * Creates a campaign promoter and its associated routes with workshops
+   * @param ID_PROMOTOR - The promoter ID
+   * @param ID_CAMPANHA - The campaign ID
+   * @param ID_OFICINA - Array of workshop IDs
+   * @param CREATED_BY - Optional user ID who created the route
+   * @returns Object with created campaign promoter and routes
+   */
+  static async createRotaWithCampanhaPromotor(
+    ID_PROMOTOR: number,
+    ID_CAMPANHA: number,
+    ID_OFICINA: number[],
+    CREATED_BY?: number
+  ): Promise<{
+    campanhaPromotor: CampanhaPromotor;
+    rotas: RotaPromotor[];
+  }> {
+    // Use transaction to ensure atomicity
+    return await AppDataSourceSync.transaction(async (transactionalEntityManager) => {
+      // Create the CampanhaPromotor
+      const novaCampanhaPromotor = transactionalEntityManager.create(CampanhaPromotor, {
+        ID_PROMOTOR,
+        ID_CAMPANHA,
+      });
+      const campanhaPromotorSalva = await transactionalEntityManager.save(novaCampanhaPromotor);
+
+      // Create routes for each workshop
+      const novasRotas = ID_OFICINA.map((oficinaId) =>
+        transactionalEntityManager.create(RotaPromotor, {
+          ID_CAMPANHA_PROMOTOR: campanhaPromotorSalva.ID_CAMPANHA_PROMOTOR,
+          ID_OFICINA: oficinaId,
+          CREATED_BY,
+        })
+      );
+      const rotasSalvas = await transactionalEntityManager.save(novasRotas);
+
+      return {
+        campanhaPromotor: campanhaPromotorSalva,
+        rotas: rotasSalvas,
+      };
+    });
   }
 
   /**

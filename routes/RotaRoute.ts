@@ -3,10 +3,12 @@ import RotaController from "../controllers/rotaController";
 import { createDocumentedRoute } from "../utils/routeDocumentation";
 import {
   CreateRotaSchema,
+  CreateRotaWithCampanhaPromotorSchema,
   UpdateRotaWorkshopsSchema,
   UpdateRotaOptionsSchema,
   RotaIdParamsSchema,
   CreateRotaResponseSchema,
+  CreateRotaWithCampanhaPromotorResponseSchema,
   UpdateRotaWorkshopsResponseSchema,
   UpdateRotaOptionsResponseSchema,
   GetRotaByIdResponseSchema,
@@ -38,6 +40,45 @@ createDocumentedRoute(router, {
       201: {
         description: "Route(s) created successfully",
         schema: CreateRotaResponseSchema,
+      },
+      400: {
+        description: "Bad request - validation error",
+        schema: ErrorResponseSchema,
+      },
+      401: {
+        description: "Unauthorized - token missing or invalid",
+        schema: ErrorResponseSchema,
+      },
+      500: {
+        description: "Internal server error",
+        schema: ErrorResponseSchema,
+      },
+    },
+  },
+});
+
+// Create campaign promoter with routes
+createDocumentedRoute(router, {
+  method: "post",
+  path: "/create-with-campanha-promotor",
+  handler: RotaController.createRotaWithCampanhaPromotor,
+  basePath: "/rota",
+  middlewares: [],
+  schemas: {
+    body: CreateRotaWithCampanhaPromotorSchema,
+  },
+  documentation: {
+    tags: ["Rota"],
+    summary: "Create campaign promoter with routes",
+    description:
+      "Creates a campaign promoter (CAMPANHA_PROMOTOR) and its associated routes with workshops. " +
+      "Receives ID_PROMOTOR, ID_CAMPANHA and an array of ID_OFICINA. " +
+      "First creates the CAMPANHA_PROMOTOR record, then creates ROTA_PROMOTOR records for each workshop.",
+    security: [{ bearerAuth: [] }],
+    responses: {
+      201: {
+        description: "Campaign promoter and routes created successfully",
+        schema: CreateRotaWithCampanhaPromotorResponseSchema,
       },
       400: {
         description: "Bad request - validation error",
