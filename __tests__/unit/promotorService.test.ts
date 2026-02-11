@@ -252,4 +252,57 @@ describe('PromotorService', () => {
       expect(mockRepository.save).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe('getPromotoresByClientId', () => {
+    it('should get all promoters by client ID', async () => {
+      const mockPromotores = [
+        {
+          ID_PROMOTOR: 1,
+          NOME: 'Promotor 1',
+          EMAIL: 'promotor1@example.com',
+          ID_CLIENT: 100,
+        },
+        {
+          ID_PROMOTOR: 2,
+          NOME: 'Promotor 2',
+          EMAIL: 'promotor2@example.com',
+          ID_CLIENT: 100,
+        },
+      ];
+
+      const mockRepository = {
+        find: jest.fn().mockResolvedValue(mockPromotores),
+      };
+
+      (AppDataSourceSync.getRepository as jest.Mock).mockReturnValue(mockRepository);
+
+      const result = await PromotorService.getPromotoresByClientId(100);
+
+      expect(result).toEqual(mockPromotores);
+      expect(mockRepository.find).toHaveBeenCalledWith({
+        where: { ID_CLIENT: 100 },
+        order: {
+          CREATED_AT: 'DESC',
+        },
+      });
+    });
+
+    it('should return empty array if no promoters found for client ID', async () => {
+      const mockRepository = {
+        find: jest.fn().mockResolvedValue([]),
+      };
+
+      (AppDataSourceSync.getRepository as jest.Mock).mockReturnValue(mockRepository);
+
+      const result = await PromotorService.getPromotoresByClientId(999);
+
+      expect(result).toEqual([]);
+      expect(mockRepository.find).toHaveBeenCalledWith({
+        where: { ID_CLIENT: 999 },
+        order: {
+          CREATED_AT: 'DESC',
+        },
+      });
+    });
+  });
 });

@@ -350,4 +350,31 @@ export default class PromotorController {
       });
     }
   };
+
+  /**
+   * Gets all promotors by client ID
+   * GET /promotor/client/:clientId
+   */
+  static getPromotoresByClientId = async (req: Request, res: Response) => {
+    try {
+      const { clientId } = req.params;
+      const clientIdNumber = parseInt(clientId, 10);
+
+      const promotores = await PromotorService.getPromotoresByClientId(clientIdNumber);
+
+      // Remove passwords from response
+      const promotoresSemSenha = promotores.map(({ SENHA, ...rest }) => rest);
+
+      return res.status(200).json({
+        message: "Promotores encontrados com sucesso.",
+        data: promotoresSemSenha
+      });
+    } catch (error) {
+      console.error("Erro ao buscar promotores por ID de cliente:", error);
+      return res.status(500).json({
+        message: "Erro interno ao buscar promotores por ID de cliente.",
+        error: error instanceof Error ? error.message : "Erro desconhecido"
+      });
+    }
+  };
 }
