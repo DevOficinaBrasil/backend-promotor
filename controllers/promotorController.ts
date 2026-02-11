@@ -352,19 +352,13 @@ export default class PromotorController {
   };
 
   /**
-   * Gets all promoters by client ID
+   * Gets all promotors by client ID
    * GET /promotor/client/:clientId
    */
   static getPromotoresByClientId = async (req: Request, res: Response) => {
     try {
       const { clientId } = req.params;
       const clientIdNumber = parseInt(clientId, 10);
-
-      if (isNaN(clientIdNumber)) {
-        return res.status(400).json({
-          message: "ID do cliente inválido."
-        });
-      }
 
       const promotores = await PromotorService.getPromotoresByClientId(clientIdNumber);
 

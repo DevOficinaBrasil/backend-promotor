@@ -358,7 +358,7 @@ createDocumentedRoute(router, {
   },
 });
 
-// Get promoters by client ID
+// Get promotors by client ID
 createDocumentedRoute(router, {
   method: 'get',
   path: '/client/:clientId',
@@ -370,12 +370,12 @@ createDocumentedRoute(router, {
   },
   documentation: {
     tags: ['Promotor'],
-    summary: 'Get promoters by client ID',
-    description: 'Returns a list of all promoters for a specific client ID (without passwords)',
+    summary: 'Get promotors by client ID',
+    description: 'Returns a list of all promotors for a specific client ID (without passwords)',
     security: [{ bearerAuth: [] }],
     responses: {
       200: {
-        description: 'Promoters retrieved successfully',
+        description: 'Promotors retrieved successfully',
         schema: GetPromotoresByClientIdResponseSchema,
       },
       400: {

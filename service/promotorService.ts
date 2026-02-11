@@ -264,9 +264,9 @@ export default class PromotorService {
   }
 
   /**
-   * Gets all promoters by client ID
+   * Gets all promotors by client ID
    * @param clientId - The client ID
-   * @returns Array of promoters
+   * @returns Array of promotors
    */
   static async getPromotoresByClientId(clientId: number): Promise<Promotor[]> {
     const promotorRepository = AppDataSourceSync.getRepository(Promotor);
