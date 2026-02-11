@@ -6,17 +6,31 @@ import Oficina from "../entities/Oficina";
 import { Between, LessThanOrEqual, MoreThanOrEqual, IsNull } from "typeorm";
 import { DuckDBClient } from "../utils/duckdbClient";
 
+export interface PromotorOficinaData {
+  ID_PROMOTOR: number;
+  ID_OFICINAS: number[];
+}
+
 export default class CampanhaService {
   /**
    * Creates a new campaign in the database
    * @param campanhaData - The campaign data to create
+   * @param promotores - Optional array of promoters with their oficinas to link
    * @returns The created campaign
    */
-  static async createCampanha(campanhaData: Partial<Campanha>): Promise<Campanha> {
+  static async createCampanha(
+    campanhaData: Partial<Campanha>,
+    promotores?: PromotorOficinaData[]
+  ): Promise<Campanha> {
     const campanhaRepository = AppDataSourceSync.getRepository(Campanha);
     
     const novaCampanha = campanhaRepository.create(campanhaData);
     const campanhaSalva = await campanhaRepository.save(novaCampanha);
+    
+    // If promotores data is provided, create the relationships
+    if (promotores && promotores.length > 0 && campanhaSalva.ID_CAMPANHA) {
+      await this.linkPromotoresToCampanha(campanhaSalva.ID_CAMPANHA, promotores);
+    }
     
     return campanhaSalva;
   }
@@ -25,9 +39,14 @@ export default class CampanhaService {
    * Updates an existing campaign in the database
    * @param id - The campaign ID to update
    * @param campanhaData - The campaign data to update
+   * @param promotores - Optional array of promoters with their oficinas to link (replaces existing links)
    * @returns The updated campaign or null if not found
    */
-  static async updateCampanha(id: number, campanhaData: Partial<Campanha>): Promise<Campanha | null> {
+  static async updateCampanha(
+    id: number,
+    campanhaData: Partial<Campanha>,
+    promotores?: PromotorOficinaData[]
+  ): Promise<Campanha | null> {
     const campanhaRepository = AppDataSourceSync.getRepository(Campanha);
     
     // Find the campaign by ID
@@ -43,6 +62,15 @@ export default class CampanhaService {
     Object.assign(campanhaExistente, campanhaData);
     
     const campanhaAtualizada = await campanhaRepository.save(campanhaExistente);
+    
+    // If promotores data is provided, update the relationships
+    if (promotores && promotores.length > 0) {
+      // First, soft delete existing relationships for this campaign
+      await this.removePromotoresFromCampanha(id);
+      
+      // Then create new relationships
+      await this.linkPromotoresToCampanha(id, promotores);
+    }
     
     return campanhaAtualizada;
   }
@@ -220,5 +248,75 @@ export default class CampanhaService {
     });
 
     return campanhas;
+  }
+
+  /**
+   * Links promoters and their oficinas to a campaign
+   * @param campanhaId - The campaign ID
+   * @param promotores - Array of promoters with their oficinas
+   */
+  static async linkPromotoresToCampanha(
+    campanhaId: number,
+    promotores: PromotorOficinaData[]
+  ): Promise<void> {
+    const campanhaPromotorRepository = AppDataSourceSync.getRepository(CampanhaPromotor);
+    const rotaPromotorRepository = AppDataSourceSync.getRepository(RotaPromotor);
+
+    for (const promotorData of promotores) {
+      // Create CampanhaPromotor relationship
+      const campanhaPromotor = campanhaPromotorRepository.create({
+        ID_CAMPANHA: campanhaId,
+        ID_PROMOTOR: promotorData.ID_PROMOTOR,
+      });
+      
+      const campanhaPromotorSalvo = await campanhaPromotorRepository.save(campanhaPromotor);
+
+      // Create RotaPromotor for each oficina
+      if (campanhaPromotorSalvo.ID_CAMPANHA_PROMOTOR) {
+        for (const idOficina of promotorData.ID_OFICINAS) {
+          const rotaPromotor = rotaPromotorRepository.create({
+            ID_CAMPANHA_PROMOTOR: campanhaPromotorSalvo.ID_CAMPANHA_PROMOTOR,
+            ID_OFICINA: idOficina,
+          });
+          
+          await rotaPromotorRepository.save(rotaPromotor);
+        }
+      }
+    }
+  }
+
+  /**
+   * Removes (soft deletes) all promoter relationships for a campaign
+   * @param campanhaId - The campaign ID
+   */
+  static async removePromotoresFromCampanha(campanhaId: number): Promise<void> {
+    const campanhaPromotorRepository = AppDataSourceSync.getRepository(CampanhaPromotor);
+    const rotaPromotorRepository = AppDataSourceSync.getRepository(RotaPromotor);
+
+    // Find all CampanhaPromotor relationships for this campaign
+    const campanhaPromotores = await campanhaPromotorRepository.find({
+      where: { ID_CAMPANHA: campanhaId, DELETED_AT: IsNull() },
+    });
+
+    // Soft delete all associated RotaPromotor records
+    for (const campanhaPromotor of campanhaPromotores) {
+      if (campanhaPromotor.ID_CAMPANHA_PROMOTOR) {
+        const rotasPromotor = await rotaPromotorRepository.find({
+          where: { 
+            ID_CAMPANHA_PROMOTOR: campanhaPromotor.ID_CAMPANHA_PROMOTOR,
+            DELETED_AT: IsNull(),
+          },
+        });
+
+        for (const rota of rotasPromotor) {
+          if (rota.ID_ROTA_PROMOTOR) {
+            await rotaPromotorRepository.softDelete(rota.ID_ROTA_PROMOTOR);
+          }
+        }
+        
+        // Soft delete the CampanhaPromotor relationship
+        await campanhaPromotorRepository.softDelete(campanhaPromotor.ID_CAMPANHA_PROMOTOR);
+      }
+    }
   }
 }
