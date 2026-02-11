@@ -16,6 +16,14 @@ export const CampanhaSchema = z.object({
 });
 
 /**
+ * Promotor oficinas schema for campaign creation/update
+ */
+export const PromotorOficinasSchema = z.object({
+  ID_PROMOTOR: z.number().int().positive(),
+  ID_OFICINAS: z.array(z.number().int().positive()).min(1, 'Pelo menos uma oficina é obrigatória'),
+});
+
+/**
  * Create campanha request schema
  */
 export const CreateCampanhaSchema = z.object({
@@ -25,6 +33,7 @@ export const CreateCampanhaSchema = z.object({
   START_TIME: z.string().datetime().optional().or(z.date().optional()),
   END_TIME: z.string().datetime().optional().or(z.date().optional()),
   CREATED_BY: z.string().optional(),
+  promotores: z.array(PromotorOficinasSchema).optional(),
 });
 
 /**
@@ -37,6 +46,7 @@ export const UpdateCampanhaSchema = z.object({
   START_TIME: z.string().datetime().optional().or(z.date().optional()),
   END_TIME: z.string().datetime().optional().or(z.date().optional()),
   CREATED_BY: z.string().optional(),
+  promotores: z.array(PromotorOficinasSchema).optional(),
 });
 
 /**

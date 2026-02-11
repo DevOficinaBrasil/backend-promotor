@@ -274,4 +274,219 @@ describe('CampanhaService', () => {
       expect(DuckDBClient.getOficinaDataByIds).toHaveBeenCalledWith([]);
     });
   });
+
+  describe('createCampanha with promotores', () => {
+    it('should create campaign and link promotores with oficinas', async () => {
+      const mockCampanha = {
+        ID_CAMPANHA: 1,
+        NOME: 'Test Campaign',
+      };
+
+      const mockCampanhaPromotor = {
+        ID_CAMPANHA_PROMOTOR: 10,
+        ID_CAMPANHA: 1,
+        ID_PROMOTOR: 5,
+      };
+
+      const mockCampanhaRepository = {
+        create: jest.fn().mockReturnValue(mockCampanha),
+        save: jest.fn().mockResolvedValue(mockCampanha),
+      };
+
+      const mockCampanhaPromotorRepository = {
+        create: jest.fn().mockReturnValue(mockCampanhaPromotor),
+        save: jest.fn().mockResolvedValue(mockCampanhaPromotor),
+        find: jest.fn(),
+      };
+
+      const mockRotaPromotorRepository = {
+        create: jest.fn().mockImplementation((data) => data),
+        save: jest.fn().mockImplementation((data) => Promise.resolve(data)),
+        find: jest.fn(),
+      };
+
+      (AppDataSourceSync.getRepository as jest.Mock).mockImplementation((entity) => {
+        if (entity === Campanha) return mockCampanhaRepository;
+        if (entity === CampanhaPromotor) return mockCampanhaPromotorRepository;
+        if (entity === RotaPromotor) return mockRotaPromotorRepository;
+        return {};
+      });
+
+      const promotores = [
+        {
+          ID_PROMOTOR: 5,
+          ID_OFICINAS: [100, 200, 300],
+        },
+      ];
+
+      const result = await CampanhaService.createCampanha(
+        { NOME: 'Test Campaign' },
+        promotores
+      );
+
+      expect(result).toEqual(mockCampanha);
+      expect(mockCampanhaRepository.save).toHaveBeenCalledTimes(1);
+      expect(mockCampanhaPromotorRepository.save).toHaveBeenCalledTimes(1);
+      expect(mockRotaPromotorRepository.save).toHaveBeenCalledTimes(3);
+    });
+
+    it('should create campaign without promotores when not provided', async () => {
+      const mockCampanha = {
+        ID_CAMPANHA: 1,
+        NOME: 'Test Campaign',
+      };
+
+      const mockCampanhaRepository = {
+        create: jest.fn().mockReturnValue(mockCampanha),
+        save: jest.fn().mockResolvedValue(mockCampanha),
+      };
+
+      const mockCampanhaPromotorRepository = {
+        save: jest.fn(),
+      };
+
+      (AppDataSourceSync.getRepository as jest.Mock).mockImplementation((entity) => {
+        if (entity === Campanha) return mockCampanhaRepository;
+        if (entity === CampanhaPromotor) return mockCampanhaPromotorRepository;
+        return {};
+      });
+
+      const result = await CampanhaService.createCampanha({ NOME: 'Test Campaign' });
+
+      expect(result).toEqual(mockCampanha);
+      expect(mockCampanhaRepository.save).toHaveBeenCalledTimes(1);
+      expect(mockCampanhaPromotorRepository.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('updateCampanha with promotores', () => {
+    it('should update campaign and replace promotor links', async () => {
+      const mockExistingCampanha = {
+        ID_CAMPANHA: 1,
+        NOME: 'Old Campaign Name',
+      };
+
+      const mockUpdatedCampanha = {
+        ID_CAMPANHA: 1,
+        NOME: 'Updated Campaign Name',
+      };
+
+      const mockCampanhaPromotor = {
+        ID_CAMPANHA_PROMOTOR: 10,
+        ID_CAMPANHA: 1,
+        ID_PROMOTOR: 5,
+      };
+
+      const mockExistingCampanhaPromotores = [
+        {
+          ID_CAMPANHA_PROMOTOR: 5,
+          ID_CAMPANHA: 1,
+          ID_PROMOTOR: 3,
+        },
+      ];
+
+      const mockExistingRotas = [
+        {
+          ID_ROTA_PROMOTOR: 1,
+          ID_CAMPANHA_PROMOTOR: 5,
+        },
+      ];
+
+      const mockCampanhaRepository = {
+        findOne: jest.fn().mockResolvedValue(mockExistingCampanha),
+        save: jest.fn().mockResolvedValue(mockUpdatedCampanha),
+      };
+
+      const mockCampanhaPromotorRepository = {
+        find: jest.fn().mockResolvedValue(mockExistingCampanhaPromotores),
+        create: jest.fn().mockReturnValue(mockCampanhaPromotor),
+        save: jest.fn().mockResolvedValue(mockCampanhaPromotor),
+        softDelete: jest.fn(),
+      };
+
+      const mockRotaPromotorRepository = {
+        find: jest.fn().mockResolvedValue(mockExistingRotas),
+        create: jest.fn().mockImplementation((data) => data),
+        save: jest.fn().mockImplementation((data) => Promise.resolve(data)),
+        softDelete: jest.fn(),
+      };
+
+      (AppDataSourceSync.getRepository as jest.Mock).mockImplementation((entity) => {
+        if (entity === Campanha) return mockCampanhaRepository;
+        if (entity === CampanhaPromotor) return mockCampanhaPromotorRepository;
+        if (entity === RotaPromotor) return mockRotaPromotorRepository;
+        return {};
+      });
+
+      const promotores = [
+        {
+          ID_PROMOTOR: 5,
+          ID_OFICINAS: [100, 200],
+        },
+      ];
+
+      const result = await CampanhaService.updateCampanha(
+        1,
+        { NOME: 'Updated Campaign Name' },
+        promotores
+      );
+
+      expect(result).toEqual(mockUpdatedCampanha);
+      expect(mockCampanhaRepository.save).toHaveBeenCalledTimes(1);
+      
+      // Verify existing links were soft deleted
+      expect(mockRotaPromotorRepository.softDelete).toHaveBeenCalledTimes(1);
+      expect(mockCampanhaPromotorRepository.softDelete).toHaveBeenCalledTimes(1);
+      
+      // Verify new links were created
+      expect(mockCampanhaPromotorRepository.save).toHaveBeenCalledTimes(1);
+      expect(mockRotaPromotorRepository.save).toHaveBeenCalledTimes(2);
+    });
+
+    it('should update campaign without affecting promotores when not provided', async () => {
+      const mockExistingCampanha = {
+        ID_CAMPANHA: 1,
+        NOME: 'Old Campaign Name',
+      };
+
+      const mockUpdatedCampanha = {
+        ID_CAMPANHA: 1,
+        NOME: 'Updated Campaign Name',
+      };
+
+      const mockCampanhaRepository = {
+        findOne: jest.fn().mockResolvedValue(mockExistingCampanha),
+        save: jest.fn().mockResolvedValue(mockUpdatedCampanha),
+      };
+
+      const mockCampanhaPromotorRepository = {
+        find: jest.fn(),
+        softDelete: jest.fn(),
+      };
+
+      const mockRotaPromotorRepository = {
+        find: jest.fn(),
+        softDelete: jest.fn(),
+      };
+
+      (AppDataSourceSync.getRepository as jest.Mock).mockImplementation((entity) => {
+        if (entity === Campanha) return mockCampanhaRepository;
+        if (entity === CampanhaPromotor) return mockCampanhaPromotorRepository;
+        if (entity === RotaPromotor) return mockRotaPromotorRepository;
+        return {};
+      });
+
+      const result = await CampanhaService.updateCampanha(
+        1,
+        { NOME: 'Updated Campaign Name' }
+      );
+
+      expect(result).toEqual(mockUpdatedCampanha);
+      expect(mockCampanhaRepository.save).toHaveBeenCalledTimes(1);
+      
+      // Verify existing links were NOT deleted
+      expect(mockCampanhaPromotorRepository.find).not.toHaveBeenCalled();
+      expect(mockRotaPromotorRepository.softDelete).not.toHaveBeenCalled();
+    });
+  });
 });

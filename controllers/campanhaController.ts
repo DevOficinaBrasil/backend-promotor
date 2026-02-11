@@ -14,7 +14,8 @@ export default class CampanhaController {
         ID_CLIENT,
         START_TIME,
         END_TIME,
-        CREATED_BY
+        CREATED_BY,
+        promotores
       } = req.body;
 
       // Validate required fields
@@ -34,8 +35,8 @@ export default class CampanhaController {
         CREATED_BY
       };
 
-      // Call the service to create the campaign
-      const novaCampanha = await CampanhaService.createCampanha(campanhaData);
+      // Call the service to create the campaign with optional promotores
+      const novaCampanha = await CampanhaService.createCampanha(campanhaData, promotores);
 
       return res.status(201).json({
         message: "Campanha criada com sucesso.",
@@ -71,7 +72,8 @@ export default class CampanhaController {
         ID_CLIENT,
         START_TIME,
         END_TIME,
-        CREATED_BY
+        CREATED_BY,
+        promotores
       } = req.body;
 
       // Check if campaign exists
@@ -92,8 +94,8 @@ export default class CampanhaController {
       if (END_TIME !== undefined) updateData.END_TIME = new Date(END_TIME);
       if (CREATED_BY !== undefined) updateData.CREATED_BY = CREATED_BY;
 
-      // Call the service to update the campaign
-      const campanhaAtualizada = await CampanhaService.updateCampanha(campanhaId, updateData);
+      // Call the service to update the campaign with optional promotores
+      const campanhaAtualizada = await CampanhaService.updateCampanha(campanhaId, updateData, promotores);
 
       return res.status(200).json({
         message: "Campanha atualizada com sucesso.",
