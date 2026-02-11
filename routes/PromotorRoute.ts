@@ -19,6 +19,8 @@ import {
   UnlinkCampanhaPromotorSchema,
   UnlinkCampanhaPromotorResponseSchema,
   GetPromotorCampanhasResponseSchema,
+  ClientIdParamsSchema,
+  GetPromotoresByClientIdResponseSchema,
 } from "../schemas/promotor";
 import { ErrorResponseSchema } from "../schemas/common";
 
@@ -339,6 +341,42 @@ createDocumentedRoute(router, {
       200: {
         description: 'Campaign IDs retrieved successfully',
         schema: GetPromotorCampanhasResponseSchema,
+      },
+      400: {
+        description: 'Bad request - validation error',
+        schema: ErrorResponseSchema,
+      },
+      401: {
+        description: 'Unauthorized - token missing or invalid',
+        schema: ErrorResponseSchema,
+      },
+      500: {
+        description: 'Internal server error',
+        schema: ErrorResponseSchema,
+      },
+    },
+  },
+});
+
+// Get promoters by client ID
+createDocumentedRoute(router, {
+  method: 'get',
+  path: '/client/:clientId',
+  handler: PromotorController.getPromotoresByClientId,
+  basePath: '/promotor',
+  middlewares: [authMiddleware],
+  schemas: {
+    params: ClientIdParamsSchema,
+  },
+  documentation: {
+    tags: ['Promotor'],
+    summary: 'Get promoters by client ID',
+    description: 'Returns a list of all promoters for a specific client ID (without passwords)',
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: {
+        description: 'Promoters retrieved successfully',
+        schema: GetPromotoresByClientIdResponseSchema,
       },
       400: {
         description: 'Bad request - validation error',
