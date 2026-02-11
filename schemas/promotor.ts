@@ -1,3 +1,4 @@
+
 import { z } from 'zod';
 
 /**
@@ -130,4 +131,35 @@ export const LinkCampanhaPromotorResponseSchema = z.object({
       ID_PROMOTOR: z.number().optional(),
     })),
   }),
+});
+
+/**
+ * Unlink campanha-promotor request schema
+ */
+export const UnlinkCampanhaPromotorSchema = z.object({
+  ID_CAMPANHA: z.union([z.number(), z.array(z.number())]),
+  ID_PROMOTOR: z.number(),
+});
+
+/**
+ * Unlink campanha-promotor response schema
+ */
+export const UnlinkCampanhaPromotorResponseSchema = z.object({
+  message: z.string(),
+  data: z.object({
+    removed: z.number(),
+    relationships: z.array(z.object({
+      ID_CAMPANHA_PROMOTOR: z.number().optional(),
+      ID_CAMPANHA: z.number().optional(),
+      ID_PROMOTOR: z.number().optional(),
+    })),
+  }),
+});
+
+/**
+ * Get campanhas vinculadas ao promotor response schema
+ */
+export const GetPromotorCampanhasResponseSchema = z.object({
+  message: z.string(),
+  data: z.array(z.number()),
 });

@@ -1,3 +1,4 @@
+
 import { Router } from "express";
 import PromotorController from "../controllers/promotorController";
 import { createDocumentedRoute } from "../utils/routeDocumentation";
@@ -15,6 +16,9 @@ import {
   GetPromotorByIdResponseSchema,
   LinkCampanhaPromotorSchema,
   LinkCampanhaPromotorResponseSchema,
+  UnlinkCampanhaPromotorSchema,
+  UnlinkCampanhaPromotorResponseSchema,
+  GetPromotorCampanhasResponseSchema,
 } from "../schemas/promotor";
 import { ErrorResponseSchema } from "../schemas/common";
 
@@ -266,6 +270,82 @@ createDocumentedRoute(router, {
       },
       404: {
         description: 'Promoter not found',
+        schema: ErrorResponseSchema,
+      },
+      500: {
+        description: 'Internal server error',
+        schema: ErrorResponseSchema,
+      },
+    },
+  },
+});
+
+// Unlink promoter from campaign(s)
+createDocumentedRoute(router, {
+  method: 'delete',
+  path: '/unlink-campanha',
+  handler: PromotorController.unlinkCampanhaPromotor,
+  basePath: '/promotor',
+  middlewares: [authMiddleware],
+  schemas: {
+    body: UnlinkCampanhaPromotorSchema,
+  },
+  documentation: {
+    tags: ['Promotor'],
+    summary: 'Unlink promoter from campaign(s)',
+    description: 'Remove relationship between a promoter and one or more campaigns',
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: {
+        description: 'Unlink successful',
+        schema: UnlinkCampanhaPromotorResponseSchema,
+      },
+      400: {
+        description: 'Bad request - validation error',
+        schema: ErrorResponseSchema,
+      },
+      401: {
+        description: 'Unauthorized - token missing or invalid',
+        schema: ErrorResponseSchema,
+      },
+      404: {
+        description: 'Promoter or campaign not found',
+        schema: ErrorResponseSchema,
+      },
+      500: {
+        description: 'Internal server error',
+        schema: ErrorResponseSchema,
+      },
+    },
+  },
+});
+
+// Get all campaign IDs linked to a promoter
+createDocumentedRoute(router, {
+  method: 'get',
+  path: '/:id/campanhas',
+  handler: PromotorController.getCampanhasByPromotor,
+  basePath: '/promotor',
+  middlewares: [authMiddleware],
+  schemas: {
+    params: PromotorIdParamsSchema,
+  },
+  documentation: {
+    tags: ['Promotor'],
+    summary: 'Get all campaign IDs linked to a promoter',
+    description: 'Returns an array of campaign IDs linked to the given promoter',
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: {
+        description: 'Campaign IDs retrieved successfully',
+        schema: GetPromotorCampanhasResponseSchema,
+      },
+      400: {
+        description: 'Bad request - validation error',
+        schema: ErrorResponseSchema,
+      },
+      401: {
+        description: 'Unauthorized - token missing or invalid',
         schema: ErrorResponseSchema,
       },
       500: {

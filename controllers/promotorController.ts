@@ -1,3 +1,5 @@
+
+
 import { Request, Response } from "express";
 import PromotorService from "../service/promotorService";
 import Promotor from "../entities/Promotor";
@@ -282,6 +284,68 @@ export default class PromotorController {
       console.error("Erro ao vincular campanha e promotor:", error);
       return res.status(500).json({
         message: "Erro interno ao vincular campanha e promotor.",
+        error: error instanceof Error ? error.message : "Erro desconhecido"
+      });
+    }
+  };
+
+    /**
+   * Unlinks a promoter from one or more campaigns
+   * DELETE /promotor/unlink-campanha
+   */
+  static unlinkCampanhaPromotor = async (req: Request, res: Response) => {
+    try {
+      const { ID_CAMPANHA, ID_PROMOTOR } = req.body;
+
+      // Validate that promoter exists
+      const promotor = await PromotorService.findPromotorById(ID_PROMOTOR);
+      if (!promotor) {
+        return res.status(404).json({
+          message: "Promotor não encontrado."
+        });
+      }
+
+      // Call the service to unlink the promoter from campaigns
+      const removedRelationships = await PromotorService.unlinkCampanhaPromotor(ID_CAMPANHA, ID_PROMOTOR);
+
+      return res.status(200).json({
+        message: "Vínculo entre campanha(s) e promotor removido com sucesso.",
+        data: {
+          removed: removedRelationships.length,
+          relationships: removedRelationships
+        }
+      });
+    } catch (error) {
+      console.error("Erro ao remover vínculo campanha e promotor:", error);
+      return res.status(500).json({
+        message: "Erro interno ao remover vínculo campanha e promotor.",
+        error: error instanceof Error ? error.message : "Erro desconhecido"
+      });
+    }
+  };
+
+    /**
+   * Gets all campaign IDs linked to a promoter
+   * GET /promotor/:id/campanhas
+   */
+  static getCampanhasByPromotor = async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const promotorId = parseInt(id, 10);
+      if (isNaN(promotorId)) {
+        return res.status(400).json({
+          message: "ID do promotor inválido."
+        });
+      }
+      const campanhas = await PromotorService.getCampanhasByPromotor(promotorId);
+      return res.status(200).json({
+        message: "Campanhas vinculadas ao promotor.",
+        data: campanhas
+      });
+    } catch (error) {
+      console.error("Erro ao buscar campanhas vinculadas ao promotor:", error);
+      return res.status(500).json({
+        message: "Erro interno ao buscar campanhas vinculadas ao promotor.",
         error: error instanceof Error ? error.message : "Erro desconhecido"
       });
     }

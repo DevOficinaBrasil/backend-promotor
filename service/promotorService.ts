@@ -1,4 +1,7 @@
+
+
 import { AppDataSourceSync } from "../data-source";
+import { In } from "typeorm";
 import Promotor from "../entities/Promotor";
 import CampanhaPromotor from "../entities/CampanhaPromotor";
 import { encrypt, decrypt } from "../utils/encryption";
@@ -217,5 +220,46 @@ export default class PromotorService {
     }
     
     return [];
+  }
+
+    /**
+   * Unlinks a promoter from one or more campaigns
+   * @param campanhaIds - Campaign ID or array of campaign IDs
+   * @param promotorId - The promoter ID
+   * @returns Array of removed CampanhaPromotor relationships
+   */
+  static async unlinkCampanhaPromotor(
+    campanhaIds: number | number[],
+    promotorId: number
+  ): Promise<CampanhaPromotor[]> {
+    const campanhaPromotorRepository = AppDataSourceSync.getRepository(CampanhaPromotor);
+    // Normalize to array
+    const idsArray = Array.isArray(campanhaIds) ? campanhaIds : [campanhaIds];
+    // Find all relationships to remove
+    const relationshipsToRemove = await campanhaPromotorRepository.find({
+      where: {
+        ID_PROMOTOR: promotorId,
+        ID_CAMPANHA: idsArray.length === 1 ? idsArray[0] : In(idsArray),
+      },
+    });
+    // Remove relationships
+    if (relationshipsToRemove.length > 0) {
+      await campanhaPromotorRepository.remove(relationshipsToRemove);
+    }
+    return relationshipsToRemove;
+  }
+
+    /**
+   * Gets all campaign IDs linked to a promoter
+   * @param promotorId - The promoter ID
+   * @returns Array of campaign IDs
+   */
+  static async getCampanhasByPromotor(promotorId: number): Promise<number[]> {
+    const campanhaPromotorRepository = AppDataSourceSync.getRepository(CampanhaPromotor);
+    const relationships = await campanhaPromotorRepository.find({
+      where: { ID_PROMOTOR: promotorId },
+      select: ["ID_CAMPANHA"],
+    });
+    return relationships.map(rel => rel.ID_CAMPANHA!);
   }
 }
