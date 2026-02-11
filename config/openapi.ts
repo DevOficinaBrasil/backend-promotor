@@ -56,7 +56,7 @@ export class OpenAPIDocumentGenerator {
         {
           url: process.env.NODE_ENV === 'development'
             ? process.env.API_URL || 'http://localhost:8185'
-            : 'https://apipromotor.oficinabrasil.com.br',
+            : 'https://apipromotores.oficinabrasil.com.br',
           description: 'Development server',
         },
       ],
