@@ -113,8 +113,8 @@ export const CreateRotaWithCampanhaPromotorResponseSchema = z.object({
   data: z.object({
     campanhaPromotor: z.object({
       ID_CAMPANHA_PROMOTOR: z.number(),
-      ID_CAMPANHA: z.number().optional(),
-      ID_PROMOTOR: z.number().optional(),
+      ID_CAMPANHA: z.number(),
+      ID_PROMOTOR: z.number(),
       CREATED_AT: z.date().optional(),
       UPDATED_AT: z.date().optional(),
     }),
