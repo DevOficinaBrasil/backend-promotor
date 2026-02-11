@@ -4,6 +4,7 @@ import CampanhaPromotor from "../entities/CampanhaPromotor";
 import RotaPromotor from "../entities/RotaPromotor";
 import Oficina from "../entities/Oficina";
 import { Between, LessThanOrEqual, MoreThanOrEqual, IsNull } from "typeorm";
+import { DuckDBClient } from "../utils/duckdbClient";
 
 export default class CampanhaService {
   /**
@@ -86,9 +87,10 @@ export default class CampanhaService {
 
   /**
    * Gets the active campaign for a promoter based on current datetime
+   * Joins with DuckDB data to add flag_engajamento, flag_sentimento, flag_treinamento, and cor_icone to oficinas
    * @param idPromotor - The promoter ID
    * @param datetime - Optional datetime to check (defaults to current time)
-   * @returns The active campaign with rotas array (each rota includes nested oficina) or null if not found
+   * @returns The active campaign with rotas array (each rota includes nested oficina with DuckDB data) or null if not found
    */
   static async getActiveCampanhaByPromotor(
     idPromotor: number,
@@ -136,9 +138,36 @@ export default class CampanhaService {
       relations: ['oficina'],
     });
 
+    // Get oficina IDs from rotas
+    const oficinaIds = rotasPromotor
+      .map((rota) => rota.oficina?.ID_OFICINA)
+      .filter((id): id is number => id != null);
+
+    // Query DuckDB for additional oficina data
+    const duckdbData = await DuckDBClient.getOficinaDataByIds(oficinaIds);
+
+    // Merge DuckDB data with oficina objects in rotas
+    const rotasWithDuckDBData = rotasPromotor.map((rota) => {
+      if (rota.oficina && rota.oficina.ID_OFICINA) {
+        const duckData = duckdbData.get(rota.oficina.ID_OFICINA);
+        
+        return {
+          ...rota,
+          oficina: {
+            ...rota.oficina,
+            flag_engajamento: duckData?.flag_engajamento || 'baixo',
+            flag_sentimento: duckData?.flag_sentimento || 'neutro',
+            flag_treinamento: duckData?.flag_treinamento || 'baixo',
+            cor_icone: duckData?.cor_icone || 'cinza',
+          } as Oficina & { flag_engajamento: string; flag_sentimento: string; flag_treinamento: string; cor_icone: string },
+        };
+      }
+      return rota;
+    });
+
     return {
       ...campanha,
-      rotas: rotasPromotor,
+      rotas: rotasWithDuckDBData,
     };
   }
 
