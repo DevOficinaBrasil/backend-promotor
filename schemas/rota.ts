@@ -1,3 +1,4 @@
+
 import { z } from 'zod';
 
 /**
@@ -193,4 +194,22 @@ export const RotaWithRelationsSchema = z.object({
 export const GetRotaByIdResponseSchema = z.object({
   message: z.string(),
   data: RotaWithRelationsSchema,
+});
+
+/**
+ * Get geolocation by CEP request schema
+ */
+export const GetGeolocationByCepRequestSchema = z.object({
+  cep: z.string().min(8, 'CEP deve ter pelo menos 8 dígitos'),
+});
+
+/**
+ * Get geolocation by CEP response schema
+ */
+export const GetGeolocationByCepResponseSchema = z.object({
+  message: z.string(),
+  data: z.object({
+    lat: z.number(),
+    lng: z.number(),
+  }).nullable(),
 });

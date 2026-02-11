@@ -168,4 +168,40 @@ export default class RotaService {
 
     return rota;
   }
+
+  static async getGeolocationDataByCep(
+    cep: string
+  ): Promise<{ lat: number; lng: number } | null> {
+    // se por alguma razao for gravado cep com mask, esse trecho remove
+    console.log(Number.isNaN(Number(cep)), cep);
+    if (Number.isNaN(Number(cep))) {
+      cep = cep.replace(/[^0-9]/g, "");
+    }
+
+    try {
+      const result = await fetch(
+        `https://maps.googleapis.com/maps/api/geocode/json?address=${cep}&key=AIzaSyCbuATYcvKcRjZ8maC3bsPk_zL5GMk_qaQ`
+      );
+
+      if (result.ok) {
+        const response = await result.json();
+
+        const results = (response as any)?.results[0] || null;
+
+        if (results) {
+          const location = results?.geometry?.location || null;
+
+          return location;
+        }
+
+        return null;
+      }
+    } catch (e) {
+      console.log("Error getGeolocationDataByCep()");
+      throw new Error((e as Error).message);
+    }
+
+
+    return null;
+  }
 }

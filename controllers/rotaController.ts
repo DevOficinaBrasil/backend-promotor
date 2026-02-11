@@ -150,4 +150,31 @@ export default class RotaController {
       });
     }
   };
+
+    /**
+   * Gets geolocation data by CEP
+   * POST /rota/geolocation
+   */
+  static getGeolocationDataByCep = async (req: Request, res: Response) => {
+    try {
+      const { cep } = req.body;
+      if (!cep || typeof cep !== 'string' || cep.length < 8) {
+        return res.status(400).json({
+          message: 'CEP inválido.',
+          data: null,
+        });
+      }
+      const location = await RotaService.getGeolocationDataByCep(cep);
+      return res.status(200).json({
+        message: location ? 'Geolocalização encontrada.' : 'Geolocalização não encontrada.',
+        data: location,
+      });
+    } catch (error) {
+      console.error('Erro ao buscar geolocalização por CEP:', error);
+      return res.status(500).json({
+        message: 'Erro interno ao buscar geolocalização.',
+        data: null,
+      });
+    }
+  };
 }

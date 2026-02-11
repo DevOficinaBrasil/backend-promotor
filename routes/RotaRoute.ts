@@ -11,6 +11,8 @@ import {
   UpdateRotaWorkshopsResponseSchema,
   UpdateRotaOptionsResponseSchema,
   GetRotaByIdResponseSchema,
+  GetGeolocationByCepResponseSchema,
+  GetGeolocationByCepRequestSchema,
 } from "../schemas/rota";
 import { ErrorResponseSchema } from "../schemas/common";
 
@@ -174,6 +176,42 @@ createDocumentedRoute(router, {
       500: {
         description: "Internal server error",
         schema: ErrorResponseSchema,
+      },
+    },
+  },
+});
+
+// Get geolocation by CEP
+createDocumentedRoute(router, {
+  method: "post",
+  path: "/geolocation",
+  handler: RotaController.getGeolocationDataByCep,
+  basePath: "/rota",
+  middlewares: [authMiddleware],
+  schemas: {
+    body: GetGeolocationByCepRequestSchema,
+  },
+  documentation: {
+    tags: ["Rota"],
+    summary: "Get geolocation by CEP",
+    description: "Returns latitude and longitude for a given CEP (postal code).",
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: {
+        description: "Geolocation found or not found",
+        schema: GetGeolocationByCepResponseSchema,
+      },
+      400: {
+        description: "Bad request - invalid CEP",
+        schema: GetGeolocationByCepResponseSchema,
+      },
+      401: {
+        description: "Unauthorized - token missing or invalid",
+        schema: ErrorResponseSchema,
+      },
+      500: {
+        description: "Internal server error",
+        schema: GetGeolocationByCepResponseSchema,
       },
     },
   },
