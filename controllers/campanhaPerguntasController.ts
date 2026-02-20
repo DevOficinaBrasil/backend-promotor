@@ -160,4 +160,28 @@ export default class CampanhaPerguntasController {
       });
     }
   };
+
+  /**
+   * Gets all perguntas for a specific campanha
+   * GET /campanha-perguntas/campanha/:id
+   */
+  static getPerguntasByCampanhaId = async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const campanhaId = parseInt(id, 10);
+
+      const perguntas = await CampanhaPerguntasService.getPerguntasByCampanhaId(campanhaId);
+
+      return res.status(200).json({
+        message: "Perguntas da campanha listadas com sucesso.",
+        data: perguntas
+      });
+    } catch (error) {
+      console.error("Erro ao listar perguntas da campanha:", error);
+      return res.status(500).json({
+        message: "Erro interno ao listar perguntas da campanha.",
+        error: error instanceof Error ? error.message : "Erro desconhecido"
+      });
+    }
+  };
 }

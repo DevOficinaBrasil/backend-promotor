@@ -50,6 +50,13 @@ export const CampanhaPerguntasIdParamsSchema = z.object({
 });
 
 /**
+ * Campanha ID params schema
+ */
+export const CampanhaIdParamsSchema = z.object({
+  id: z.coerce.number().int().positive(),
+});
+
+/**
  * Create campanha perguntas response schema
  */
 export const CreateCampanhaPerguntasResponseSchema = z.object({
@@ -87,4 +94,12 @@ export const GetAllCampanhaPerguntasResponseSchema = z.object({
 export const GetCampanhaPerguntasByIdResponseSchema = z.object({
   message: z.string(),
   data: CampanhaPerguntasSchema,
+});
+
+/**
+ * Get perguntas by campanha ID response schema
+ */
+export const GetPerguntasByCampanhaIdResponseSchema = z.object({
+  message: z.string(),
+  data: z.array(CampanhaPerguntasSchema),
 });

@@ -5,11 +5,13 @@ import {
   CreateCampanhaPerguntasSchema,
   UpdateCampanhaPerguntasSchema,
   CampanhaPerguntasIdParamsSchema,
+  CampanhaIdParamsSchema,
   CreateCampanhaPerguntasResponseSchema,
   UpdateCampanhaPerguntasResponseSchema,
   DeleteCampanhaPerguntasResponseSchema,
   GetAllCampanhaPerguntasResponseSchema,
   GetCampanhaPerguntasByIdResponseSchema,
+  GetPerguntasByCampanhaIdResponseSchema,
 } from "../schemas/campanhaPerguntas";
 import { ErrorResponseSchema } from "../schemas/common";
 
@@ -191,6 +193,42 @@ createDocumentedRoute(router, {
       },
       404: {
         description: "Question not found",
+        schema: ErrorResponseSchema,
+      },
+      500: {
+        description: "Internal server error",
+        schema: ErrorResponseSchema,
+      },
+    },
+  },
+});
+
+// Get perguntas by campanha ID
+createDocumentedRoute(router, {
+  method: "get",
+  path: "/campanha/:id",
+  handler: CampanhaPerguntasController.getPerguntasByCampanhaId,
+  basePath: "/campanha-perguntas",
+  middlewares: [],
+  schemas: {
+    params: CampanhaIdParamsSchema,
+  },
+  documentation: {
+    tags: ["Campanha Perguntas"],
+    summary: "Get questions by campaign ID",
+    description: "Returns all questions for a specific campaign",
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: {
+        description: "Questions retrieved successfully",
+        schema: GetPerguntasByCampanhaIdResponseSchema,
+      },
+      400: {
+        description: "Bad request - validation error",
+        schema: ErrorResponseSchema,
+      },
+      401: {
+        description: "Unauthorized - token missing or invalid",
         schema: ErrorResponseSchema,
       },
       500: {
