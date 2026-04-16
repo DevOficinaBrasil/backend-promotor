@@ -11,6 +11,7 @@ import {
 } from "typeorm";
 import Campanha from "./Campanha";
 import CampanhaResults from "./CampanhaResults";
+import CampanhaPerguntaOpcao from "./CampanhaPerguntaOpcao";
 
 export enum TipoPergunta {
   String = "String",
@@ -19,6 +20,7 @@ export enum TipoPergunta {
   Date = "Date",
   Float = "Float",
   Image = "Image",
+  Multi = "Multi",
 }
 
 @Entity({ schema: "CAMPANHAS_OB", name: "CAMPANHA_PERGUNTAS" })
@@ -66,6 +68,12 @@ export default class CampanhaPerguntas {
     (campanhaResults) => campanhaResults.pergunta
   )
   campanhaResults: CampanhaResults[];
+
+  @OneToMany(
+    () => CampanhaPerguntaOpcao,
+    (opcao) => opcao.pergunta
+  )
+  opcoes: CampanhaPerguntaOpcao[];
 
   constructor(init?: Partial<CampanhaPerguntas>) {
     Object.assign(this, init);

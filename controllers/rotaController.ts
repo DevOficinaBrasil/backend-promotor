@@ -206,4 +206,56 @@ export default class RotaController {
       });
     }
   };
+
+  /**
+   * Calcula rota otimizada A→B
+   * POST /rota/optimize
+   */
+  static optimizeRoute = async (req: Request, res: Response) => {
+    try {
+      const { ID_CAMPANHA_PROMOTOR, ID_OFICINA_INICIO, ID_OFICINA_FIM } = req.body;
+
+      const result = await RotaService.optimizeAndSaveRoute(
+        ID_CAMPANHA_PROMOTOR,
+        ID_OFICINA_INICIO,
+        ID_OFICINA_FIM
+      );
+
+      return res.status(200).json({
+        message: "Rota otimizada com sucesso.",
+        data: result,
+      });
+    } catch (error) {
+      console.error("Erro ao otimizar rota:", error);
+      return res.status(400).json({
+        message: error instanceof Error ? error.message : "Erro ao otimizar rota.",
+      });
+    }
+  };
+
+  /**
+   * Reordena rotas (MANUAL ou PROXIMIDADE_PROMOTOR)
+   * PUT /rota/reorder
+   */
+  static reorderRotas = async (req: Request, res: Response) => {
+    try {
+      const { ID_CAMPANHA_PROMOTOR, ESTRATEGIA_ORDENACAO, rotas } = req.body;
+
+      const result = await RotaService.reorderRotas(
+        ID_CAMPANHA_PROMOTOR,
+        ESTRATEGIA_ORDENACAO,
+        rotas
+      );
+
+      return res.status(200).json({
+        message: "Rotas reordenadas com sucesso.",
+        data: result,
+      });
+    } catch (error) {
+      console.error("Erro ao reordenar rotas:", error);
+      return res.status(400).json({
+        message: error instanceof Error ? error.message : "Erro ao reordenar rotas.",
+      });
+    }
+  };
 }

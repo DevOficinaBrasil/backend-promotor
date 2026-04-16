@@ -69,6 +69,9 @@ export default class RotaPromotor {
   @Column({ type: "int", nullable: true, name: "CREATED_BY" })
   CREATED_BY?: number;
 
+  @Column({ type: "int", nullable: true, name: "ORDEM" })
+  ORDEM?: number;
+
   @UpdateDateColumn({
     type: "timestamp",
     default: () => "CURRENT_TIMESTAMP",

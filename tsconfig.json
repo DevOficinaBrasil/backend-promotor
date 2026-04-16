@@ -5,6 +5,7 @@
     "lib": [
       "es2020"
     ],
+    "ignoreDeprecations": "6.0",
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "outDir": "./dist",

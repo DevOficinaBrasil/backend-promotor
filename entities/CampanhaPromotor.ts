@@ -12,6 +12,13 @@ import {
 import Campanha from "./Campanha";
 import Promotor from "./Promotor";
 import RotaPromotor from "./RotaPromotor";
+import Oficina from "./Oficina";
+
+export enum EstrategiaOrdenacao {
+  ROTA_OTIMIZADA = "ROTA_OTIMIZADA",
+  MANUAL = "MANUAL",
+  PROXIMIDADE_PROMOTOR = "PROXIMIDADE_PROMOTOR",
+}
 
 @Entity({ schema: "CAMPANHAS_OB", name: "CAMPANHA_PROMOTOR" })
 export default class CampanhaPromotor {
@@ -23,6 +30,21 @@ export default class CampanhaPromotor {
 
   @Column({ type: "int", nullable: true, name: "ID_PROMOTOR" })
   ID_PROMOTOR?: number;
+
+  @Column({
+    type: "varchar",
+    length: 30,
+    default: EstrategiaOrdenacao.PROXIMIDADE_PROMOTOR,
+    nullable: true,
+    name: "ESTRATEGIA_ORDENACAO",
+  })
+  ESTRATEGIA_ORDENACAO?: EstrategiaOrdenacao;
+
+  @Column({ type: "int", nullable: true, name: "ID_OFICINA_INICIO" })
+  ID_OFICINA_INICIO?: number;
+
+  @Column({ type: "int", nullable: true, name: "ID_OFICINA_FIM" })
+  ID_OFICINA_FIM?: number;
 
   @UpdateDateColumn({
     type: "timestamp",
@@ -51,6 +73,14 @@ export default class CampanhaPromotor {
 
   @OneToMany(() => RotaPromotor, (rotaPromotor) => rotaPromotor.campanhaPromotor)
   rotasPromotor: RotaPromotor[];
+
+  @ManyToOne(() => Oficina)
+  @JoinColumn({ name: "ID_OFICINA_INICIO" })
+  oficinaInicio?: Oficina;
+
+  @ManyToOne(() => Oficina)
+  @JoinColumn({ name: "ID_OFICINA_FIM" })
+  oficinaFim?: Oficina;
 
   constructor(init?: Partial<CampanhaPromotor>) {
     Object.assign(this, init);

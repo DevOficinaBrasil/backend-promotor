@@ -1,6 +1,6 @@
 import { AppDataSourceSync } from "../data-source";
 import Campanha from "../entities/Campanha";
-import CampanhaPromotor from "../entities/CampanhaPromotor";
+import CampanhaPromotor, { EstrategiaOrdenacao } from "../entities/CampanhaPromotor";
 import RotaPromotor from "../entities/RotaPromotor";
 import Oficina from "../entities/Oficina";
 import { Between, LessThanOrEqual, MoreThanOrEqual, IsNull } from "typeorm";
@@ -123,7 +123,7 @@ export default class CampanhaService {
   static async getActiveCampanhaByPromotor(
     idPromotor: number,
     datetime?: Date
-  ): Promise<(Campanha & { rotas: RotaPromotor[] }) | null> {
+  ): Promise<(Campanha & { ESTRATEGIA_ORDENACAO: EstrategiaOrdenacao | 'PROXIMIDADE_PROMOTOR'; rotas: RotaPromotor[] }) | null> {
     const currentDatetime = datetime || new Date();
     const campanhaRepository = AppDataSourceSync.getRepository(Campanha);
     const campanhaPromotorRepository = AppDataSourceSync.getRepository(CampanhaPromotor);
@@ -164,6 +164,7 @@ export default class CampanhaService {
         DELETED_AT: IsNull(),
       },
       relations: ['oficina'],
+      order: { ORDEM: { direction: 'ASC', nulls: 'LAST' } },
     });
 
     // Get oficina IDs from rotas
@@ -195,6 +196,7 @@ export default class CampanhaService {
 
     return {
       ...campanha,
+      ESTRATEGIA_ORDENACAO: activeCampanha.ESTRATEGIA_ORDENACAO || 'PROXIMIDADE_PROMOTOR',
       rotas: rotasWithDuckDBData,
     };
   }
@@ -225,7 +227,7 @@ export default class CampanhaService {
     
     const campanha = await campanhaRepository.findOne({
       where: { ID_CAMPANHA: id },
-      relations: ['campanhaPromotores', 'campanhaPromotores.promotor', 'campanhaPromotores.rotasPromotor', 'campanhaPromotores.rotasPromotor.oficina', 'campanhaPerguntas'],
+      relations: ['campanhaPromotores', 'campanhaPromotores.promotor', 'campanhaPromotores.rotasPromotor', 'campanhaPromotores.rotasPromotor.oficina', 'campanhaPerguntas', 'campanhaPerguntas.opcoes'],
     });
 
     return campanha;
@@ -241,7 +243,7 @@ export default class CampanhaService {
     
     const campanhas = await campanhaRepository.find({
       where: { ID_CLIENT: clientId },
-      relations: ['campanhaPromotores', 'campanhaPromotores.promotor', 'campanhaPromotores.rotasPromotor', 'campanhaPromotores.rotasPromotor.oficina', 'campanhaPerguntas'],
+      relations: ['campanhaPromotores', 'campanhaPromotores.promotor', 'campanhaPromotores.rotasPromotor', 'campanhaPromotores.rotasPromotor.oficina', 'campanhaPerguntas', 'campanhaPerguntas.opcoes'],
       order: {
         CREATED_AT: 'DESC',
       },

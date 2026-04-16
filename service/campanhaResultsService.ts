@@ -159,7 +159,9 @@ export default class CampanhaResultsService {
       .createQueryBuilder('result')
       .leftJoinAndSelect('result.rota', 'rota')
       .leftJoinAndSelect('result.pergunta', 'pergunta')
-      .leftJoin('rota.campanhaPromotor', 'campanhaPromotor')
+      .leftJoinAndSelect('pergunta.opcoes', 'opcoes')
+      .leftJoinAndSelect('rota.campanhaPromotor', 'campanhaPromotor')
+      .leftJoinAndSelect('campanhaPromotor.promotor', 'promotor')
       .where('campanhaPromotor.ID_CAMPANHA = :campanhaId', { campanhaId })
       .orderBy('result.CREATED_AT', 'DESC')
       .getMany();
