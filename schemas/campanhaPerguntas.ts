@@ -10,7 +10,16 @@ export const TipoPerguntaEnum = z.enum([
   'Date',
   'Float',
   'Image',
+  'Multi',
 ]);
+
+/**
+ * Schema for a single option (used in Multi type questions)
+ */
+export const OpcaoSchema = z.object({
+  LABEL: z.string().min(1, 'LABEL é obrigatório').max(500),
+  ORDEM: z.number().int().min(0),
+});
 
 /**
  * CampanhaPerguntas entity schema
@@ -20,6 +29,7 @@ export const CampanhaPerguntasSchema = z.object({
   ID_CAMPANHA: z.number().optional(),
   PERGUNTA: z.string().optional(),
   TIPO: TipoPerguntaEnum.optional(),
+  OPCOES: z.array(OpcaoSchema).optional(),
   CREATED_AT: z.date().optional(),
   UPDATED_AT: z.date().optional(),
 });
@@ -31,7 +41,19 @@ export const CreateCampanhaPerguntasSchema = z.object({
   ID_CAMPANHA: z.number().int().positive(),
   PERGUNTA: z.string().min(1, 'PERGUNTA é obrigatória').max(500),
   TIPO: TipoPerguntaEnum,
-});
+  OPCOES: z.array(OpcaoSchema).min(2).optional(),
+}).refine(
+  (data) => {
+    if (data.TIPO === 'Multi') {
+      return data.OPCOES && data.OPCOES.length >= 2;
+    }
+    return true;
+  },
+  {
+    message: 'Perguntas do tipo Multi devem ter pelo menos 2 opções',
+    path: ['OPCOES'],
+  }
+);
 
 /**
  * Update campanha perguntas request schema
@@ -40,7 +62,19 @@ export const UpdateCampanhaPerguntasSchema = z.object({
   ID_CAMPANHA: z.number().int().positive().optional(),
   PERGUNTA: z.string().min(1).max(500).optional(),
   TIPO: TipoPerguntaEnum.optional(),
-});
+  OPCOES: z.array(OpcaoSchema).min(2).optional(),
+}).refine(
+  (data) => {
+    if (data.TIPO === 'Multi') {
+      return data.OPCOES && data.OPCOES.length >= 2;
+    }
+    return true;
+  },
+  {
+    message: 'Perguntas do tipo Multi devem ter pelo menos 2 opções',
+    path: ['OPCOES'],
+  }
+);
 
 /**
  * Campanha Perguntas ID params schema

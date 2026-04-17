@@ -9,7 +9,7 @@ export default class CampanhaPerguntasController {
    */
   static createCampanhaPergunta = async (req: Request, res: Response) => {
     try {
-      const { ID_CAMPANHA, PERGUNTA, TIPO } = req.body;
+      const { ID_CAMPANHA, PERGUNTA, TIPO, OPCOES } = req.body;
 
       // Create pergunta data object
       const perguntaData = {
@@ -19,7 +19,7 @@ export default class CampanhaPerguntasController {
       };
 
       // Call the service to create the pergunta
-      const novaPergunta = await CampanhaPerguntasService.createCampanhaPergunta(perguntaData);
+      const novaPergunta = await CampanhaPerguntasService.createCampanhaPergunta(perguntaData, OPCOES);
 
       return res.status(201).json({
         message: "Pergunta criada com sucesso.",
@@ -43,7 +43,7 @@ export default class CampanhaPerguntasController {
       const { id } = req.params;
       const perguntaId = parseInt(id, 10);
 
-      const { ID_CAMPANHA, PERGUNTA, TIPO } = req.body;
+      const { ID_CAMPANHA, PERGUNTA, TIPO, OPCOES } = req.body;
 
       // Check if pergunta exists
       const perguntaExistente = await CampanhaPerguntasService.findCampanhaPerguntaById(perguntaId);
@@ -61,7 +61,7 @@ export default class CampanhaPerguntasController {
       if (TIPO !== undefined) updateData.TIPO = TIPO;
 
       // Call the service to update the pergunta
-      const perguntaAtualizada = await CampanhaPerguntasService.updateCampanhaPergunta(perguntaId, updateData);
+      const perguntaAtualizada = await CampanhaPerguntasService.updateCampanhaPergunta(perguntaId, updateData, OPCOES);
 
       return res.status(200).json({
         message: "Pergunta atualizada com sucesso.",

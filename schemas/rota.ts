@@ -241,3 +241,72 @@ export const GetGeolocationByCepResponseSchema = z.object({
     lng: z.number(),
   }).nullable(),
 });
+
+/**
+ * Estratégia de ordenação enum schema
+ */
+export const EstrategiaOrdenacaoSchema = z.enum([
+  'ROTA_OTIMIZADA',
+  'MANUAL',
+  'PROXIMIDADE_PROMOTOR',
+]);
+
+/**
+ * POST /rota/optimize — calcular rota otimizada A→B
+ */
+export const OptimizeRotaSchema = z.object({
+  ID_CAMPANHA_PROMOTOR: z.number().int().positive(),
+  ID_OFICINA_INICIO: z.number().int().positive(),
+  ID_OFICINA_FIM: z.number().int().positive(),
+}).refine(data => data.ID_OFICINA_INICIO !== data.ID_OFICINA_FIM, {
+  message: "Oficina de início e fim devem ser diferentes.",
+});
+
+/**
+ * PUT /rota/reorder — reordenar rotas manualmente
+ */
+export const ReorderRotasSchema = z.object({
+  ID_CAMPANHA_PROMOTOR: z.number().int().positive(),
+  ESTRATEGIA_ORDENACAO: EstrategiaOrdenacaoSchema,
+  rotas: z.array(z.object({
+    ID_ROTA_PROMOTOR: z.number().int().positive(),
+    ORDEM: z.number().int().positive(),
+  })).optional(),
+});
+
+/**
+ * Optimize rota response schema
+ */
+export const OptimizeRotaResponseSchema = z.object({
+  message: z.string(),
+  data: z.object({
+    ESTRATEGIA_ORDENACAO: EstrategiaOrdenacaoSchema,
+    ID_OFICINA_INICIO: z.number(),
+    ID_OFICINA_FIM: z.number(),
+    distancia_total_km: z.number(),
+    route_geometry: z.object({
+      type: z.string(),
+      coordinates: z.array(z.array(z.number())),
+    }).nullable(),
+    rotas: z.array(z.object({
+      ID_ROTA_PROMOTOR: z.number(),
+      ORDEM: z.number(),
+      ID_OFICINA: z.number(),
+    })),
+  }),
+});
+
+/**
+ * Reorder rotas response schema
+ */
+export const ReorderRotasResponseSchema = z.object({
+  message: z.string(),
+  data: z.object({
+    ESTRATEGIA_ORDENACAO: EstrategiaOrdenacaoSchema,
+    rotas: z.array(z.object({
+      ID_ROTA_PROMOTOR: z.number(),
+      ORDEM: z.number().nullable(),
+      ID_OFICINA: z.number(),
+    })),
+  }),
+});

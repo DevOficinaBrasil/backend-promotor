@@ -14,6 +14,10 @@ import {
   GetRotaByIdResponseSchema,
   GetGeolocationByCepResponseSchema,
   GetGeolocationByCepRequestSchema,
+  OptimizeRotaSchema,
+  ReorderRotasSchema,
+  OptimizeRotaResponseSchema,
+  ReorderRotasResponseSchema,
 } from "../schemas/rota";
 import { ErrorResponseSchema } from "../schemas/common";
 
@@ -252,6 +256,75 @@ createDocumentedRoute(router, {
       500: {
         description: "Internal server error",
         schema: GetGeolocationByCepResponseSchema,
+      },
+    },
+  },
+});
+
+// Optimize route order (A→B with Nearest Neighbor + 2-opt)
+createDocumentedRoute(router, {
+  method: "post",
+  path: "/optimize",
+  handler: RotaController.optimizeRoute,
+  basePath: "/rota",
+  middlewares: [],
+  schemas: {
+    body: OptimizeRotaSchema,
+  },
+  documentation: {
+    tags: ["Rota"],
+    summary: "Optimize route order",
+    description:
+      "Calculates the optimal visit order from a starting oficina to an ending oficina " +
+      "using Nearest Neighbor heuristic + 2-opt improvement. Persists ORDEM on each rota " +
+      "and sets ESTRATEGIA_ORDENACAO = ROTA_OTIMIZADA on the CampanhaPromotor.",
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: {
+        description: "Route optimized successfully",
+        schema: OptimizeRotaResponseSchema,
+      },
+      400: {
+        description: "Bad request - validation or business error",
+        schema: ErrorResponseSchema,
+      },
+      500: {
+        description: "Internal server error",
+        schema: ErrorResponseSchema,
+      },
+    },
+  },
+});
+
+// Reorder routes (manual or proximity-based)
+createDocumentedRoute(router, {
+  method: "put",
+  path: "/reorder",
+  handler: RotaController.reorderRotas,
+  basePath: "/rota",
+  middlewares: [],
+  schemas: {
+    body: ReorderRotasSchema,
+  },
+  documentation: {
+    tags: ["Rota"],
+    summary: "Reorder routes",
+    description:
+      "Reorders routes for a campaign promoter. For MANUAL strategy, expects an array of " +
+      "{ ID_ROTA_PROMOTOR, ORDEM }. For PROXIMIDADE_PROMOTOR, clears all ORDEM values (calculated client-side).",
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: {
+        description: "Routes reordered successfully",
+        schema: ReorderRotasResponseSchema,
+      },
+      400: {
+        description: "Bad request - validation or business error",
+        schema: ErrorResponseSchema,
+      },
+      500: {
+        description: "Internal server error",
+        schema: ErrorResponseSchema,
       },
     },
   },

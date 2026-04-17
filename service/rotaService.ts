@@ -1,7 +1,8 @@
 import { AppDataSourceSync } from "../data-source";
 import RotaPromotor from "../entities/RotaPromotor";
-import CampanhaPromotor from "../entities/CampanhaPromotor";
+import CampanhaPromotor, { EstrategiaOrdenacao } from "../entities/CampanhaPromotor";
 import { In, IsNull } from "typeorm";
+import { optimizeRoute, fetchOSRMRoute } from "../utils/routeOptimizer";
 
 export default class RotaService {
   /**
@@ -247,5 +248,126 @@ export default class RotaService {
 
 
     return null;
+  }
+
+  /**
+   * Calcula rota otimizada (Nearest Neighbor + 2-opt) e persiste ORDEM.
+   */
+  static async optimizeAndSaveRoute(
+    idCampanhaPromotor: number,
+    idOficinaInicio: number,
+    idOficinaFim: number
+  ) {
+    const rotaRepository = AppDataSourceSync.getRepository(RotaPromotor);
+    const cpRepository = AppDataSourceSync.getRepository(CampanhaPromotor);
+
+    const rotas = await rotaRepository.find({
+      where: { ID_CAMPANHA_PROMOTOR: idCampanhaPromotor, DELETED_AT: IsNull() },
+      relations: ["oficina"],
+    });
+
+    if (rotas.length === 0) {
+      throw new Error("Nenhuma rota encontrada para este vínculo.");
+    }
+
+    const pontos = rotas
+      .filter((r) => r.oficina?.LATITUDE && r.oficina?.LONGITUDE)
+      .map((r) => ({
+        id: r.ID_ROTA_PROMOTOR!,
+        id_oficina: r.ID_OFICINA!,
+        lat: parseFloat(r?.oficina?.LATITUDE!),
+        lon: parseFloat(r?.oficina?.LONGITUDE!),
+      }));
+
+    if (pontos.length < rotas.length) {
+      throw new Error("Algumas oficinas não possuem coordenadas (LATITUDE/LONGITUDE).");
+    }
+
+    const result = optimizeRoute(pontos, idOficinaInicio, idOficinaFim);
+
+    // Obter pontos na ordem otimizada para enviar ao OSRM
+    const orderedPontos = result.order.map((o) => {
+      const p = pontos.find((pt) => pt.id === o.id)!;
+      return { id: p.id, id_oficina: p.id_oficina, lat: p.lat, lon: p.lon };
+    });
+
+    // Chamar OSRM para rota real por ruas
+    const osrmResult = await fetchOSRMRoute(orderedPontos);
+
+    // Salvar ORDEM em cada rota
+    for (const item of result.order) {
+      await rotaRepository.update(item.id, { ORDEM: item.ordem });
+    }
+
+    // Salvar estratégia no CampanhaPromotor
+    await cpRepository.update(idCampanhaPromotor, {
+      ESTRATEGIA_ORDENACAO: EstrategiaOrdenacao.ROTA_OTIMIZADA,
+      ID_OFICINA_INICIO: idOficinaInicio,
+      ID_OFICINA_FIM: idOficinaFim,
+    });
+
+    return {
+      ESTRATEGIA_ORDENACAO: EstrategiaOrdenacao.ROTA_OTIMIZADA,
+      ID_OFICINA_INICIO: idOficinaInicio,
+      ID_OFICINA_FIM: idOficinaFim,
+      distancia_total_km: osrmResult?.distanceKm ?? result.totalDistanceKm,
+      route_geometry: osrmResult?.geometry ?? null,
+      rotas: result.order.map((o) => ({
+        ID_ROTA_PROMOTOR: o.id,
+        ORDEM: o.ordem,
+        ID_OFICINA: o.id_oficina,
+      })),
+    };
+  }
+
+  /**
+   * Reordena rotas (MANUAL ou PROXIMIDADE_PROMOTOR).
+   * Para MANUAL recebe array de { ID_ROTA_PROMOTOR, ORDEM }.
+   * Para PROXIMIDADE_PROMOTOR limpa ORDEM (NULL).
+   */
+  static async reorderRotas(
+    idCampanhaPromotor: number,
+    estrategia: EstrategiaOrdenacao,
+    rotasOrdem?: { ID_ROTA_PROMOTOR: number; ORDEM: number }[]
+  ) {
+    const rotaRepository = AppDataSourceSync.getRepository(RotaPromotor);
+    const cpRepository = AppDataSourceSync.getRepository(CampanhaPromotor);
+
+    const rotas = await rotaRepository.find({
+      where: { ID_CAMPANHA_PROMOTOR: idCampanhaPromotor, DELETED_AT: IsNull() },
+    });
+
+    if (estrategia === EstrategiaOrdenacao.MANUAL) {
+      if (!rotasOrdem || rotasOrdem.length === 0) {
+        throw new Error("Estratégia MANUAL exige array de rotas com ORDEM.");
+      }
+      for (const item of rotasOrdem) {
+        await rotaRepository.update(item.ID_ROTA_PROMOTOR, { ORDEM: item.ORDEM });
+      }
+    } else if (estrategia === EstrategiaOrdenacao.PROXIMIDADE_PROMOTOR) {
+      // Limpar ORDEM de todas as rotas
+      for (const rota of rotas) {
+        await rotaRepository.update(rota.ID_ROTA_PROMOTOR!, { ORDEM: undefined });
+      }
+    }
+
+    await cpRepository.update(idCampanhaPromotor, {
+      ESTRATEGIA_ORDENACAO: estrategia,
+      ID_OFICINA_INICIO: undefined,
+      ID_OFICINA_FIM: undefined,
+    });
+
+    const updatedRotas = await rotaRepository.find({
+      where: { ID_CAMPANHA_PROMOTOR: idCampanhaPromotor, DELETED_AT: IsNull() },
+    });
+
+    return {
+      ESTRATEGIA_ORDENACAO: estrategia,
+      rotas: updatedRotas.map((r) => ({
+        ID_ROTA_PROMOTOR: r.ID_ROTA_PROMOTOR!,
+        ORDEM: r.ORDEM ?? null,
+        ID_OFICINA: r.ID_OFICINA!,
+      })),
+    };
   }
 }

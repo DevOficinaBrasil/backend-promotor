@@ -1,0 +1,1159 @@
+{
+  "version": 2,
+  "skills": {
+    "accessibility": {
+      "name": "accessibility",
+      "source": "local",
+      "contentHash": "706129400c8c91a9264582940b36007116faffcaf27bb0780bdab87337b4f881",
+      "installedAt": "2026-04-07T13:32:12.714Z",
+      "updatedAt": "2026-04-07T13:32:17.595Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "ai-cold-outreach": {
+      "name": "ai-cold-outreach",
+      "source": "local",
+      "contentHash": "7a2ca1d3f443357b96f22ffce9fb6d5e19134bb5d723ea55ca939873b3777c12",
+      "installedAt": "2026-04-07T13:32:12.726Z",
+      "updatedAt": "2026-04-07T13:32:17.603Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "ai-pricing": {
+      "name": "ai-pricing",
+      "source": "local",
+      "contentHash": "642a42cf94b8061aad642d84363bb4f60712af858c093bed6f2ec6135a3e7937",
+      "installedAt": "2026-04-07T13:32:12.761Z",
+      "updatedAt": "2026-04-07T13:32:17.612Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "ai-sdr": {
+      "name": "ai-sdr",
+      "source": "local",
+      "contentHash": "3f36a4b65cb1fc97722341b9fb1849fcecf320be8a1d8892028fa45663719786",
+      "installedAt": "2026-04-07T13:32:12.773Z",
+      "updatedAt": "2026-04-07T13:32:17.619Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "ai-seo": {
+      "name": "ai-seo",
+      "source": "local",
+      "contentHash": "8ff9c7d6181c37c92fb225a8559d50ee5413c20e6a7ae240e05bb6a532d64f9b",
+      "installedAt": "2026-04-07T13:32:12.779Z",
+      "updatedAt": "2026-04-07T13:32:17.648Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "ai-ugc-ads": {
+      "name": "ai-ugc-ads",
+      "source": "local",
+      "contentHash": "92f981122d6add656bd10cae4404fa94a79db93f3cad2cd978ef12a4eea51b83",
+      "installedAt": "2026-04-07T13:32:12.809Z",
+      "updatedAt": "2026-04-07T13:32:17.657Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "aws-advisor": {
+      "name": "aws-advisor",
+      "source": "local",
+      "contentHash": "959d64baef88617c3cd3273250de4eef5e0954d627a2c01708b23fd0f6e0f050",
+      "installedAt": "2026-04-07T13:32:12.915Z",
+      "updatedAt": "2026-04-07T13:32:17.670Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "best-practices": {
+      "name": "best-practices",
+      "source": "local",
+      "contentHash": "2abba650ba22a819e67f8c2fb09d0f5f33a24d66d945ee2ef824751bc97151ce",
+      "installedAt": "2026-04-07T13:32:12.927Z",
+      "updatedAt": "2026-04-07T13:32:17.680Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "chrome-devtools": {
+      "name": "chrome-devtools",
+      "source": "local",
+      "contentHash": "249d0fb724d83a9dc1b81f5812b894d471b36e6e629407cd43f9b8135fe4630a",
+      "installedAt": "2026-04-07T13:32:12.937Z",
+      "updatedAt": "2026-04-07T13:32:17.691Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "cloudflare-deploy": {
+      "name": "cloudflare-deploy",
+      "source": "local",
+      "contentHash": "f51f33e059b64bfb145de75c5b85da8d4fdd91dd2f846557183a98f51b0f87ea",
+      "installedAt": "2026-04-07T13:32:13.242Z",
+      "updatedAt": "2026-04-07T13:32:18.164Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "codenavi": {
+      "name": "codenavi",
+      "source": "local",
+      "contentHash": "23ac05b7f2d8df8311129d41432eba248bdcf14e9ace3f17c581976f7d888ada",
+      "installedAt": "2026-04-07T13:32:13.253Z",
+      "updatedAt": "2026-04-07T13:32:18.174Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "coding-guidelines": {
+      "name": "coding-guidelines",
+      "source": "local",
+      "contentHash": "28a414c715d3c41aae28a25e2f109813ec3f246f76b5567c1e7d6a128cd289ff",
+      "installedAt": "2026-04-07T13:32:13.261Z",
+      "updatedAt": "2026-04-07T13:32:18.181Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "component-common-domain-detection": {
+      "name": "component-common-domain-detection",
+      "source": "local",
+      "contentHash": "58c72d63eaf387cf11ae36b223ff80478ba861f53265e42a3c4fbcb3bc739208",
+      "installedAt": "2026-04-07T13:32:13.271Z",
+      "updatedAt": "2026-04-07T13:32:18.210Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "component-flattening-analysis": {
+      "name": "component-flattening-analysis",
+      "source": "local",
+      "contentHash": "085696b944897a2d8c96efb6e0a3faab00f910a62a49a45c3293c32458962411",
+      "installedAt": "2026-04-07T13:32:13.303Z",
+      "updatedAt": "2026-04-07T13:32:18.221Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "component-identification-sizing": {
+      "name": "component-identification-sizing",
+      "source": "local",
+      "contentHash": "8ec5eb90e86cc84a346f15f50c86960d8f4ba6876f6fe27d687a1ba43a2448a0",
+      "installedAt": "2026-04-07T13:32:13.315Z",
+      "updatedAt": "2026-04-07T13:32:18.230Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "confluence-assistant": {
+      "name": "confluence-assistant",
+      "source": "local",
+      "contentHash": "0c4c6993acb33dfc9bf925e18db0d762dceadbf36ab6bda4290475e4f97fad70",
+      "installedAt": "2026-04-07T13:32:13.328Z",
+      "updatedAt": "2026-04-07T13:32:18.238Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "content-to-pipeline": {
+      "name": "content-to-pipeline",
+      "source": "local",
+      "contentHash": "925f769a4c601ea7fac8cab4d3ee00f799921eb0600427d18f458eb35db2e2ed",
+      "installedAt": "2026-04-07T13:32:13.336Z",
+      "updatedAt": "2026-04-07T13:32:18.246Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "core-web-vitals": {
+      "name": "core-web-vitals",
+      "source": "local",
+      "contentHash": "3a67190e1dea1f2573d4fbb17071bbdac5ff4fd087d8cb5271094851c2acd559",
+      "installedAt": "2026-04-07T13:32:13.347Z",
+      "updatedAt": "2026-04-07T13:32:18.255Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "coupling-analysis": {
+      "name": "coupling-analysis",
+      "source": "local",
+      "contentHash": "a33a142a73ac2e6b8db300acb3d13dba5077e225cbfad7599b0ac431290ab5c7",
+      "installedAt": "2026-04-07T13:32:13.377Z",
+      "updatedAt": "2026-04-07T13:32:18.283Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "create-adr": {
+      "name": "create-adr",
+      "source": "local",
+      "contentHash": "47ec663c849e8c1620c6f33a7be0055acdcf838c27ab7c16f44260244b80195a",
+      "installedAt": "2026-04-07T13:32:13.384Z",
+      "updatedAt": "2026-04-07T13:32:18.309Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "create-rfc": {
+      "name": "create-rfc",
+      "source": "local",
+      "contentHash": "3f391b6c4397bb1590bbad511eca95c297dd0467e65385fa28b3724851c42ea8",
+      "installedAt": "2026-04-07T13:32:13.391Z",
+      "updatedAt": "2026-04-07T13:32:18.318Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "cursor-subagent-creator": {
+      "name": "cursor-subagent-creator",
+      "source": "local",
+      "contentHash": "658a170d783a694e638814bed35a738184795da2d0f0b36489cac94a478cd8d7",
+      "installedAt": "2026-04-07T13:32:13.401Z",
+      "updatedAt": "2026-04-07T13:32:18.327Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "decomposition-planning-roadmap": {
+      "name": "decomposition-planning-roadmap",
+      "source": "local",
+      "contentHash": "8de88d993b2556a6b38c26fd79c863f06bf7746faf87c0c9fd1b9a198a49e1ac",
+      "installedAt": "2026-04-07T13:32:13.412Z",
+      "updatedAt": "2026-04-07T13:32:18.335Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "docs-writer": {
+      "name": "docs-writer",
+      "source": "local",
+      "contentHash": "c49827c59d2e27d313731dfd36314cfde0e8dbf15be0e8f813d2f8b751546b0c",
+      "installedAt": "2026-04-07T13:32:13.425Z",
+      "updatedAt": "2026-04-07T13:32:18.370Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "domain-analysis": {
+      "name": "domain-analysis",
+      "source": "local",
+      "contentHash": "5914beeaf1aa1fe57cd95cf0afb60ee1cccc58eedaddd123a43cad32d6a70077",
+      "installedAt": "2026-04-07T13:32:13.458Z",
+      "updatedAt": "2026-04-07T13:32:18.381Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "domain-identification-grouping": {
+      "name": "domain-identification-grouping",
+      "source": "local",
+      "contentHash": "ac3c94d9910a75aa6a61f7866507d16a3c646ff17e86b79667d1a19c6fa6c659",
+      "installedAt": "2026-04-07T13:32:13.471Z",
+      "updatedAt": "2026-04-07T13:32:18.391Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "excalidraw-studio": {
+      "name": "excalidraw-studio",
+      "source": "local",
+      "contentHash": "2246025ff4fc3d69a733514d5a4e6fff580cb664d89746ce2666300aa0c8013a",
+      "installedAt": "2026-04-07T13:32:13.516Z",
+      "updatedAt": "2026-04-07T13:32:18.410Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "expansion-retention": {
+      "name": "expansion-retention",
+      "source": "local",
+      "contentHash": "e5420a123058969e8e5014d74120daf7a1c598e1fb44e6d152c6b60a71a81e95",
+      "installedAt": "2026-04-07T13:32:13.547Z",
+      "updatedAt": "2026-04-07T13:32:18.418Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "figma": {
+      "name": "figma",
+      "source": "local",
+      "contentHash": "5da2000639e7aee302556408a161168b8955758da0da3305842e14a93a40a7b7",
+      "installedAt": "2026-04-07T13:32:13.561Z",
+      "updatedAt": "2026-04-07T13:32:18.452Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "figma-implement-design": {
+      "name": "figma-implement-design",
+      "source": "local",
+      "contentHash": "6177778eac45026cf58d1f86447fa730e39389e54a99df2c5f35cd6905371b1d",
+      "installedAt": "2026-04-07T13:32:13.571Z",
+      "updatedAt": "2026-04-07T13:32:18.460Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "frontend-blueprint": {
+      "name": "frontend-blueprint",
+      "source": "local",
+      "contentHash": "c79c5acbf69e88e1b0c848e64afb671f33091e32b6dcb1b2e6f9c78213a10ec3",
+      "installedAt": "2026-04-07T13:32:13.585Z",
+      "updatedAt": "2026-04-07T13:32:18.469Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "frontend-design": {
+      "name": "frontend-design",
+      "source": "local",
+      "contentHash": "b20162c8d6bcdd9137c4afceaeb4f9dce2c1ba3ccb57a96a3228b8cb33104ec4",
+      "installedAt": "2026-04-07T13:32:13.596Z",
+      "updatedAt": "2026-04-07T13:32:18.481Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "gh-address-comments": {
+      "name": "gh-address-comments",
+      "source": "local",
+      "contentHash": "a1808fb136b7118a7bdac65415e9a40a7982953f8b3339c97087fc0807865d88",
+      "installedAt": "2026-04-07T13:32:13.631Z",
+      "updatedAt": "2026-04-07T13:32:18.491Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "gh-fix-ci": {
+      "name": "gh-fix-ci",
+      "source": "local",
+      "contentHash": "f032610bcbf7f7a7b6b13d20de360608c10328b7a9e507610323e843d613f1f4",
+      "installedAt": "2026-04-07T13:32:13.644Z",
+      "updatedAt": "2026-04-07T13:32:18.500Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "gtm-engineering": {
+      "name": "gtm-engineering",
+      "source": "local",
+      "contentHash": "b2cfbea2da9f2a52527f6c41f128df2dba76c33df90692357a5533c06b78223f",
+      "installedAt": "2026-04-07T13:32:13.652Z",
+      "updatedAt": "2026-04-07T13:32:18.530Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "gtm-metrics": {
+      "name": "gtm-metrics",
+      "source": "local",
+      "contentHash": "9f2afa96826b0456cf79f05b43ab4470fd6802990e301bb898c2cbaa6f01cf5c",
+      "installedAt": "2026-04-07T13:32:13.660Z",
+      "updatedAt": "2026-04-07T13:32:18.538Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "jira-assistant": {
+      "name": "jira-assistant",
+      "source": "local",
+      "contentHash": "fa63880889d2206548e33489a0ac1aa849c4e6ab879ea769c2715521a8231c8a",
+      "installedAt": "2026-04-07T13:32:13.671Z",
+      "updatedAt": "2026-04-07T13:32:18.547Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "lead-enrichment": {
+      "name": "lead-enrichment",
+      "source": "local",
+      "contentHash": "c062dadf96d7a1500457c222b95baff7f5aade66486044be360a13268b251940",
+      "installedAt": "2026-04-07T13:32:13.699Z",
+      "updatedAt": "2026-04-07T13:32:18.557Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "learning-opportunities": {
+      "name": "learning-opportunities",
+      "source": "local",
+      "contentHash": "47c4d62eebf29a61477c1b611c6ae360b028e1e23e09df1f6a33b5ff32b020f7",
+      "installedAt": "2026-04-07T13:32:13.711Z",
+      "updatedAt": "2026-04-07T13:32:18.565Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "legacy-migration-planner": {
+      "name": "legacy-migration-planner",
+      "source": "local",
+      "contentHash": "e73e55256768767436943c8948da0d6a0667282c7195a47119841b5e76263d02",
+      "installedAt": "2026-04-07T13:32:13.728Z",
+      "updatedAt": "2026-04-07T13:32:18.576Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "mermaid-studio": {
+      "name": "mermaid-studio",
+      "source": "local",
+      "contentHash": "8a240b980cee9287a20ec6ea1e4837c5d6e43c756ab17fcebbf6b1087a609815",
+      "installedAt": "2026-04-07T13:32:13.751Z",
+      "updatedAt": "2026-04-07T13:32:18.610Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "multi-platform-launch": {
+      "name": "multi-platform-launch",
+      "source": "local",
+      "contentHash": "22552e0a3fde93c57715295f52b31d0695ad78d10512e5793ea93c7b138c79ee",
+      "installedAt": "2026-04-07T13:32:13.781Z",
+      "updatedAt": "2026-04-07T13:32:18.618Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "nestjs-modular-monolith": {
+      "name": "nestjs-modular-monolith",
+      "source": "local",
+      "contentHash": "0bf9fee4b6a151866c38204557b13452feefb315b7d982a36c79125bcc3d076a",
+      "installedAt": "2026-04-07T13:32:13.793Z",
+      "updatedAt": "2026-04-07T13:32:18.632Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "netlify-deploy": {
+      "name": "netlify-deploy",
+      "source": "local",
+      "contentHash": "a85452537b4a35077d259ed06661d16fb026d252e4b952b2fe82f2a006f39a15",
+      "installedAt": "2026-04-07T13:32:13.803Z",
+      "updatedAt": "2026-04-07T13:32:18.642Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "nx-ci-monitor": {
+      "name": "nx-ci-monitor",
+      "source": "local",
+      "contentHash": "ddb5bf9bd2a5ca0eac8fa01632a19569baed922201b2cc501975edd77697f75c",
+      "installedAt": "2026-04-07T13:32:13.814Z",
+      "updatedAt": "2026-04-07T13:32:18.651Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "nx-generate": {
+      "name": "nx-generate",
+      "source": "local",
+      "contentHash": "b975e1a0caa6cc9922ba941e0746a2f141c708e41c8bbddb395d40e3efecf2a0",
+      "installedAt": "2026-04-07T13:32:13.824Z",
+      "updatedAt": "2026-04-07T13:32:18.659Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "nx-run-tasks": {
+      "name": "nx-run-tasks",
+      "source": "local",
+      "contentHash": "3c4d49d795b02e6a4a82606891a7da4773c3bc1ef883c1b980ac17596883397f",
+      "installedAt": "2026-04-07T13:32:13.834Z",
+      "updatedAt": "2026-04-07T13:32:18.696Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "nx-workspace": {
+      "name": "nx-workspace",
+      "source": "local",
+      "contentHash": "410aad2cc5a3cdaf3ffc04b0a4ad893f6cf2f5babdd836e6eda68f409d3c7bf6",
+      "installedAt": "2026-04-07T13:32:13.869Z",
+      "updatedAt": "2026-04-07T13:32:18.711Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "paid-creative-ai": {
+      "name": "paid-creative-ai",
+      "source": "local",
+      "contentHash": "89328ab72ff4336917031a217f43bd19b133a7d17202bf70d8d8d7f59d69ce29",
+      "installedAt": "2026-04-07T13:32:13.877Z",
+      "updatedAt": "2026-04-07T13:32:18.723Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "partner-affiliate": {
+      "name": "partner-affiliate",
+      "source": "local",
+      "contentHash": "3ff5e89d89da30e46eef1d6fa4379aa1b41c30be16e2ca761a5581267c41561e",
+      "installedAt": "2026-04-07T13:32:13.886Z",
+      "updatedAt": "2026-04-07T13:32:18.733Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "perf-astro": {
+      "name": "perf-astro",
+      "source": "local",
+      "contentHash": "11b50b27564085d9bff6d558bd4e9f31e5bce3c9a82af4c7203d9a4cd1ff43e4",
+      "installedAt": "2026-04-07T13:32:13.897Z",
+      "updatedAt": "2026-04-07T13:32:18.764Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "perf-lighthouse": {
+      "name": "perf-lighthouse",
+      "source": "local",
+      "contentHash": "2ef96cebc94fda975a7bba9e37511bff65739c91e61b950be0bd3048b8c9760d",
+      "installedAt": "2026-04-07T13:32:13.908Z",
+      "updatedAt": "2026-04-07T13:32:18.774Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "perf-web-optimization": {
+      "name": "perf-web-optimization",
+      "source": "local",
+      "contentHash": "864bb35d6ec7e7755181886b57709b76d8b5da5181a6d8480cd412dd772f1ffb",
+      "installedAt": "2026-04-07T13:32:13.943Z",
+      "updatedAt": "2026-04-07T13:32:18.784Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "playwright-skill": {
+      "name": "playwright-skill",
+      "source": "local",
+      "contentHash": "9c45020d33af9ac2d44c89721f154c94bd73b9d8590117597b9a26920ff9cecc",
+      "installedAt": "2026-04-07T13:32:13.957Z",
+      "updatedAt": "2026-04-07T13:32:18.798Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "positioning-icp": {
+      "name": "positioning-icp",
+      "source": "local",
+      "contentHash": "3b940bcd8ad2035177bffb04e34d52fe038f669a2d466e8d67e73135044373a5",
+      "installedAt": "2026-04-07T13:32:13.965Z",
+      "updatedAt": "2026-04-07T13:32:18.807Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "react-best-practices": {
+      "name": "react-best-practices",
+      "source": "local",
+      "contentHash": "e96f99e13dc2acc75efc1793aee08fe244802a97a4e190af38bd5a871a5c9636",
+      "installedAt": "2026-04-07T13:32:14.076Z",
+      "updatedAt": "2026-04-07T13:32:18.888Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "react-composition-patterns": {
+      "name": "react-composition-patterns",
+      "source": "local",
+      "contentHash": "171c6a35a0a74a6b37facf2a6e3883a02f53e3f2d429e6aa5834412c65d38dc7",
+      "installedAt": "2026-04-07T13:32:14.127Z",
+      "updatedAt": "2026-04-07T13:32:18.925Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "react-native-expert": {
+      "name": "react-native-expert",
+      "source": "local",
+      "contentHash": "9da108258c0a93cd04b57d94a5a7788e6c37c704ca4322ca9b6bedce8e3ff683",
+      "installedAt": "2026-04-07T13:32:14.138Z",
+      "updatedAt": "2026-04-07T13:32:18.934Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "render-deploy": {
+      "name": "render-deploy",
+      "source": "local",
+      "contentHash": "b2d22a5612b4b1871c4d33765f8ee875ffc7eb3604cc9f2faabb1ff3c0c527ea",
+      "installedAt": "2026-04-07T13:32:14.150Z",
+      "updatedAt": "2026-04-07T13:32:18.948Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "sales-motion-design": {
+      "name": "sales-motion-design",
+      "source": "local",
+      "contentHash": "8f9829a2107c994a3a4d2fcaec73def4bcc1a7fac20c64b452093a4e7018e93f",
+      "installedAt": "2026-04-07T13:32:14.178Z",
+      "updatedAt": "2026-04-07T13:32:18.956Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "security-best-practices": {
+      "name": "security-best-practices",
+      "source": "local",
+      "contentHash": "6fec09f7e43bb297ad6097e13469e85aa5b5d671a839b4f7e7871ef8eaa76c4e",
+      "installedAt": "2026-04-07T13:32:14.280Z",
+      "updatedAt": "2026-04-07T13:32:18.974Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "security-ownership-map": {
+      "name": "security-ownership-map",
+      "source": "local",
+      "contentHash": "d6231f21029bc14fc776dbef909f631a6b39d7d1b46b11b25dbfe51c51dd7141",
+      "installedAt": "2026-04-07T13:32:14.299Z",
+      "updatedAt": "2026-04-07T13:32:19.008Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "security-threat-model": {
+      "name": "security-threat-model",
+      "source": "local",
+      "contentHash": "9f4cf3c7971c6d84a4657c2c0c395a4c7febbac5a2361950922fc150fcef9599",
+      "installedAt": "2026-04-07T13:32:14.315Z",
+      "updatedAt": "2026-04-07T13:32:19.017Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "sentry": {
+      "name": "sentry",
+      "source": "local",
+      "contentHash": "aa0e533aff9a319b0aef86ad3e543f61b812bf159c27fc9ebb1c7ad97d5db937",
+      "installedAt": "2026-04-07T13:32:14.351Z",
+      "updatedAt": "2026-04-07T13:32:19.029Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "seo": {
+      "name": "seo",
+      "source": "local",
+      "contentHash": "fc9897a3923b5e23e00545ac67f4c8c2b6903113bd5f046cda259c98a0f3cd40",
+      "installedAt": "2026-04-07T13:32:14.362Z",
+      "updatedAt": "2026-04-07T13:32:19.039Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "shopify-developer": {
+      "name": "shopify-developer",
+      "source": "local",
+      "contentHash": "10dd4806c0061bb9e89914557f6aec6badcef893e601293711ba3e8993527e9f",
+      "installedAt": "2026-04-07T13:32:14.379Z",
+      "updatedAt": "2026-04-07T13:32:19.054Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "skill-architect": {
+      "name": "skill-architect",
+      "source": "local",
+      "contentHash": "349b256153447631c3ed356996c3a62fec52493d07ba75e37b12c458f9fbf6bb",
+      "installedAt": "2026-04-07T13:32:14.396Z",
+      "updatedAt": "2026-04-07T13:32:19.089Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "social-selling": {
+      "name": "social-selling",
+      "source": "local",
+      "contentHash": "7cc6fba77aff372c64d8e2b97b2b645ef641ef78a266b602e5e6fdd74231460e",
+      "installedAt": "2026-04-07T13:32:14.424Z",
+      "updatedAt": "2026-04-07T13:32:19.098Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "solo-founder-gtm": {
+      "name": "solo-founder-gtm",
+      "source": "local",
+      "contentHash": "95d71f10ea8a48767cb871ad72c09745cb6ecd822ed71be659cbd960b6503445",
+      "installedAt": "2026-04-07T13:32:14.431Z",
+      "updatedAt": "2026-04-07T13:32:19.107Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "subagent-creator": {
+      "name": "subagent-creator",
+      "source": "local",
+      "contentHash": "bef6b5a9f23b3186af259c1041c2561e9af15fa94810009d72d775bb217aa3ca",
+      "installedAt": "2026-04-07T13:32:14.441Z",
+      "updatedAt": "2026-04-07T13:32:19.115Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "technical-design-doc-creator": {
+      "name": "technical-design-doc-creator",
+      "source": "local",
+      "contentHash": "d05974df076f695f96b4e4c263ad19f2aaffe8ee6248c1b07a634dd9ed0ea51e",
+      "installedAt": "2026-04-07T13:32:14.452Z",
+      "updatedAt": "2026-04-07T13:32:19.125Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "the-fool": {
+      "name": "the-fool",
+      "source": "local",
+      "contentHash": "b761f983e21e00173ac42760f478095a3e8c733862c20d9f711d10d962f407cc",
+      "installedAt": "2026-04-07T13:32:14.469Z",
+      "updatedAt": "2026-04-07T13:32:19.136Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "tlc-spec-driven": {
+      "name": "tlc-spec-driven",
+      "source": "local",
+      "contentHash": "79d0e1b750dfc70820ac0152d9ca78927c398f669397e9cdb8bb812ceca2fbc6",
+      "installedAt": "2026-04-07T13:32:14.515Z",
+      "updatedAt": "2026-04-07T13:32:19.177Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "vercel-deploy": {
+      "name": "vercel-deploy",
+      "source": "local",
+      "contentHash": "53985dad8a6cf5571b8eb796668502f2e82f0574ab15d31609486de8317f0ec5",
+      "installedAt": "2026-04-07T13:32:14.523Z",
+      "updatedAt": "2026-04-07T13:32:19.185Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "video-outreach": {
+      "name": "video-outreach",
+      "source": "local",
+      "contentHash": "b918e2c62adf317b82ac43e4731e300ff4f163383aebe7ae8532f7ea69c24c29",
+      "installedAt": "2026-04-07T13:32:14.530Z",
+      "updatedAt": "2026-04-07T13:32:19.193Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "web-design-guidelines": {
+      "name": "web-design-guidelines",
+      "source": "local",
+      "contentHash": "213a23fff251b12ddfec648bda148bf10704ef6617e162eb9329cc83963dd138",
+      "installedAt": "2026-04-07T13:32:14.542Z",
+      "updatedAt": "2026-04-07T13:32:19.200Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline",
+        "opencode"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "web-quality-audit": {
+      "name": "web-quality-audit",
+      "source": "local",
+      "contentHash": "8af5bd3453984bdcef903709b6ef0606b12ae1badb6dd5b5b382b930d2594d7c",
+      "installedAt": "2026-04-07T13:32:14.553Z",
+      "updatedAt": "2026-04-07T13:32:17.586Z",
+      "agents": [
+        "claude-code",
+        "github-copilot",
+        "cline"
+      ],
+      "method": "copy",
+      "global": false
+    }
+  }
+}
