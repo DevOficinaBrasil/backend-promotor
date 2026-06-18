@@ -158,36 +158,83 @@ export default class CampanhaService {
     const campanha = activeCampanha.campanha;
 
     // Get the rotas (routes) for this campaign promoter with join to OFICINA table
-    const rotasPromotor = await rotaPromotorRepository.find({
-      where: {
-        ID_CAMPANHA_PROMOTOR: activeCampanha.ID_CAMPANHA_PROMOTOR,
-        DELETED_AT: IsNull(),
-      },
-      relations: ['oficina'],
-      order: { ORDEM: { direction: 'ASC', nulls: 'LAST' } },
-    });
+    // const rotasPromotor = await rotaPromotorRepository.find({
+    //   where: {
+    //     ID_CAMPANHA_PROMOTOR: activeCampanha.ID_CAMPANHA_PROMOTOR,
+    //     DELETED_AT: IsNull(),
+    //   },
+    //   relations: ['oficina'],
+    //   order: { ORDEM: { direction: 'ASC', nulls: 'LAST' } },
+    // });
 
-    // Get oficina IDs from rotas
-    const oficinaIds = rotasPromotor
-      .map((rota) => rota.oficina?.ID_OFICINA)
-      .filter((id): id is number => id != null);
-
-    // Query DuckDB for additional oficina data
-    const duckdbData = await DuckDBClient.getOficinaDataByIds(oficinaIds);
+    const rotasPromotor = await AppDataSourceSync.query(`
+      SELECT 
+        rp.*,
+        ce.latitude as "LATITUDE",
+        ce.longitude as "LONGITUDE",
+        COALESCE(o."NOME_FANTASIA", ce.razao_social) as "NOME_FANTASIA",
+        CONCAT(ce.logradouro, ' ', ce.rua) as "ENDERECO",
+        ce.bairro as "BAIRRO",
+        ce.cidade as "CIDADE",
+        ce.estado as "ESTADO",
+        ce.numero as "NUMERO",
+        ce.cep as "CEP",
+        ce.cnpj as "CNPJ",
+        ce.telefone as "TELEFONE"
+      FROM "CAMPANHAS_OB"."ROTA_PROMOTOR" rp
+      LEFT JOIN "MAIN_REGISTER"."OFICINA" o 
+      ON rp."ID_OFICINA" = o."ID_OFICINA"
+      LEFT JOIN dw.cadastro_empresa ce 
+      ON o."ID_OFICINA" = ce."id_oficina"
+      WHERE rp."ID_CAMPANHA_PROMOTOR" = $1
+      AND rp."DELETED_AT" IS NULL
+      ORDER BY rp."ORDEM" ASC NULLS LAST
+    `, [activeCampanha.ID_CAMPANHA_PROMOTOR]);
 
     // Merge DuckDB data with oficina objects in rotas
-    const rotasWithDuckDBData = rotasPromotor.map((rota) => {
-      if (rota.oficina && rota.oficina.ID_OFICINA) {
-        const duckData = duckdbData.get(rota.oficina.ID_OFICINA);
+    const rotasWithDuckDBData = rotasPromotor.map((rota : any) => {
+      if (rota.ID_OFICINA) {
+
+        const payloadOficina = {
+          ID_OFICINA: rota.ID_OFICINA,
+          LATITUDE: rota.LATITUDE,
+          LONGITUDE: rota.LONGITUDE,
+          NOME_FANTASIA: rota.NOME_FANTASIA,
+          ENDERECO: rota.ENDERECO,
+          BAIRRO: rota.BAIRRO,
+          CIDADE: rota.CIDADE,
+          ESTADO: rota.ESTADO,
+          NUMERO: rota.NUMERO,
+          CEP: rota.CEP,
+          CNPJ: rota.CNPJ,
+          TELEFONE: rota.TELEFONE,
+        }
+
+        const payloadRota = {
+          ID_ROTA_PROMOTOR: rota.ID_ROTA_PROMOTOR,
+          ID_OFICINA: rota.ID_OFICINA,
+          ID_CAMPANHA_PROMOTOR: rota.ID_CAMPANHA_PROMOTOR,
+          STATUS: rota.STATUS,
+          SUCCESS: rota.SUCCESS,
+          CHECKIN_TIME: rota.CHECKIN_TIME,
+          DONE_AT: rota.DONE_AT,
+          OBS: rota.OBS,
+          REDIRECT: rota.REDIRECT,
+          CREATED_BY: rota.CREATED_BY,
+          ORDEM: rota.ORDEM,
+          UPDATED_AT: rota.UPDATED_AT,
+          CREATED_AT: rota.CREATED_AT,
+          DELETED_AT: rota.DELETED_AT,
+        }
         
         return {
-          ...rota,
+          ...payloadRota,
           oficina: {
-            ...rota.oficina,
-            flag_engajamento: duckData?.flag_engajamento || 'baixo',
-            flag_sentimento: duckData?.flag_sentimento || 'neutro',
-            flag_treinamento: duckData?.flag_treinamento || 'baixo',
-            cor_icone: duckData?.cor_icone || 'cinza',
+            ...payloadOficina,
+            flag_engajamento: 'neutro',
+            flag_sentimento: 'neutro',
+            flag_treinamento: 'neutro',
+            cor_icone: 'cinza',
           } as Oficina & { flag_engajamento: string; flag_sentimento: string; flag_treinamento: string; cor_icone: string },
         };
       }
