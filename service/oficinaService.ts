@@ -24,25 +24,26 @@ export default class OficinaService {
 
     // The Haversine formula to calculate distance between two points on Earth
     // Distance in kilometers
-    // Note: LATITUDE and LONGITUDE are stored as strings in DB, so we check for empty strings
+    // Note: latitude and longitude are stored as strings in DB, so we check for empty strings
     const query = `
       SELECT 
         *,
         (
           ${EARTH_RADIUS_KM} * acos(
             cos(radians($1)) * 
-            cos(radians(CAST("LATITUDE" AS DOUBLE PRECISION))) * 
-            cos(radians(CAST("LONGITUDE" AS DOUBLE PRECISION)) - radians($2)) + 
+            cos(radians(CAST("latitude" AS DOUBLE PRECISION))) * 
+            cos(radians(CAST("longitude" AS DOUBLE PRECISION)) - radians($2)) + 
             sin(radians($1)) * 
-            sin(radians(CAST("LATITUDE" AS DOUBLE PRECISION)))
+            sin(radians(CAST("latitude" AS DOUBLE PRECISION)))
           )
         ) AS distance
-      FROM "MAIN_REGISTER"."OFICINA"
+      FROM "dw"."cadastro_empresa"
       WHERE 
-        "LATITUDE" IS NOT NULL 
-        AND "LONGITUDE" IS NOT NULL
-        AND "LATITUDE" != ''
-        AND "LONGITUDE" != ''
+        "latitude" IS NOT NULL 
+        AND "longitude" IS NOT NULL
+        AND "latitude" != ''
+        AND "longitude" != ''
+        AND "status_receita" = 'ATIVA'
       ORDER BY distance ASC
       LIMIT $3
     `;
@@ -56,7 +57,7 @@ export default class OficinaService {
 
       // Get oficina IDs from results
       const oficinaIds = results
-        .map((oficina: any) => oficina.ID_OFICINA)
+        .map((oficina: any) => oficina.id_oficina)
         .filter((id: number) => id != null);
 
       // Query DuckDB for additional data
@@ -64,14 +65,14 @@ export default class OficinaService {
 
       // Merge DuckDB data with PostgreSQL results
       const mergedResults = results.map((oficina: any) => {
-        const duckData = duckdbData.get(oficina.ID_OFICINA);
+        const oficinaInfo = oficinaRepository.findOneBy({ ID_OFICINA: oficina.id_oficina });
         
         return {
-          ...oficina,
-          flag_engajamento: duckData?.flag_engajamento || 'baixo',
-          flag_sentimento: duckData?.flag_sentimento || 'neutro',
-          flag_treinamento: duckData?.flag_treinamento || 'baixo',
-          cor_icone: duckData?.cor_icone || 'cinza',
+          ...oficinaInfo,
+          flag_engajamento: 'neutro',
+          flag_sentimento: 'neutro',
+          flag_treinamento: 'neutro',
+          cor_icone: 'cinza',
         };
       });
 
