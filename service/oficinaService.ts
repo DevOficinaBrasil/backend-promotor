@@ -20,7 +20,6 @@ export default class OficinaService {
     longitude: number,
     limit: number = 40
   ): Promise<Array<Oficina & { distance?: number; flag_engajamento?: string; flag_sentimento?: string; flag_treinamento?: string; cor_icone?: string }>> {
-    const oficinaRepository = AppDataSourceSync.getRepository(Oficina);
 
     // The Haversine formula to calculate distance between two points on Earth
     // Distance in kilometers
@@ -38,23 +37,22 @@ export default class OficinaService {
         ce.cep as "CEP",
         ce.cnpj as "CNPJ",
         ce.telefone as "TELEFONE",
-        
         (
           ${EARTH_RADIUS_KM} * acos(
             cos(radians($1)) * 
-            cos(radians("latitude")) * 
-            cos(radians("longitude") - radians($2)) + 
-            sin(radians($1)) * 
-            sin(radians("latitude"))
+            cos(radians(ce.latitude)) *
+            cos(radians(ce.longitude) - radians($2)) +
+            sin(radians($1)) *
+            sin(radians(ce.latitude))
           )
         ) AS distance
       FROM "dw"."cadastro_empresa" ce
       LEFT JOIN "MAIN_REGISTER"."OFICINA" o
-      ON "dw"."cadastro_empresa"."id_oficina" = "MAIN_REGISTER"."OFICINA"."ID_OFICINA"
-      WHERE 
-        "latitude" IS NOT NULL 
-        AND "longitude" IS NOT NULL
-        AND "status_receita" = 'ATIVA'
+      ON  ce.id_oficina = o."ID_OFICINA"
+      WHERE
+        ce.latitude IS NOT NULL
+        AND ce.longitude IS NOT NULL
+        AND ce.status_receita = 'ATIVA'
       ORDER BY distance ASC
       LIMIT $3
     `;
