@@ -24,25 +24,24 @@ export default class OficinaService {
 
     // The Haversine formula to calculate distance between two points on Earth
     // Distance in kilometers
-    // Note: LATITUDE and LONGITUDE are stored as strings in DB, so we check for empty strings
     const query = `
       SELECT 
-        *,
+        "MAIN_REGISTER"."OFICINA".*,
         (
           ${EARTH_RADIUS_KM} * acos(
             cos(radians($1)) * 
-            cos(radians(CAST("LATITUDE" AS DOUBLE PRECISION))) * 
-            cos(radians(CAST("LONGITUDE" AS DOUBLE PRECISION)) - radians($2)) + 
+            cos(radians("latitude")) * 
+            cos(radians("longitude") - radians($2)) + 
             sin(radians($1)) * 
-            sin(radians(CAST("LATITUDE" AS DOUBLE PRECISION)))
+            sin(radians("latitude"))
           )
         ) AS distance
-      FROM "MAIN_REGISTER"."OFICINA"
+      FROM "dw"."cadastro_empresa"
+      LEFT JOIN "MAIN_REGISTER"."OFICINA" ON "dw"."cadastro_empresa"."id_oficina" = "MAIN_REGISTER"."OFICINA"."ID_OFICINA"
       WHERE 
-        "LATITUDE" IS NOT NULL 
-        AND "LONGITUDE" IS NOT NULL
-        AND "LATITUDE" != ''
-        AND "LONGITUDE" != ''
+        "latitude" IS NOT NULL 
+        AND "longitude" IS NOT NULL
+        AND "status_receita" = 'ATIVA'
       ORDER BY distance ASC
       LIMIT $3
     `;
@@ -54,24 +53,15 @@ export default class OficinaService {
         limit,
       ]);
 
-      // Get oficina IDs from results
-      const oficinaIds = results
-        .map((oficina: any) => oficina.ID_OFICINA)
-        .filter((id: number) => id != null);
-
-      // Query DuckDB for additional data
-      const duckdbData = await DuckDBClient.getOficinaDataByIds(oficinaIds);
-
       // Merge DuckDB data with PostgreSQL results
       const mergedResults = results.map((oficina: any) => {
-        const duckData = duckdbData.get(oficina.ID_OFICINA);
         
         return {
           ...oficina,
-          flag_engajamento: duckData?.flag_engajamento || 'baixo',
-          flag_sentimento: duckData?.flag_sentimento || 'neutro',
-          flag_treinamento: duckData?.flag_treinamento || 'baixo',
-          cor_icone: duckData?.cor_icone || 'cinza',
+          flag_engajamento: 'neutro',
+          flag_sentimento: 'neutro',
+          flag_treinamento: 'neutro',
+          cor_icone: 'cinza',
         };
       });
 
