@@ -24,25 +24,23 @@ export default class OficinaService {
 
     // The Haversine formula to calculate distance between two points on Earth
     // Distance in kilometers
-    // Note: latitude and longitude are stored as strings in DB, so we check for empty strings
     const query = `
       SELECT 
-        *,
+        "MAIN_REGISTER"."OFICINA".*,
         (
           ${EARTH_RADIUS_KM} * acos(
             cos(radians($1)) * 
-            cos(radians(CAST("latitude" AS DOUBLE PRECISION))) * 
-            cos(radians(CAST("longitude" AS DOUBLE PRECISION)) - radians($2)) + 
+            cos(radians("latitude")) * 
+            cos(radians("longitude") - radians($2)) + 
             sin(radians($1)) * 
-            sin(radians(CAST("latitude" AS DOUBLE PRECISION)))
+            sin(radians("latitude"))
           )
         ) AS distance
       FROM "dw"."cadastro_empresa"
+      LEFT JOIN "MAIN_REGISTER"."OFICINA" ON "dw"."cadastro_empresa"."id_oficina" = "MAIN_REGISTER"."OFICINA"."ID_OFICINA"
       WHERE 
         "latitude" IS NOT NULL 
         AND "longitude" IS NOT NULL
-        AND "latitude" != ''
-        AND "longitude" != ''
         AND "status_receita" = 'ATIVA'
       ORDER BY distance ASC
       LIMIT $3
@@ -55,20 +53,11 @@ export default class OficinaService {
         limit,
       ]);
 
-      // Get oficina IDs from results
-      const oficinaIds = results
-        .map((oficina: any) => oficina.id_oficina)
-        .filter((id: number) => id != null);
-
-      // Query DuckDB for additional data
-      const duckdbData = await DuckDBClient.getOficinaDataByIds(oficinaIds);
-
       // Merge DuckDB data with PostgreSQL results
       const mergedResults = results.map((oficina: any) => {
-        const oficinaInfo = oficinaRepository.findOneBy({ ID_OFICINA: oficina.id_oficina });
         
         return {
-          ...oficinaInfo,
+          ...oficina,
           flag_engajamento: 'neutro',
           flag_sentimento: 'neutro',
           flag_treinamento: 'neutro',
