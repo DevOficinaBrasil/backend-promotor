@@ -26,7 +26,19 @@ export default class OficinaService {
     // Distance in kilometers
     const query = `
       SELECT 
-        "MAIN_REGISTER"."OFICINA".*,
+        ce.id_oficina as "ID_OFICINA",
+        ce.latitude as "LATITUDE",
+        ce.longitude as "LONGITUDE",
+        COALESCE(o."NOME_FANTASIA", ce.razao_social) as "NOME_FANTASIA",
+        CONCAT(ce.logradouro, ' ', ce.rua) as "ENDERECO",
+        ce.bairro as "BAIRRO",
+        ce.cidade as "CIDADE",
+        ce.estado as "ESTADO",
+        ce.numero as "NUMERO",
+        ce.cep as "CEP",
+        ce.cnpj as "CNPJ",
+        ce.telefone as "TELEFONE",
+        
         (
           ${EARTH_RADIUS_KM} * acos(
             cos(radians($1)) * 
@@ -36,8 +48,9 @@ export default class OficinaService {
             sin(radians("latitude"))
           )
         ) AS distance
-      FROM "dw"."cadastro_empresa"
-      LEFT JOIN "MAIN_REGISTER"."OFICINA" ON "dw"."cadastro_empresa"."id_oficina" = "MAIN_REGISTER"."OFICINA"."ID_OFICINA"
+      FROM "dw"."cadastro_empresa" ce
+      LEFT JOIN "MAIN_REGISTER"."OFICINA" o
+      ON "dw"."cadastro_empresa"."id_oficina" = "MAIN_REGISTER"."OFICINA"."ID_OFICINA"
       WHERE 
         "latitude" IS NOT NULL 
         AND "longitude" IS NOT NULL
