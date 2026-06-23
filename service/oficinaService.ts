@@ -53,6 +53,7 @@ export default class OficinaService {
         ce.latitude IS NOT NULL
         AND ce.longitude IS NOT NULL
         AND ce.status_receita = 'ATIVA'
+        AND ce.cnpj IN (SELECT DISTINCT "CNPJ" FROM temp_cnpj_sqlserver where "CREATED_AT" > '2026-01-01')
       ORDER BY distance ASC
       LIMIT $3
     `;
