@@ -18,7 +18,7 @@ export default class OficinaService {
   static async findNearestOficinas(
     latitude: number,
     longitude: number,
-    limit: number = 40
+    limit: number = 70
   ): Promise<Array<Oficina & { distance?: number; flag_engajamento?: string; flag_sentimento?: string; flag_treinamento?: string; cor_icone?: string }>> {
 
     // The Haversine formula to calculate distance between two points on Earth
