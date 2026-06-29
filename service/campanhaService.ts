@@ -188,7 +188,7 @@ export default class CampanhaService {
       ON o."ID_OFICINA" = ce."id_oficina"
       WHERE rp."ID_CAMPANHA_PROMOTOR" = $1
       AND rp."DELETED_AT" IS NULL
-      ORDER BY rp."ORDEM" ASC NULLS LAST
+      ORDER BY rp."ORDEM" ASC NULLS LAST, rp."ID_ROTA_PROMOTOR" ASC
     `, [activeCampanha.ID_CAMPANHA_PROMOTOR]);
 
     // Merge DuckDB data with oficina objects in rotas
