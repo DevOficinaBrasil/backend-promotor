@@ -1,7 +1,7 @@
 import express from "express";
 import * as dotenv from "dotenv";
 import routes from "./api";
-import { AppDataSourceSync } from "./data-source";
+import { AppDataSourceSync, LegacyDataSource, isLegacyEnabled } from "./data-source";
 import cors from "cors";
 import { openAPIGenerator } from "./config/openapi";
 
@@ -42,8 +42,21 @@ app.get("/docs", (req, res) => {
 routes(app);
 
 AppDataSourceSync.initialize()
-  .then(() => {
-    console.log("Data Source synced has been initialized!");
+  .then(async () => {
+    console.log("Data Source (PRD) has been initialized!");
+
+    // Inicializar LegacyDataSource se habilitado
+    if (isLegacyEnabled()) {
+      try {
+        await LegacyDataSource.initialize();
+        console.log("Legacy Data Source (DEV) has been initialized! (READ-ONLY)");
+      } catch (err) {
+        console.warn("⚠️ Legacy Data Source failed to initialize (app continues without merge):", (err as Error).message);
+      }
+    } else {
+      console.log("Legacy Data Source is disabled (LEGACY_DB_ENABLED != true)");
+    }
+
     console.log(`Local: http://localhost:${process.env.PORT || 8185}`);
   })
   .catch((err) => {

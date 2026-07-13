@@ -12,6 +12,7 @@ import {
 import CampanhaPromotor from "./CampanhaPromotor";
 import CampanhaResults from "./CampanhaResults";
 import Oficina from "./Oficina";
+import Empresa from "./CadastroEmpresa";
 
 export enum StatusRota {
   BACKLOG = "BACKLOG",
@@ -99,6 +100,10 @@ export default class RotaPromotor {
   @ManyToOne(() => Oficina, (oficina) => oficina.rotasPromotor)
   @JoinColumn({ name: "ID_OFICINA" })
   oficina?: Oficina;
+
+  @ManyToOne(() => Empresa, (oficina) => oficina.rotasPromotor)
+  @JoinColumn({ name: "ID_OFICINA" })
+  cadastroEmpresa?: Empresa;
 
   @OneToMany(
     () => CampanhaResults,

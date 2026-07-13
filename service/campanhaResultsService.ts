@@ -2,21 +2,32 @@ import { AppDataSourceSync } from "../data-source";
 import CampanhaResults from "../entities/CampanhaResults";
 import RotaPromotor from "../entities/RotaPromotor";
 import CampanhaPerguntas from "../entities/CampanhaPerguntas";
+import { MigrationAwareRepository } from "../utils/migrationRepository";
 
 export default class CampanhaResultsService {
+  private static getResultRepo() {
+    return new MigrationAwareRepository<CampanhaResults>(CampanhaResults, "ID_CAMPANHA_RESULTS");
+  }
+
+  private static getRotaRepo() {
+    return new MigrationAwareRepository<RotaPromotor>(RotaPromotor, "ID_ROTA_PROMOTOR");
+  }
+
+  private static getPerguntaRepo() {
+    return new MigrationAwareRepository<CampanhaPerguntas>(CampanhaPerguntas, "ID_PERGUNTAS");
+  }
+
   /**
    * Creates a new campanha result or updates if it already exists
-   * @param resultData - The result data to create/update
-   * @returns The created/updated result
    */
   static async saveOrUpdateResult(resultData: Partial<CampanhaResults>): Promise<CampanhaResults> {
-    const resultRepository = AppDataSourceSync.getRepository(CampanhaResults);
-    const rotaRepository = AppDataSourceSync.getRepository(RotaPromotor);
-    const perguntaRepository = AppDataSourceSync.getRepository(CampanhaPerguntas);
+    const resultRepo = this.getResultRepo();
+    const rotaRepo = this.getRotaRepo();
+    const perguntaRepo = this.getPerguntaRepo();
     
     // Validate that the rota exists if ID_ROTA is provided
     if (resultData.ID_ROTA) {
-      const rotaExists = await rotaRepository.findOne({
+      const rotaExists = await rotaRepo.findOne({
         where: { ID_ROTA_PROMOTOR: resultData.ID_ROTA }
       });
       
@@ -27,7 +38,7 @@ export default class CampanhaResultsService {
     
     // Validate that the pergunta exists if ID_PERGUNTA is provided
     if (resultData.ID_PERGUNTA) {
-      const perguntaExists = await perguntaRepository.findOne({
+      const perguntaExists = await perguntaRepo.findOne({
         where: { ID_PERGUNTAS: resultData.ID_PERGUNTA }
       });
       
@@ -36,10 +47,10 @@ export default class CampanhaResultsService {
       }
     }
     
-    // Check if a result already exists for this rota and pergunta
+    // Check if a result already exists for this rota and pergunta (both DBs)
     let existingResult = null;
     if (resultData.ID_ROTA && resultData.ID_PERGUNTA) {
-      existingResult = await resultRepository.findOne({
+      existingResult = await resultRepo.findOne({
         where: {
           ID_ROTA: resultData.ID_ROTA,
           ID_PERGUNTA: resultData.ID_PERGUNTA
@@ -48,31 +59,28 @@ export default class CampanhaResultsService {
     }
     
     if (existingResult) {
-      // Update existing result
+      // Update existing result (saves to new DB)
       Object.assign(existingResult, resultData);
-      const updatedResult = await resultRepository.save(existingResult);
+      const updatedResult = await resultRepo.save(existingResult);
       return updatedResult;
     } else {
-      // Create new result
-      const novoResult = resultRepository.create(resultData);
-      const resultSalvo = await resultRepository.save(novoResult);
+      // Create new result (on new DB)
+      const novoResult = resultRepo.create(resultData);
+      const resultSalvo = await resultRepo.save(novoResult);
       return resultSalvo;
     }
   }
 
   /**
    * Updates an existing campanha result by ID
-   * @param id - The result ID to update
-   * @param resultData - The result data to update
-   * @returns The updated result or null if not found
    */
   static async updateResult(id: number, resultData: Partial<CampanhaResults>): Promise<CampanhaResults | null> {
-    const resultRepository = AppDataSourceSync.getRepository(CampanhaResults);
-    const rotaRepository = AppDataSourceSync.getRepository(RotaPromotor);
-    const perguntaRepository = AppDataSourceSync.getRepository(CampanhaPerguntas);
+    const resultRepo = this.getResultRepo();
+    const rotaRepo = this.getRotaRepo();
+    const perguntaRepo = this.getPerguntaRepo();
     
-    // Find the result by ID
-    const resultExistente = await resultRepository.findOne({
+    // Find the result by ID (searches both DBs)
+    const resultExistente = await resultRepo.findOne({
       where: { ID_CAMPANHA_RESULTS: id }
     });
 
@@ -82,7 +90,7 @@ export default class CampanhaResultsService {
 
     // Validate that the rota exists if ID_ROTA is being updated
     if (resultData.ID_ROTA) {
-      const rotaExists = await rotaRepository.findOne({
+      const rotaExists = await rotaRepo.findOne({
         where: { ID_ROTA_PROMOTOR: resultData.ID_ROTA }
       });
       
@@ -93,7 +101,7 @@ export default class CampanhaResultsService {
     
     // Validate that the pergunta exists if ID_PERGUNTA is being updated
     if (resultData.ID_PERGUNTA) {
-      const perguntaExists = await perguntaRepository.findOne({
+      const perguntaExists = await perguntaRepo.findOne({
         where: { ID_PERGUNTAS: resultData.ID_PERGUNTA }
       });
       
@@ -102,23 +110,21 @@ export default class CampanhaResultsService {
       }
     }
 
-    // Update the result fields
+    // Update the result fields (saves to new DB)
     Object.assign(resultExistente, resultData);
     
-    const resultAtualizado = await resultRepository.save(resultExistente);
+    const resultAtualizado = await resultRepo.save(resultExistente);
     
     return resultAtualizado;
   }
 
   /**
    * Finds a campanha result by ID
-   * @param id - The result ID to find
-   * @returns The result or null if not found
    */
   static async findResultById(id: number): Promise<CampanhaResults | null> {
-    const resultRepository = AppDataSourceSync.getRepository(CampanhaResults);
+    const resultRepo = this.getResultRepo();
     
-    const result = await resultRepository.findOne({
+    const result = await resultRepo.findOne({
       where: { ID_CAMPANHA_RESULTS: id },
       relations: ['rota', 'pergunta']
     });
@@ -128,13 +134,11 @@ export default class CampanhaResultsService {
 
   /**
    * Gets all results for a specific rota
-   * @param rotaId - The rota ID
-   * @returns Array of results for the rota
    */
   static async getResultsByRotaId(rotaId: number): Promise<CampanhaResults[]> {
-    const resultRepository = AppDataSourceSync.getRepository(CampanhaResults);
+    const resultRepo = this.getResultRepo();
     
-    const results = await resultRepository.find({
+    const results = await resultRepo.find({
       where: { ID_ROTA: rotaId },
       relations: ['rota', 'pergunta'],
       order: {
@@ -147,16 +151,12 @@ export default class CampanhaResultsService {
 
   /**
    * Gets all results for a specific campanha
-   * @param campanhaId - The campanha ID
-   * @returns Array of results for the campanha
    */
   static async getResultsByCampanhaId(campanhaId: number): Promise<CampanhaResults[]> {
-    const resultRepository = AppDataSourceSync.getRepository(CampanhaResults);
+    const resultRepo = this.getResultRepo();
     
-    // Query results by joining through the relationship chain:
-    // CampanhaResults -> RotaPromotor -> CampanhaPromotor -> Campanha
-    const results = await resultRepository
-      .createQueryBuilder('result')
+    // Use QueryBuilder on new DB, then merge with legacy simple query
+    const results = await resultRepo.createQueryBuilder('result')
       .leftJoinAndSelect('result.rota', 'rota')
       .leftJoinAndSelect('result.pergunta', 'pergunta')
       .leftJoinAndSelect('pergunta.opcoes', 'opcoes')
@@ -165,6 +165,29 @@ export default class CampanhaResultsService {
       .where('campanhaPromotor.ID_CAMPANHA = :campanhaId', { campanhaId })
       .orderBy('result.CREATED_AT', 'DESC')
       .getMany();
+
+    // Also check legacy for results
+    const legacyRepo = resultRepo.getLegacyRepoInstance();
+    if (legacyRepo) {
+      try {
+        const legacyResults = await legacyRepo.createQueryBuilder('result')
+          .leftJoinAndSelect('result.rota', 'rota')
+          .leftJoinAndSelect('result.pergunta', 'pergunta')
+          .leftJoinAndSelect('pergunta.opcoes', 'opcoes')
+          .leftJoinAndSelect('rota.campanhaPromotor', 'campanhaPromotor')
+          .leftJoinAndSelect('campanhaPromotor.promotor', 'promotor')
+          .where('campanhaPromotor.ID_CAMPANHA = :campanhaId', { campanhaId })
+          .orderBy('result.CREATED_AT', 'DESC')
+          .getMany();
+
+        // Merge: new DB results take priority
+        const existingIds = new Set(results.map(r => r.ID_CAMPANHA_RESULTS));
+        const uniqueLegacy = legacyResults.filter(r => !existingIds.has(r.ID_CAMPANHA_RESULTS));
+        return [...results, ...uniqueLegacy];
+      } catch (err) {
+        console.warn("⚠️ Legacy getResultsByCampanhaId failed:", (err as Error).message);
+      }
+    }
 
     return results;
   }
