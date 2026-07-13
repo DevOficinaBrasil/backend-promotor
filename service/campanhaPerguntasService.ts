@@ -2,25 +2,35 @@ import { AppDataSourceSync } from "../data-source";
 import CampanhaPerguntas from "../entities/CampanhaPerguntas";
 import CampanhaPerguntaOpcao from "../entities/CampanhaPerguntaOpcao";
 import Campanha from "../entities/Campanha";
+import { MigrationAwareRepository } from "../utils/migrationRepository";
 
 export default class CampanhaPerguntasService {
+  private static getPerguntaRepo() {
+    return new MigrationAwareRepository<CampanhaPerguntas>(CampanhaPerguntas, "ID_PERGUNTAS");
+  }
+
+  private static getOpcaoRepo() {
+    return new MigrationAwareRepository<CampanhaPerguntaOpcao>(CampanhaPerguntaOpcao, "ID_OPCAO");
+  }
+
+  private static getCampanhaRepo() {
+    return new MigrationAwareRepository<Campanha>(Campanha, "ID_CAMPANHA");
+  }
+
   /**
    * Creates a new campanha pergunta in the database
-   * @param perguntaData - The pergunta data to create
-   * @param opcoes - Array of options (for Multi type)
-   * @returns The created pergunta
    */
   static async createCampanhaPergunta(
     perguntaData: Partial<CampanhaPerguntas>,
     opcoes?: { LABEL: string; ORDEM: number }[]
   ): Promise<CampanhaPerguntas> {
-    const perguntaRepository = AppDataSourceSync.getRepository(CampanhaPerguntas);
-    const opcaoRepository = AppDataSourceSync.getRepository(CampanhaPerguntaOpcao);
-    const campanhaRepository = AppDataSourceSync.getRepository(Campanha);
+    const perguntaRepo = this.getPerguntaRepo();
+    const opcaoRepo = this.getOpcaoRepo();
+    const campanhaRepo = this.getCampanhaRepo();
     
     // Validate that the campanha exists if ID_CAMPANHA is provided
     if (perguntaData.ID_CAMPANHA) {
-      const campanhaExists = await campanhaRepository.findOne({
+      const campanhaExists = await campanhaRepo.findOne({
         where: { ID_CAMPANHA: perguntaData.ID_CAMPANHA }
       });
       
@@ -29,19 +39,19 @@ export default class CampanhaPerguntasService {
       }
     }
     
-    const novaPergunta = perguntaRepository.create(perguntaData);
-    const perguntaSalva = await perguntaRepository.save(novaPergunta);
+    const novaPergunta = perguntaRepo.create(perguntaData);
+    const perguntaSalva = await perguntaRepo.save(novaPergunta);
     
     // Save opcoes if tipo is Multi
     if (opcoes && opcoes.length > 0 && perguntaSalva.ID_PERGUNTAS) {
       const opcaoEntities = opcoes.map((o) =>
-        opcaoRepository.create({
+        opcaoRepo.create({
           ID_PERGUNTAS: perguntaSalva.ID_PERGUNTAS!,
           LABEL: o.LABEL,
           ORDEM: o.ORDEM,
         })
       );
-      perguntaSalva.opcoes = await opcaoRepository.save(opcaoEntities);
+      perguntaSalva.opcoes = await opcaoRepo.saveMany(opcaoEntities);
     }
 
     return perguntaSalva;
@@ -59,12 +69,12 @@ export default class CampanhaPerguntasService {
     perguntaData: Partial<CampanhaPerguntas>,
     opcoes?: { LABEL: string; ORDEM: number }[]
   ): Promise<CampanhaPerguntas | null> {
-    const perguntaRepository = AppDataSourceSync.getRepository(CampanhaPerguntas);
-    const opcaoRepository = AppDataSourceSync.getRepository(CampanhaPerguntaOpcao);
-    const campanhaRepository = AppDataSourceSync.getRepository(Campanha);
+    const perguntaRepo = this.getPerguntaRepo();
+    const opcaoRepo = this.getOpcaoRepo();
+    const campanhaRepo = this.getCampanhaRepo();
     
-    // Find the pergunta by ID
-    const perguntaExistente = await perguntaRepository.findOne({
+    // Find the pergunta by ID (searches both DBs)
+    const perguntaExistente = await perguntaRepo.findOne({
       where: { ID_PERGUNTAS: id }
     });
 
@@ -74,7 +84,7 @@ export default class CampanhaPerguntasService {
 
     // Validate that the campanha exists if ID_CAMPANHA is being updated
     if (perguntaData.ID_CAMPANHA) {
-      const campanhaExists = await campanhaRepository.findOne({
+      const campanhaExists = await campanhaRepo.findOne({
         where: { ID_CAMPANHA: perguntaData.ID_CAMPANHA }
       });
       
@@ -86,22 +96,22 @@ export default class CampanhaPerguntasService {
     // Update the pergunta fields
     Object.assign(perguntaExistente, perguntaData);
     
-    const perguntaAtualizada = await perguntaRepository.save(perguntaExistente);
+    const perguntaAtualizada = await perguntaRepo.save(perguntaExistente);
 
     // Replace opcoes if provided (full replace strategy)
     if (opcoes !== undefined) {
-      // Soft-delete existing opcoes
-      await opcaoRepository.softDelete({ ID_PERGUNTAS: id });
+      // Soft-delete existing opcoes (on new DB)
+      await opcaoRepo.softDelete({ ID_PERGUNTAS: id } as any);
 
       if (opcoes.length > 0) {
         const opcaoEntities = opcoes.map((o) =>
-          opcaoRepository.create({
+          opcaoRepo.create({
             ID_PERGUNTAS: id,
             LABEL: o.LABEL,
             ORDEM: o.ORDEM,
           })
         );
-        perguntaAtualizada.opcoes = await opcaoRepository.save(opcaoEntities);
+        perguntaAtualizada.opcoes = await opcaoRepo.saveMany(opcaoEntities);
       } else {
         perguntaAtualizada.opcoes = [];
       }
@@ -116,10 +126,10 @@ export default class CampanhaPerguntasService {
    * @returns The deleted pergunta or null if not found
    */
   static async deleteCampanhaPergunta(id: number): Promise<CampanhaPerguntas | null> {
-    const perguntaRepository = AppDataSourceSync.getRepository(CampanhaPerguntas);
+    const perguntaRepo = this.getPerguntaRepo();
     
-    // Find the pergunta by ID
-    const perguntaExistente = await perguntaRepository.findOne({
+    // Find the pergunta by ID (searches both DBs)
+    const perguntaExistente = await perguntaRepo.findOne({
       where: { ID_PERGUNTAS: id }
     });
 
@@ -127,21 +137,19 @@ export default class CampanhaPerguntasService {
       return null;
     }
 
-    // Soft delete the pergunta
-    await perguntaRepository.softDelete(id);
+    // Soft delete the pergunta (on new DB)
+    await perguntaRepo.softDelete(id);
     
     return perguntaExistente;
   }
 
   /**
    * Finds a campanha pergunta by ID
-   * @param id - The pergunta ID to find
-   * @returns The pergunta or null if not found
    */
   static async findCampanhaPerguntaById(id: number): Promise<CampanhaPerguntas | null> {
-    const perguntaRepository = AppDataSourceSync.getRepository(CampanhaPerguntas);
+    const perguntaRepo = this.getPerguntaRepo();
     
-    const pergunta = await perguntaRepository.findOne({
+    const pergunta = await perguntaRepo.findOne({
       where: { ID_PERGUNTAS: id },
       relations: ['opcoes'],
     });
@@ -151,12 +159,11 @@ export default class CampanhaPerguntasService {
 
   /**
    * Gets all campanha perguntas (non-deleted)
-   * @returns Array of all perguntas
    */
   static async getAllCampanhaPerguntas(): Promise<CampanhaPerguntas[]> {
-    const perguntaRepository = AppDataSourceSync.getRepository(CampanhaPerguntas);
+    const perguntaRepo = this.getPerguntaRepo();
     
-    const perguntas = await perguntaRepository.find({
+    const perguntas = await perguntaRepo.find({
       relations: ['campanha', 'opcoes'],
       order: {
         CREATED_AT: 'DESC',
@@ -168,13 +175,11 @@ export default class CampanhaPerguntasService {
 
   /**
    * Gets all perguntas for a specific campanha
-   * @param campanhaId - The campanha ID
-   * @returns Array of perguntas for the campanha
    */
   static async getPerguntasByCampanhaId(campanhaId: number): Promise<CampanhaPerguntas[]> {
-    const perguntaRepository = AppDataSourceSync.getRepository(CampanhaPerguntas);
+    const perguntaRepo = this.getPerguntaRepo();
     
-    const perguntas = await perguntaRepository.find({
+    const perguntas = await perguntaRepo.find({
       where: { ID_CAMPANHA: campanhaId },
       relations: ['opcoes'],
       order: {

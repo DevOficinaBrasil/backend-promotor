@@ -5,8 +5,17 @@ import { In } from "typeorm";
 import Promotor from "../entities/Promotor";
 import CampanhaPromotor from "../entities/CampanhaPromotor";
 import { encrypt, decrypt } from "../utils/encryption";
+import { MigrationAwareRepository } from "../utils/migrationRepository";
 
 export default class PromotorService {
+  private static getPromotorRepo() {
+    return new MigrationAwareRepository<Promotor>(Promotor, "ID_PROMOTOR");
+  }
+
+  private static getCampanhaPromotorRepo() {
+    return new MigrationAwareRepository<CampanhaPromotor>(CampanhaPromotor, "ID_CAMPANHA_PROMOTOR");
+  }
+
   /**
    * Creates a new promoter in the database
    * @param promotorData - The promoter data to create
@@ -17,15 +26,15 @@ export default class PromotorService {
     promotorData: Partial<Promotor>, 
     campanhaIds?: number | number[]
   ): Promise<Promotor> {
-    const promotorRepository = AppDataSourceSync.getRepository(Promotor);
+    const repo = this.getPromotorRepo();
     
     // Encrypt password if provided
     if (promotorData.SENHA) {
       promotorData.SENHA = encrypt(promotorData.SENHA);
     }
     
-    const novoPromotor = promotorRepository.create(promotorData);
-    const promotorSalvo = await promotorRepository.save(novoPromotor);
+    const novoPromotor = repo.create(promotorData);
+    const promotorSalvo = await repo.save(novoPromotor);
     
     // If campaign IDs are provided, create the associations
     if (campanhaIds !== undefined) {
@@ -42,10 +51,10 @@ export default class PromotorService {
    * @returns The updated promoter or null if not found
    */
   static async updatePromotor(id: number, promotorData: Partial<Promotor>): Promise<Promotor | null> {
-    const promotorRepository = AppDataSourceSync.getRepository(Promotor);
+    const repo = this.getPromotorRepo();
     
-    // Find the promoter by ID
-    const promotorExistente = await promotorRepository.findOne({
+    // Find the promoter by ID (searches both DBs)
+    const promotorExistente = await repo.findOne({
       where: { ID_PROMOTOR: id }
     });
 
@@ -61,7 +70,7 @@ export default class PromotorService {
     // Update the promoter fields
     Object.assign(promotorExistente, promotorData);
     
-    const promotorAtualizado = await promotorRepository.save(promotorExistente);
+    const promotorAtualizado = await repo.save(promotorExistente);
     
     return promotorAtualizado;
   }
@@ -72,10 +81,10 @@ export default class PromotorService {
    * @returns The deleted promoter or null if not found
    */
   static async deletePromotor(id: number): Promise<Promotor | null> {
-    const promotorRepository = AppDataSourceSync.getRepository(Promotor);
+    const repo = this.getPromotorRepo();
     
-    // Find the promoter by ID
-    const promotorExistente = await promotorRepository.findOne({
+    // Find the promoter by ID (searches both DBs)
+    const promotorExistente = await repo.findOne({
       where: { ID_PROMOTOR: id }
     });
 
@@ -83,8 +92,8 @@ export default class PromotorService {
       return null;
     }
 
-    // Soft delete the promoter
-    await promotorRepository.softDelete(id);
+    // Soft delete the promoter (always on new DB)
+    await repo.softDelete(id);
     
     return promotorExistente;
   }
@@ -95,9 +104,9 @@ export default class PromotorService {
    * @returns The promoter or null if not found
    */
   static async findPromotorById(id: number): Promise<Promotor | null> {
-    const promotorRepository = AppDataSourceSync.getRepository(Promotor);
+    const repo = this.getPromotorRepo();
     
-    const promotor = await promotorRepository.findOne({
+    const promotor = await repo.findOne({
       where: { ID_PROMOTOR: id }
     });
 
@@ -110,9 +119,9 @@ export default class PromotorService {
    * @returns The promoter or null if not found
    */
   static async findPromotorByEmail(email: string): Promise<Promotor | null> {
-    const promotorRepository = AppDataSourceSync.getRepository(Promotor);
+    const repo = this.getPromotorRepo();
     
-    const promotor = await promotorRepository.findOne({
+    const promotor = await repo.findOne({
       where: { EMAIL: email }
     });
 
@@ -162,9 +171,9 @@ export default class PromotorService {
    * @returns Array of all promoters
    */
   static async getAllPromotores(): Promise<Promotor[]> {
-    const promotorRepository = AppDataSourceSync.getRepository(Promotor);
+    const repo = this.getPromotorRepo();
     
-    const promotores = await promotorRepository.find({
+    const promotores = await repo.find({
       order: {
         CREATED_AT: 'DESC',
       },
@@ -183,13 +192,13 @@ export default class PromotorService {
     campanhaIds: number | number[], 
     promotorId: number
   ): Promise<CampanhaPromotor[]> {
-    const campanhaPromotorRepository = AppDataSourceSync.getRepository(CampanhaPromotor);
+    const repo = this.getCampanhaPromotorRepo();
     
     // Normalize to array
     const idsArray = Array.isArray(campanhaIds) ? campanhaIds : [campanhaIds];
     
-    // Check all existing relationships in a single query
-    const existingRelationships = await campanhaPromotorRepository.find({
+    // Check all existing relationships in a single query (both DBs)
+    const existingRelationships = await repo.find({
       where: {
         ID_PROMOTOR: promotorId,
       },
@@ -205,7 +214,7 @@ export default class PromotorService {
     
     for (const campanhaId of idsArray) {
       if (!existingCampanhaIds.has(campanhaId)) {
-        const campanhaPromotor = campanhaPromotorRepository.create({
+        const campanhaPromotor = repo.create({
           ID_CAMPANHA: campanhaId,
           ID_PROMOTOR: promotorId,
         });
@@ -213,9 +222,9 @@ export default class PromotorService {
       }
     }
     
-    // Bulk save all new relationships
+    // Bulk save all new relationships (always on new DB)
     if (newRelationships.length > 0) {
-      const savedRelationships = await campanhaPromotorRepository.save(newRelationships);
+      const savedRelationships = await repo.saveMany(newRelationships);
       return savedRelationships;
     }
     
@@ -235,7 +244,7 @@ export default class PromotorService {
     const campanhaPromotorRepository = AppDataSourceSync.getRepository(CampanhaPromotor);
     // Normalize to array
     const idsArray = Array.isArray(campanhaIds) ? campanhaIds : [campanhaIds];
-    // Find all relationships to remove
+    // Find all relationships to remove (new DB only for write operations)
     const relationshipsToRemove = await campanhaPromotorRepository.find({
       where: {
         ID_PROMOTOR: promotorId,

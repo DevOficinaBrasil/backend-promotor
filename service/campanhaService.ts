@@ -5,6 +5,7 @@ import RotaPromotor from "../entities/RotaPromotor";
 import Oficina from "../entities/Oficina";
 import { Between, LessThanOrEqual, MoreThanOrEqual, IsNull } from "typeorm";
 import { DuckDBClient } from "../utils/duckdbClient";
+import { MigrationAwareRepository, queryBothAndMerge } from "../utils/migrationRepository";
 
 export interface PromotorOficinaData {
   ID_PROMOTOR: number;
@@ -12,6 +13,18 @@ export interface PromotorOficinaData {
 }
 
 export default class CampanhaService {
+  private static getCampanhaRepo() {
+    return new MigrationAwareRepository<Campanha>(Campanha, "ID_CAMPANHA");
+  }
+
+  private static getCampanhaPromotorRepo() {
+    return new MigrationAwareRepository<CampanhaPromotor>(CampanhaPromotor, "ID_CAMPANHA_PROMOTOR");
+  }
+
+  private static getRotaPromotorRepo() {
+    return new MigrationAwareRepository<RotaPromotor>(RotaPromotor, "ID_ROTA_PROMOTOR");
+  }
+
   /**
    * Creates a new campaign in the database
    * @param campanhaData - The campaign data to create
@@ -22,10 +35,10 @@ export default class CampanhaService {
     campanhaData: Partial<Campanha>,
     promotores?: PromotorOficinaData[]
   ): Promise<Campanha> {
-    const campanhaRepository = AppDataSourceSync.getRepository(Campanha);
+    const repo = this.getCampanhaRepo();
     
-    const novaCampanha = campanhaRepository.create(campanhaData);
-    const campanhaSalva = await campanhaRepository.save(novaCampanha);
+    const novaCampanha = repo.create(campanhaData);
+    const campanhaSalva = await repo.save(novaCampanha);
     
     // If promotores data is provided, create the relationships
     if (promotores && promotores.length > 0 && campanhaSalva.ID_CAMPANHA) {
@@ -47,10 +60,10 @@ export default class CampanhaService {
     campanhaData: Partial<Campanha>,
     promotores?: PromotorOficinaData[]
   ): Promise<Campanha | null> {
-    const campanhaRepository = AppDataSourceSync.getRepository(Campanha);
+    const repo = this.getCampanhaRepo();
     
-    // Find the campaign by ID
-    const campanhaExistente = await campanhaRepository.findOne({
+    // Find the campaign by ID (searches both DBs)
+    const campanhaExistente = await repo.findOne({
       where: { ID_CAMPANHA: id }
     });
 
@@ -61,7 +74,7 @@ export default class CampanhaService {
     // Update the campaign fields
     Object.assign(campanhaExistente, campanhaData);
     
-    const campanhaAtualizada = await campanhaRepository.save(campanhaExistente);
+    const campanhaAtualizada = await repo.save(campanhaExistente);
     
     // If promotores data is provided, update the relationships
     if (promotores && promotores.length > 0) {
@@ -81,10 +94,10 @@ export default class CampanhaService {
    * @returns The deleted campaign or null if not found
    */
   static async deleteCampanha(id: number): Promise<Campanha | null> {
-    const campanhaRepository = AppDataSourceSync.getRepository(Campanha);
+    const repo = this.getCampanhaRepo();
     
-    // Find the campaign by ID
-    const campanhaExistente = await campanhaRepository.findOne({
+    // Find the campaign by ID (searches both DBs)
+    const campanhaExistente = await repo.findOne({
       where: { ID_CAMPANHA: id }
     });
 
@@ -92,8 +105,8 @@ export default class CampanhaService {
       return null;
     }
 
-    // Soft delete the campaign
-    await campanhaRepository.softDelete(id);
+    // Soft delete the campaign (always on new DB)
+    await repo.softDelete(id);
     
     return campanhaExistente;
   }
@@ -104,9 +117,9 @@ export default class CampanhaService {
    * @returns The campaign or null if not found
    */
   static async findCampanhaById(id: number): Promise<Campanha | null> {
-    const campanhaRepository = AppDataSourceSync.getRepository(Campanha);
+    const repo = this.getCampanhaRepo();
     
-    const campanha = await campanhaRepository.findOne({
+    const campanha = await repo.findOne({
       where: { ID_CAMPANHA: id }
     });
 
@@ -125,12 +138,10 @@ export default class CampanhaService {
     datetime?: Date
   ): Promise<(Campanha & { ESTRATEGIA_ORDENACAO: EstrategiaOrdenacao | 'PROXIMIDADE_PROMOTOR'; rotas: RotaPromotor[] }) | null> {
     const currentDatetime = datetime || new Date();
-    const campanhaRepository = AppDataSourceSync.getRepository(Campanha);
-    const campanhaPromotorRepository = AppDataSourceSync.getRepository(CampanhaPromotor);
-    const rotaPromotorRepository = AppDataSourceSync.getRepository(RotaPromotor);
+    const cpRepo = this.getCampanhaPromotorRepo();
 
-    // Find all campanha_promotor relationships for this promoter
-    const campanhasPromotor = await campanhaPromotorRepository.find({
+    // Find all campanha_promotor relationships for this promoter (both DBs)
+    const campanhasPromotor = await cpRepo.find({
       where: {
         ID_PROMOTOR: idPromotor,
         DELETED_AT: IsNull(),
@@ -167,7 +178,8 @@ export default class CampanhaService {
     //   order: { ORDEM: { direction: 'ASC', nulls: 'LAST' } },
     // });
 
-    const rotasPromotor = await AppDataSourceSync.query(`
+    // Get the rotas for this campaign promoter with oficina data (from both DBs)
+    const fullRotasQuery = `
       SELECT 
         rp.*,
         ce.latitude as "LATITUDE",
@@ -185,11 +197,56 @@ export default class CampanhaService {
       LEFT JOIN "MAIN_REGISTER"."OFICINA" o 
       ON rp."ID_OFICINA" = o."ID_OFICINA"
       LEFT JOIN dw.cadastro_empresa ce 
-      ON o."ID_OFICINA" = ce."id_oficina"
+      ON rp."ID_OFICINA" = ce."id_oficina"
       WHERE rp."ID_CAMPANHA_PROMOTOR" = $1
       AND rp."DELETED_AT" IS NULL
-      ORDER BY rp."ORDEM" ASC NULLS LAST, rp."ID_ROTA_PROMOTOR" ASC
-    `, [activeCampanha.ID_CAMPANHA_PROMOTOR]);
+      ORDER BY rp."ORDEM" ASC NULLS LAST, rp."ID_ROTA_PROMOTOR" ASC`;
+
+    const legacyRotasQuery = `
+      SELECT rp.*
+      FROM "CAMPANHAS_OB"."ROTA_PROMOTOR" rp
+      WHERE rp."ID_CAMPANHA_PROMOTOR" = $1
+      AND rp."DELETED_AT" IS NULL
+      ORDER BY rp."ORDEM" ASC NULLS LAST, rp."ID_ROTA_PROMOTOR" ASC`;
+
+    const rotasPromotor = await queryBothAndMerge(
+      fullRotasQuery,
+      [activeCampanha.ID_CAMPANHA_PROMOTOR],
+      "ID_ROTA_PROMOTOR",
+      legacyRotasQuery,
+      [activeCampanha.ID_CAMPANHA_PROMOTOR]
+    );
+
+    // Enrich legacy rotas (without oficina data) from new DB
+    const rotasSemOficina = rotasPromotor.filter((r: any) => r.ID_OFICINA && !r.NOME_FANTASIA);
+    if (rotasSemOficina.length > 0) {
+      const oficinaIds = [...new Set(rotasSemOficina.map((r: any) => r.ID_OFICINA))];
+      const oficinas = await AppDataSourceSync.query(`
+        SELECT 
+          ce.id_oficina as "ID_OFICINA",
+          ce.latitude as "LATITUDE",
+          ce.longitude as "LONGITUDE",
+          COALESCE(o."NOME_FANTASIA", ce.razao_social) as "NOME_FANTASIA",
+          CONCAT(ce.logradouro, ' ', ce.rua) as "ENDERECO",
+          ce.bairro as "BAIRRO",
+          ce.cidade as "CIDADE",
+          ce.estado as "ESTADO",
+          ce.numero as "NUMERO",
+          ce.cep as "CEP",
+          ce.cnpj as "CNPJ",
+          ce.telefone as "TELEFONE"
+        FROM dw.cadastro_empresa ce
+        LEFT JOIN "MAIN_REGISTER"."OFICINA" o ON ce.id_oficina = o."ID_OFICINA"
+        WHERE ce.id_oficina = ANY($1)
+      `, [oficinaIds]);
+      const oficinaMap = new Map(oficinas.map((o: any) => [o.ID_OFICINA, o]));
+      for (const rota of rotasSemOficina) {
+        const oficina = oficinaMap.get(rota.ID_OFICINA);
+        if (oficina) {
+          Object.assign(rota, oficina);
+        }
+      }
+    }
 
     // Merge DuckDB data with oficina objects in rotas
     const rotasWithDuckDBData = rotasPromotor.map((rota : any) => {
@@ -253,9 +310,9 @@ export default class CampanhaService {
    * @returns Array of all campaigns
    */
   static async getAllCampanhas(): Promise<Campanha[]> {
-    const campanhaRepository = AppDataSourceSync.getRepository(Campanha);
+    const repo = this.getCampanhaRepo();
     
-    const campanhas = await campanhaRepository.find({
+    const campanhas = await repo.find({
       order: {
         CREATED_AT: 'DESC',
       },
@@ -270,9 +327,9 @@ export default class CampanhaService {
    * @returns The campaign with related promoters and questions, or null if not found
    */
   static async getCampanhaByIdWithRelations(id: number): Promise<Campanha | null> {
-    const campanhaRepository = AppDataSourceSync.getRepository(Campanha);
+    const repo = this.getCampanhaRepo();
     
-    const campanha = await campanhaRepository.findOne({
+    const campanha = await repo.findOne({
       where: { ID_CAMPANHA: id },
       relations: ['campanhaPromotores', 'campanhaPromotores.promotor', 'campanhaPromotores.rotasPromotor', 'campanhaPromotores.rotasPromotor.oficina', 'campanhaPerguntas', 'campanhaPerguntas.opcoes'],
     });
@@ -286,17 +343,224 @@ export default class CampanhaService {
    * @returns Array of campaigns for the client or empty array if none found
    */
   static async getCampanhasByClientId(clientId: number): Promise<Campanha[]> {
-    const campanhaRepository = AppDataSourceSync.getRepository(Campanha);
-    
-    const campanhas = await campanhaRepository.find({
-      where: { ID_CLIENT: clientId },
-      relations: ['campanhaPromotores', 'campanhaPromotores.promotor', 'campanhaPromotores.rotasPromotor', 'campanhaPromotores.rotasPromotor.oficina', 'campanhaPerguntas', 'campanhaPerguntas.opcoes'],
-      order: {
-        CREATED_AT: 'DESC',
-      },
-    });
+    // 1. Get campanhas (from both DBs)
+    const campanhas = await queryBothAndMerge(
+      `SELECT c.*
+      FROM "CAMPANHAS_OB"."CAMPANHA" c
+      WHERE c."ID_CLIENT" = $1
+        AND c."DELETED_AT" IS NULL
+      ORDER BY c."CREATED_AT" DESC`,
+      [clientId],
+      "ID_CAMPANHA"
+    );
 
-    return campanhas;
+    if (!campanhas.length) return [];
+
+    const campanhaIds = campanhas.map((c: any) => c.ID_CAMPANHA);
+
+    // 2. Get campanhaPromotores with promotor (from both DBs)
+    const campanhaPromotores = await queryBothAndMerge(
+      `SELECT 
+        cp.*,
+        p."ID_PROMOTOR" as "promotor_ID_PROMOTOR",
+        p."NOME" as "promotor_NOME",
+        p."EMAIL" as "promotor_EMAIL",
+        p."CPF" as "promotor_CPF",
+        p."ID_CLIENT" as "promotor_ID_CLIENT",
+        p."CREATED_BY" as "promotor_CREATED_BY",
+        p."UPDATED_AT" as "promotor_UPDATED_AT",
+        p."CREATED_AT" as "promotor_CREATED_AT",
+        p."DELETED_AT" as "promotor_DELETED_AT"
+      FROM "CAMPANHAS_OB"."CAMPANHA_PROMOTOR" cp
+      LEFT JOIN "CAMPANHAS_OB"."PROMOTOR" p ON cp."ID_PROMOTOR" = p."ID_PROMOTOR"
+      WHERE cp."ID_CAMPANHA" = ANY($1)
+        AND cp."DELETED_AT" IS NULL`,
+      [campanhaIds],
+      "ID_CAMPANHA_PROMOTOR"
+    );
+
+    const campanhaPromotorIds = campanhaPromotores
+      .filter((cp: any) => cp.ID_CAMPANHA_PROMOTOR)
+      .map((cp: any) => cp.ID_CAMPANHA_PROMOTOR);
+
+    // 3. Get rotasPromotor with oficina data from cadastro_empresa + OFICINA (from both DBs)
+    let rotasPromotor: any[] = [];
+    if (campanhaPromotorIds.length > 0) {
+      const fullQuery = `
+        SELECT 
+          rp.*,
+          ce.latitude as "oficina_LATITUDE",
+          ce.longitude as "oficina_LONGITUDE",
+          COALESCE(o."NOME_FANTASIA", ce.razao_social) as "oficina_NOME_FANTASIA",
+          CONCAT(ce.logradouro, ' ', ce.rua) as "oficina_ENDERECO",
+          ce.bairro as "oficina_BAIRRO",
+          ce.cidade as "oficina_CIDADE",
+          ce.estado as "oficina_ESTADO",
+          ce.numero as "oficina_NUMERO",
+          ce.cep as "oficina_CEP",
+          ce.cnpj as "oficina_CNPJ",
+          ce.telefone as "oficina_TELEFONE"
+        FROM "CAMPANHAS_OB"."ROTA_PROMOTOR" rp
+        LEFT JOIN "MAIN_REGISTER"."OFICINA" o ON rp."ID_OFICINA" = o."ID_OFICINA"
+        LEFT JOIN dw.cadastro_empresa ce ON rp."ID_OFICINA" = ce.id_oficina
+        WHERE rp."ID_CAMPANHA_PROMOTOR" = ANY($1)
+          AND rp."DELETED_AT" IS NULL
+        ORDER BY rp."ORDEM" ASC NULLS LAST`;
+
+      // Legacy query without cross-schema JOINs (MAIN_REGISTER/dw don't exist there)
+      const legacyQuery = `
+        SELECT rp.*
+        FROM "CAMPANHAS_OB"."ROTA_PROMOTOR" rp
+        WHERE rp."ID_CAMPANHA_PROMOTOR" = ANY($1)
+          AND rp."DELETED_AT" IS NULL
+        ORDER BY rp."ORDEM" ASC NULLS LAST`;
+
+      rotasPromotor = await queryBothAndMerge(
+        fullQuery,
+        [campanhaPromotorIds],
+        "ID_ROTA_PROMOTOR",
+        legacyQuery,
+        [campanhaPromotorIds]
+      );
+
+      // Enrich legacy rotas (those without oficina data) with oficina info from new DB
+      const rotasSemOficina = rotasPromotor.filter(r => r.ID_OFICINA && !r.oficina_NOME_FANTASIA);
+      if (rotasSemOficina.length > 0) {
+        const oficinaIds = [...new Set(rotasSemOficina.map(r => r.ID_OFICINA))];
+        const oficinas = await AppDataSourceSync.query(`
+          SELECT 
+            ce.id_oficina as "ID_OFICINA",
+            ce.latitude as "oficina_LATITUDE",
+            ce.longitude as "oficina_LONGITUDE",
+            COALESCE(o."NOME_FANTASIA", ce.razao_social) as "oficina_NOME_FANTASIA",
+            CONCAT(ce.logradouro, ' ', ce.rua) as "oficina_ENDERECO",
+            ce.bairro as "oficina_BAIRRO",
+            ce.cidade as "oficina_CIDADE",
+            ce.estado as "oficina_ESTADO",
+            ce.numero as "oficina_NUMERO",
+            ce.cep as "oficina_CEP",
+            ce.cnpj as "oficina_CNPJ",
+            ce.telefone as "oficina_TELEFONE"
+          FROM dw.cadastro_empresa ce
+          LEFT JOIN "MAIN_REGISTER"."OFICINA" o ON ce.id_oficina = o."ID_OFICINA"
+          WHERE ce.id_oficina = ANY($1)
+        `, [oficinaIds]);
+
+        const oficinaMap = new Map(oficinas.map((o: any) => [o.ID_OFICINA, o]));
+        for (const rota of rotasSemOficina) {
+          const oficina = oficinaMap.get(rota.ID_OFICINA);
+          if (oficina) {
+            Object.assign(rota, oficina);
+          }
+        }
+      }
+    }
+
+    // 4. Get campanhaPerguntas (from both DBs)
+    const perguntas = await queryBothAndMerge(
+      `SELECT cp.*
+      FROM "CAMPANHAS_OB"."CAMPANHA_PERGUNTAS" cp
+      WHERE cp."ID_CAMPANHA" = ANY($1)
+        AND cp."DELETED_AT" IS NULL`,
+      [campanhaIds],
+      "ID_PERGUNTAS"
+    );
+
+    const perguntaIds = perguntas
+      .filter((p: any) => p.ID_PERGUNTAS)
+      .map((p: any) => p.ID_PERGUNTAS);
+
+    // 5. Get opcoes (from both DBs)
+    let opcoes: any[] = [];
+    if (perguntaIds.length > 0) {
+      opcoes = await queryBothAndMerge(
+        `SELECT o.*
+        FROM "CAMPANHAS_OB"."CAMPANHA_PERGUNTA_OPCOES" o
+        WHERE o."ID_PERGUNTAS" = ANY($1)
+          AND o."DELETED_AT" IS NULL`,
+        [perguntaIds],
+        "ID_OPCAO"
+      );
+    }
+
+    // 6. Assemble nested structure
+    return campanhas.map((campanha: any) => {
+      const campanhaPerguntas = perguntas
+        .filter((p: any) => p.ID_CAMPANHA === campanha.ID_CAMPANHA)
+        .map((p: any) => ({
+          ...p,
+          opcoes: opcoes.filter((o: any) => o.ID_PERGUNTAS === p.ID_PERGUNTAS),
+        }));
+
+      const promotores = campanhaPromotores
+        .filter((cp: any) => cp.ID_CAMPANHA === campanha.ID_CAMPANHA)
+        .map((cp: any) => {
+          const promotor = {
+            ID_PROMOTOR: cp.promotor_ID_PROMOTOR,
+            NOME: cp.promotor_NOME,
+            EMAIL: cp.promotor_EMAIL,
+            CPF: cp.promotor_CPF,
+            ID_CLIENT: cp.promotor_ID_CLIENT,
+            CREATED_BY: cp.promotor_CREATED_BY,
+            UPDATED_AT: cp.promotor_UPDATED_AT,
+            CREATED_AT: cp.promotor_CREATED_AT,
+            DELETED_AT: cp.promotor_DELETED_AT,
+          };
+
+          const rotas = rotasPromotor
+            .filter((r: any) => r.ID_CAMPANHA_PROMOTOR === cp.ID_CAMPANHA_PROMOTOR)
+            .map((r: any) => ({
+              ID_ROTA_PROMOTOR: r.ID_ROTA_PROMOTOR,
+              ID_OFICINA: r.ID_OFICINA,
+              ID_CAMPANHA_PROMOTOR: r.ID_CAMPANHA_PROMOTOR,
+              STATUS: r.STATUS,
+              SUCCESS: r.SUCCESS,
+              CHECKIN_TIME: r.CHECKIN_TIME,
+              DONE_AT: r.DONE_AT,
+              OBS: r.OBS,
+              REDIRECT: r.REDIRECT,
+              CREATED_BY: r.CREATED_BY,
+              ORDEM: r.ORDEM,
+              UPDATED_AT: r.UPDATED_AT,
+              CREATED_AT: r.CREATED_AT,
+              DELETED_AT: r.DELETED_AT,
+              oficina: r.ID_OFICINA ? {
+                ID_OFICINA: r.ID_OFICINA,
+                LATITUDE: r.oficina_LATITUDE,
+                LONGITUDE: r.oficina_LONGITUDE,
+                NOME_FANTASIA: r.oficina_NOME_FANTASIA,
+                ENDERECO: r.oficina_ENDERECO,
+                BAIRRO: r.oficina_BAIRRO,
+                CIDADE: r.oficina_CIDADE,
+                ESTADO: r.oficina_ESTADO,
+                NUMERO: r.oficina_NUMERO,
+                CEP: r.oficina_CEP,
+                CNPJ: r.oficina_CNPJ,
+                TELEFONE: r.oficina_TELEFONE,
+              } : null,
+            }));
+
+          return {
+            ID_CAMPANHA_PROMOTOR: cp.ID_CAMPANHA_PROMOTOR,
+            ID_CAMPANHA: cp.ID_CAMPANHA,
+            ID_PROMOTOR: cp.ID_PROMOTOR,
+            ESTRATEGIA_ORDENACAO: cp.ESTRATEGIA_ORDENACAO,
+            ID_OFICINA_INICIO: cp.ID_OFICINA_INICIO,
+            ID_OFICINA_FIM: cp.ID_OFICINA_FIM,
+            UPDATED_AT: cp.UPDATED_AT,
+            CREATED_AT: cp.CREATED_AT,
+            DELETED_AT: cp.DELETED_AT,
+            promotor,
+            rotasPromotor: rotas,
+          };
+        });
+
+      return {
+        ...campanha,
+        campanhaPromotores: promotores,
+        campanhaPerguntas,
+      };
+    });
   }
 
   /**
