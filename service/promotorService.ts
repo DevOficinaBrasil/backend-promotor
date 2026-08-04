@@ -6,6 +6,7 @@ import Promotor from "../entities/Promotor";
 import CampanhaPromotor from "../entities/CampanhaPromotor";
 import { encrypt, decrypt } from "../utils/encryption";
 import { MigrationAwareRepository } from "../utils/migrationRepository";
+import GeolocationService from "./geolocationService";
 
 export default class PromotorService {
   private static getPromotorRepo() {
@@ -34,7 +35,20 @@ export default class PromotorService {
     }
     
     const novoPromotor = repo.create(promotorData);
+
+    if(novoPromotor.CEP) {
+      const geolocationService = new GeolocationService()
+
+      const latLong = await geolocationService.getLatLongByCep(novoPromotor.CEP);
+
+      if(latLong) {
+        novoPromotor.LATITUDE = latLong.lat.toString();
+        novoPromotor.LONGITUDE = latLong.long.toString();
+      }
+    }
+
     const promotorSalvo = await repo.save(novoPromotor);
+
     
     // If campaign IDs are provided, create the associations
     if (campanhaIds !== undefined) {
