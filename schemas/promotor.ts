@@ -31,6 +31,7 @@ export const CreatePromotorSchema = z.object({
   CREATED_BY: z.number().optional(),
   CEP: z.string().max(30, 'CEP deve ter no máximo 30 caracteres').optional(),
   ID_CAMPANHA: z.union([z.number(), z.array(z.number())]).optional(),
+  RAIO: z.number().int().positive().optional(),
 });
 
 /**
@@ -44,6 +45,7 @@ export const UpdatePromotorSchema = z.object({
   ID_CLIENT: z.number().optional(),
   CREATED_BY: z.number().optional(),
   CEP: z.string().max(30, 'CEP deve ter no máximo 30 caracteres').optional(),
+  RAIO: z.number().int().positive().optional(),
 });
 
 /**
@@ -121,6 +123,7 @@ export const GetPromotorByIdResponseSchema = z.object({
 export const LinkCampanhaPromotorSchema = z.object({
   ID_CAMPANHA: z.union([z.number(), z.array(z.number())]),
   ID_PROMOTOR: z.number(),
+  RAIO: z.number().int().positive().optional(),
 });
 
 /**
@@ -134,6 +137,7 @@ export const LinkCampanhaPromotorResponseSchema = z.object({
       ID_CAMPANHA_PROMOTOR: z.number().optional(),
       ID_CAMPANHA: z.number().optional(),
       ID_PROMOTOR: z.number().optional(),
+      RAIO: z.number().optional(),
     })),
   }),
 });

@@ -46,6 +46,9 @@ export default class CampanhaPromotor {
   @Column({ type: "int", nullable: true, name: "ID_OFICINA_FIM" })
   ID_OFICINA_FIM?: number;
 
+  @Column({ type: "int", nullable: true, name: "RAIO" })
+  RAIO?: number;
+
   @UpdateDateColumn({
     type: "timestamp",
     default: () => "CURRENT_TIMESTAMP",

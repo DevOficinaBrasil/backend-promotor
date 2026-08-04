@@ -7,6 +7,7 @@ import CampanhaPromotor from "../entities/CampanhaPromotor";
 import { encrypt, decrypt } from "../utils/encryption";
 import { MigrationAwareRepository } from "../utils/migrationRepository";
 import GeolocationService from "./geolocationService";
+import CampanhaPromotorService from "./campanhaPromotorService";
 
 export default class PromotorService {
   private static getPromotorRepo() {
@@ -40,7 +41,8 @@ export default class PromotorService {
    */
   static async createPromotor(
     promotorData: Partial<Promotor>, 
-    campanhaIds?: number | number[]
+    campanhaIds?: number | number[],
+    raio?: number
   ): Promise<Promotor> {
     const repo = this.getPromotorRepo();
     
@@ -60,7 +62,7 @@ export default class PromotorService {
     
     // If campaign IDs are provided, create the associations
     if (campanhaIds !== undefined) {
-      await this.linkCampanhaPromotor(campanhaIds, promotorSalvo.ID_PROMOTOR!);
+      await this.linkCampanhaPromotor(campanhaIds, promotorSalvo.ID_PROMOTOR!, raio);
     }
     
     return promotorSalvo;
@@ -72,7 +74,7 @@ export default class PromotorService {
    * @param promotorData - The promoter data to update
    * @returns The updated promoter or null if not found
    */
-  static async updatePromotor(id: number, promotorData: Partial<Promotor>): Promise<Promotor | null> {
+  static async updatePromotor(id: number, promotorData: Partial<Promotor>, raio?: number): Promise<Promotor | null> {
     const repo = this.getPromotorRepo();
     
     // Find the promoter by ID (searches both DBs)
@@ -209,92 +211,30 @@ export default class PromotorService {
     return promotores;
   }
 
-  /**
-   * Links a promoter to one or more campaigns
-   * @param campanhaIds - Campaign ID or array of campaign IDs
-   * @param promotorId - The promoter ID
-   * @returns Array of created CampanhaPromotor relationships
-   */
+// Delegações para CampanhaPromotorService (mantidas para retrocompatibilidade)
   static async linkCampanhaPromotor(
     campanhaIds: number | number[], 
-    promotorId: number
+    promotorId: number,
+    raio?: number
   ): Promise<CampanhaPromotor[]> {
-    const repo = this.getCampanhaPromotorRepo();
-    
-    // Normalize to array
-    const idsArray = Array.isArray(campanhaIds) ? campanhaIds : [campanhaIds];
-    
-    // Check all existing relationships in a single query (both DBs)
-    const existingRelationships = await repo.find({
-      where: {
-        ID_PROMOTOR: promotorId,
-      },
-    });
-    
-    // Create a Set of existing campaign IDs for quick lookup
-    const existingCampanhaIds = new Set(
-      existingRelationships.map(rel => rel.ID_CAMPANHA!)
-    );
-    
-    // Create relationships for campaigns that don't exist yet
-    const newRelationships: CampanhaPromotor[] = [];
-    
-    for (const campanhaId of idsArray) {
-      if (!existingCampanhaIds.has(campanhaId)) {
-        const campanhaPromotor = repo.create({
-          ID_CAMPANHA: campanhaId,
-          ID_PROMOTOR: promotorId,
-        });
-        newRelationships.push(campanhaPromotor);
-      }
-    }
-    
-    // Bulk save all new relationships (always on new DB)
-    if (newRelationships.length > 0) {
-      const savedRelationships = await repo.saveMany(newRelationships);
-      return savedRelationships;
-    }
-    
-    return [];
+    return CampanhaPromotorService.linkCampanhaPromotor(campanhaIds, promotorId, raio);
   }
 
-    /**
-   * Unlinks a promoter from one or more campaigns
-   * @param idCampanhaPromotor - The ID of the campanha-promotor relationship
-   * @returns Array of removed CampanhaPromotor relationships
-   */
+  static async updateCampanhaPromotorRaio(
+    idCampanhaPromotor: number,
+    raio: number
+  ): Promise<CampanhaPromotor | null> {
+    return CampanhaPromotorService.updateRaio(idCampanhaPromotor, raio);
+  }
+
   static async unlinkCampanhaPromotor(
     idCampanhaPromotor: number
   ): Promise<CampanhaPromotor[]> {
-    const campanhaPromotorRepository = AppDataSourceSync.getRepository(CampanhaPromotor);
-    
-    
-    const relationshipToRemove = await campanhaPromotorRepository.findOne({
-      where: {
-        ID_CAMPANHA_PROMOTOR: idCampanhaPromotor,
-      },
-    });
-
-    if (relationshipToRemove) {
-      await campanhaPromotorRepository.remove(relationshipToRemove);
-      return [relationshipToRemove];
-    }
-
-    return [];
+    return CampanhaPromotorService.unlinkCampanhaPromotor(idCampanhaPromotor);
   }
 
-    /**
-   * Gets all campaign IDs linked to a promoter
-   * @param promotorId - The promoter ID
-   * @returns Array of campaign IDs
-   */
   static async getCampanhasByPromotor(promotorId: number): Promise<number[]> {
-    const campanhaPromotorRepository = AppDataSourceSync.getRepository(CampanhaPromotor);
-    const relationships = await campanhaPromotorRepository.find({
-      where: { ID_PROMOTOR: promotorId },
-      select: ["ID_CAMPANHA"],
-    });
-    return relationships.map(rel => rel.ID_CAMPANHA!);
+    return CampanhaPromotorService.getCampanhasByPromotor(promotorId);
   }
 
   /**
