@@ -119,13 +119,15 @@ export default class GeolocationService
         try {
             const nominatimResult = await this.getLatLongByNominatim(cep);
             if (nominatimResult) return nominatimResult;
-        } catch (err) {
+        } 
+        catch (err) {
             console.error('Nominatim falhou, tentando Google Maps:', err);
         }
 
         try {
             return await this.getLatLongByGoogleMaps(cep);
-        } catch (err) {
+        } 
+        catch (err) {
             console.error('Google Maps falhou:', err);
             return null;
         }

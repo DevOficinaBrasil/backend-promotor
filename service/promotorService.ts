@@ -17,6 +17,21 @@ export default class PromotorService {
     return new MigrationAwareRepository<CampanhaPromotor>(CampanhaPromotor, "ID_CAMPANHA_PROMOTOR");
   }
 
+  private static async includeLatLongToPromotor(promotor: Promotor): Promise<Promotor> 
+  {
+    const geolocationService = new GeolocationService();
+
+    const latLong = await geolocationService.getLatLongByCep(promotor.CEP as string);
+
+    if(latLong) 
+    {
+      promotor.LATITUDE = latLong.lat.toString();
+      promotor.LONGITUDE = latLong.long.toString();
+    }
+
+    return promotor;
+  }
+
   /**
    * Creates a new promoter in the database
    * @param promotorData - The promoter data to create
@@ -37,14 +52,7 @@ export default class PromotorService {
     const novoPromotor = repo.create(promotorData);
 
     if(novoPromotor.CEP) {
-      const geolocationService = new GeolocationService()
-
-      const latLong = await geolocationService.getLatLongByCep(novoPromotor.CEP);
-
-      if(latLong) {
-        novoPromotor.LATITUDE = latLong.lat.toString();
-        novoPromotor.LONGITUDE = latLong.long.toString();
-      }
+      await this.includeLatLongToPromotor(novoPromotor);
     }
 
     const promotorSalvo = await repo.save(novoPromotor);
@@ -83,6 +91,11 @@ export default class PromotorService {
 
     // Update the promoter fields
     Object.assign(promotorExistente, promotorData);
+
+    // atualiza a latitude e longitude se o CEP foi alterado
+    if(promotorData.CEP != promotorExistente.CEP) {
+      await this.includeLatLongToPromotor(promotorExistente);
+    }
     
     const promotorAtualizado = await repo.save(promotorExistente);
     
