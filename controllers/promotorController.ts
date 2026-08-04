@@ -293,20 +293,14 @@ export default class PromotorController {
    * Unlinks a promoter from one or more campaigns
    * DELETE /promotor/unlink-campanha
    */
-  static unlinkCampanhaPromotor = async (req: Request, res: Response) => {
-    try {
-      const { ID_CAMPANHA, ID_PROMOTOR } = req.body;
-
-      // Validate that promoter exists
-      const promotor = await PromotorService.findPromotorById(ID_PROMOTOR);
-      if (!promotor) {
-        return res.status(404).json({
-          message: "Promotor não encontrado."
-        });
-      }
+  static unlinkCampanhaPromotor = async (req: Request, res: Response) => 
+  {
+    try 
+    {
+      const { id_campanha_promotor } = req.params;
 
       // Call the service to unlink the promoter from campaigns
-      const removedRelationships = await PromotorService.unlinkCampanhaPromotor(ID_CAMPANHA, ID_PROMOTOR);
+      const removedRelationships = await PromotorService.unlinkCampanhaPromotor(Number(id_campanha_promotor));
 
       return res.status(200).json({
         message: "Vínculo entre campanha(s) e promotor removido com sucesso.",
@@ -315,7 +309,9 @@ export default class PromotorController {
           relationships: removedRelationships
         }
       });
-    } catch (error) {
+    } 
+    catch (error) 
+    {
       console.error("Erro ao remover vínculo campanha e promotor:", error);
       return res.status(500).json({
         message: "Erro interno ao remover vínculo campanha e promotor.",

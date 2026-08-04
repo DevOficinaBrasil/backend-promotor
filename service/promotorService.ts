@@ -233,29 +233,27 @@ export default class PromotorService {
 
     /**
    * Unlinks a promoter from one or more campaigns
-   * @param campanhaIds - Campaign ID or array of campaign IDs
-   * @param promotorId - The promoter ID
+   * @param idCampanhaPromotor - The ID of the campanha-promotor relationship
    * @returns Array of removed CampanhaPromotor relationships
    */
   static async unlinkCampanhaPromotor(
-    campanhaIds: number | number[],
-    promotorId: number
+    idCampanhaPromotor: number
   ): Promise<CampanhaPromotor[]> {
     const campanhaPromotorRepository = AppDataSourceSync.getRepository(CampanhaPromotor);
-    // Normalize to array
-    const idsArray = Array.isArray(campanhaIds) ? campanhaIds : [campanhaIds];
-    // Find all relationships to remove (new DB only for write operations)
-    const relationshipsToRemove = await campanhaPromotorRepository.find({
+    
+    
+    const relationshipToRemove = await campanhaPromotorRepository.findOne({
       where: {
-        ID_PROMOTOR: promotorId,
-        ID_CAMPANHA: idsArray.length === 1 ? idsArray[0] : In(idsArray),
+        ID_CAMPANHA_PROMOTOR: idCampanhaPromotor,
       },
     });
-    // Remove relationships
-    if (relationshipsToRemove.length > 0) {
-      await campanhaPromotorRepository.remove(relationshipsToRemove);
+
+    if (relationshipToRemove) {
+      await campanhaPromotorRepository.remove(relationshipToRemove);
+      return [relationshipToRemove];
     }
-    return relationshipsToRemove;
+
+    return [];
   }
 
     /**

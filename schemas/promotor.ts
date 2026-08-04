@@ -137,8 +137,7 @@ export const LinkCampanhaPromotorResponseSchema = z.object({
  * Unlink campanha-promotor request schema
  */
 export const UnlinkCampanhaPromotorSchema = z.object({
-  ID_CAMPANHA: z.union([z.number(), z.array(z.number())]),
-  ID_PROMOTOR: z.number(),
+  id_campanha_promotor: z.coerce.number().int().positive(),
 });
 
 /**
