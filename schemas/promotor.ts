@@ -12,6 +12,9 @@ export const PromotorSchema = z.object({
   SENHA: z.string().optional(),
   ID_CLIENT: z.number().optional(),
   CREATED_BY: z.number().optional(),
+  CEP: z.string().optional(),
+  LONGITUDE: z.string().optional(),
+  LATITUDE: z.string().optional(),
   CREATED_AT: z.date().optional(),
   UPDATED_AT: z.date().optional(),
 });
@@ -26,6 +29,7 @@ export const CreatePromotorSchema = z.object({
   SENHA: z.string().min(6, 'SENHA deve ter pelo menos 6 caracteres').optional(),
   ID_CLIENT: z.number().optional(),
   CREATED_BY: z.number().optional(),
+  CEP: z.string().max(30, 'CEP deve ter no máximo 30 caracteres').optional(),
   ID_CAMPANHA: z.union([z.number(), z.array(z.number())]).optional(),
 });
 
@@ -39,6 +43,7 @@ export const UpdatePromotorSchema = z.object({
   SENHA: z.string().min(6, 'SENHA deve ter pelo menos 6 caracteres').optional(),
   ID_CLIENT: z.number().optional(),
   CREATED_BY: z.number().optional(),
+  CEP: z.string().max(30, 'CEP deve ter no máximo 30 caracteres').optional(),
 });
 
 /**

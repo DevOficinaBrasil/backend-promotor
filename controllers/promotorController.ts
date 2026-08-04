@@ -21,6 +21,9 @@ export default class PromotorController {
         SENHA,
         ID_CLIENT,
         CREATED_BY,
+        CEP,
+        LONGITUDE,
+        LATITUDE,
         ID_CAMPANHA
       } = req.body;
 
@@ -31,7 +34,10 @@ export default class PromotorController {
         CPF,
         SENHA,
         ID_CLIENT,
-        CREATED_BY
+        CREATED_BY,
+        CEP,
+        LONGITUDE,
+        LATITUDE
       };
 
       // Call the service to create the promoter with optional campaign associations
@@ -65,7 +71,10 @@ export default class PromotorController {
         CPF,
         SENHA,
         ID_CLIENT,
-        CREATED_BY
+        CREATED_BY,
+        CEP,
+        LONGITUDE,
+        LATITUDE
       } = req.body;
 
       // Check if promoter exists
@@ -85,6 +94,7 @@ export default class PromotorController {
       if (SENHA !== undefined) updateData.SENHA = SENHA;
       if (ID_CLIENT !== undefined) updateData.ID_CLIENT = ID_CLIENT;
       if (CREATED_BY !== undefined) updateData.CREATED_BY = CREATED_BY;
+      if (CEP !== undefined) updateData.CEP = CEP;
 
       // Call the service to update the promoter
       const promotorAtualizado = await PromotorService.updatePromotor(promotorId, updateData);
