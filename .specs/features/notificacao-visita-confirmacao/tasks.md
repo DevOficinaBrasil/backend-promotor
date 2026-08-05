@@ -841,13 +841,15 @@ The 3 `campanhaService` tests fail because the feature they cover was silently r
 
 **Done when**:
 
-- [ ] Inverse relation declared without altering any existing column or relation
-- [ ] Gate check passes: `npx tsc --noEmit && npm test`
+- [x] Inverse relation declared without altering any existing column or relation
+- [x] Gate check passes: `npx tsc --noEmit && npm test`
 
 **Tests**: none
 **Gate**: build
 
 **Commit**: `feat(entities): add NotificacaoVisita relation to RotaPromotor`
+
+**Status**: ✅ Complete
 
 ---
 

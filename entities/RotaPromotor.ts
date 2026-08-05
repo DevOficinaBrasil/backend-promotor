@@ -5,6 +5,7 @@ import {
   ManyToOne,
   JoinColumn,
   OneToMany,
+  OneToOne,
   CreateDateColumn,
   UpdateDateColumn,
   DeleteDateColumn,
@@ -13,6 +14,7 @@ import CampanhaPromotor from "./CampanhaPromotor";
 import CampanhaResults from "./CampanhaResults";
 import Oficina from "./Oficina";
 import Empresa from "./CadastroEmpresa";
+import NotificacaoVisita from "./NotificacaoVisita";
 
 export enum StatusRota {
   BACKLOG = "BACKLOG",
@@ -110,6 +112,12 @@ export default class RotaPromotor {
     (campanhaResults) => campanhaResults.rota
   )
   campanhaResults: CampanhaResults[];
+
+  // Inverse side of NotificacaoVisita's @ManyToOne, uniqueness enforced at the
+  // DB level by NOTIFICACAO_VISITA's UNIQUE(ID_ROTA_PROMOTOR) constraint —
+  // lets route reads eager-load visit-confirmation status (NOTIF-19).
+  @OneToOne(() => NotificacaoVisita, (n) => n.rotaPromotor)
+  notificacaoVisita?: NotificacaoVisita;
 
   constructor(init?: Partial<RotaPromotor>) {
     Object.assign(this, init);
