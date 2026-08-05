@@ -497,20 +497,26 @@ The 3 `campanhaService` tests fail because the feature they cover was silently r
 
 **Done when**:
 
-- [ ] Creates the row in `PENDENTE`, then updates through the write sequence in design.md
-- [ ] Guard order: address-freshness → recipient resolution → anti-spam → phone normalization → token → dispatch
-- [ ] Recipient resolution orders by `DATA_ALTERACAO DESC NULLS LAST`, then `ID_USUARIO ASC` (spec AC2)
-- [ ] `FALHOU` + `"no recipient with phone"` when nobody qualifies; `"no usuario linked to oficina"` for the zero-Usuario edge case
-- [ ] Link token issued **before** dispatch and survives a failed send (spec AC5, AC11)
-- [ ] **Never throws** — every failure path resolves to a persisted row; asserted by a test forcing the channel to reject
-- [ ] Logs creation, token issuance, dispatch attempt, and result with both IDs (spec AC24)
-- [ ] Gate check passes: `npm run test:unit`
-- [ ] Test count: at least 12 tests pass (no silent deletions)
+- [x] Creates the row in `PENDENTE`, then updates through the write sequence in design.md
+- [x] Guard order: address-freshness → recipient resolution → anti-spam → phone normalization → token → dispatch
+- [x] Recipient resolution orders by `DATA_ALTERACAO DESC NULLS LAST`, then `ID_USUARIO ASC` (spec AC2)
+- [x] `FALHOU` + `"no recipient with phone"` when nobody qualifies; `"no usuario linked to oficina"` for the zero-Usuario edge case
+- [x] Link token issued **before** dispatch and survives a failed send (spec AC5, AC11)
+- [x] **Never throws** — every failure path resolves to a persisted row; asserted by a test forcing the channel to reject
+- [x] Logs creation, token issuance, dispatch attempt, and result with both IDs (spec AC24)
+- [x] Gate check passes: `npm run test:unit`
+- [x] Test count: 19 tests pass (no silent deletions)
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(service): add visit notification send orchestrator`
+
+**Notes**:
+- The confirmation URL's frontend host is read from a new `VISITA_CONFIRMACAO_BASE_URL` env var, falling back to `API_URL`. The spec fixes the link shape but never names the variable — `.env.example` still needs the entry (outside this task's `Where`).
+- A route whose `Oficina` row is missing resolves to `FALHOU` / `"oficina not found"`. No AC covers it; it is handled explicitly because this function may never throw.
+
+**Status**: ✅ Complete
 
 ---
 

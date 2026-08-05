@@ -170,8 +170,8 @@ Each requirement gets a unique ID for tracking across design, tasks, and validat
 | --- | --- | --- | --- | --- |
 | NOTIF-01 | P1: entity + one-row-per-route | CON26-80 | Design | Implementing |
 | NOTIF-02 | P1: trigger on route creation | CON26-84 | Design | Pending |
-| NOTIF-03 | P1: recipient resolution | CON26-83 | Design | Pending |
-| NOTIF-04 | P1: recipient tiebreak (DATA_ALTERACAO desc, ID_USUARIO asc) | CON26-83 | Design | Pending |
+| NOTIF-03 | P1: recipient resolution | CON26-83 | Design | Implementing |
+| NOTIF-04 | P1: recipient tiebreak (DATA_ALTERACAO desc, ID_USUARIO asc) | CON26-83 | Design | Implementing |
 | NOTIF-05 | P1: channel abstraction interface | CON26-82 | Design | Implementing |
 | NOTIF-06 | P1: WhatsApp channel + phone normalization | CON26-86 | Design | Implementing |
 | NOTIF-07 | P1: notification failure isolated from route creation | CON26-84 | Design | Pending |
@@ -185,7 +185,7 @@ Each requirement gets a unique ID for tracking across design, tasks, and validat
 | NOTIF-15 | P1: confirmation state + audit fields on NotificacaoVisita | CON26-87 | Design | Pending |
 | NOTIF-16 | P1: notification state-transition integrity | CON26-80 | Design | Implementing |
 | NOTIF-17 | P1: expiry handling | CON26-85 | Design | Implementing |
-| NOTIF-18 | P1: lifecycle logging | CON26-90 | Design | Pending |
+| NOTIF-18 | P1: lifecycle logging | CON26-90 | Design | Implementing |
 | NOTIF-19 | P2: status on dashboard/app | CON26-89 | Design | Pending |
 | NOTIF-20 | P1/P2: automated test coverage | CON26-90 | Design | Pending |
 | NOTIF-21 | P1: provider error-code mapping (config vs rate/quota vs payload) | CON26-86 | Design | Implementing |
