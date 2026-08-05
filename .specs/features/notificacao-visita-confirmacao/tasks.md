@@ -275,17 +275,19 @@ The 3 `campanhaService` tests fail because the feature they cover was silently r
 
 **Done when**:
 
-- [ ] Returns `EXPIRADO` only when `STATUS === 'ENVIADO'` and `EXPIRA_EM` is non-null and in the past
-- [ ] Returns `STATUS` unchanged for every other combination, including `CONFIRMADO` past its expiry and a null `EXPIRA_EM`
-- [ ] Clock is injectable so the boundary case is tested without wall-clock dependence
-- [ ] Tests cover: unexpired `ENVIADO`, expired `ENVIADO`, exact-boundary, `CONFIRMADO` past expiry, `DISPENSADO`, null `EXPIRA_EM`
-- [ ] Gate check passes: `npm run test:unit`
-- [ ] Test count: at least 6 tests pass (no silent deletions)
+- [x] Returns `EXPIRADO` only when `STATUS === 'ENVIADO'` and `EXPIRA_EM` is non-null and in the past
+- [x] Returns `STATUS` unchanged for every other combination, including `CONFIRMADO` past its expiry and a null `EXPIRA_EM`
+- [x] Clock is injectable so the boundary case is tested without wall-clock dependence
+- [x] Tests cover: unexpired `ENVIADO`, expired `ENVIADO`, exact-boundary, `CONFIRMADO` past expiry, `DISPENSADO`, null `EXPIRA_EM`
+- [x] Gate check passes: `npm run test:unit`
+- [x] Test count: 9 tests pass (no silent deletions)
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(utils): add effective notification status helper`
+
+**Status**: ✅ Complete
 
 ---
 

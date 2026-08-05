@@ -184,7 +184,7 @@ Each requirement gets a unique ID for tracking across design, tasks, and validat
 | NOTIF-14 | P1: public confirmation page | CON26-88 | Design | Pending |
 | NOTIF-15 | P1: confirmation state + audit fields on NotificacaoVisita | CON26-87 | Design | Pending |
 | NOTIF-16 | P1: notification state-transition integrity | CON26-80 | Design | Implementing |
-| NOTIF-17 | P1: expiry handling | CON26-85 | Design | Pending |
+| NOTIF-17 | P1: expiry handling | CON26-85 | Design | Implementing |
 | NOTIF-18 | P1: lifecycle logging | CON26-90 | Design | Pending |
 | NOTIF-19 | P2: status on dashboard/app | CON26-89 | Design | Pending |
 | NOTIF-20 | P1/P2: automated test coverage | CON26-90 | Design | Pending |
