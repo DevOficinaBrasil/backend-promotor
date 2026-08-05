@@ -911,6 +911,42 @@ The 3 `campanhaService` tests fail because the feature they cover was silently r
 
 ---
 
+## Phase 8: Post-verification fixes
+
+Opened from `validation.md` (Verifier FAIL, 2026-08-05). Each fix keeps the same
+task cycle and gets its own atomic commit.
+
+### T25: Expose confirmation status on the route-list reads
+
+**What**: Carry the same derived confirmation status T23 added to the single-route read into both campanha route-list reads (`design.md:157`, which T23 left undone).
+**Where**: `service/campanhaService.ts` (modify), `schemas/campanha.ts` (modify)
+**Depends on**: T23, T24
+**Reuses**: `utils/statusNotificacaoVisita.ts`; `NotificacaoVisitaStatusInfoSchema` from `schemas/rota.ts`
+**Requirement**: NOTIF-19 (spec P2 AC2)
+
+**Tools**:
+
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+
+- [x] `getActiveCampanhaByPromotor` joins `CAMPANHAS_OB.NOTIFICACAO_VISITA` in the route-list query — one query, no per-route lookup
+- [x] `getCampanhaByIdWithRelations` loads `campanhaPromotores.rotasPromotor.notificacaoVisita`
+- [x] Both paths report the status through `statusEfetivo()` — a stored `ENVIADO` past `EXPIRA_EM` reads `EXPIRADO`, asserted per path
+- [x] `CONFIRMADO_EM` included when set; routes with no notification row degrade to absent/null rather than throwing
+- [x] `RotaPromotorSchema` in `schemas/campanha.ts` carries the nested status object, so it appears in `/openapi.json`
+- [x] Gate check passes: `npx tsc --noEmit && npm test` (failure count still the 3 documented DuckDB ones)
+
+**Tests**: unit
+**Gate**: build
+
+**Commit**: `fix(service): expose visit confirmation status on route list reads`
+
+**Status**: ✅ Complete
+
+---
+
 ## Phase Execution Map
 
 Phases run in sequence; tasks within a phase run in numeric order. (Rendered as a table rather than an arrow diagram so it is not mistaken for — or parsed as — a second dependency graph.)

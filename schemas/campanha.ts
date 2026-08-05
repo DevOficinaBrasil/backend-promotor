@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { NotificacaoVisitaStatusInfoSchema } from './rota';
 
 /**
  * Campanha entity schema
@@ -135,6 +136,10 @@ export const RotaPromotorSchema = z.object({
   UPDATED_AT: z.string().optional(),
   DELETED_AT: z.string().optional(),
   oficina: OficinaSchema.optional(),
+  // NOTIF-19 / P2 AC2: the route's visit-confirmation status, effective
+  // (statusEfetivo()) rather than the raw stored column. Absent when the
+  // route has no notification row.
+  notificacaoVisita: NotificacaoVisitaStatusInfoSchema.optional(),
 });
 
 /**

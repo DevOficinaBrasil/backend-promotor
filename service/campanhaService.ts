@@ -6,6 +6,8 @@ import Oficina from "../entities/Oficina";
 import { Between, LessThanOrEqual, MoreThanOrEqual, IsNull } from "typeorm";
 import { DuckDBClient } from "../utils/duckdbClient";
 import { MigrationAwareRepository, queryBothAndMerge } from "../utils/migrationRepository";
+import { StatusNotificacaoVisita } from "../entities/NotificacaoVisita";
+import { statusEfetivo } from "../utils/statusNotificacaoVisita";
 
 export interface PromotorOficinaData {
   ID_PROMOTOR: number;
@@ -23,6 +25,33 @@ export default class CampanhaService {
 
   private static getRotaPromotorRepo() {
     return new MigrationAwareRepository<RotaPromotor>(RotaPromotor, "ID_ROTA_PROMOTOR");
+  }
+
+  /**
+   * Builds the nested visit-confirmation status object for one route row of a
+   * route-list read (NOTIF-19 / spec P2 AC2).
+   *
+   * STATUS is always the *effective* status: a stored ENVIADO whose EXPIRA_EM
+   * has silently passed must read EXPIRADO here too (spec AC22), or a link
+   * nobody ever opened would look live in the promoter app forever. Routes
+   * with no notification row return undefined rather than throwing.
+   */
+  private static montarNotificacaoVisita(fonte: {
+    STATUS?: StatusNotificacaoVisita | null;
+    EXPIRA_EM?: Date | string | null;
+    CONFIRMADO_EM?: Date | string | null;
+  }): { STATUS: StatusNotificacaoVisita | undefined; CONFIRMADO_EM: Date | string | null } | undefined {
+    if (!fonte.STATUS) {
+      return undefined;
+    }
+
+    return {
+      STATUS: statusEfetivo({
+        STATUS: fonte.STATUS,
+        EXPIRA_EM: fonte.EXPIRA_EM ? new Date(fonte.EXPIRA_EM) : null,
+      }),
+      CONFIRMADO_EM: fonte.CONFIRMADO_EM ?? null,
+    };
   }
 
   /**
@@ -192,16 +221,23 @@ export default class CampanhaService {
         ce.numero as "NUMERO",
         ce.cep as "CEP",
         ce.cnpj as "CNPJ",
-        ce.telefone as "TELEFONE"
+        ce.telefone as "TELEFONE",
+        nv."STATUS" as "NOTIFICACAO_STATUS",
+        nv."EXPIRA_EM" as "NOTIFICACAO_EXPIRA_EM",
+        nv."CONFIRMADO_EM" as "NOTIFICACAO_CONFIRMADO_EM"
       FROM "CAMPANHAS_OB"."ROTA_PROMOTOR" rp
-      LEFT JOIN "MAIN_REGISTER"."OFICINA" o 
+      LEFT JOIN "MAIN_REGISTER"."OFICINA" o
       ON rp."ID_OFICINA" = o."ID_OFICINA"
-      LEFT JOIN dw.cadastro_empresa ce 
+      LEFT JOIN dw.cadastro_empresa ce
       ON rp."ID_OFICINA" = ce."id_oficina"
+      LEFT JOIN "CAMPANHAS_OB"."NOTIFICACAO_VISITA" nv
+      ON rp."ID_ROTA_PROMOTOR" = nv."ID_ROTA_PROMOTOR"
       WHERE rp."ID_CAMPANHA_PROMOTOR" = $1
       AND rp."DELETED_AT" IS NULL
       ORDER BY rp."ORDEM" ASC NULLS LAST, rp."ID_ROTA_PROMOTOR" ASC`;
 
+    // The legacy DB predates NOTIFICACAO_VISITA, so it keeps its join-free
+    // query: a legacy-only route simply carries no confirmation status.
     const legacyRotasQuery = `
       SELECT rp.*
       FROM "CAMPANHAS_OB"."ROTA_PROMOTOR" rp
@@ -250,6 +286,13 @@ export default class CampanhaService {
 
     // Merge DuckDB data with oficina objects in rotas
     const rotasWithDuckDBData = rotasPromotor.map((rota : any) => {
+      // P2 AC2: every route in the list carries its confirmation status.
+      const notificacaoVisita = this.montarNotificacaoVisita({
+        STATUS: rota.NOTIFICACAO_STATUS,
+        EXPIRA_EM: rota.NOTIFICACAO_EXPIRA_EM,
+        CONFIRMADO_EM: rota.NOTIFICACAO_CONFIRMADO_EM,
+      });
+
       if (rota.ID_OFICINA) {
 
         const payloadOficina = {
@@ -286,6 +329,7 @@ export default class CampanhaService {
         
         return {
           ...payloadRota,
+          ...(notificacaoVisita ? { notificacaoVisita } : {}),
           oficina: {
             ...payloadOficina,
             flag_engajamento: 'neutro',
@@ -295,7 +339,7 @@ export default class CampanhaService {
           } as Oficina & { flag_engajamento: string; flag_sentimento: string; flag_treinamento: string; cor_icone: string },
         };
       }
-      return rota;
+      return notificacaoVisita ? { ...rota, notificacaoVisita } : rota;
     });
 
     return {
@@ -331,8 +375,18 @@ export default class CampanhaService {
     
     const campanha = await repo.findOne({
       where: { ID_CAMPANHA: id },
-      relations: ['campanhaPromotores', 'campanhaPromotores.promotor', 'campanhaPromotores.rotasPromotor', 'campanhaPromotores.rotasPromotor.oficina', 'campanhaPerguntas', 'campanhaPerguntas.opcoes'],
+      relations: ['campanhaPromotores', 'campanhaPromotores.promotor', 'campanhaPromotores.rotasPromotor', 'campanhaPromotores.rotasPromotor.oficina', 'campanhaPromotores.rotasPromotor.notificacaoVisita', 'campanhaPerguntas', 'campanhaPerguntas.opcoes'],
     });
+
+    // P2 AC2: each route in this list reports its *effective* confirmation
+    // status, so an expired-but-unopened link never reads as still live.
+    for (const campanhaPromotor of campanha?.campanhaPromotores ?? []) {
+      for (const rota of campanhaPromotor.rotasPromotor ?? []) {
+        if (rota.notificacaoVisita) {
+          rota.notificacaoVisita.STATUS = statusEfetivo(rota.notificacaoVisita);
+        }
+      }
+    }
 
     return campanha;
   }
