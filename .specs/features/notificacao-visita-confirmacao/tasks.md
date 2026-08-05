@@ -245,16 +245,18 @@ The 3 `campanhaService` tests fail because the feature they cover was silently r
 
 **Done when**:
 
-- [ ] Strips separators, parentheses, `+`, and spaces; prefixes `55` when absent; never double-prefixes an already-`55` number
-- [ ] Returns null (fail closed) for non-numeric junk, invalid DDD, and wrong digit counts — spec edge case "IF CELULAR contains non-numeric characters or an invalid DDD"
-- [ ] Tests cover 10-digit landline-style, 11-digit mobile, already-prefixed, masked `(11) 99999-8888`, empty, and invalid-DDD inputs
-- [ ] Gate check passes: `npm run test:unit`
-- [ ] Test count: at least 8 tests pass (no silent deletions)
+- [x] Strips separators, parentheses, `+`, and spaces; prefixes `55` when absent; never double-prefixes an already-`55` number
+- [x] Returns null (fail closed) for non-numeric junk, invalid DDD, and wrong digit counts — spec edge case "IF CELULAR contains non-numeric characters or an invalid DDD"
+- [x] Tests cover 10-digit landline-style, 11-digit mobile, already-prefixed, masked `(11) 99999-8888`, empty, and invalid-DDD inputs
+- [x] Gate check passes: `npm run test:unit`
+- [x] Test count: 15 tests pass (no silent deletions)
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(utils): add Brazilian phone normalization`
+
+**Status**: ✅ Complete
 
 ---
 
