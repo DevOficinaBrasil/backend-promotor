@@ -947,6 +947,35 @@ task cycle and gets its own atomic commit.
 
 ---
 
+### T26: Cover the per-visit rate limit on the authenticated visit routes
+
+**What**: Integration tests for `limitadorAcao`, which is wired into both authenticated routes but exercised by no test.
+**Where**: `__tests__/integration/visitaConfirmar.test.ts` (modify), `__tests__/integration/visitaEndereco.test.ts` (modify)
+**Depends on**: T20, T21
+**Reuses**: The `GET` limiter tests in `__tests__/integration/visitaExchange.test.ts:129,146`
+**Requirement**: NOTIF-13 (spec AC25)
+
+**Tools**:
+
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+
+- [x] The 21st authenticated request within the window is `429` with `{error:"RATE_LIMITED"}` on `POST /visita/confirmar` and on `PUT /visita/endereco`
+- [x] Two different `ID_NOTIFICACAO_VISITA` values do not share a bucket — exhausting one leaves the other answering `200`
+- [x] The limiter's production configuration is unchanged (no lowered limit, no test-only bypass)
+- [x] Gate check passes: `npm run test:unit && npm run test:integration`
+
+**Tests**: integration
+**Gate**: full
+
+**Commit**: `test(api): cover the per-visit rate limit on the authenticated visit routes`
+
+**Status**: ✅ Complete
+
+---
+
 ## Phase Execution Map
 
 Phases run in sequence; tasks within a phase run in numeric order. (Rendered as a table rather than an arrow diagram so it is not mistaken for — or parsed as — a second dependency graph.)

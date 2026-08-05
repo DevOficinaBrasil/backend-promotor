@@ -31,6 +31,16 @@ const jwtValido = () =>
     ID_ROTA_PROMOTOR: ID_ROTA,
   });
 
+// The limiter's buckets live on the router module for the whole file, so the
+// rate-limit tests below use their own visit ids and never spend the budget of
+// the visit the other tests exercise.
+const jwtDaVisita = (idNotificacao: number) =>
+  emitirJwt({
+    sub: ID_USUARIO,
+    ID_NOTIFICACAO_VISITA: idNotificacao,
+    ID_ROTA_PROMOTOR: ID_ROTA,
+  });
+
 describe("POST /visita/confirmar", () => {
   beforeEach(() => {
     process.env.JWT_SECRET = SEGREDO;
@@ -176,5 +186,46 @@ describe("POST /visita/confirmar", () => {
 
     expect(confirmacao.status).toBe(200);
     expect(confirmacao.body.data.state).toBe("CONFIRMED");
+  });
+
+  // AC25: "SHALL reject more than 20 requests per minute targeting the same
+  // visit - keyed on ... the JWT's ID_NOTIFICACAO_VISITA claim for the
+  // authenticated POST/PUT actions".
+  it("returns 429 after 20 confirmations for the same visit within a minute", async () => {
+    const token = jwtDaVisita(901);
+
+    const respostas = [];
+    for (let i = 0; i < 21; i += 1) {
+      respostas.push(
+        await request(app).post("/visita/confirmar").set("Authorization", `Bearer ${token}`)
+      );
+    }
+
+    expect(respostas.slice(0, 20).every((r) => r.status !== 429)).toBe(true);
+    expect(respostas[20].status).toBe(429);
+    expect(respostas[20].body).toEqual({
+      message: "Muitas tentativas. Aguarde um minuto.",
+      error: "RATE_LIMITED",
+    });
+  });
+
+  // AC25 keys the limit per visit ("independent of the caller's source IP"), so
+  // exhausting one visit must leave another visit's budget untouched. A
+  // keyGenerator that returned a constant would collapse both into one bucket.
+  it("keeps a separate limit bucket per ID_NOTIFICACAO_VISITA", async () => {
+    const tokenBarulhento = jwtDaVisita(902);
+
+    for (let i = 0; i < 21; i += 1) {
+      await request(app)
+        .post("/visita/confirmar")
+        .set("Authorization", `Bearer ${tokenBarulhento}`);
+    }
+
+    const outraVisita = await request(app)
+      .post("/visita/confirmar")
+      .set("Authorization", `Bearer ${jwtDaVisita(903)}`);
+
+    expect(outraVisita.status).toBe(200);
+    expect(outraVisita.body.data.state).toBe("CONFIRMED");
   });
 });

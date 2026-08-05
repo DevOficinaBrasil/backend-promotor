@@ -180,7 +180,7 @@ Each requirement gets a unique ID for tracking across design, tasks, and validat
 | NOTIF-10 | P1: public confirmation endpoints | CON26-85 | Design | Implementing |
 | NOTIF-11 | P1: signed link token, 168h expiry, re-exchangeable | CON26-85 | Design | Implementing |
 | NOTIF-12 | P1: concurrent double-confirm safety | CON26-85 | Design | Implementing |
-| NOTIF-13 | P1: per-visit rate limiting on public endpoints (token/JWT-keyed, not IP) | CON26-85 | Design | Implementing |
+| NOTIF-13 | P1: per-visit rate limiting on public endpoints (token/JWT-keyed, not IP) | CON26-85 | Design | Implementing (`GET` via T19; `POST`/`PUT` covered by T26) |
 | NOTIF-14 | P1: public confirmation page | CON26-88 | Design | Implementing |
 | NOTIF-15 | P1: confirmation state + audit fields on NotificacaoVisita | CON26-87 | Design | Implementing |
 | NOTIF-16 | P1: notification state-transition integrity | CON26-80 | Design | Implementing |
