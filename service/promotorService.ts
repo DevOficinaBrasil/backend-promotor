@@ -63,13 +63,11 @@ export default class PromotorService {
     const promotorSalvo = await repo.save(novoPromotor);
 
     let campanhaPromotores: CampanhaPromotor[] = [];
-    if (campanhaIds !== undefined) {
-      campanhaPromotores = await this.linkCampanhaPromotor(campanhaIds, promotorSalvo.ID_PROMOTOR!, raio);
-    }
-
     let autoAssignResult: { rotasCriadas: number; error?: string } | undefined;
-    if (empresaSlug && promotorSalvo.LATITUDE && promotorSalvo.LONGITUDE && campanhaPromotores.length > 0) {
-      autoAssignResult = await this.autoAssignRotas(promotorSalvo, campanhaPromotores, empresaSlug);
+    if (campanhaIds !== undefined) {
+      const result = await this.linkCampanhaPromotor(campanhaIds, promotorSalvo.ID_PROMOTOR!, raio, empresaSlug);
+      campanhaPromotores = result.campanhaPromotores;
+      autoAssignResult = result.autoAssignResult;
     }
     
     return { promotor: promotorSalvo, autoAssignResult };
@@ -261,9 +259,25 @@ export default class PromotorService {
   static async linkCampanhaPromotor(
     campanhaIds: number | number[], 
     promotorId: number,
-    raio?: number
-  ): Promise<CampanhaPromotor[]> {
-    return CampanhaPromotorService.linkCampanhaPromotor(campanhaIds, promotorId, raio);
+    raio?: number,
+    empresaSlug?: string
+  ): 
+    Promise<{ campanhaPromotores: CampanhaPromotor[]; autoAssignResult?: { rotasCriadas: number; error?: string } }> 
+  {
+    const campanhaPromotores = await CampanhaPromotorService.linkCampanhaPromotor(campanhaIds, promotorId, raio);
+
+    let autoAssignResult: { rotasCriadas: number; error?: string } | undefined;
+
+    if (empresaSlug && campanhaPromotores.length > 0) 
+    {
+      const promotor = await this.findPromotorById(promotorId);
+    
+      if (promotor?.LATITUDE && promotor?.LONGITUDE) {
+        autoAssignResult = await this.autoAssignRotas(promotor, campanhaPromotores, empresaSlug);
+      }
+    }
+
+    return { campanhaPromotores, autoAssignResult };
   }
 
   static async updateCampanhaPromotorRaio(

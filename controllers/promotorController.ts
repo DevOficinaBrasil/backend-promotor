@@ -271,7 +271,7 @@ export default class PromotorController {
    */
   static linkCampanhaPromotor = async (req: Request, res: Response) => {
     try {
-      const { ID_CAMPANHA, ID_PROMOTOR, RAIO } = req.body;
+      const { ID_CAMPANHA, ID_PROMOTOR, RAIO, EMPRESA_SLUG } = req.body;
 
       // Validate that promoter exists
       const promotor = await PromotorService.findPromotorById(ID_PROMOTOR);
@@ -281,15 +281,18 @@ export default class PromotorController {
         });
       }
 
-      // Call the service to link the promoter with campaigns
-      const newRelationships = await CampanhaPromotorService.linkCampanhaPromotor(ID_CAMPANHA, ID_PROMOTOR, RAIO);
+      // Call the service to link the promoter with campaigns and auto-assign rotas
+      const { campanhaPromotores, autoAssignResult } = await PromotorService.linkCampanhaPromotor(ID_CAMPANHA, ID_PROMOTOR, RAIO, EMPRESA_SLUG);
 
       return res.status(201).json({
-        message: "Vínculo entre campanha(s) e promotor criado com sucesso.",
+        message: autoAssignResult?.error
+          ? "Vínculo criado, porém houve erro na auto-atribuição de rotas."
+          : "Vínculo entre campanha(s) e promotor criado com sucesso.",
         data: {
-          created: newRelationships.length,
-          relationships: newRelationships
-        }
+          created: campanhaPromotores.length,
+          relationships: campanhaPromotores
+        },
+        ...(autoAssignResult && { rotasCriadas: autoAssignResult.rotasCriadas }),
       });
     } catch (error) {
       console.error("Erro ao vincular campanha e promotor:", error);

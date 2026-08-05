@@ -125,6 +125,7 @@ export const LinkCampanhaPromotorSchema = z.object({
   ID_CAMPANHA: z.union([z.number(), z.array(z.number())]),
   ID_PROMOTOR: z.number(),
   RAIO: z.number().int().positive().optional(),
+  EMPRESA_SLUG: z.string().min(1).optional(),
 });
 
 /**
