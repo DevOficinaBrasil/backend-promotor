@@ -431,16 +431,20 @@ The 3 `campanhaService` tests fail because the feature they cover was silently r
 
 **Done when**:
 
-- [ ] Returns true only for a non-null timestamp within 3 months; null returns false (stale), per the spec edge case
-- [ ] Clock injectable; boundary at exactly 3 months asserted
-- [ ] Tests cover: recent, exactly-at-boundary, older, null
-- [ ] Gate check passes: `npm run test:unit`
-- [ ] Test count: at least 4 tests pass (no silent deletions)
+- [x] Returns true only for a non-null timestamp within 3 months; null returns false (stale), per the spec edge case
+- [x] Clock injectable; boundary at exactly 3 months asserted
+- [x] Tests cover: recent, exactly-at-boundary, older, null
+- [x] Gate check passes: `npm run test:unit`
+- [x] Test count: 7 tests pass (no silent deletions)
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(service): add address-freshness send guard`
+
+**Note**: the spec does not pin the boundary instant, so exactly-3-months-old is treated as fresh (inclusive) and asserted by a test at the boundary and one millisecond before it.
+
+**Status**: ✅ Complete
 
 ---
 

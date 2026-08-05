@@ -194,7 +194,7 @@ Each requirement gets a unique ID for tracking across design, tasks, and validat
 | NOTIF-24 | P1: link-token → JWT exchange endpoint + distinct states (invalid/expired/already-confirmed) | CON26-85 | Design | Implementing |
 | NOTIF-25 | P1: JWT-authenticated confirm action, visit-scoped | CON26-87 | Design | Implementing |
 | NOTIF-26 | P1: REAGENDADO reserved + resource-oriented URL shape for future reschedule | CON26-80 | Design | Implementing |
-| NOTIF-27 | P1: address-freshness skip (Oficina.DATA_ALTERACAO < 3 months → DISPENSADO) | CON26-84 | Design | Pending |
+| NOTIF-27 | P1: address-freshness skip (Oficina.DATA_ALTERACAO < 3 months → DISPENSADO) | CON26-84 | Design | Implementing |
 | NOTIF-28 | P1: anti-spam skip — recipient has outstanding notification | CON26-83 | Design | Pending |
 | NOTIF-29 | P1: anti-spam skip — recipient confirmed within 3 months | CON26-83 | Design | Pending |
 | NOTIF-30 | P1: opportunistic EXPIRADO persist during the anti-spam scan | CON26-80 | Design | Pending |
