@@ -1,8 +1,13 @@
-# Frontend Contract — Visit Confirmation Page
+# Frontend Contract — Visit & Address Confirmation Page
 
-**Status:** Draft, reflects `spec.md` as written during Specify. Field names/paths are the intended contract but are not yet locked by Design — re-check against `spec.md`'s Requirement Traceability before final implementation, and update this doc if Design changes anything.
+**Status:** Draft, synced to `spec.md` as of 2026-08-05 (33 requirements, post-Design). Field names and paths are the intended contract; the backend that implements them is still being built, so re-check against `spec.md` before final wiring.
 
 **Audience:** whichever agent/session builds the public confirmation page. This doc is meant to be enough on its own — you shouldn't need to read the backend source or the full `spec.md` to implement the page, only to understand *why* a rule exists.
+
+> **Changed from the previous revision** — if you read an earlier copy, three things moved:
+> 1. **`dataVisita` is gone.** No visit date is returned at all. There is no per-visit date anywhere in the schema, so the page must not claim one. (Removed field — do not render it.)
+> 2. **The page now shows the workshop's registered address**, and confirming means "the visit is acknowledged *and* this address is correct".
+> 3. **New third endpoint: `PUT /visita/endereco`** — lets the reparador correct the address instead of confirming it as-is.
 
 ---
 
@@ -11,8 +16,12 @@
 A reparador (workshop contact) taps a link inside a WhatsApp message. The link opens this page, which:
 
 1. Exchanges the link's token for a short-lived access token (JWT).
-2. Shows the workshop name and visit date.
-3. Lets the reparador tap "Confirmar" once.
+2. Shows the workshop name and its **currently registered address**.
+3. Offers two mutually exclusive actions:
+   - **"Confirmar"** — the address is right, and they know about the visit.
+   - **"Corrigir endereço"** — the address is wrong; they edit it and submit.
+
+Either action ends in the same state: `CONFIRMED`. Correcting the address *also* confirms — the reparador never has to do both.
 
 No login screen, no account, no password. The link itself is the credential.
 
@@ -27,28 +36,33 @@ WhatsApp message
 Frontend page loads, reads {linkToken} from the URL
       │
       ▼
-GET /visita/{linkToken}          ← backend, no auth header needed here
+GET /visita/{linkToken}          ← no auth header needed here
       │
-      ├─ 200 OK, ainda pendente  → render workshop name + date + "Confirmar" button
-      │                             store the returned JWT (in memory only, see below)
+      ├─ 200 OK, pendente     → render workshop name + address + both action buttons
+      │                          store the returned JWT (in memory only, see below)
       │
-      ├─ 200 OK, já confirmado   → render "Você já confirmou esta visita em {data}"
-      │                             (no button, no JWT needed)
+      ├─ 200 OK, já confirmado → render "Você já confirmou em {data}" (no buttons)
       │
-      ├─ 410 Gone, expirado      → render "Este link expirou"
+      ├─ 410 Gone, expirado    → render "Este link expirou"
       │
-      └─ 400/404, inválido      → render "Link inválido"
+      └─ 400/404, inválido     → render "Link inválido"
 
-Reparador taps "Confirmar"
-      │
-      ▼
-POST /visita/confirmar            Authorization: Bearer {jwt from step above}
-      │
-      ├─ 200 OK        → render "Visita confirmada!"
-      ├─ 409 Conflict   → someone else confirmed it first (double-tap/two tabs) →
-      │                    render the same "already confirmed" state as above
-      └─ 401/403        → JWT expired mid-session (page was open >30min) →
-                           silently re-run the GET step to get a fresh JWT, retry once
+Reparador picks ONE:
+
+  (a) taps "Confirmar"                    (b) edits the address, taps "Salvar"
+      │                                        │
+      ▼                                        ▼
+  POST /visita/confirmar                   PUT /visita/endereco
+  Authorization: Bearer {jwt}              Authorization: Bearer {jwt}
+  (no body)                                body = the 7 address fields
+      │                                        │
+      └────────────────┬───────────────────────┘
+                       ▼
+      ├─ 200 OK       → render "Confirmado!"
+      ├─ 400          → (PUT only) validation error — show which field, stay on the form
+      ├─ 409 Conflict → already confirmed elsewhere → render the already-confirmed state
+      └─ 401/403      → JWT expired mid-session (page open >30min) →
+                         silently re-run the GET to get a fresh JWT, retry once
 ```
 
 ---
@@ -59,11 +73,11 @@ Base path: **`/visita`** — mounted flat, same as every other domain in this AP
 
 ### `GET /visita/{token}`
 
-Exchanges the WhatsApp link's opaque token for a JWT. Safe to call repeatedly (page reloads, reopening the link) — it is **not** single-use. Only the confirm action below is.
+Exchanges the WhatsApp link's opaque token for a JWT. Safe to call repeatedly (page reloads, reopening the link) — it is **not** single-use. Only the confirm/correct action is.
 
 **Path param:** `token` — the opaque string from the WhatsApp link's URL.
 
-**Response `200` — pending confirmation (show the confirm button):**
+**Response `200` — pending (show the address and both actions):**
 ```json
 {
   "message": "Visita pendente de confirmação.",
@@ -71,12 +85,22 @@ Exchanges the WhatsApp link's opaque token for a JWT. Safe to call repeatedly (p
     "state": "PENDING",
     "jwt": "eyJhbGciOi...",
     "oficinaNome": "Auto Center Silva",
-    "dataVisita": "2026-08-10"
+    "endereco": {
+      "ENDERECO": "Rua das Oficinas",
+      "NUMERO": "1234",
+      "COMPLEMENTO": "Galpão 2",
+      "BAIRRO": "Vila Industrial",
+      "CIDADE": "São Paulo",
+      "ESTADO": "SP",
+      "CEP": "01234-567"
+    }
   }
 }
 ```
 
-**Response `200` — already confirmed (no JWT, no button):**
+Any address field may be `null` — the registry has incomplete records. Render empty inputs, not the string `"null"`.
+
+**Response `200` — already confirmed (no JWT, no actions):**
 ```json
 {
   "message": "Visita já confirmada.",
@@ -90,46 +114,78 @@ Exchanges the WhatsApp link's opaque token for a JWT. Safe to call repeatedly (p
 
 **Response `410` — link expired:**
 ```json
-{
-  "message": "Este link expirou.",
-  "error": "EXPIRED"
-}
+{ "message": "Este link expirou.", "error": "EXPIRED" }
 ```
 
 **Response `400`/`404` — malformed or unrecognized token:**
 ```json
-{
-  "message": "Link inválido.",
-  "error": "TOKEN_INVALID"
-}
+{ "message": "Link inválido.", "error": "TOKEN_INVALID" }
 ```
 
 ### `POST /visita/confirmar`
 
-**Header:** `Authorization: Bearer {jwt}` — the JWT from the `GET` call above. There is no request body.
+Confirms the visit **and** that the displayed address is correct. Use when the reparador makes no edits.
+
+**Header:** `Authorization: Bearer {jwt}`. No request body.
 
 **Response `200`:**
 ```json
 {
   "message": "Visita confirmada com sucesso.",
+  "data": { "state": "CONFIRMED", "confirmadoEm": "2026-08-09T14:32:00.000Z" }
+}
+```
+
+### `PUT /visita/endereco`
+
+Corrects the address **and** confirms in the same call. Use when the reparador edits anything.
+
+**Header:** `Authorization: Bearer {jwt}`
+
+**Body — exactly these 7 fields, nothing else:**
+```json
+{
+  "ENDERECO": "Avenida Nova",
+  "NUMERO": "500",
+  "COMPLEMENTO": null,
+  "BAIRRO": "Centro",
+  "CIDADE": "Campinas",
+  "ESTADO": "SP",
+  "CEP": "13010-000"
+}
+```
+
+**The allowlist is enforced server-side and is strict.** Sending any other key — `TELEFONE`, `CNPJ`, `STATUS`, `ID_OFICINA`, anything — is rejected with `400` and **no** data is written. Don't spread the whole `endereco` object back with extra properties attached; send exactly these seven.
+
+**Response `200`:**
+```json
+{
+  "message": "Endereço atualizado e visita confirmada.",
   "data": {
     "state": "CONFIRMED",
-    "confirmadoEm": "2026-08-09T14:32:00.000Z"
+    "confirmadoEm": "2026-08-09T14:32:00.000Z",
+    "enderecoAtualizado": true
   }
 }
 ```
 
-**Response `401`/`403`** — JWT expired, malformed, or wrong scope. Re-run `GET /visita/{token}` to get a fresh JWT and retry once; if the visit is now `ALREADY_CONFIRMED` or expired, show that state instead of retrying forever.
-
-**Response `409`** — someone else already confirmed (race between two taps/tabs, or the link was opened on two devices). Treat identically to the `ALREADY_CONFIRMED` state from the `GET` endpoint.
-
-**Response `500`** — unexpected server error:
+**Response `400` — validation failure:**
 ```json
 {
-  "message": "Erro interno ao confirmar visita.",
-  "error": "<message>"
+  "message": "Dados inválidos.",
+  "error": "VALIDATION_ERROR",
+  "details": [{ "field": "CEP", "message": "...", "code": "..." }]
 }
 ```
+Nothing was written. Keep the user on the form and surface the offending field.
+
+### Shared error responses (`POST` and `PUT`)
+
+**`401`/`403`** — JWT missing, expired, malformed, or wrong scope. Re-run `GET /visita/{token}` for a fresh JWT and retry **once**. If the visit now reports `ALREADY_CONFIRMED` or `EXPIRED`, render that instead of retrying again.
+
+**`409`** — already confirmed (double-tap, two tabs, or two devices). Treat identically to `ALREADY_CONFIRMED`.
+
+**`500`** — unexpected server error. For `PUT` specifically, a `500` may mean the address write itself failed; the backend guarantees it does **not** report a confirmation in that case, so treat it as "nothing happened" and let the user retry.
 
 ---
 
@@ -138,39 +194,55 @@ Exchanges the WhatsApp link's opaque token for a JWT. Safe to call repeatedly (p
 | State | Trigger | UI |
 | --- | --- | --- |
 | `LOADING` | Initial page load, before `GET` resolves | Spinner / skeleton |
-| `PENDING` | `GET` returns pending | Oficina name, visit date, "Confirmar" button |
-| `CONFIRMED` | `POST` succeeds | Success message, no further action |
-| `ALREADY_CONFIRMED` | `GET` or `POST` reports it | "Você já confirmou esta visita em {data}" — no button |
-| `EXPIRED` | `GET` returns `410` | "Este link expirou" — no button, no retry |
-| `TOKEN_INVALID` | `GET` returns `400`/`404` | "Link inválido" — no button |
-| `RATE_LIMITED` | Either endpoint returns `429` | "Muitas tentativas. Aguarde um minuto e tente novamente." — do **not** auto-retry, that makes it worse |
-| `ERROR` | Network failure or `500` | Generic error + a manual "tentar novamente" retry |
+| `PENDING` | `GET` returns pending | Workshop name, address fields, **"Confirmar"** + **"Corrigir endereço"** |
+| `EDITING` | User tapped "Corrigir endereço" | Editable form of the 7 fields, "Salvar" / "Cancelar" |
+| `CONFIRMED` | `POST` or `PUT` succeeds | Success message, no further action |
+| `ALREADY_CONFIRMED` | `GET`/`POST`/`PUT` reports it | "Você já confirmou em {data}" — no actions |
+| `EXPIRED` | `GET` returns `410` | "Este link expirou" — no actions, no retry |
+| `TOKEN_INVALID` | `GET` returns `400`/`404` | "Link inválido" — no actions |
+| `VALIDATION_ERROR` | `PUT` returns `400` | Stay in `EDITING`, mark the offending field |
+| `RATE_LIMITED` | Any endpoint returns `429` | "Muitas tentativas. Aguarde um minuto." — do **not** auto-retry |
+| `ERROR` | Network failure or `500` | Generic error + manual "tentar novamente" |
 
-**On `429`:** the limit is 20 requests/minute *per visit* (not per user or per IP), so hitting it normally means rapid page reloads. Back off and let the user retry manually — the automatic re-exchange described under JWT handling must not fire on a `429`.
+**No visit date is rendered in any state.** The backend does not send one and the schema has no per-visit date to send. Don't substitute `CREATED_AT` or a campaign window for it.
+
+**On `429`:** the limit is 20 requests/minute *per visit* (not per user, not per IP), so hitting it normally means rapid reloads. Back off and let the user retry manually — the automatic JWT re-exchange below must not fire on a `429`.
 
 ---
 
 ## JWT handling
 
-- **Store it in memory only** (component state, a ref, a closure) — never `localStorage`/`sessionStorage`. It's short-lived (30 minutes) and scoped to exactly this one visit, so the blast radius of it leaking is small, but there's no reason to persist it past the page's lifetime.
-- It is **not** a general login token. It cannot be used to view or act on the reparador's other visits — don't build any "see my other visits" feature on top of it, that's explicitly out of scope for this feature (see `spec.md` → Out of Scope).
-- If the page sits open past 30 minutes and the confirm call comes back `401`/`403`, silently re-fetch via `GET /visita/{token}` (same token still works — it's re-exchangeable) rather than showing an error immediately.
+- **Store it in memory only** (component state, a ref, a closure) — never `localStorage`/`sessionStorage`. It's short-lived (30 minutes) and scoped to exactly one visit, so a leak's blast radius is small, but there's no reason to persist it past the page's lifetime.
+- It is **not** a general login token. It cannot view or act on the reparador's other visits — don't build any "my visits" feature on it; that's explicitly out of scope.
+- If the page sits open past 30 minutes and an action returns `401`/`403`, silently re-fetch via `GET /visita/{token}` (the link token is re-exchangeable) rather than showing an error immediately. Retry the action once, then surface the real state.
+
+---
+
+## Things the backend deliberately does not do
+
+Worth knowing so you don't build UI promising them:
+
+- **Coordinates are not updated** when an address is corrected. There's no geocoding provider in this stack. Don't show a map preview implying the pin moved.
+- **No approval step.** A correction writes straight through to the registry — there's no "pending review" state to display.
+- **Only the address is editable.** Phone, name, CNPJ, and status are read-only for this flow, by design.
 
 ---
 
 ## Coming later — do not build yet
 
-A "reschedule to a later date" action is planned but **not part of this feature**. The backend is reserving room for it (`REAGENDADO` status, a future `POST /visita/reagendar` sibling endpoint using the same JWT), but:
+A "reschedule to a later date" action is planned but **not part of this feature**. The backend reserves room for it (a `REAGENDADO` status and a future `POST /visita/reagendar` sibling using the same JWT), but:
 
-- Don't add a "reschedule" button or any UI for it now.
-- Don't assume the `PENDING` state's shape above is final — a future iteration may add fields once reschedule ships.
-- When it does ship, it'll reuse the exact same token-exchange flow (`GET /visita/{token}` → JWT → authenticated action call), just with a second action alongside confirm.
+- Don't add a reschedule button or any UI for it now.
+- Don't assume the `PENDING` shape is final — a future iteration may add fields.
+- When it ships it reuses this exact flow (`GET` → JWT → authenticated action), just with a third action alongside confirm and correct.
 
 ---
 
 ## Open items that could still change this contract
 
-From `spec.md`'s Assumptions table (unconfirmed rows) — check before relying on exact values:
-- JWT expiry window (currently assumed 30 minutes)
-- Link token expiry window (currently assumed 48 hours)
-- Exact wording/copy for each state (Portuguese strings above are placeholders, not final UX copy)
+From `spec.md`'s Assumptions table (rows still marked unconfirmed):
+
+- JWT expiry window (assumed 30 minutes)
+- Link token expiry window (assumed 48 hours)
+- Portuguese copy above is placeholder, not final UX wording
+- **Address correction depends on an unverified database grant.** Nothing in this codebase has ever written to the `MAIN_REGISTER` schema, and whether the app's DB user is allowed to is being checked during backend implementation. If that grant turns out to be missing, `PUT /visita/endereco` may be cut from this release — build the confirm path so it stands alone if that happens.
