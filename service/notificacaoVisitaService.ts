@@ -11,7 +11,7 @@ import { avaliarGuardas, enderecoRecente } from "./envioGuards";
 import { normalizarTelefone } from "../utils/telefone";
 import { gerarLinkToken } from "../utils/visitaToken";
 
-const HORAS_VALIDADE_TOKEN = 48;
+const HORAS_VALIDADE_TOKEN = 168;
 
 export const MOTIVO_ENDERECO_RECENTE = "address recently updated";
 export const MOTIVO_SEM_USUARIO = "no usuario linked to oficina";
