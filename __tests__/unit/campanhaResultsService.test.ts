@@ -379,7 +379,7 @@ describe('CampanhaResultsService', () => {
       expect(mockRepository.createQueryBuilder).toHaveBeenCalledWith('result');
       expect(mockQueryBuilder.leftJoinAndSelect).toHaveBeenCalledWith('result.rota', 'rota');
       expect(mockQueryBuilder.leftJoinAndSelect).toHaveBeenCalledWith('result.pergunta', 'pergunta');
-      expect(mockQueryBuilder.leftJoin).toHaveBeenCalledWith('rota.campanhaPromotor', 'campanhaPromotor');
+      expect(mockQueryBuilder.leftJoinAndSelect).toHaveBeenCalledWith('rota.campanhaPromotor', 'campanhaPromotor');
       expect(mockQueryBuilder.where).toHaveBeenCalledWith(
         'campanhaPromotor.ID_CAMPANHA = :campanhaId',
         { campanhaId: 5 }

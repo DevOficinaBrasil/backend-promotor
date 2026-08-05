@@ -42,6 +42,7 @@ describe('CampanhaPerguntasService', () => {
       expect(AppDataSourceSync.getRepository).toHaveBeenCalledWith(CampanhaPerguntas);
       expect(mockRepository.find).toHaveBeenCalledWith({
         where: { ID_CAMPANHA: campanhaId },
+        relations: ['opcoes'],
         order: {
           CREATED_AT: 'ASC',
         },
@@ -65,6 +66,7 @@ describe('CampanhaPerguntasService', () => {
       expect(AppDataSourceSync.getRepository).toHaveBeenCalledWith(CampanhaPerguntas);
       expect(mockRepository.find).toHaveBeenCalledWith({
         where: { ID_CAMPANHA: campanhaId },
+        relations: ['opcoes'],
         order: {
           CREATED_AT: 'ASC',
         },
