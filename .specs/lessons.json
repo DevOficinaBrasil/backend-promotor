@@ -1,0 +1,63 @@
+{
+  "schema": 1,
+  "promote_threshold": 2,
+  "window_days": 45,
+  "quarantine_threshold": 2,
+  "next_id": 4,
+  "lessons": [
+    {
+      "id": "L-001",
+      "key": "ac_gap::when an ac names several read paths implement and test every one of them a single record read does not satisfy a criterion written about a list endpoint",
+      "text": "When an AC names several read paths, implement and test every one of them - a single-record read does not satisfy a criterion written about a list endpoint.",
+      "signal": "ac_gap",
+      "scope": "service-layer",
+      "status": "candidate",
+      "features": [
+        "notificacao-visita-confirmacao"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        ".specs/features/notificacao-visita-confirmacao/validation.md P2 AC2; service/campanhaService.ts:212 (service-layer)"
+      ],
+      "created": "2026-08-05T18:43:45Z",
+      "last_seen": "2026-08-05T18:43:45Z"
+    },
+    {
+      "id": "L-002",
+      "key": "ac_gap::every middleware wired into a route needs its own integration test wiring it is not evidence that it behaves",
+      "text": "Every middleware wired into a route needs its own integration test - wiring it is not evidence that it behaves.",
+      "signal": "ac_gap",
+      "scope": "routes",
+      "status": "candidate",
+      "features": [
+        "notificacao-visita-confirmacao"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "routes/VisitaRoute.ts:49; AC25 POST/PUT (routes)"
+      ],
+      "created": "2026-08-05T18:43:52Z",
+      "last_seen": "2026-08-05T18:43:52Z"
+    },
+    {
+      "id": "L-003",
+      "key": "spec_precision_gap::specify the http status code for every named error state not just the state name or the tests silently become the contract",
+      "text": "Specify the HTTP status code for every named error state, not just the state name, or the tests silently become the contract.",
+      "signal": "spec_precision_gap",
+      "scope": "spec",
+      "status": "candidate",
+      "features": [
+        "notificacao-visita-confirmacao"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        ".specs/features/notificacao-visita-confirmacao/validation.md Spec-Precision Gaps; AC16-AC20, AC33 (spec)"
+      ],
+      "created": "2026-08-05T18:43:52Z",
+      "last_seen": "2026-08-05T18:43:52Z"
+    }
+  ]
+}
