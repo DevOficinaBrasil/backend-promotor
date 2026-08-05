@@ -45,7 +45,7 @@ GET /visita/{linkToken}          ← no auth header needed here
       │
       ├─ 410 Gone, expirado    → render "Este link expirou"
       │
-      └─ 400/404, inválido     → render "Link inválido"
+      └─ 404 Not Found, inválido → render "Link inválido"
 
 Reparador picks ONE:
 
@@ -61,6 +61,8 @@ Reparador picks ONE:
       ├─ 200 OK       → render "Confirmado!"
       ├─ 400          → (PUT only) validation error — show which field, stay on the form
       ├─ 409 Conflict → already confirmed elsewhere → render the already-confirmed state
+      ├─ 410 Gone     → the link expired before the action landed → render "Este link expirou"
+      ├─ 404          → the visit is no longer confirmable → render "Link inválido"
       └─ 401/403      → JWT expired mid-session (page open >30min) →
                          silently re-run the GET to get a fresh JWT, retry once
 ```
@@ -117,7 +119,7 @@ Any address field may be `null` — the registry has incomplete records. Render 
 { "message": "Este link expirou.", "error": "EXPIRED" }
 ```
 
-**Response `400`/`404` — malformed or unrecognized token:**
+**Response `404` — malformed or unrecognized token:**
 ```json
 { "message": "Link inválido.", "error": "TOKEN_INVALID" }
 ```
@@ -169,7 +171,15 @@ Corrects the address **and** confirms in the same call. Use when the reparador e
 }
 ```
 
-**Response `400` — validation failure:**
+**Response `400` — validation failure.** Two shapes, same meaning. The route's strict body schema rejects first and is what you will actually see:
+```json
+{
+  "error": "Validation Error",
+  "message": "Invalid input data",
+  "details": [{ "field": "CNPJ", "message": "...", "code": "unrecognized_keys" }]
+}
+```
+The service re-checks the allowlist as defence in depth and answers:
 ```json
 {
   "message": "Dados inválidos.",
@@ -177,7 +187,28 @@ Corrects the address **and** confirms in the same call. Use when the reparador e
   "details": [{ "field": "CEP", "message": "...", "code": "..." }]
 }
 ```
-Nothing was written. Keep the user on the form and surface the offending field.
+Both are `400`, both carry `details[]`, and in both cases nothing was written. Branch on the status, then read `details[].field`. Keep the user on the form and surface the offending field.
+
+### Status codes (complete)
+
+This is the whole contract, pinned in `spec.md` under "HTTP status codes (normative)". Branch on the `error` code, not on the status alone — `500` covers both a failed address write and an unexpected error, and only the code tells them apart.
+
+| Endpoint | Status | `error` | Meaning |
+| --- | --- | --- | --- |
+| `GET /visita/{token}` | `200` | - | `PENDING` or `ALREADY_CONFIRMED` (read `data.state`) |
+| `GET /visita/{token}` | `404` | `TOKEN_INVALID` | Malformed or unrecognized token |
+| `GET /visita/{token}` | `410` | `EXPIRED` | Link past its 7-day window |
+| `POST /visita/confirmar` | `200` | - | `CONFIRMED` |
+| `PUT /visita/endereco` | `200` | - | `CONFIRMED`, `enderecoAtualizado: true` |
+| `PUT /visita/endereco` | `400` | `Validation Error` (route schema) or `VALIDATION_ERROR` (service) | Non-allowlisted or invalid field; nothing written. Both shapes carry `details[]`; treat either as the same state |
+| `POST` / `PUT` | `404` | `TOKEN_INVALID` | Visit no longer confirmable |
+| `POST` / `PUT` | `409` | `ALREADY_CONFIRMED` | Confirmed already, elsewhere or in another tab |
+| `POST` / `PUT` | `410` | `EXPIRED` | Link expired before the action landed |
+| `POST` / `PUT` | `401` | `TOKEN_INVALID` | No `Authorization: Bearer <jwt>` header |
+| `POST` / `PUT` | `403` | `TOKEN_INVALID` | JWT invalid, expired, or wrong scope |
+| `PUT /visita/endereco` | `500` | `ADDRESS_UPDATE_FAILED` | Registry write failed; **no** confirmation recorded |
+| All three | `429` | `RATE_LIMITED` | 20 requests/minute per visit exceeded |
+| All three | `500` | *(error message)* | Unexpected server error |
 
 ### Shared error responses (`POST` and `PUT`)
 
@@ -198,8 +229,8 @@ Nothing was written. Keep the user on the form and surface the offending field.
 | `EDITING` | User tapped "Corrigir endereço" | Editable form of the 7 fields, "Salvar" / "Cancelar" |
 | `CONFIRMED` | `POST` or `PUT` succeeds | Success message, no further action |
 | `ALREADY_CONFIRMED` | `GET`/`POST`/`PUT` reports it | "Você já confirmou em {data}" — no actions |
-| `EXPIRED` | `GET` returns `410` | "Este link expirou" — no actions, no retry |
-| `TOKEN_INVALID` | `GET` returns `400`/`404` | "Link inválido" — no actions |
+| `EXPIRED` | `GET`/`POST`/`PUT` returns `410` | "Este link expirou" — no actions, no retry |
+| `TOKEN_INVALID` | `GET`/`POST`/`PUT` returns `404` | "Link inválido" — no actions |
 | `VALIDATION_ERROR` | `PUT` returns `400` | Stay in `EDITING`, mark the offending field |
 | `RATE_LIMITED` | Any endpoint returns `429` | "Muitas tentativas. Aguarde um minuto." — do **not** auto-retry |
 | `ERROR` | Network failure or `500` | Generic error + manual "tentar novamente" |

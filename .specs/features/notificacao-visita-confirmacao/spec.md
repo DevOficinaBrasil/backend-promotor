@@ -126,6 +126,36 @@ Every ambiguity is resolved or recorded here — nothing is left silently unclea
 32. IF a `PUT /visita/endereco` request carries any field outside the address column allowlist THEN the system SHALL reject the request with a validation error and SHALL NOT write to `Oficina`.
 33. IF the `Oficina` address update fails at the database level (including a missing `UPDATE` grant on `MAIN_REGISTER`) THEN the system SHALL leave `NotificacaoVisita` STATUS unchanged, SHALL NOT report the confirmation as successful, and SHALL surface a distinct error state to the caller.
 
+**HTTP status codes (normative):**
+
+The criteria above name response *states*; these are the status codes those states are carried on. Recorded after implementation to close the contract-by-implementation gap flagged in `validation.md` — the codes below are what `controllers/visitaController.ts` and `middlewares/visitaAuthMiddleware.ts` return today and what the tests assert. `frontend-contract.md` mirrors this table; the two must not diverge.
+
+| Endpoint | State | Status | Body `error` |
+| --- | --- | --- | --- |
+| `GET /visita/{token}` | `PENDING` (AC14) | `200` | - |
+| `GET /visita/{token}` | `ALREADY_CONFIRMED` (AC18) | `200` | - |
+| `GET /visita/{token}` | `EXPIRED` (AC17) | `410` | `EXPIRED` |
+| `GET /visita/{token}` | `TOKEN_INVALID` (AC16) | `404` | `TOKEN_INVALID` |
+| `POST /visita/confirmar` | `CONFIRMED` (AC19) | `200` | - |
+| `POST /visita/confirmar` | `ALREADY_CONFIRMED` (AC20, AC21) | `409` | `ALREADY_CONFIRMED` |
+| `POST /visita/confirmar` | `EXPIRED` (AC20, AC22) | `410` | `EXPIRED` |
+| `POST /visita/confirmar` | `TOKEN_INVALID` — any other rejected state (AC20) | `404` | `TOKEN_INVALID` |
+| `PUT /visita/endereco` | `CONFIRMED` (AC31) | `200` | - |
+| `PUT /visita/endereco` | Non-allowlisted or invalid field (AC32) | `400` | `Validation Error` from the route's strict body schema; `VALIDATION_ERROR` from the service's own allowlist check |
+| `PUT /visita/endereco` | `ADDRESS_UPDATE_FAILED` — registry write failed (AC33) | `500` | `ADDRESS_UPDATE_FAILED` |
+| `PUT /visita/endereco` | `ALREADY_CONFIRMED` / `EXPIRED` / `TOKEN_INVALID` | same as `POST` | same as `POST` |
+| `POST` / `PUT` | Authorization header missing or not `Bearer <token>` | `401` | `TOKEN_INVALID` |
+| `POST` / `PUT` | JWT fails verification: bad signature, expired, or missing the `visita:confirmar` scope (AC20) | `403` | `TOKEN_INVALID` |
+| All three | Per-visit limit exceeded (AC25) | `429` | `RATE_LIMITED` |
+| All three | Unhandled exception | `500` | the error message |
+
+Notes on the split:
+- `401` vs `403`: `401` means no usable credential was presented at all; `403` means one was presented and failed verification. Mirrors `middlewares/authMiddleware.ts`.
+- `409` (already confirmed) is distinct from `410` (expired) so the frontend can render "you already confirmed" separately from a dead link.
+- The allowlist is enforced twice (route schema, then service). Over HTTP the route schema always wins, so a `400` carries `error: "Validation Error"` with a `details[]` array; the service's `VALIDATION_ERROR` shape is the defence-in-depth path. Both are `400` and both write nothing.
+- `ADDRESS_UPDATE_FAILED` shares `500` with an unhandled error, but carries its own `error` code — the code, not the status, is what the frontend branches on. Per AC33 no confirmation is recorded in either case.
+- The `GET` route declares a params schema, so `validateSchema` could in principle answer `400`; in practice an empty `:token` does not match the route, so `404` is the only invalid-token outcome.
+
 **Independent Test**: Create a `RotaPromotor` for an Oficina whose `Usuario` has `CELULAR` set; confirm a `NotificacaoVisita` row appears `PENDENTE` → `ENVIADO` via a real (or `WHATSAPP_TEMPLATE_NAME_VISITA`-unset-stubbed) call to `wpp.oficinabrasil.com.br`. Call `GET /visita/{token}`, verify it returns a JWT plus Oficina name/date. Call `POST /visita/confirmar` with that JWT, verify STATUS = `CONFIRMADO` and audit fields are set. Call `GET /visita/{token}` again and confirm it now returns `ALREADY_CONFIRMED` without issuing a JWT or changing state.
 
 ---

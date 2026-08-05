@@ -976,6 +976,36 @@ task cycle and gets its own atomic commit.
 
 ---
 
+### T27: Pin the visit endpoint status codes in the spec
+
+**What**: Record the HTTP status codes the visit endpoints actually return, so the frontend contract is spec-anchored instead of contract-by-implementation.
+**Where**: `.specs/features/notificacao-visita-confirmacao/spec.md` (modify), `.specs/features/notificacao-visita-confirmacao/frontend-contract.md` (modify)
+**Depends on**: T19, T20, T21
+**Reuses**: The existing state tables in `frontend-contract.md`
+**Requirement**: NOTIF-24, NOTIF-25, NOTIF-33 (spec AC16–AC20, AC32, AC33)
+
+**Tools**:
+
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+
+- [x] `spec.md` carries a normative state → status table covering `GET`/`POST`/`PUT`, the 401/403 split, `429` and `500`
+- [x] `frontend-contract.md` mirrors it and its stale `400`/`404` claims for `TOKEN_INVALID` are corrected
+- [x] Every documented code is read off the implementation and its test, never invented
+- [x] No code changed
+- [x] Gate check passes: `npx tsc --noEmit && npm test`
+
+**Tests**: none
+**Gate**: build
+
+**Commit**: `docs(visita): pin the visit endpoint status codes in the spec`
+
+**Status**: ✅ Complete
+
+---
+
 ## Phase Execution Map
 
 Phases run in sequence; tasks within a phase run in numeric order. (Rendered as a table rather than an arrow diagram so it is not mistaken for — or parsed as — a second dependency graph.)
