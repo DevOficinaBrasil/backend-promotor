@@ -32,6 +32,7 @@ export const CreatePromotorSchema = z.object({
   CEP: z.string().max(30, 'CEP deve ter no máximo 30 caracteres').optional(),
   ID_CAMPANHA: z.union([z.number(), z.array(z.number())]).optional(),
   RAIO: z.number().int().positive().optional(),
+  EMPRESA_SLUG: z.string().min(1).optional(),
 });
 
 /**

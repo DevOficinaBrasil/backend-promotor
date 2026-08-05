@@ -8,6 +8,8 @@ import { encrypt, decrypt } from "../utils/encryption";
 import { MigrationAwareRepository } from "../utils/migrationRepository";
 import GeolocationService from "./geolocationService";
 import CampanhaPromotorService from "./campanhaPromotorService";
+import OficinaService from "./oficinaService";
+import RotaService from "./rotaService";
 
 export default class PromotorService {
   private static getPromotorRepo() {
@@ -42,7 +44,8 @@ export default class PromotorService {
   static async createPromotor(
     promotorData: Partial<Promotor>, 
     campanhaIds?: number | number[],
-    raio?: number
+    raio?: number,
+    empresaSlug?: string
   ): Promise<Promotor> {
     const repo = this.getPromotorRepo();
     
@@ -59,13 +62,42 @@ export default class PromotorService {
 
     const promotorSalvo = await repo.save(novoPromotor);
 
-    
-    // If campaign IDs are provided, create the associations
+    let campanhaPromotores: CampanhaPromotor[] = [];
     if (campanhaIds !== undefined) {
-      await this.linkCampanhaPromotor(campanhaIds, promotorSalvo.ID_PROMOTOR!, raio);
+      campanhaPromotores = await this.linkCampanhaPromotor(campanhaIds, promotorSalvo.ID_PROMOTOR!, raio);
+    }
+
+    if (empresaSlug && promotorSalvo.LATITUDE && promotorSalvo.LONGITUDE && campanhaPromotores.length > 0) {
+      await this.autoAssignRotas(promotorSalvo, campanhaPromotores, empresaSlug);
     }
     
     return promotorSalvo;
+  }
+
+  private static async autoAssignRotas(
+    promotor: Promotor,
+    campanhaPromotores: CampanhaPromotor[],
+    empresaSlug: string
+  ): Promise<void> {
+    for (const cp of campanhaPromotores) {
+      try {
+        const raio = cp.RAIO ?? 20;
+        const oficinas = await OficinaService.getComunityNearbyOficinas(
+          parseFloat(promotor.LATITUDE!),
+          parseFloat(promotor.LONGITUDE!),
+          raio,
+          empresaSlug
+        );
+
+        if (oficinas.length > 0) {
+          const oficinaIds = oficinas.map((o: any) => o.ID_OFICINA);
+          await RotaService.createRotas(cp.ID_CAMPANHA_PROMOTOR!, oficinaIds);
+          console.log(`Auto-assigned ${oficinas.length} rotas for CAMPANHA_PROMOTOR ${cp.ID_CAMPANHA_PROMOTOR}`);
+        }
+      } catch (error) {
+        console.error(`Auto-assign rotas failed for CAMPANHA_PROMOTOR ${cp.ID_CAMPANHA_PROMOTOR}:`, error);
+      }
+    }
   }
 
   /**

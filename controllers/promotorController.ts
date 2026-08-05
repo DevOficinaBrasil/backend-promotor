@@ -24,7 +24,8 @@ export default class PromotorController {
         CREATED_BY,
         CEP,
         ID_CAMPANHA,
-        RAIO
+        RAIO,
+        EMPRESA_SLUG
       } = req.body;
 
       // Create promoter data object
@@ -39,7 +40,7 @@ export default class PromotorController {
       };
 
       // Call the service to create the promoter with optional campaign associations
-      const novoPromotor = await PromotorService.createPromotor(promotorData, ID_CAMPANHA, RAIO);
+      const novoPromotor = await PromotorService.createPromotor(promotorData, ID_CAMPANHA, RAIO, EMPRESA_SLUG);
 
       return res.status(201).json({
         message: "Promotor criado com sucesso.",
