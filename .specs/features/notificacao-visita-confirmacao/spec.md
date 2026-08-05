@@ -168,7 +168,7 @@ Each requirement gets a unique ID for tracking across design, tasks, and validat
 
 | Requirement ID | Story | CON26 Ticket | Phase | Status |
 | --- | --- | --- | --- | --- |
-| NOTIF-01 | P1: entity + one-row-per-route | CON26-80 | Design | Pending |
+| NOTIF-01 | P1: entity + one-row-per-route | CON26-80 | Design | Implementing |
 | NOTIF-02 | P1: trigger on route creation | CON26-84 | Design | Pending |
 | NOTIF-03 | P1: recipient resolution | CON26-83 | Design | Pending |
 | NOTIF-04 | P1: recipient tiebreak (DATA_ALTERACAO desc, ID_USUARIO asc) | CON26-83 | Design | Pending |
@@ -176,7 +176,7 @@ Each requirement gets a unique ID for tracking across design, tasks, and validat
 | NOTIF-06 | P1: WhatsApp channel + phone normalization | CON26-86 | Design | Pending |
 | NOTIF-07 | P1: notification failure isolated from route creation | CON26-84 | Design | Pending |
 | NOTIF-08 | P1: failure captured, no auto-retry | CON26-86 | Design | Pending |
-| NOTIF-09 | P1: one notification per route (dedup) | CON26-80 | Design | Pending |
+| NOTIF-09 | P1: one notification per route (dedup) | CON26-80 | Design | Implementing |
 | NOTIF-10 | P1: public confirmation endpoints | CON26-85 | Design | Pending |
 | NOTIF-11 | P1: signed link token, 48h expiry, re-exchangeable | CON26-85 | Design | Pending |
 | NOTIF-12 | P1: concurrent double-confirm safety | CON26-85 | Design | Pending |

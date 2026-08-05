@@ -187,15 +187,17 @@ The 3 `campanhaService` tests fail because the feature they cover was silently r
 
 **Done when**:
 
-- [ ] Table matches design.md exactly, including `ID_USUARIO`/`TOKEN_HASH`/`EXPIRA_EM` nullable and `ENDERECO_ATUALIZADO BOOLEAN NOT NULL DEFAULT FALSE`
-- [ ] `UNIQUE` constraint on `ID_ROTA_PROMOTOR`; unique index on `TOKEN_HASH`; composite index on `(ID_USUARIO, STATUS)`
-- [ ] Uses `IF NOT EXISTS` throughout, per the existing migration's style
-- [ ] Gate check passes: `npx tsc --noEmit && npm test`
+- [x] Table matches design.md exactly, including `ID_USUARIO`/`TOKEN_HASH`/`EXPIRA_EM` nullable and `ENDERECO_ATUALIZADO BOOLEAN NOT NULL DEFAULT FALSE`
+- [x] `UNIQUE` constraint on `ID_ROTA_PROMOTOR`; unique index on `TOKEN_HASH`; composite index on `(ID_USUARIO, STATUS)`
+- [x] Uses `IF NOT EXISTS` throughout, per the existing migration's style
+- [x] Gate check passes: `npx tsc --noEmit && npm test`
 
 **Tests**: none
 **Gate**: build
 
 **Commit**: `feat(db): add NOTIFICACAO_VISITA table migration`
+
+**Status**: ✅ Complete
 
 ---
 
