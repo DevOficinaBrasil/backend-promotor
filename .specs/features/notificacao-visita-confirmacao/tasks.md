@@ -337,14 +337,16 @@ The 3 `campanhaService` tests fail because the feature they cover was silently r
 
 **Done when**:
 
-- [ ] `send()` signature matches design.md
-- [ ] Result type distinguishes success (with `messageId`/`providerMessageId`) from failure (with a reason string)
-- [ ] Gate check passes: `npx tsc --noEmit && npm test`
+- [x] `send()` signature matches design.md
+- [x] Result type distinguishes success (with `messageId`/`providerMessageId`) from failure (with a reason string)
+- [x] Gate check passes: `npx tsc --noEmit && npm test`
 
 **Tests**: none
 **Gate**: build
 
 **Commit**: `feat(channels): define ChannelSender interface`
+
+**Status**: ✅ Complete
 
 ---
 
