@@ -365,20 +365,24 @@ The 3 `campanhaService` tests fail because the feature they cover was silently r
 
 **Done when**:
 
-- [ ] Posts to `{WHATSAPP_BASE_URL}/api/v1/messages/send-template` with the exact body and `Authorization: Bearer` header from spec AC6
-- [ ] Explicit axios timeout set (10s) so a hung provider cannot stall route creation
-- [ ] `NODE_ENV === "test"` forces the no-op path **unconditionally**, overriding `WHATSAPP_SEND_ENABLED=true` — asserted by a dedicated test
-- [ ] `WHATSAPP_SEND_ENABLED !== "true"` takes the no-op path; missing `WHATSAPP_ACCOUNT_ID`/`WHATSAPP_TEMPLATE_NAME_VISITA` likewise
-- [ ] Provider codes map per spec AC8/AC9: config-type → `"channel not configured"`, rate/quota → captured code, `VALIDATION_ERROR` → `"invalid payload"`
-- [ ] Network error, timeout, and non-JSON response all resolve to a failure result rather than throwing
-- [ ] Tests assert **no HTTP call is made** in every locked path (axios mocked and asserted not called)
-- [ ] Gate check passes: `npm run test:unit`
-- [ ] Test count: at least 12 tests pass (no silent deletions)
+- [x] Posts to `{WHATSAPP_BASE_URL}/api/v1/messages/send-template` with the exact body and `Authorization: Bearer` header from spec AC6
+- [x] Explicit axios timeout set (10s) so a hung provider cannot stall route creation
+- [x] `NODE_ENV === "test"` forces the no-op path **unconditionally**, overriding `WHATSAPP_SEND_ENABLED=true` — asserted by a dedicated test
+- [x] `WHATSAPP_SEND_ENABLED !== "true"` takes the no-op path; missing `WHATSAPP_ACCOUNT_ID`/`WHATSAPP_TEMPLATE_NAME_VISITA` likewise
+- [x] Provider codes map per spec AC8/AC9: config-type → `"channel not configured"`, rate/quota → captured code, `VALIDATION_ERROR` → `"invalid payload"`
+- [x] Network error, timeout, and non-JSON response all resolve to a failure result rather than throwing
+- [x] Tests assert **no HTTP call is made** in every locked path (axios mocked and asserted not called)
+- [x] Gate check passes: `npm run test:unit`
+- [x] Test count: 24 tests pass (no silent deletions)
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(channels): implement WhatsApp send-template channel`
+
+**Note**: the config gate also fails closed on a missing `WHATSAPP_BASE_URL`/`WHATSAPP_API_KEY` — a superset of AC11's two named vars, since AC6 cannot build the call without them. An unmapped provider code yields `"provider error"`; the spec does not define wording for codes outside its three groups (spec-precision gap).
+
+**Status**: ✅ Complete
 
 ---
 
