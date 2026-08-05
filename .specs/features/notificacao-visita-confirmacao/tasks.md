@@ -401,16 +401,18 @@ The 3 `campanhaService` tests fail because the feature they cover was silently r
 
 **Done when**:
 
-- [ ] `getChannel(CanalNotificacao.WHATSAPP)` returns the WhatsApp sender
-- [ ] An unregistered enum value throws a clearly-worded programmer error
-- [ ] Tests cover both branches
-- [ ] Gate check passes: `npm run test:unit`
-- [ ] Test count: at least 2 tests pass (no silent deletions)
+- [x] `getChannel(CanalNotificacao.WHATSAPP)` returns the WhatsApp sender
+- [x] An unregistered enum value throws a clearly-worded programmer error
+- [x] Tests cover both branches
+- [x] Gate check passes: `npm run test:unit`
+- [x] Test count: 2 tests pass (no silent deletions)
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(channels): add channel registry`
+
+**Status**: ✅ Complete
 
 ---
 
