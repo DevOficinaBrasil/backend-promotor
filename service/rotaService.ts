@@ -5,6 +5,7 @@ import { In, IsNull } from "typeorm";
 import { optimizeRoute, fetchOSRMRoute } from "../utils/routeOptimizer";
 import { MigrationAwareRepository } from "../utils/migrationRepository";
 import NotificacaoVisitaService from "./notificacaoVisitaService";
+import { statusEfetivo } from "../utils/statusNotificacaoVisita";
 
 export default class RotaService {
   private static getRotaRepo() {
@@ -236,8 +237,16 @@ export default class RotaService {
 
     const rota = await repo.findOne({
       where: { ID_ROTA_PROMOTOR: id },
-      relations: ['campanhaPromotor', 'campanhaPromotor.campanha', 'campanhaPromotor.promotor', 'campanhaResults'],
+      relations: ['campanhaPromotor', 'campanhaPromotor.campanha', 'campanhaPromotor.promotor', 'campanhaResults', 'notificacaoVisita'],
     });
+
+    // Report the *effective* status (NOTIF-19) — a stored ENVIADO whose
+    // EXPIRA_EM has silently passed must read EXPIRADO here too, or an
+    // unopened expired link would look live on the dashboard forever
+    // (spec AC22). Routes with no notification row are left untouched.
+    if (rota?.notificacaoVisita) {
+      rota.notificacaoVisita.STATUS = statusEfetivo(rota.notificacaoVisita);
+    }
 
     return rota;
   }

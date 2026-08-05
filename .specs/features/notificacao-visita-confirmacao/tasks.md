@@ -868,16 +868,18 @@ The 3 `campanhaService` tests fail because the feature they cover was silently r
 
 **Done when**:
 
-- [ ] `'notificacaoVisita'` added to the relations array in `getRotaByIdWithRelations`
-- [ ] Returned status goes through `statusEfetivo()` — a test asserts an unopened expired row reads `EXPIRADO`, not `ENVIADO` (the staleness bug this exists to prevent)
-- [ ] `CONFIRMADO_EM` included when set; routes with no notification row degrade gracefully rather than throwing
-- [ ] Gate check passes: `npm run test:unit`
-- [ ] Test count: at least 5 tests pass (no silent deletions)
+- [x] `'notificacaoVisita'` added to the relations array in `getRotaByIdWithRelations`
+- [x] Returned status goes through `statusEfetivo()` — a test asserts an unopened expired row reads `EXPIRADO`, not `ENVIADO` (the staleness bug this exists to prevent)
+- [x] `CONFIRMADO_EM` included when set; routes with no notification row degrade gracefully rather than throwing
+- [x] Gate check passes: `npm run test:unit`
+- [x] Test count: at least 5 tests pass (no silent deletions)
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(service): expose visit confirmation status on route reads`
+
+**Status**: ✅ Complete
 
 ---
 

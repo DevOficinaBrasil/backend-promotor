@@ -3,6 +3,7 @@ import { AppDataSourceSync } from '../../data-source';
 import RotaPromotor from '../../entities/RotaPromotor';
 import CampanhaPromotor from '../../entities/CampanhaPromotor';
 import NotificacaoVisitaService from '../../service/notificacaoVisitaService';
+import { StatusNotificacaoVisita } from '../../entities/NotificacaoVisita';
 
 jest.mock('../../data-source');
 jest.mock('../../service/notificacaoVisitaService');
@@ -355,5 +356,94 @@ describe('RotaService visit notification hook', () => {
       expect(resultado.created).toEqual([novaRota]);
       expect(resultado.deleted).toEqual([]);
     });
+  });
+});
+
+// NOTIF-19 (P2 AC1, AC2): "WHEN the dashboard requests route details for a
+// RotaPromotor THEN the system SHALL include the linked NotificacaoVisita
+// STATUS and CONFIRMADO_EM (if set) in the response." The status must be the
+// *effective* one (spec AC22) — derived via statusEfetivo(), never the raw
+// stored column — so an unopened expired link never reads as still ENVIADO.
+describe('RotaService.getRotaByIdWithRelations — visit confirmation status', () => {
+  function montarRepo(findOneResult: unknown) {
+    const findOne = jest.fn().mockResolvedValue(findOneResult);
+    (AppDataSourceSync.getRepository as jest.Mock).mockReturnValue({
+      findOne,
+    });
+    return findOne;
+  }
+
+  it("adds 'notificacaoVisita' to the relations array passed to findOne", async () => {
+    const findOne = montarRepo({ ID_ROTA_PROMOTOR: 1 });
+
+    await RotaService.getRotaByIdWithRelations(1);
+
+    expect(findOne).toHaveBeenCalledWith(
+      expect.objectContaining({
+        relations: expect.arrayContaining(['notificacaoVisita']),
+      })
+    );
+  });
+
+  it('reports EXPIRADO — not the stored ENVIADO — for an unopened expired notification', async () => {
+    montarRepo({
+      ID_ROTA_PROMOTOR: 1,
+      notificacaoVisita: {
+        STATUS: StatusNotificacaoVisita.ENVIADO,
+        EXPIRA_EM: new Date('2020-01-01T00:00:00Z'), // long past
+      },
+    });
+
+    const rota = await RotaService.getRotaByIdWithRelations(1);
+
+    expect(rota!.notificacaoVisita!.STATUS).toBe(StatusNotificacaoVisita.EXPIRADO);
+  });
+
+  it('leaves a still-valid ENVIADO status unchanged', async () => {
+    const futuro = new Date(Date.now() + 1000 * 60 * 60);
+    montarRepo({
+      ID_ROTA_PROMOTOR: 1,
+      notificacaoVisita: {
+        STATUS: StatusNotificacaoVisita.ENVIADO,
+        EXPIRA_EM: futuro,
+      },
+    });
+
+    const rota = await RotaService.getRotaByIdWithRelations(1);
+
+    expect(rota!.notificacaoVisita!.STATUS).toBe(StatusNotificacaoVisita.ENVIADO);
+  });
+
+  it('includes CONFIRMADO_EM on the returned notificacaoVisita when set', async () => {
+    const confirmadoEm = new Date('2026-02-01T10:00:00Z');
+    montarRepo({
+      ID_ROTA_PROMOTOR: 1,
+      notificacaoVisita: {
+        STATUS: StatusNotificacaoVisita.CONFIRMADO,
+        EXPIRA_EM: new Date('2020-01-01T00:00:00Z'),
+        CONFIRMADO_EM: confirmadoEm,
+      },
+    });
+
+    const rota = await RotaService.getRotaByIdWithRelations(1);
+
+    expect(rota!.notificacaoVisita!.CONFIRMADO_EM).toBe(confirmadoEm);
+    // CONFIRMADO past its expiry must stay CONFIRMADO, not flip to EXPIRADO.
+    expect(rota!.notificacaoVisita!.STATUS).toBe(StatusNotificacaoVisita.CONFIRMADO);
+  });
+
+  it('degrades gracefully — no throw — for a route with no notification row', async () => {
+    montarRepo({ ID_ROTA_PROMOTOR: 1, notificacaoVisita: undefined });
+
+    await expect(RotaService.getRotaByIdWithRelations(1)).resolves.toEqual({
+      ID_ROTA_PROMOTOR: 1,
+      notificacaoVisita: undefined,
+    });
+  });
+
+  it('returns null without throwing when the route itself is not found', async () => {
+    montarRepo(null);
+
+    await expect(RotaService.getRotaByIdWithRelations(999)).resolves.toBeNull();
   });
 });
