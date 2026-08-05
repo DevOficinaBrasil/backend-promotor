@@ -179,10 +179,10 @@ Each requirement gets a unique ID for tracking across design, tasks, and validat
 | NOTIF-09 | P1: one notification per route (dedup) | CON26-80 | Design | Implementing |
 | NOTIF-10 | P1: public confirmation endpoints | CON26-85 | Design | Pending |
 | NOTIF-11 | P1: signed link token, 48h expiry, re-exchangeable | CON26-85 | Design | Implementing |
-| NOTIF-12 | P1: concurrent double-confirm safety | CON26-85 | Design | Pending |
+| NOTIF-12 | P1: concurrent double-confirm safety | CON26-85 | Design | Implementing |
 | NOTIF-13 | P1: per-visit rate limiting on public endpoints (token/JWT-keyed, not IP) | CON26-85 | Design | Pending |
 | NOTIF-14 | P1: public confirmation page | CON26-88 | Design | Pending |
-| NOTIF-15 | P1: confirmation state + audit fields on NotificacaoVisita | CON26-87 | Design | Pending |
+| NOTIF-15 | P1: confirmation state + audit fields on NotificacaoVisita | CON26-87 | Design | Implementing |
 | NOTIF-16 | P1: notification state-transition integrity | CON26-80 | Design | Implementing |
 | NOTIF-17 | P1: expiry handling | CON26-85 | Design | Implementing |
 | NOTIF-18 | P1: lifecycle logging | CON26-90 | Design | Implementing |

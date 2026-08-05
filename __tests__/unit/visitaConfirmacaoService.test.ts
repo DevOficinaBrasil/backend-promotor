@@ -3,7 +3,13 @@ import { AppDataSourceSync } from "../../data-source";
 import NotificacaoVisita, { StatusNotificacaoVisita } from "../../entities/NotificacaoVisita";
 import Oficina from "../../entities/Oficina";
 import RotaPromotor from "../../entities/RotaPromotor";
-import { hashToken, verificarJwt, VISITA_SCOPE } from "../../utils/visitaToken";
+import {
+  hashToken,
+  verificarJwt,
+  VisitaJwtPayload,
+  VISITA_SCOPE,
+} from "../../utils/visitaToken";
+import { MoreThan } from "typeorm";
 
 jest.mock("../../data-source");
 
@@ -217,5 +223,145 @@ describe("VisitaConfirmacaoService.trocarToken", () => {
     const resultado = await VisitaConfirmacaoService.trocarToken(RAW_TOKEN, AGORA);
 
     expect(resultado).toEqual({ state: "TOKEN_INVALID" });
+  });
+});
+
+describe("VisitaConfirmacaoService.confirmar", () => {
+  let notifRepo: { findOne: jest.Mock; update: jest.Mock };
+
+  const IP = "203.0.113.7";
+
+  const payload: VisitaJwtPayload = {
+    sub: ID_USUARIO,
+    ID_NOTIFICACAO_VISITA: ID_NOTIFICACAO,
+    ID_ROTA_PROMOTOR: ID_ROTA,
+    scope: VISITA_SCOPE,
+  };
+
+  const linhaConfirmada = (confirmadoEm: Date) =>
+    new NotificacaoVisita({
+      ID_NOTIFICACAO_VISITA: ID_NOTIFICACAO,
+      ID_ROTA_PROMOTOR: ID_ROTA,
+      ID_USUARIO,
+      STATUS: StatusNotificacaoVisita.CONFIRMADO,
+      CONFIRMADO_EM: confirmadoEm,
+    });
+
+  beforeEach(() => {
+    notifRepo = {
+      findOne: jest.fn(async () => null),
+      update: jest.fn(async () => ({ affected: 1 })),
+    };
+
+    (AppDataSourceSync.getRepository as jest.Mock).mockImplementation((entidade: unknown) => {
+      if (entidade === NotificacaoVisita) return notifRepo;
+      throw new Error("repositório inesperado no teste");
+    });
+  });
+
+  // AC19: "...SHALL atomically transition it to CONFIRMADO, setting on that
+  // same row CONFIRMADO_EM (timestamp), CONFIRMADO_POR (= the JWT's
+  // sub/ID_USUARIO), and CONFIRMADO_IP (source IP of the request)."
+  it("transitions to CONFIRMADO and writes all three audit fields", async () => {
+    const resultado = await VisitaConfirmacaoService.confirmar(payload, IP, AGORA);
+
+    expect(resultado).toEqual({
+      state: "CONFIRMED",
+      confirmadoEm: AGORA,
+      enderecoAtualizado: false,
+    });
+    expect(notifRepo.update).toHaveBeenCalledWith(expect.anything(), {
+      STATUS: StatusNotificacaoVisita.CONFIRMADO,
+      CONFIRMADO_EM: AGORA,
+      CONFIRMADO_POR: ID_USUARIO,
+      CONFIRMADO_IP: IP,
+    });
+  });
+
+  // AC19: "re-check the linked NotificacaoVisita is still STATUS ENVIADO and
+  // unexpired" — both conditions must live in the guarded UPDATE itself.
+  it("guards the update on STATUS ENVIADO and an unexpired EXPIRA_EM", async () => {
+    await VisitaConfirmacaoService.confirmar(payload, IP, AGORA);
+
+    expect(notifRepo.update).toHaveBeenCalledWith(
+      {
+        ID_NOTIFICACAO_VISITA: ID_NOTIFICACAO,
+        STATUS: StatusNotificacaoVisita.ENVIADO,
+        EXPIRA_EM: MoreThan(AGORA),
+      },
+      expect.anything()
+    );
+  });
+
+  // Spec edge case: "IF a JWT was validly issued before EXPIRA_EM passed but is
+  // presented to POST /visita/confirmar after it has passed THEN the system
+  // SHALL still reject it."
+  it("rejects a JWT issued before expiry but presented after it", async () => {
+    notifRepo.update.mockResolvedValue({ affected: 0 });
+    notifRepo.findOne.mockResolvedValue(
+      new NotificacaoVisita({
+        ID_NOTIFICACAO_VISITA: ID_NOTIFICACAO,
+        STATUS: StatusNotificacaoVisita.ENVIADO,
+        EXPIRA_EM: new Date("2026-08-05T11:59:59.999Z"),
+      })
+    );
+
+    const resultado = await VisitaConfirmacaoService.confirmar(payload, IP, AGORA);
+
+    expect(resultado).toEqual({ state: "EXPIRED" });
+  });
+
+  // AC20: "IF ... its linked NotificacaoVisita is no longer ENVIADO THEN the
+  // system SHALL reject the confirmation, return an ALREADY_CONFIRMED ...
+  // response as appropriate, and SHALL NOT alter STATUS."
+  it("returns ALREADY_CONFIRMED with the original CONFIRMADO_EM when the row is already confirmed", async () => {
+    const confirmadoEm = new Date("2026-08-04T10:00:00.000Z");
+    notifRepo.update.mockResolvedValue({ affected: 0 });
+    notifRepo.findOne.mockResolvedValue(linhaConfirmada(confirmadoEm));
+
+    const resultado = await VisitaConfirmacaoService.confirmar(payload, IP, AGORA);
+
+    expect(resultado).toEqual({ state: "ALREADY_CONFIRMED", confirmadoEm });
+  });
+
+  it("returns TOKEN_INVALID when the notification no longer exists", async () => {
+    notifRepo.update.mockResolvedValue({ affected: 0 });
+    notifRepo.findOne.mockResolvedValue(null);
+
+    const resultado = await VisitaConfirmacaoService.confirmar(payload, IP, AGORA);
+
+    expect(resultado).toEqual({ state: "TOKEN_INVALID" });
+  });
+
+  // AC20: a rejected confirmation must never be reported as a success.
+  it("never reports CONFIRMED when the guarded update affects zero rows", async () => {
+    notifRepo.update.mockResolvedValue({ affected: 0 });
+    notifRepo.findOne.mockResolvedValue(linhaConfirmada(new Date("2026-08-04T10:00:00.000Z")));
+
+    const resultado = await VisitaConfirmacaoService.confirmar(payload, IP, AGORA);
+
+    expect(resultado.state).not.toBe("CONFIRMED");
+  });
+
+  // AC21: "IF two POST /visita/confirmar requests for the same
+  // NotificacaoVisita are received concurrently THEN the system SHALL apply
+  // exactly one CONFIRMADO transition and SHALL return an ALREADY_CONFIRMED
+  // response to the other."
+  it("applies exactly one transition for two concurrent confirmations", async () => {
+    let confirmada = false;
+    notifRepo.update.mockImplementation(async () => {
+      if (confirmada) return { affected: 0 };
+      confirmada = true;
+      return { affected: 1 };
+    });
+    notifRepo.findOne.mockImplementation(async () => linhaConfirmada(AGORA));
+
+    const [primeiro, segundo] = await Promise.all([
+      VisitaConfirmacaoService.confirmar(payload, IP, AGORA),
+      VisitaConfirmacaoService.confirmar(payload, "198.51.100.9", AGORA),
+    ]);
+
+    const estados = [primeiro.state, segundo.state].sort();
+    expect(estados).toEqual(["ALREADY_CONFIRMED", "CONFIRMED"]);
   });
 });

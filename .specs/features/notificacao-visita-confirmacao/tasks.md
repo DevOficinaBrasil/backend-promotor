@@ -601,17 +601,21 @@ The 3 `campanhaService` tests fail because the feature they cover was silently r
 
 **Done when**:
 
-- [ ] Conditional `UPDATE ... WHERE STATUS='ENVIADO' AND "EXPIRA_EM" > now()` — the expiry guard asserted by a test where a JWT issued pre-expiry is presented post-expiry and must be rejected
-- [ ] Sets `CONFIRMADO_EM`, `CONFIRMADO_POR` (JWT `sub`), `CONFIRMADO_IP`
-- [ ] `rowCount = 0` re-reads and returns `ALREADY_CONFIRMED` or `EXPIRED` — never a false success
-- [ ] Concurrent double-confirm yields exactly one transition (spec AC21)
-- [ ] Gate check passes: `npm run test:unit`
-- [ ] Test count: at least 7 tests pass (no silent deletions)
+- [x] Conditional `UPDATE ... WHERE STATUS='ENVIADO' AND "EXPIRA_EM" > now()` — the expiry guard asserted by a test where a JWT issued pre-expiry is presented post-expiry and must be rejected
+- [x] Sets `CONFIRMADO_EM`, `CONFIRMADO_POR` (JWT `sub`), `CONFIRMADO_IP`
+- [x] `rowCount = 0` re-reads and returns `ALREADY_CONFIRMED` or `EXPIRED` — never a false success
+- [x] Concurrent double-confirm yields exactly one transition (spec AC21)
+- [x] Gate check passes: `npm run test:unit`
+- [x] Test count: 7 confirm tests pass, 20 in the file (no silent deletions)
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(service): add visit confirmation action`
+
+**Note**: the conditional transition is expressed as a TypeORM `repo.update(where, patch)`, which emits exactly the guarded single-statement `UPDATE` the design calls for; `UpdateResult.affected` is the `rowCount` the design checks.
+
+**Status**: ✅ Complete
 
 ---
 

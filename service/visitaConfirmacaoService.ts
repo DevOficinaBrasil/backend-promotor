@@ -1,9 +1,10 @@
+import { MoreThan } from "typeorm";
 import { AppDataSourceSync } from "../data-source";
 import NotificacaoVisita, { StatusNotificacaoVisita } from "../entities/NotificacaoVisita";
 import Oficina from "../entities/Oficina";
 import RotaPromotor from "../entities/RotaPromotor";
 import { statusEfetivo } from "../utils/statusNotificacaoVisita";
-import { emitirJwt, hashToken } from "../utils/visitaToken";
+import { emitirJwt, hashToken, VisitaJwtPayload } from "../utils/visitaToken";
 
 /** The seven address columns a link-holder may see and correct. Nothing else. */
 export const CAMPOS_ENDERECO = [
@@ -28,6 +29,12 @@ export type ExchangeResult =
       endereco: EnderecoOficina;
     }
   | { state: "ALREADY_CONFIRMED"; oficinaNome: string | null; confirmadoEm: Date | null }
+  | { state: "EXPIRED" }
+  | { state: "TOKEN_INVALID" };
+
+export type ConfirmResult =
+  | { state: "CONFIRMED"; confirmadoEm: Date; enderecoAtualizado: boolean }
+  | { state: "ALREADY_CONFIRMED"; confirmadoEm: Date | null }
   | { state: "EXPIRED" }
   | { state: "TOKEN_INVALID" };
 
@@ -105,6 +112,77 @@ export default class VisitaConfirmacaoService {
       oficinaNome: oficina?.NOME_FANTASIA ?? null,
       endereco: extrairEndereco(oficina),
     };
+  }
+
+  /**
+   * Applies the ENVIADO→CONFIRMADO transition with its audit fields
+   * (spec AC19-AC21).
+   *
+   * Live state decides, not the JWT's snapshot at issuance: the conditional
+   * UPDATE re-checks STATUS and expiry in the same statement, so a JWT minted
+   * before EXPIRA_EM passed can no longer confirm a dead visit.
+   *
+   * @param agora - injectable clock so the expiry boundary is testable
+   */
+  static async confirmar(
+    payload: VisitaJwtPayload,
+    ip: string,
+    agora: Date = new Date()
+  ): Promise<ConfirmResult> {
+    return await this.transicionar(payload, ip, false, agora);
+  }
+
+  protected static async transicionar(
+    payload: VisitaJwtPayload,
+    ip: string,
+    enderecoAtualizado: boolean,
+    agora: Date
+  ): Promise<ConfirmResult> {
+    const repo = AppDataSourceSync.getRepository(NotificacaoVisita);
+    const id = payload.ID_NOTIFICACAO_VISITA;
+
+    // One guarded statement, so two concurrent confirms produce exactly one
+    // transition (AC21) — the loser simply affects 0 rows. The EXPIRA_EM guard
+    // is required, not decorative: expiry is derived rather than stored, so an
+    // expired row still reads STATUS='ENVIADO' in the database.
+    const resultado = await repo.update(
+      {
+        ID_NOTIFICACAO_VISITA: id,
+        STATUS: StatusNotificacaoVisita.ENVIADO,
+        EXPIRA_EM: MoreThan(agora),
+      },
+      {
+        STATUS: StatusNotificacaoVisita.CONFIRMADO,
+        CONFIRMADO_EM: agora,
+        CONFIRMADO_POR: payload.sub,
+        CONFIRMADO_IP: ip,
+        ...(enderecoAtualizado ? { ENDERECO_ATUALIZADO: true } : {}),
+      }
+    );
+
+    if ((resultado.affected ?? 0) > 0) {
+      return { state: "CONFIRMED", confirmadoEm: agora, enderecoAtualizado };
+    }
+
+    // Zero rows means somebody or something got there first. Re-read rather
+    // than guess, so a lost race is never reported as a success.
+    const linha = await repo.findOne({ where: { ID_NOTIFICACAO_VISITA: id } });
+
+    if (linha === null) {
+      return { state: "TOKEN_INVALID" };
+    }
+
+    const status = statusEfetivo(linha, agora);
+
+    if (status === StatusNotificacaoVisita.CONFIRMADO) {
+      return { state: "ALREADY_CONFIRMED", confirmadoEm: linha.CONFIRMADO_EM ?? null };
+    }
+
+    if (status === StatusNotificacaoVisita.EXPIRADO) {
+      return { state: "EXPIRED" };
+    }
+
+    return { state: "TOKEN_INVALID" };
   }
 
   /**
