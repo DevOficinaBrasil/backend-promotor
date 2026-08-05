@@ -93,10 +93,17 @@ export default class PromotorService {
         );
 
         if (oficinas.length > 0) {
-          const oficinaIds = oficinas.map((o: any) => o.ID_OFICINA);
-          await RotaService.createRotas(cp.ID_CAMPANHA_PROMOTOR!, oficinaIds);
-          totalRotasCriadas += oficinas.length;
-          console.log(`Auto-assigned ${oficinas.length} rotas for CAMPANHA_PROMOTOR ${cp.ID_CAMPANHA_PROMOTOR}`);
+          const assignedOficinas = await RotaService.getOficinasAssignedInCampanha(cp.ID_CAMPANHA!);
+          const assignedSet = new Set(assignedOficinas);
+          const availableOficinaIds = oficinas
+            .map((o: any) => o.ID_OFICINA)
+            .filter((id: number) => !assignedSet.has(id));
+
+          if (availableOficinaIds.length > 0) {
+            await RotaService.createRotas(cp.ID_CAMPANHA_PROMOTOR!, availableOficinaIds);
+            totalRotasCriadas += availableOficinaIds.length;
+            console.log(`Auto-assigned ${availableOficinaIds.length} rotas for CAMPANHA_PROMOTOR ${cp.ID_CAMPANHA_PROMOTOR} (${oficinas.length - availableOficinaIds.length} already assigned)`);
+          }
         }
       } catch (error) {
         console.error(`Auto-assign rotas failed for CAMPANHA_PROMOTOR ${cp.ID_CAMPANHA_PROMOTOR}:`, error);
@@ -269,6 +276,7 @@ export default class PromotorService {
   static async unlinkCampanhaPromotor(
     idCampanhaPromotor: number
   ): Promise<CampanhaPromotor[]> {
+    await RotaService.removeCampanhaPromotorRota(idCampanhaPromotor);
     return CampanhaPromotorService.unlinkCampanhaPromotor(idCampanhaPromotor);
   }
 

@@ -45,6 +45,21 @@ export default class RotaService {
     return await repo.saveMany(novasRotas);
   }
 
+  // Returns oficina IDs already assigned to any promotor in a given campaign
+  static async getOficinasAssignedInCampanha(idCampanha: number): Promise<number[]> {
+    const results = await AppDataSourceSync.query(
+      `SELECT DISTINCT rp."ID_OFICINA"
+       FROM "CAMPANHAS_OB"."ROTA_PROMOTOR" rp
+       INNER JOIN "CAMPANHAS_OB"."CAMPANHA_PROMOTOR" cp
+         ON rp."ID_CAMPANHA_PROMOTOR" = cp."ID_CAMPANHA_PROMOTOR"
+       WHERE cp."ID_CAMPANHA" = $1
+         AND rp."DELETED_AT" IS NULL
+         AND cp."DELETED_AT" IS NULL`,
+      [idCampanha]
+    );
+    return results.map((r: any) => r.ID_OFICINA);
+  }
+
   /**
    * Creates a campaign promoter and its associated routes with workshops
    * @param ID_PROMOTOR - The promoter ID
@@ -362,5 +377,14 @@ export default class RotaService {
         ID_OFICINA: r.ID_OFICINA!,
       })),
     };
+  }
+
+  public static async removeCampanhaPromotorRota(idCampanhaPromotor: number): Promise<void> 
+  {
+    // Hard-delete all rotas including soft-deleted ones to clear FK constraint
+    await AppDataSourceSync.query(
+      `DELETE FROM "CAMPANHAS_OB"."ROTA_PROMOTOR" WHERE "ID_CAMPANHA_PROMOTOR" = $1`,
+      [idCampanhaPromotor]
+    );
   }
 }

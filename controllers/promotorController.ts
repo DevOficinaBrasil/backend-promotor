@@ -311,7 +311,7 @@ export default class PromotorController {
       const { id_campanha_promotor } = req.params;
 
       // Call the service to unlink the promoter from campaigns
-      const removedRelationships = await CampanhaPromotorService.unlinkCampanhaPromotor(Number(id_campanha_promotor));
+      const removedRelationships = await PromotorService.unlinkCampanhaPromotor(Number(id_campanha_promotor));
 
       return res.status(200).json({
         message: "Vínculo entre campanha(s) e promotor removido com sucesso.",
