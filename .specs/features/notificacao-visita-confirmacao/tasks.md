@@ -714,14 +714,18 @@ The 3 `campanhaService` tests fail because the feature they cover was silently r
 
 **Done when**:
 
-- [ ] Token param, address-update body (`.strict()` so unknown keys are rejected), and response schemas for each state defined
-- [ ] Reuses `ErrorResponseSchema` from `schemas/common.ts`
-- [ ] Gate check passes: `npx tsc --noEmit && npm test`
+- [x] Token param, address-update body (`.strict()` so unknown keys are rejected), and response schemas for each state defined
+- [x] Reuses `ErrorResponseSchema` from `schemas/common.ts`
+- [x] Gate check passes: `npx tsc --noEmit && npm test`
 
 **Tests**: none
 **Gate**: build
 
 **Commit**: `feat(schemas): add visit confirmation schemas`
+
+**Note**: `UpdateEnderecoSchema` requires all seven fields and allows each to be null, matching the frontend contract's example body; `.strict()` carries the AC32 allowlist. `ErrorResponseSchema` is reused via the `VisitaErrorResponseSchema` alias consumed by the route definitions.
+
+**Status**: ✅ Complete
 
 ---
 
