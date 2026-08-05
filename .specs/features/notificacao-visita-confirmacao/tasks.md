@@ -568,17 +568,21 @@ The 3 `campanhaService` tests fail because the feature they cover was silently r
 
 **Done when**:
 
-- [ ] Returns `PENDING` with a JWT, workshop name, and the seven address fields — and **no visit date** (spec AC30)
-- [ ] Returns `ALREADY_CONFIRMED` (with `CONFIRMADO_EM`), `EXPIRED`, and `TOKEN_INVALID` as distinct states, none issuing a JWT
-- [ ] Expiry decided via `statusEfetivo()`, and the stored `STATUS` column is **not** mutated by this read
-- [ ] Re-exchangeable: two successive calls on a live token both return a JWT (spec AC15)
-- [ ] Gate check passes: `npm run test:unit`
-- [ ] Test count: at least 8 tests pass (no silent deletions)
+- [x] Returns `PENDING` with a JWT, workshop name, and the seven address fields — and **no visit date** (spec AC30)
+- [x] Returns `ALREADY_CONFIRMED` (with `CONFIRMADO_EM`), `EXPIRED`, and `TOKEN_INVALID` as distinct states, none issuing a JWT
+- [x] Expiry decided via `statusEfetivo()`, and the stored `STATUS` column is **not** mutated by this read
+- [x] Re-exchangeable: two successive calls on a live token both return a JWT (spec AC15)
+- [x] Gate check passes: `npm run test:unit`
+- [x] Test count: 13 tests pass (no silent deletions)
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(service): add visit token exchange`
+
+**Note**: a notification whose route or Oficina row is missing still exchanges, with `oficinaNome`/address fields null, rather than reporting TOKEN_INVALID — the frontend contract already allows every address field to be null, and no AC covers a broken registry link.
+
+**Status**: ✅ Complete
 
 ---
 
