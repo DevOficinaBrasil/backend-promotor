@@ -634,7 +634,7 @@ The 3 `campanhaService` tests fail because the feature they cover was silently r
 
 **Done when**:
 
-- [ ] Grant failure is handled defensively **in code**: a rejected `Oficina` write is caught, leaves `NotificacaoVisita` STATUS untouched, and returns a distinct error — proven by a test that forces the write to reject with a permission-style error (spec AC33)
+- [x] Grant failure is handled defensively **in code**: a rejected `Oficina` write is caught, leaves `NotificacaoVisita` STATUS untouched, and returns a distinct error — proven by a test that forces the write to reject with a permission-style error (spec AC33)
 
 > **The live grant check is a human pre-deploy step, not part of this task.** Nothing in this codebase has ever written to `MAIN_REGISTER`, so whether the app's DB user holds `UPDATE` on `MAIN_REGISTER.OFICINA` is genuinely unknown. An implementing agent has no live database access and must not attempt to connect to one — that would be an external side effect outside this feature's blast radius. What the code must guarantee is that a missing grant fails *visibly and safely* rather than silently confirming. Before this feature is deployed, someone with database access must run the equivalent of:
 >
@@ -646,17 +646,23 @@ The 3 `campanhaService` tests fail because the feature they cover was silently r
 > ```
 >
 > If that errors, `PUT /visita/endereco` cannot work in that environment and must be disabled until the grant is added. The confirm-only path (T15) is unaffected and can ship independently.
-- [ ] Only `ENDERECO`, `NUMERO`, `COMPLEMENTO`, `BAIRRO`, `CIDADE`, `ESTADO`, `CEP` are writable; any other key is rejected — asserted by a test attempting to change `CNPJ`, `TELEFONE`, and `STATUS`
-- [ ] Oficina write happens **first**; if it fails, `NotificacaoVisita` STATUS is left untouched and a distinct error is returned — no false confirmation (spec AC33), asserted by a test forcing the write to reject
-- [ ] On success: same `CONFIRMADO` transition and audit fields as T15, plus `ENDERECO_ATUALIZADO = true`
-- [ ] `LATITUDE`/`LONGITUDE` untouched (documented consequence)
-- [ ] Gate check passes: `npm run test:unit`
-- [ ] Test count: at least 8 tests pass (no silent deletions)
+- [x] Only `ENDERECO`, `NUMERO`, `COMPLEMENTO`, `BAIRRO`, `CIDADE`, `ESTADO`, `CEP` are writable; any other key is rejected — asserted by a test attempting to change `CNPJ`, `TELEFONE`, and `STATUS`
+- [x] Oficina write happens **first**; if it fails, `NotificacaoVisita` STATUS is left untouched and a distinct error is returned — no false confirmation (spec AC33), asserted by a test forcing the write to reject
+- [x] On success: same `CONFIRMADO` transition and audit fields as T15, plus `ENDERECO_ATUALIZADO = true`
+- [x] `LATITUDE`/`LONGITUDE` untouched (documented consequence)
+- [x] Gate check passes: `npm run test:unit`
+- [x] Test count: 8 address-correction tests pass, 28 in the file (no silent deletions)
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(service): add address correction with audited confirmation`
+
+**Notes**:
+- The live grant check was **not** run: no live database access, and attempting one is outside this feature's blast radius. It remains the human pre-deploy step described above. The code path is proven defensively by a test forcing the Oficina write to reject with a `permission denied for table "OFICINA"` error.
+- A visit that is no longer `ENVIADO` short-circuits **before** the Oficina write, so an already-confirmed or expired link cannot mutate the registry. The design fixes the write order for the live path; this pre-check does not change it.
+
+**Status**: ✅ Complete
 
 ---
 

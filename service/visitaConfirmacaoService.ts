@@ -38,6 +38,11 @@ export type ConfirmResult =
   | { state: "EXPIRED" }
   | { state: "TOKEN_INVALID" };
 
+export type EnderecoResult =
+  | ConfirmResult
+  | { state: "VALIDATION_ERROR"; campos: string[] }
+  | { state: "ADDRESS_UPDATE_FAILED" };
+
 /** Projects an Oficina row onto the address allowlist, normalising undefined to null. */
 function extrairEndereco(oficina: Oficina | null): EnderecoOficina {
   return {
@@ -130,6 +135,80 @@ export default class VisitaConfirmacaoService {
     agora: Date = new Date()
   ): Promise<ConfirmResult> {
     return await this.transicionar(payload, ip, false, agora);
+  }
+
+  /**
+   * Corrects the workshop's address and confirms the visit in one call
+   * (spec AC31-AC33).
+   *
+   * Three guarantees, in this order:
+   * 1. Only the seven allowlisted address columns are writable. Any other key
+   *    is rejected outright and nothing is written (AC32).
+   * 2. The Oficina write happens before the CONFIRMADO transition and must
+   *    succeed. A rejected write — including a missing UPDATE grant on
+   *    MAIN_REGISTER — leaves the notification STATUS untouched and surfaces a
+   *    distinct error, never a false confirmation (AC33).
+   * 3. LATITUDE/LONGITUDE are deliberately left alone: no geocoding provider
+   *    exists in this codebase, so a corrected address keeps its old pin.
+   *
+   * @param agora - injectable clock so the expiry boundary is testable
+   */
+  static async atualizarEndereco(
+    payload: VisitaJwtPayload,
+    endereco: Record<string, unknown>,
+    ip: string,
+    agora: Date = new Date()
+  ): Promise<EnderecoResult> {
+    const permitidos = new Set<string>(CAMPOS_ENDERECO);
+    const invalidos = Object.keys(endereco ?? {}).filter((campo) => !permitidos.has(campo));
+
+    // AC32
+    if (invalidos.length > 0) {
+      return { state: "VALIDATION_ERROR", campos: invalidos };
+    }
+
+    const repo = AppDataSourceSync.getRepository(NotificacaoVisita);
+    const notificacao = await repo.findOne({
+      where: { ID_NOTIFICACAO_VISITA: payload.ID_NOTIFICACAO_VISITA },
+    });
+
+    if (notificacao === null) {
+      return { state: "TOKEN_INVALID" };
+    }
+
+    // A visit that can no longer be confirmed must not cause a registry write.
+    const status = statusEfetivo(notificacao, agora);
+
+    if (status === StatusNotificacaoVisita.CONFIRMADO) {
+      return { state: "ALREADY_CONFIRMED", confirmadoEm: notificacao.CONFIRMADO_EM ?? null };
+    }
+
+    if (status === StatusNotificacaoVisita.EXPIRADO) {
+      return { state: "EXPIRED" };
+    }
+
+    if (status !== StatusNotificacaoVisita.ENVIADO) {
+      return { state: "TOKEN_INVALID" };
+    }
+
+    const oficina = await this.carregarOficina(notificacao);
+
+    if (oficina?.ID_OFICINA == null) {
+      return { state: "TOKEN_INVALID" };
+    }
+
+    try {
+      await AppDataSourceSync.getRepository(Oficina).update({ ID_OFICINA: oficina.ID_OFICINA }, endereco);
+    } catch (erro) {
+      console.error("[visitaConfirmacao] falha ao atualizar endereço da oficina", {
+        ID_NOTIFICACAO_VISITA: payload.ID_NOTIFICACAO_VISITA,
+        ID_ROTA_PROMOTOR: payload.ID_ROTA_PROMOTOR,
+        erro: (erro as Error)?.message,
+      });
+      return { state: "ADDRESS_UPDATE_FAILED" };
+    }
+
+    return await this.transicionar(payload, ip, true, agora);
   }
 
   protected static async transicionar(

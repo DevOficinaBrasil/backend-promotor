@@ -365,3 +365,219 @@ describe("VisitaConfirmacaoService.confirmar", () => {
     expect(estados).toEqual(["ALREADY_CONFIRMED", "CONFIRMED"]);
   });
 });
+
+describe("VisitaConfirmacaoService.atualizarEndereco", () => {
+  let notifRepo: { findOne: jest.Mock; update: jest.Mock };
+  let rotaRepo: { findOne: jest.Mock };
+  let oficinaRepo: { findOne: jest.Mock; update: jest.Mock };
+  let ordemDeChamadas: string[];
+
+  const IP = "203.0.113.7";
+
+  const payload: VisitaJwtPayload = {
+    sub: ID_USUARIO,
+    ID_NOTIFICACAO_VISITA: ID_NOTIFICACAO,
+    ID_ROTA_PROMOTOR: ID_ROTA,
+    scope: VISITA_SCOPE,
+  };
+
+  const enderecoCorrigido = {
+    ENDERECO: "Avenida Nova",
+    NUMERO: "500",
+    COMPLEMENTO: null,
+    BAIRRO: "Centro",
+    CIDADE: "Campinas",
+    ESTADO: "SP",
+    CEP: "13010-000",
+  };
+
+  const notificacaoEnviada = () =>
+    new NotificacaoVisita({
+      ID_NOTIFICACAO_VISITA: ID_NOTIFICACAO,
+      ID_ROTA_PROMOTOR: ID_ROTA,
+      ID_USUARIO,
+      STATUS: StatusNotificacaoVisita.ENVIADO,
+      EXPIRA_EM: new Date("2026-08-07T12:00:00.000Z"),
+    });
+
+  beforeEach(() => {
+    ordemDeChamadas = [];
+
+    notifRepo = {
+      findOne: jest.fn(async () => notificacaoEnviada()),
+      update: jest.fn(async () => {
+        ordemDeChamadas.push("notificacao");
+        return { affected: 1 };
+      }),
+    };
+    rotaRepo = {
+      findOne: jest.fn(async () => ({ ID_ROTA_PROMOTOR: ID_ROTA, ID_OFICINA }) as RotaPromotor),
+    };
+    oficinaRepo = {
+      findOne: jest.fn(async () => ({ ID_OFICINA }) as Oficina),
+      update: jest.fn(async () => {
+        ordemDeChamadas.push("oficina");
+        return { affected: 1 };
+      }),
+    };
+
+    (AppDataSourceSync.getRepository as jest.Mock).mockImplementation((entidade: unknown) => {
+      if (entidade === NotificacaoVisita) return notifRepo;
+      if (entidade === RotaPromotor) return rotaRepo;
+      if (entidade === Oficina) return oficinaRepo;
+      throw new Error("repositório inesperado no teste");
+    });
+
+    jest.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  // AC31: "...SHALL apply the same ENVIADO→CONFIRMADO transition and audit
+  // fields as AC19, and SHALL set ENDERECO_ATUALIZADO to true."
+  it("confirms the visit and flags ENDERECO_ATUALIZADO on success", async () => {
+    const resultado = await VisitaConfirmacaoService.atualizarEndereco(
+      payload,
+      enderecoCorrigido,
+      IP,
+      AGORA
+    );
+
+    expect(resultado).toEqual({
+      state: "CONFIRMED",
+      confirmadoEm: AGORA,
+      enderecoAtualizado: true,
+    });
+    expect(notifRepo.update).toHaveBeenCalledWith(expect.anything(), {
+      STATUS: StatusNotificacaoVisita.CONFIRMADO,
+      CONFIRMADO_EM: AGORA,
+      CONFIRMADO_POR: ID_USUARIO,
+      CONFIRMADO_IP: IP,
+      ENDERECO_ATUALIZADO: true,
+    });
+  });
+
+  // AC31: "...SHALL update only the address columns of the linked
+  // MAIN_REGISTER.OFICINA row." Coordinates are left as-is by design.
+  it("writes only the seven address columns to the Oficina row", async () => {
+    await VisitaConfirmacaoService.atualizarEndereco(payload, enderecoCorrigido, IP, AGORA);
+
+    expect(oficinaRepo.update).toHaveBeenCalledWith({ ID_OFICINA }, enderecoCorrigido);
+
+    const escrito = oficinaRepo.update.mock.calls[0][1] as Record<string, unknown>;
+    expect(Object.keys(escrito).sort()).toEqual([
+      "BAIRRO",
+      "CEP",
+      "CIDADE",
+      "COMPLEMENTO",
+      "ENDERECO",
+      "ESTADO",
+      "NUMERO",
+    ]);
+    expect(escrito).not.toHaveProperty("LATITUDE");
+    expect(escrito).not.toHaveProperty("LONGITUDE");
+  });
+
+  // AC32: "IF a PUT /visita/endereco request carries any field outside the
+  // address column allowlist THEN the system SHALL reject the request with a
+  // validation error and SHALL NOT write to Oficina."
+  it("rejects a payload carrying CNPJ, TELEFONE or STATUS without writing to Oficina", async () => {
+    const resultado = await VisitaConfirmacaoService.atualizarEndereco(
+      payload,
+      {
+        ...enderecoCorrigido,
+        CNPJ: "99999999000199",
+        TELEFONE: "11999998888",
+        STATUS: "ATIVO",
+      },
+      IP,
+      AGORA
+    );
+
+    expect(resultado).toEqual({
+      state: "VALIDATION_ERROR",
+      campos: ["CNPJ", "TELEFONE", "STATUS"],
+    });
+    expect(oficinaRepo.update).not.toHaveBeenCalled();
+    expect(notifRepo.update).not.toHaveBeenCalled();
+  });
+
+  // AC33: "IF the Oficina address update fails at the database level
+  // (including a missing UPDATE grant on MAIN_REGISTER) THEN the system SHALL
+  // leave NotificacaoVisita STATUS unchanged, SHALL NOT report the
+  // confirmation as successful, and SHALL surface a distinct error state."
+  it("returns ADDRESS_UPDATE_FAILED and leaves STATUS untouched when the grant is missing", async () => {
+    oficinaRepo.update.mockRejectedValue(
+      new Error('permission denied for table "OFICINA"')
+    );
+
+    const resultado = await VisitaConfirmacaoService.atualizarEndereco(
+      payload,
+      enderecoCorrigido,
+      IP,
+      AGORA
+    );
+
+    expect(resultado).toEqual({ state: "ADDRESS_UPDATE_FAILED" });
+    expect(notifRepo.update).not.toHaveBeenCalled();
+  });
+
+  it("never reports CONFIRMED when the Oficina write fails", async () => {
+    oficinaRepo.update.mockRejectedValue(new Error("permission denied"));
+
+    const resultado = await VisitaConfirmacaoService.atualizarEndereco(
+      payload,
+      enderecoCorrigido,
+      IP,
+      AGORA
+    );
+
+    expect(resultado.state).not.toBe("CONFIRMED");
+  });
+
+  // Design: "the Oficina write happens first and must succeed".
+  it("writes the Oficina row before transitioning the notification", async () => {
+    await VisitaConfirmacaoService.atualizarEndereco(payload, enderecoCorrigido, IP, AGORA);
+
+    expect(ordemDeChamadas).toEqual(["oficina", "notificacao"]);
+  });
+
+  // AC31 applies "the same transition as AC19", so AC20's rejection rules hold:
+  // a visit that is no longer ENVIADO must not confirm — nor write the registry.
+  it("returns ALREADY_CONFIRMED without touching Oficina when the visit is confirmed", async () => {
+    const confirmadoEm = new Date("2026-08-04T10:00:00.000Z");
+    notifRepo.findOne.mockResolvedValue(
+      new NotificacaoVisita({
+        ...notificacaoEnviada(),
+        STATUS: StatusNotificacaoVisita.CONFIRMADO,
+        CONFIRMADO_EM: confirmadoEm,
+      })
+    );
+
+    const resultado = await VisitaConfirmacaoService.atualizarEndereco(
+      payload,
+      enderecoCorrigido,
+      IP,
+      AGORA
+    );
+
+    expect(resultado).toEqual({ state: "ALREADY_CONFIRMED", confirmadoEm });
+    expect(oficinaRepo.update).not.toHaveBeenCalled();
+  });
+
+  it("returns EXPIRED without touching Oficina once EXPIRA_EM has passed", async () => {
+    const depoisDaExpiracao = new Date("2026-08-07T12:00:00.001Z");
+
+    const resultado = await VisitaConfirmacaoService.atualizarEndereco(
+      payload,
+      enderecoCorrigido,
+      IP,
+      depoisDaExpiracao
+    );
+
+    expect(resultado).toEqual({ state: "EXPIRED" });
+    expect(oficinaRepo.update).not.toHaveBeenCalled();
+  });
+});
