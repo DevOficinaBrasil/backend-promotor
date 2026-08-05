@@ -626,7 +626,18 @@ The 3 `campanhaService` tests fail because the feature they cover was silently r
 
 **Done when**:
 
-- [ ] **`UPDATE` grant on `MAIN_REGISTER.OFICINA` verified against a real (non-production) database before this task is marked done.** Nothing in this codebase has ever written to that schema — if the grant is missing, STOP and escalate rather than shipping a runtime failure
+- [ ] Grant failure is handled defensively **in code**: a rejected `Oficina` write is caught, leaves `NotificacaoVisita` STATUS untouched, and returns a distinct error — proven by a test that forces the write to reject with a permission-style error (spec AC33)
+
+> **The live grant check is a human pre-deploy step, not part of this task.** Nothing in this codebase has ever written to `MAIN_REGISTER`, so whether the app's DB user holds `UPDATE` on `MAIN_REGISTER.OFICINA` is genuinely unknown. An implementing agent has no live database access and must not attempt to connect to one — that would be an external side effect outside this feature's blast radius. What the code must guarantee is that a missing grant fails *visibly and safely* rather than silently confirming. Before this feature is deployed, someone with database access must run the equivalent of:
+>
+> ```sql
+> -- as the application's DB user, against a NON-PRODUCTION database
+> BEGIN;
+> UPDATE "MAIN_REGISTER"."OFICINA" SET "ENDERECO" = "ENDERECO" WHERE "ID_OFICINA" = <known-id>;
+> ROLLBACK;
+> ```
+>
+> If that errors, `PUT /visita/endereco` cannot work in that environment and must be disabled until the grant is added. The confirm-only path (T15) is unaffected and can ship independently.
 - [ ] Only `ENDERECO`, `NUMERO`, `COMPLEMENTO`, `BAIRRO`, `CIDADE`, `ESTADO`, `CEP` are writable; any other key is rejected — asserted by a test attempting to change `CNPJ`, `TELEFONE`, and `STATUS`
 - [ ] Oficina write happens **first**; if it fails, `NotificacaoVisita` STATUS is left untouched and a distinct error is returned — no false confirmation (spec AC33), asserted by a test forcing the write to reject
 - [ ] On success: same `CONFIRMADO` transition and audit fields as T15, plus `ENDERECO_ATUALIZADO = true`
