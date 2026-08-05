@@ -216,15 +216,17 @@ The 3 `campanhaService` tests fail because the feature they cover was silently r
 
 **Done when**:
 
-- [ ] Every column from T2's migration is represented with matching nullability
-- [ ] `StatusNotificacaoVisita` includes `DISPENSADO` and the reserved `REAGENDADO`
-- [ ] `@ManyToOne` to `RotaPromotor` with `@JoinColumn`, mirroring the `Oficina` relation pattern
-- [ ] Gate check passes: `npx tsc --noEmit && npm test`
+- [x] Every column from T2's migration is represented with matching nullability
+- [x] `StatusNotificacaoVisita` includes `DISPENSADO` and the reserved `REAGENDADO`
+- [x] `@ManyToOne` to `RotaPromotor` with `@JoinColumn`, mirroring the `Oficina` relation pattern
+- [x] Gate check passes: `npx tsc --noEmit && npm test`
 
 **Tests**: none
 **Gate**: build
 
 **Commit**: `feat(entities): add NotificacaoVisita entity`
+
+**Status**: ✅ Complete
 
 ---
 
