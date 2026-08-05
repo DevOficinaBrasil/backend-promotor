@@ -681,17 +681,21 @@ The 3 `campanhaService` tests fail because the feature they cover was silently r
 
 **Done when**:
 
-- [ ] 401 for missing or malformed `Authorization` header; 403 for invalid signature, expired, or wrong scope
-- [ ] Attaches the parsed payload to the request on success
-- [ ] Uses its own Zod payload schema, independent of `authMiddleware`'s known-mismatched one
-- [ ] Tests cover every rejection branch plus the happy path
-- [ ] Gate check passes: `npm run test:unit`
-- [ ] Test count: at least 6 tests pass (no silent deletions)
+- [x] 401 for missing or malformed `Authorization` header; 403 for invalid signature, expired, or wrong scope
+- [x] Attaches the parsed payload to the request on success
+- [x] Uses its own Zod payload schema, independent of `authMiddleware`'s known-mismatched one
+- [x] Tests cover every rejection branch plus the happy path
+- [x] Gate check passes: `npm run test:unit`
+- [x] Test count: 6 tests pass (no silent deletions)
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(middleware): add visit-scoped JWT middleware`
+
+**Note**: the payload schema is `utils/visitaToken`'s `VisitaJwtPayloadSchema`, applied inside `verificarJwt`, so signature, expiry and scope all fail through one rejection path. A missing `JWT_SECRET` also lands on 403 rather than `authMiddleware`'s 500; no AC covers that case.
+
+**Status**: ✅ Complete
 
 ---
 
