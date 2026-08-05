@@ -306,17 +306,19 @@ The 3 `campanhaService` tests fail because the feature they cover was silently r
 
 **Done when**:
 
-- [ ] `gerarLinkToken()` returns `{ raw, hash }` with `raw` from `crypto.randomBytes(32)` base64url-encoded and `hash` its SHA-256 hex
-- [ ] `emitirJwt()` signs with `JWT_SECRET`, `expiresIn: "30m"`, scope `visita:confirmar`, and the `ID_NOTIFICACAO_VISITA`/`ID_ROTA_PROMOTOR` claims
-- [ ] `verificarJwt()` verifies signature and expiry, then Zod-parses the payload; throws on bad signature, expiry, or wrong scope
-- [ ] Tests cover: token uniqueness across calls, hash determinism, round-trip sign→verify, tampered signature, expired token, missing/incorrect scope
-- [ ] Gate check passes: `npm run test:unit`
-- [ ] Test count: at least 8 tests pass (no silent deletions)
+- [x] `gerarLinkToken()` returns `{ raw, hash }` with `raw` from `crypto.randomBytes(32)` base64url-encoded and `hash` its SHA-256 hex
+- [x] `emitirJwt()` signs with `JWT_SECRET`, `expiresIn: "30m"`, scope `visita:confirmar`, and the `ID_NOTIFICACAO_VISITA`/`ID_ROTA_PROMOTOR` claims
+- [x] `verificarJwt()` verifies signature and expiry, then Zod-parses the payload; throws on bad signature, expiry, or wrong scope
+- [x] Tests cover: token uniqueness across calls, hash determinism, round-trip sign→verify, tampered signature, expired token, missing/incorrect scope
+- [x] Gate check passes: `npm run test:unit`
+- [x] Test count: 12 tests pass (no silent deletions)
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(utils): add visit link-token and scoped JWT helpers`
+
+**Status**: ✅ Complete
 
 ---
 

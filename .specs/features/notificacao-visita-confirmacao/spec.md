@@ -178,7 +178,7 @@ Each requirement gets a unique ID for tracking across design, tasks, and validat
 | NOTIF-08 | P1: failure captured, no auto-retry | CON26-86 | Design | Pending |
 | NOTIF-09 | P1: one notification per route (dedup) | CON26-80 | Design | Implementing |
 | NOTIF-10 | P1: public confirmation endpoints | CON26-85 | Design | Pending |
-| NOTIF-11 | P1: signed link token, 48h expiry, re-exchangeable | CON26-85 | Design | Pending |
+| NOTIF-11 | P1: signed link token, 48h expiry, re-exchangeable | CON26-85 | Design | Implementing |
 | NOTIF-12 | P1: concurrent double-confirm safety | CON26-85 | Design | Pending |
 | NOTIF-13 | P1: per-visit rate limiting on public endpoints (token/JWT-keyed, not IP) | CON26-85 | Design | Pending |
 | NOTIF-14 | P1: public confirmation page | CON26-88 | Design | Pending |
@@ -191,8 +191,8 @@ Each requirement gets a unique ID for tracking across design, tasks, and validat
 | NOTIF-21 | P1: provider error-code mapping (config vs rate/quota vs payload) | CON26-86 | Design | Pending |
 | NOTIF-22 | P1: default-off send lock (WHATSAPP_SEND_ENABLED) | CON26-86 | Design | Pending |
 | NOTIF-23 | P1: unconditional test-env send lock (NODE_ENV=test) | CON26-90 | Design | Pending |
-| NOTIF-24 | P1: link-token → JWT exchange endpoint + distinct states (invalid/expired/already-confirmed) | CON26-85 | Design | Pending |
-| NOTIF-25 | P1: JWT-authenticated confirm action, visit-scoped | CON26-87 | Design | Pending |
+| NOTIF-24 | P1: link-token → JWT exchange endpoint + distinct states (invalid/expired/already-confirmed) | CON26-85 | Design | Implementing |
+| NOTIF-25 | P1: JWT-authenticated confirm action, visit-scoped | CON26-87 | Design | Implementing |
 | NOTIF-26 | P1: REAGENDADO reserved + resource-oriented URL shape for future reschedule | CON26-80 | Design | Implementing |
 | NOTIF-27 | P1: address-freshness skip (Oficina.DATA_ALTERACAO < 3 months → DISPENSADO) | CON26-84 | Design | Pending |
 | NOTIF-28 | P1: anti-spam skip — recipient has outstanding notification | CON26-83 | Design | Pending |
