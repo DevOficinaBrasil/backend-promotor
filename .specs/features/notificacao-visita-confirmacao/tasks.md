@@ -463,18 +463,22 @@ The 3 `campanhaService` tests fail because the feature they cover was silently r
 
 **Done when**:
 
-- [ ] The `EXPIRADO` persist runs **before** the outstanding check — asserted by a test where a just-expired row must NOT block a new send
-- [ ] Blocks with `"recipient has outstanding notification"` for an unexpired `ENVIADO` on any Oficina
-- [ ] Blocks with `"recipient confirmed recently"` for a `CONFIRMADO` within 3 months on any Oficina
-- [ ] Does not block on `FALHOU`, `DISPENSADO`, `EXPIRADO`, or a confirmation older than 3 months
-- [ ] Scoped per `ID_USUARIO`, not per Oficina — asserted by a test with two different Oficinas sharing a recipient
-- [ ] Gate check passes: `npm run test:unit`
-- [ ] Test count: at least 8 tests pass (no silent deletions)
+- [x] The `EXPIRADO` persist runs **before** the outstanding check — asserted by a test where a just-expired row must NOT block a new send
+- [x] Blocks with `"recipient has outstanding notification"` for an unexpired `ENVIADO` on any Oficina
+- [x] Blocks with `"recipient confirmed recently"` for a `CONFIRMADO` within 3 months on any Oficina
+- [x] Does not block on `FALHOU`, `DISPENSADO`, `EXPIRADO`, or a confirmation older than 3 months
+- [x] Scoped per `ID_USUARIO`, not per Oficina — asserted by a test with two different Oficinas sharing a recipient
+- [x] Gate check passes: `npm run test:unit`
+- [x] Test count: 14 tests pass (no silent deletions)
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(service): add per-recipient anti-spam send guards`
+
+**Note**: ordering is pinned two ways — a lapsed row is persisted `EXPIRADO` and does not block, and an explicit invocation-order assertion fails if the persist is moved after the outstanding check. The outstanding query also keeps its own `EXPIRA_EM` filter, so a failed persist can never resurrect an expired row as outstanding.
+
+**Status**: ✅ Complete
 
 ---
 
