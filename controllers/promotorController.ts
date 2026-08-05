@@ -40,11 +40,14 @@ export default class PromotorController {
       };
 
       // Call the service to create the promoter with optional campaign associations
-      const novoPromotor = await PromotorService.createPromotor(promotorData, ID_CAMPANHA, RAIO, EMPRESA_SLUG);
+      const { promotor, autoAssignResult } = await PromotorService.createPromotor(promotorData, ID_CAMPANHA, RAIO, EMPRESA_SLUG);
 
       return res.status(201).json({
-        message: "Promotor criado com sucesso.",
-        data: novoPromotor
+        message: autoAssignResult?.error
+          ? "Promotor criado, porém houve erro na auto-atribuição de rotas."
+          : "Promotor criado com sucesso.",
+        data: promotor,
+        ...(autoAssignResult && { rotasCriadas: autoAssignResult.rotasCriadas }),
       });
     } catch (error) {
       console.error("Erro ao criar promotor:", error);

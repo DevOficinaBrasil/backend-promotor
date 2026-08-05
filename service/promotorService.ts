@@ -46,7 +46,7 @@ export default class PromotorService {
     campanhaIds?: number | number[],
     raio?: number,
     empresaSlug?: string
-  ): Promise<Promotor> {
+  ): Promise<{ promotor: Promotor; autoAssignResult?: { rotasCriadas: number; error?: string } }> {
     const repo = this.getPromotorRepo();
     
     // Encrypt password if provided
@@ -67,18 +67,21 @@ export default class PromotorService {
       campanhaPromotores = await this.linkCampanhaPromotor(campanhaIds, promotorSalvo.ID_PROMOTOR!, raio);
     }
 
+    let autoAssignResult: { rotasCriadas: number; error?: string } | undefined;
     if (empresaSlug && promotorSalvo.LATITUDE && promotorSalvo.LONGITUDE && campanhaPromotores.length > 0) {
-      await this.autoAssignRotas(promotorSalvo, campanhaPromotores, empresaSlug);
+      autoAssignResult = await this.autoAssignRotas(promotorSalvo, campanhaPromotores, empresaSlug);
     }
     
-    return promotorSalvo;
+    return { promotor: promotorSalvo, autoAssignResult };
   }
 
   private static async autoAssignRotas(
     promotor: Promotor,
     campanhaPromotores: CampanhaPromotor[],
     empresaSlug: string
-  ): Promise<void> {
+  ): Promise<{ rotasCriadas: number; error?: string }> {
+    let totalRotasCriadas = 0;
+
     for (const cp of campanhaPromotores) {
       try {
         const raio = cp.RAIO ?? 20;
@@ -92,12 +95,16 @@ export default class PromotorService {
         if (oficinas.length > 0) {
           const oficinaIds = oficinas.map((o: any) => o.ID_OFICINA);
           await RotaService.createRotas(cp.ID_CAMPANHA_PROMOTOR!, oficinaIds);
+          totalRotasCriadas += oficinas.length;
           console.log(`Auto-assigned ${oficinas.length} rotas for CAMPANHA_PROMOTOR ${cp.ID_CAMPANHA_PROMOTOR}`);
         }
       } catch (error) {
         console.error(`Auto-assign rotas failed for CAMPANHA_PROMOTOR ${cp.ID_CAMPANHA_PROMOTOR}:`, error);
+        return { rotasCriadas: totalRotasCriadas, error: 'Erro na auto-atribuição de rotas.' };
       }
     }
+
+    return { rotasCriadas: totalRotasCriadas };
   }
 
   /**
