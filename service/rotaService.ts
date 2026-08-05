@@ -4,6 +4,7 @@ import CampanhaPromotor, { EstrategiaOrdenacao } from "../entities/CampanhaPromo
 import { In, IsNull } from "typeorm";
 import { optimizeRoute, fetchOSRMRoute } from "../utils/routeOptimizer";
 import { MigrationAwareRepository } from "../utils/migrationRepository";
+import NotificacaoVisitaService from "./notificacaoVisitaService";
 
 export default class RotaService {
   private static getRotaRepo() {
@@ -12,6 +13,27 @@ export default class RotaService {
 
   private static getCampanhaPromotorRepo() {
     return new MigrationAwareRepository<CampanhaPromotor>(CampanhaPromotor, "ID_CAMPANHA_PROMOTOR");
+  }
+
+  /**
+   * Notifies the workshop for each newly created route, one notification per
+   * route.
+   *
+   * Isolated per route: a notification failure never propagates, so route
+   * creation always returns successfully (spec AC10). This catch is belt and
+   * braces on top of notificarVisita's own internal handling.
+   */
+  private static async notificarRotasCriadas(rotas: RotaPromotor[]): Promise<void> {
+    for (const rota of rotas) {
+      try {
+        await NotificacaoVisitaService.notificarVisita(rota);
+      } catch (erro) {
+        console.error("[rotaService] falha ao notificar visita", {
+          ID_ROTA_PROMOTOR: rota?.ID_ROTA_PROMOTOR,
+          erro: (erro as Error)?.message,
+        });
+      }
+    }
   }
 
   /**
@@ -31,7 +53,9 @@ export default class RotaService {
         ID_OFICINA,
         CREATED_BY,
       });
-      return await repo.save(novaRota);
+      const rotaSalva = await repo.save(novaRota);
+      await this.notificarRotasCriadas([rotaSalva]);
+      return rotaSalva;
     }
 
     // If array of ID_OFICINA, create multiple routes (batch creation)
@@ -42,7 +66,9 @@ export default class RotaService {
         CREATED_BY,
       })
     );
-    return await repo.saveMany(novasRotas);
+    const rotasSalvas = await repo.saveMany(novasRotas);
+    await this.notificarRotasCriadas(rotasSalvas);
+    return rotasSalvas;
   }
 
   /**
@@ -63,7 +89,7 @@ export default class RotaService {
     rotas: RotaPromotor[];
   }> {
     // Use transaction to ensure atomicity
-    return await AppDataSourceSync.transaction(async (transactionalEntityManager) => {
+    const resultado = await AppDataSourceSync.transaction(async (transactionalEntityManager) => {
       // Create the CampanhaPromotor
       const novaCampanhaPromotor = transactionalEntityManager.create(CampanhaPromotor, {
         ID_PROMOTOR,
@@ -86,6 +112,12 @@ export default class RotaService {
         rotas: rotasSalvas,
       };
     });
+
+    // Notify after the transaction commits, so a rolled-back creation never
+    // produces a notification for routes that do not exist.
+    await this.notificarRotasCriadas(resultado.rotas);
+
+    return resultado;
   }
 
   /**
@@ -148,6 +180,7 @@ export default class RotaService {
       );
       const savedRotas = await repo.saveMany(novasRotas);
       createdRotas.push(...savedRotas);
+      await this.notificarRotasCriadas(savedRotas);
     }
 
     return {

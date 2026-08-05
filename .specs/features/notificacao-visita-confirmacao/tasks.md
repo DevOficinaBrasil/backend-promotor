@@ -535,17 +535,21 @@ The 3 `campanhaService` tests fail because the feature they cover was silently r
 
 **Done when**:
 
-- [ ] All three creation paths notify — `updateRotaWorkshops` included (the path missed in the design's first draft)
-- [ ] Each call wrapped so a notification failure never propagates; route creation still returns successfully — asserted per path by forcing the orchestrator to reject
-- [ ] Batch creation notifies once per created route
-- [ ] Existing `rotaService` tests still pass unmodified
-- [ ] Gate check passes: `npm run test:unit`
-- [ ] Test count: at least 6 new tests pass (no silent deletions)
+- [x] All three creation paths notify — `updateRotaWorkshops` included (the path missed in the design's first draft)
+- [x] Each call wrapped so a notification failure never propagates; route creation still returns successfully — asserted per path by forcing the orchestrator to reject
+- [x] Batch creation notifies once per created route
+- [x] Existing `rotaService` tests still pass unmodified
+- [x] Gate check passes: `npm run test:unit`
+- [x] Test count: 8 new tests pass, 12 in the suite (no silent deletions)
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(service): trigger visit notification on route creation`
+
+**Note**: `createRotaWithCampanhaPromotor` notifies **after** the transaction commits, not inside the callback, so a rolled-back creation never notifies for routes that do not exist.
+
+**Status**: ✅ Complete
 
 ---
 
