@@ -898,14 +898,16 @@ The 3 `campanhaService` tests fail because the feature they cover was silently r
 
 **Done when**:
 
-- [ ] Response schemas include the nested status object as optional
-- [ ] `/openapi.json` still generates without error
-- [ ] Gate check passes: `npx tsc --noEmit && npm test`
+- [x] Response schemas include the nested status object as optional
+- [x] `/openapi.json` still generates without error
+- [x] Gate check passes: `npx tsc --noEmit && npm test`
 
 **Tests**: none
 **Gate**: build
 
 **Commit**: `feat(schemas): expose visit confirmation status in rota responses`
+
+**Status**: ✅ Complete
 
 ---
 

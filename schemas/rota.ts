@@ -196,6 +196,33 @@ export const CampanhaResultsSimplifiedSchema = z.object({
 });
 
 /**
+ * Effective visit-confirmation status enum schema (NOTIF-19 / P2 AC1-2).
+ * Mirrors entities/NotificacaoVisita.ts's StatusNotificacaoVisita — kept as
+ * its own string enum here, matching this file's existing convention of not
+ * importing entity enums directly (see StatusRotaSchema/RedirectRotaSchema).
+ */
+export const NotificacaoVisitaStatusSchema = z.enum([
+  'PENDENTE',
+  'ENVIADO',
+  'FALHOU',
+  'DISPENSADO',
+  'CONFIRMADO',
+  'EXPIRADO',
+  'REAGENDADO',
+]);
+
+/**
+ * Nested visit-confirmation status object surfaced on route reads
+ * (NOTIF-19 / P2 AC1: dashboard/app SHALL include STATUS and CONFIRMADO_EM).
+ * STATUS here is always the *effective* status (statusEfetivo()), not the
+ * raw stored column.
+ */
+export const NotificacaoVisitaStatusInfoSchema = z.object({
+  STATUS: NotificacaoVisitaStatusSchema,
+  CONFIRMADO_EM: z.date().nullable().optional(),
+});
+
+/**
  * Rota with relationships schema
  */
 export const RotaWithRelationsSchema = z.object({
@@ -214,6 +241,7 @@ export const RotaWithRelationsSchema = z.object({
   DELETED_AT: z.date().optional(),
   campanhaPromotor: CampanhaPromotorSimplifiedSchema.optional(),
   campanhaResults: z.array(CampanhaResultsSimplifiedSchema).optional(),
+  notificacaoVisita: NotificacaoVisitaStatusInfoSchema.optional(),
 });
 
 /**
