@@ -808,15 +808,21 @@ The 3 `campanhaService` tests fail because the feature they cover was silently r
 
 **Done when**:
 
-- [ ] Integration tests cover: valid correction → 200 + `CONFIRMADO` + `ENDERECO_ATUALIZADO`, non-allowlisted field → 400 with no Oficina write, missing JWT → 401, already-confirmed → 409, and Oficina write failure → error state with STATUS unchanged
-- [ ] A test asserts the `Oficina` row actually received only the address columns
-- [ ] Gate check passes: `npm run test:unit && npm run test:integration`
-- [ ] Test count: at least 6 integration tests pass (no silent deletions)
+- [x] Integration tests cover: valid correction → 200 + `CONFIRMADO` + `ENDERECO_ATUALIZADO`, non-allowlisted field → 400 with no Oficina write, missing JWT → 401, already-confirmed → 409, and Oficina write failure → error state with STATUS unchanged
+- [x] A test asserts the `Oficina` row actually received only the address columns
+- [x] Gate check passes: `npm run test:unit && npm run test:integration`
+- [x] Test count: 6 integration tests pass (no silent deletions)
 
 **Tests**: integration
 **Gate**: full
 
 **Commit**: `feat(api): add PUT /visita/endereco correction endpoint`
+
+**Notes**:
+- `createDocumentedRoute` mounts body validation before the route's own middlewares, so a non-allowlisted key answers `400` before the JWT is checked. Both orders satisfy AC32; nothing is written either way.
+- The repository-level assertion that only address columns reach `MAIN_REGISTER.OFICINA` lives in the T16 unit test (`__tests__/unit/visitaConfirmacaoService.test.ts`, "writes only the seven address columns to the Oficina row"); the integration test asserts the same seven keys cross the HTTP boundary.
+
+**Status**: ✅ Complete
 
 ---
 

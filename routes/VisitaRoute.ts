@@ -6,6 +6,8 @@ import { visitaAuthMiddleware, VisitaRequest } from "../middlewares/visitaAuthMi
 import {
   ConfirmarResponseSchema,
   ExchangeResponseSchema,
+  UpdateEnderecoResponseSchema,
+  UpdateEnderecoSchema,
   VisitaErrorResponseSchema,
   VisitaTokenParamsSchema,
 } from "../schemas/visita";
@@ -99,6 +101,66 @@ createDocumentedRoute(router, {
       },
       500: {
         description: "Internal server error",
+        schema: VisitaErrorResponseSchema,
+      },
+    },
+  },
+});
+
+// Correct the workshop's address and confirm the visit in one call
+createDocumentedRoute(router, {
+  method: "put",
+  path: "/endereco",
+  handler: VisitaController.atualizarEndereco,
+  basePath: "/visita",
+  middlewares: [visitaAuthMiddleware, limitadorAcao],
+  schemas: {
+    body: UpdateEnderecoSchema,
+  },
+  documentation: {
+    tags: ["Visita"],
+    summary: "Correct the workshop address and confirm the visit",
+    description:
+      "Updates only the seven allowlisted address columns on the workshop's registry row and " +
+      "applies the same confirmation transition as POST /visita/confirmar. " +
+      "Any key outside the allowlist is rejected and nothing is written. " +
+      "Coordinates are left untouched - there is no geocoding step.",
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: {
+        description: "Address updated and visit confirmed",
+        schema: UpdateEnderecoResponseSchema,
+      },
+      400: {
+        description: "Validation error - unknown field or invalid value; nothing written",
+        schema: VisitaErrorResponseSchema,
+      },
+      401: {
+        description: "Unauthorized - JWT missing or malformed header",
+        schema: VisitaErrorResponseSchema,
+      },
+      403: {
+        description: "Forbidden - JWT invalid, expired or wrong scope",
+        schema: VisitaErrorResponseSchema,
+      },
+      404: {
+        description: "Visit no longer confirmable",
+        schema: VisitaErrorResponseSchema,
+      },
+      409: {
+        description: "Visit already confirmed",
+        schema: VisitaErrorResponseSchema,
+      },
+      410: {
+        description: "Link expired",
+        schema: VisitaErrorResponseSchema,
+      },
+      429: {
+        description: "Too many requests for this visit",
+        schema: VisitaErrorResponseSchema,
+      },
+      500: {
+        description: "Address write failed or internal server error; no confirmation recorded",
         schema: VisitaErrorResponseSchema,
       },
     },

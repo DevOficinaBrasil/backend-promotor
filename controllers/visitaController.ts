@@ -69,6 +69,64 @@ export default class VisitaController {
   };
 
   /**
+   * Corrects the workshop's address and confirms the visit in one call
+   * PUT /visita/endereco
+   *
+   * The address allowlist is enforced twice on purpose: the route's strict Zod
+   * body schema rejects unknown keys before the handler runs, and the service
+   * re-checks before it writes anything.
+   */
+  static atualizarEndereco = async (req: Request, res: Response) => {
+    try {
+      const payload = (req as VisitaRequest).visitaJwt!;
+      const resultado = await VisitaConfirmacaoService.atualizarEndereco(
+        payload,
+        req.body,
+        req.ip ?? ""
+      );
+
+      if (resultado.state === "CONFIRMED") {
+        return res.status(200).json({
+          message: "Endereço atualizado e visita confirmada.",
+          data: {
+            state: "CONFIRMED",
+            confirmadoEm: resultado.confirmadoEm,
+            enderecoAtualizado: true,
+          },
+        });
+      }
+
+      if (resultado.state === "VALIDATION_ERROR") {
+        return res.status(400).json({
+          message: "Dados inválidos.",
+          error: "VALIDATION_ERROR",
+          details: resultado.campos.map((campo) => ({
+            field: campo,
+            message: "Campo não permitido.",
+            code: "unrecognized_keys",
+          })),
+        });
+      }
+
+      // AC33: a failed registry write is never reported as a confirmation.
+      if (resultado.state === "ADDRESS_UPDATE_FAILED") {
+        return res.status(500).json({
+          message: "Não foi possível atualizar o endereço.",
+          error: "ADDRESS_UPDATE_FAILED",
+        });
+      }
+
+      return VisitaController.responderFalhaDeConfirmacao(res, resultado.state);
+    } catch (error) {
+      console.error("Erro ao atualizar endereço da visita:", error);
+      return res.status(500).json({
+        message: "Erro interno ao atualizar o endereço.",
+        error: error instanceof Error ? error.message : "Erro desconhecido",
+      });
+    }
+  };
+
+  /**
    * Maps a rejected confirmation to its HTTP response.
    *
    * 409 for an already-confirmed visit is what the frontend contract renders as
