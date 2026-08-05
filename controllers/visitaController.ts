@@ -1,5 +1,6 @@
 import { Request, Response } from "express";
 import VisitaConfirmacaoService from "../service/visitaConfirmacaoService";
+import { VisitaRequest } from "../middlewares/visitaAuthMiddleware";
 
 export default class VisitaController {
   /**
@@ -37,4 +38,53 @@ export default class VisitaController {
       });
     }
   };
+
+  /**
+   * Confirms the visit and that the displayed address is correct
+   * POST /visita/confirmar
+   *
+   * Reaches here only past visitaAuthMiddleware, so the JWT is already
+   * verified; the service still re-checks live state before transitioning.
+   */
+  static confirmar = async (req: Request, res: Response) => {
+    try {
+      const payload = (req as VisitaRequest).visitaJwt!;
+      const resultado = await VisitaConfirmacaoService.confirmar(payload, req.ip ?? "");
+
+      if (resultado.state === "CONFIRMED") {
+        return res.status(200).json({
+          message: "Visita confirmada com sucesso.",
+          data: { state: "CONFIRMED", confirmadoEm: resultado.confirmadoEm },
+        });
+      }
+
+      return VisitaController.responderFalhaDeConfirmacao(res, resultado.state);
+    } catch (error) {
+      console.error("Erro ao confirmar visita:", error);
+      return res.status(500).json({
+        message: "Erro interno ao confirmar a visita.",
+        error: error instanceof Error ? error.message : "Erro desconhecido",
+      });
+    }
+  };
+
+  /**
+   * Maps a rejected confirmation to its HTTP response.
+   *
+   * 409 for an already-confirmed visit is what the frontend contract renders as
+   * the already-confirmed state; 410 mirrors the exchange endpoint's expired
+   * response so both surfaces report a dead link the same way.
+   */
+  protected static responderFalhaDeConfirmacao(res: Response, state: string) {
+    switch (state) {
+      case "ALREADY_CONFIRMED":
+        return res
+          .status(409)
+          .json({ message: "Visita já confirmada.", error: "ALREADY_CONFIRMED" });
+      case "EXPIRED":
+        return res.status(410).json({ message: "Este link expirou.", error: "EXPIRED" });
+      default:
+        return res.status(404).json({ message: "Link inválido.", error: "TOKEN_INVALID" });
+    }
+  }
 }

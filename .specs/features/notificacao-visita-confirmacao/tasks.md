@@ -777,15 +777,19 @@ The 3 `campanhaService` tests fail because the feature they cover was silently r
 
 **Done when**:
 
-- [ ] Route mounted with `visitaAuthMiddleware`; rate limiter keyed on the JWT's `ID_NOTIFICACAO_VISITA`
-- [ ] Integration tests cover: valid JWT → 200 + `CONFIRMADO`, missing header → 401, bad signature → 403, expired JWT → 403, second confirm → 409, and a full `GET`→`POST` round trip
-- [ ] Gate check passes: `npm run test:unit && npm run test:integration`
-- [ ] Test count: at least 6 integration tests pass (no silent deletions)
+- [x] Route mounted with `visitaAuthMiddleware`; rate limiter keyed on the JWT's `ID_NOTIFICACAO_VISITA`
+- [x] Integration tests cover: valid JWT → 200 + `CONFIRMADO`, missing header → 401, bad signature → 403, expired JWT → 403, second confirm → 409, and a full `GET`→`POST` round trip
+- [x] Gate check passes: `npm run test:unit && npm run test:integration`
+- [x] Test count: 8 integration tests pass (no silent deletions)
 
 **Tests**: integration
 **Gate**: full
 
 **Commit**: `feat(api): add POST /visita/confirmar endpoint`
+
+**Note**: an expired visit answers `410 EXPIRED`, mirroring the exchange endpoint. The frontend contract lists no status for that case on `POST` (spec-precision gap); `409` stays reserved for `ALREADY_CONFIRMED`, which the contract does pin.
+
+**Status**: ✅ Complete
 
 ---
 

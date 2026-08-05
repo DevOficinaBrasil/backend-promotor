@@ -2,7 +2,9 @@ import { Request, Response, Router } from "express";
 import rateLimit from "express-rate-limit";
 import VisitaController from "../controllers/visitaController";
 import { createDocumentedRoute } from "../utils/routeDocumentation";
+import { visitaAuthMiddleware, VisitaRequest } from "../middlewares/visitaAuthMiddleware";
 import {
+  ConfirmarResponseSchema,
   ExchangeResponseSchema,
   VisitaErrorResponseSchema,
   VisitaTokenParamsSchema,
@@ -34,6 +36,73 @@ export const limitadorExchange = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req: Request) => `visita-token:${req.params.token ?? ""}`,
   handler: respostaLimite,
+});
+
+/**
+ * Same per-visit limit for the authenticated actions, keyed on the JWT's
+ * ID_NOTIFICACAO_VISITA claim. Mounted after visitaAuthMiddleware so the claim
+ * is available; an unauthenticated request is rejected before it ever reaches
+ * a bucket.
+ */
+export const limitadorAcao = rateLimit({
+  windowMs: JANELA_MS,
+  limit: LIMITE_POR_VISITA,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: Request) =>
+    `visita-jwt:${(req as VisitaRequest).visitaJwt?.ID_NOTIFICACAO_VISITA ?? ""}`,
+  handler: respostaLimite,
+});
+
+// Confirm the visit and that the displayed address is correct
+createDocumentedRoute(router, {
+  method: "post",
+  path: "/confirmar",
+  handler: VisitaController.confirmar,
+  basePath: "/visita",
+  middlewares: [visitaAuthMiddleware, limitadorAcao],
+  documentation: {
+    tags: ["Visita"],
+    summary: "Confirm a scheduled visit",
+    description:
+      "Confirms the visit and that the workshop's registered address is correct. " +
+      "Requires the visita:confirmar JWT returned by GET /visita/{token}. No request body.",
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: {
+        description: "Visit confirmed",
+        schema: ConfirmarResponseSchema,
+      },
+      401: {
+        description: "Unauthorized - JWT missing or malformed header",
+        schema: VisitaErrorResponseSchema,
+      },
+      403: {
+        description: "Forbidden - JWT invalid, expired or wrong scope",
+        schema: VisitaErrorResponseSchema,
+      },
+      404: {
+        description: "Visit no longer confirmable",
+        schema: VisitaErrorResponseSchema,
+      },
+      409: {
+        description: "Visit already confirmed",
+        schema: VisitaErrorResponseSchema,
+      },
+      410: {
+        description: "Link expired",
+        schema: VisitaErrorResponseSchema,
+      },
+      429: {
+        description: "Too many requests for this visit",
+        schema: VisitaErrorResponseSchema,
+      },
+      500: {
+        description: "Internal server error",
+        schema: VisitaErrorResponseSchema,
+      },
+    },
+  },
 });
 
 // Exchange the WhatsApp link token for a visit-scoped JWT
