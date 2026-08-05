@@ -744,17 +744,21 @@ The 3 `campanhaService` tests fail because the feature they cover was silently r
 
 **Done when**:
 
-- [ ] `express-rate-limit` installed and configured with a **custom `keyGenerator`** keyed on the link token — never `req.ip` (which resolves to the ALB)
-- [ ] Router mounted at `/visita` in `api.ts` alongside the existing six domains
-- [ ] Integration tests via `supertest` cover: valid token → 200 + JWT + name + address, already-confirmed → 200 `ALREADY_CONFIRMED` with no JWT, expired → 410, malformed → 404, and 429 after exceeding the limit
-- [ ] Response contains no visit-date field (spec AC30)
-- [ ] Gate check passes: `npm run test:unit && npm run test:integration`
-- [ ] Test count: at least 6 integration tests pass (no silent deletions)
+- [x] `express-rate-limit` installed and configured with a **custom `keyGenerator`** keyed on the link token — never `req.ip` (which resolves to the ALB)
+- [x] Router mounted at `/visita` in `api.ts` alongside the existing six domains
+- [x] Integration tests via `supertest` cover: valid token → 200 + JWT + name + address, already-confirmed → 200 `ALREADY_CONFIRMED` with no JWT, expired → 410, malformed → 404, and 429 after exceeding the limit
+- [x] Response contains no visit-date field (spec AC30)
+- [x] Gate check passes: `npm run test:unit && npm run test:integration`
+- [x] Test count: 8 integration tests pass (no silent deletions)
 
 **Tests**: integration
 **Gate**: full
 
 **Commit**: `feat(api): add GET /visita/:token exchange endpoint`
+
+**Note**: `express-rate-limit` 8.6.2 added to `package.json`. Integration tests mount the router on a bare Express app rather than importing `app.ts`, which opens a port and initializes the datasource at import time.
+
+**Status**: ✅ Complete
 
 ---
 
