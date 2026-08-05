@@ -243,6 +243,6 @@ A "reschedule to a later date" action is planned but **not part of this feature*
 From `spec.md`'s Assumptions table (rows still marked unconfirmed):
 
 - JWT expiry window (assumed 30 minutes)
-- Link token expiry window (assumed 48 hours)
+- Link token expiry window: **168 hours (7 days)** — confirmed by the user, no longer an assumption
 - Portuguese copy above is placeholder, not final UX wording
 - **Address correction depends on an unverified database grant.** Nothing in this codebase has ever written to the `MAIN_REGISTER` schema, and whether the app's DB user is allowed to is being checked during backend implementation. If that grant turns out to be missing, `PUT /visita/endereco` may be cut from this release — build the confirm path so it stands alone if that happens.

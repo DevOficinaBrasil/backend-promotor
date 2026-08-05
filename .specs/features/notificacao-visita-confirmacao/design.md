@@ -199,7 +199,7 @@ interface NotificacaoVisita {
   STATUS: StatusNotificacaoVisita;
   TELEFONE_NORMALIZADO: string | null;  // digits-only, 55DDDNNNNNNNNN
   TOKEN_HASH: string | null;            // SHA-256 hex of the link token; NULL until AC5 issues one. Raw token never persisted
-  EXPIRA_EM: Date | null;               // token issuance time + 48h; NULL until AC5
+  EXPIRA_EM: Date | null;               // token issuance time + 168h; NULL until AC5
   ERRO_ENVIO: string | null;            // provider error code / internal reason
   MESSAGE_ID: string | null;            // provider response
   PROVIDER_MESSAGE_ID: string | null;   // provider "wamid.xxx"

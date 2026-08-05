@@ -209,14 +209,14 @@ describe("NotificacaoVisitaService.notificarVisita", () => {
     expect(resultado.TOKEN_HASH ?? null).toBeNull();
   });
 
-  // AC5: token issued before any dispatch attempt, EXPIRA_EM = issuance + 48h.
-  it("issues the link token before dispatch with a 48 hour expiry", async () => {
+  // AC5: token issued before any dispatch attempt, EXPIRA_EM = issuance + 168h.
+  it("issues the link token before dispatch with a 168 hour expiry", async () => {
     jest.useFakeTimers({ now: new Date("2026-08-05T12:00:00.000Z") });
     try {
       const resultado = await NotificacaoVisitaService.notificarVisita(rota);
 
       expect(resultado.TOKEN_HASH).toMatch(/^[0-9a-f]{64}$/);
-      expect(resultado.EXPIRA_EM).toEqual(new Date("2026-08-07T12:00:00.000Z"));
+      expect(resultado.EXPIRA_EM).toEqual(new Date("2026-08-12T12:00:00.000Z"));
 
       // The persist that carried the token must precede the dispatch call.
       const indiceComToken = persistidos.findIndex((linha) => linha.TOKEN_HASH != null);
