@@ -3,7 +3,7 @@
   "promote_threshold": 2,
   "window_days": 45,
   "quarantine_threshold": 2,
-  "next_id": 4,
+  "next_id": 5,
   "lessons": [
     {
       "id": "L-001",
@@ -58,6 +58,24 @@
       ],
       "created": "2026-08-05T18:43:52Z",
       "last_seen": "2026-08-05T18:43:52Z"
+    },
+    {
+      "id": "L-004",
+      "key": "surviving_mutant::when a test mocks the query runner assert the sql string s joins and column aliases too hand fed rows prove the mapper never the query",
+      "text": "When a test mocks the query runner, assert the SQL string's joins and column aliases too - hand-fed rows prove the mapper, never the query.",
+      "signal": "surviving_mutant",
+      "scope": "raw-sql",
+      "status": "candidate",
+      "features": [
+        "notificacao-visita-confirmacao"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        ".specs/features/notificacao-visita-confirmacao/validation.md M4, M11; service/campanhaService.ts:233-234, :225-227 (raw-sql)"
+      ],
+      "created": "2026-08-05T19:21:55Z",
+      "last_seen": "2026-08-05T19:21:55Z"
     }
   ]
 }

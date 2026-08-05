@@ -32,6 +32,12 @@ Seen once or not yet corroborated. Tracked, not trusted.
 - evidence: .specs/features/notificacao-visita-confirmacao/validation.md Spec-Precision Gaps; AC16-AC20, AC33 (spec)
 - last seen: 2026-08-05T18:43:52Z
 
+### L-004 - When a test mocks the query runner, assert the SQL string's joins and column aliases too - hand-fed rows prove the mapper, never the query.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `raw-sql` · harmful: 0
+- features: notificacao-visita-confirmacao
+- evidence: .specs/features/notificacao-visita-confirmacao/validation.md M4, M11; service/campanhaService.ts:233-234, :225-227 (raw-sql)
+- last seen: 2026-08-05T19:21:55Z
+
 ## Quarantined (failed when applied - ignore)
 
 A confirmed lesson that recurred alongside failure. Kept for the maintainer to review.
