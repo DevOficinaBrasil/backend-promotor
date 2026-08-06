@@ -14,15 +14,7 @@
     "test:unit:watch": "jest --testMatch \"**/__tests__/unit/**/*.test.ts\" --watch",
     "test:integration:watch": "jest --testMatch \"**/__tests__/integration/**/*.test.ts\" --watch",
     "test:unit:coverage": "jest --testMatch \"**/__tests__/unit/**/*.test.ts\" --coverage",
-    "test:integration:coverage": "jest --testMatch \"**/__tests__/integration/**/*.test.ts\" --coverage",
-    "scrapAutoDoc": "ts-node bots/scrapAutoDoc.ts",
-    "scrapStartMyCar": "ts-node bots/scrapStartMyCar.ts",
-    "autodocToOB": "ts-node bots/scrapToOB.ts",
-    "vectorizeManuals": "ts-node bots/vectorizeManuals.ts",
-    "vinculateToPeca": "ts-node bots/vinculateToPeca.ts",
-    "importToMongoDev": "ts-node scripts/importToMongoDev.ts",
-    "aproveSolicitacoes": "ts-node scripts/aproveSolicitacoes.ts",
-    "sendEmailSolicitacoes": "ts-node scripts/sendEmailSolicitacoes.ts"
+    "test:integration:coverage": "jest --testMatch \"**/__tests__/integration/**/*.test.ts\" --coverage"
   },
   "keywords": [],
   "author": "",
