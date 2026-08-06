@@ -1,9 +1,32 @@
 import { AppDataSourceSync } from "../data-source";
-import RotaPromotor from "../entities/RotaPromotor";
+import RotaPromotor, { StatusRota } from "../entities/RotaPromotor";
 import CampanhaPromotor, { EstrategiaOrdenacao } from "../entities/CampanhaPromotor";
 import { In, IsNull } from "typeorm";
 import { optimizeRoute, fetchOSRMRoute } from "../utils/routeOptimizer";
 import { MigrationAwareRepository } from "../utils/migrationRepository";
+import { haversineDistanceKm } from "../utils/haversine";
+import GeolocationService from "./geolocationService";
+
+interface ReatribuicaoResult {
+  ID_CAMPANHA: number;
+  promotor_anterior: { ID_PROMOTOR: number; NOME: string; distancia_km: number };
+  promotor_novo: { ID_PROMOTOR: number; NOME: string; distancia_km: number } | null;
+  rota_removida: number | null;
+  rota_criada: number | null;
+  status: "reatribuida" | "mantida_dentro_do_raio" | "sem_promotor_disponivel";
+}
+
+interface ReassignResult {
+  oficina: {
+    ID_OFICINA: number;
+    novo_cep: string;
+    nova_latitude: number;
+    nova_longitude: number;
+  };
+  campanhas_processadas: number;
+  reatribuicoes: ReatribuicaoResult[];
+  resumo: { mantidas: number; reatribuidas: number; sem_promotor_disponivel: number };
+}
 
 export default class RotaService {
   private static getRotaRepo() {
@@ -386,5 +409,229 @@ export default class RotaService {
       `DELETE FROM "CAMPANHAS_OB"."ROTA_PROMOTOR" WHERE "ID_CAMPANHA_PROMOTOR" = $1`,
       [idCampanhaPromotor]
     );
+  }
+
+  /**
+   * Reatribui rotas de uma oficina após mudança de endereço (CEP).
+   */
+  static async reassignRotasByAddress(
+    cep: string,
+    idOficina: number
+  ): Promise<ReassignResult> {
+    const geolocationService = new GeolocationService();
+    const coords = await geolocationService.getLatLongByCep(cep);
+    if (!coords) {
+      throw new Error("Não foi possível geocodificar o CEP informado.");
+    }
+
+    const { lat: novaLat, long: novaLong } = coords;
+
+    const repo = this.getRotaRepo();
+    const rotasAtivas = await repo.find({
+      where: {
+        ID_OFICINA: idOficina,
+        STATUS: StatusRota.BACKLOG,
+        DELETED_AT: IsNull(),
+      },
+      relations: ["campanhaPromotor", "campanhaPromotor.promotor"],
+    });
+
+    if (rotasAtivas.length === 0) {
+      throw new Error("NOT_FOUND");
+    }
+
+    // Agrupar rotas por campanha
+    const rotasPorCampanha = new Map<number, RotaPromotor[]>();
+    for (const rota of rotasAtivas) {
+      const idCampanha = rota.campanhaPromotor?.ID_CAMPANHA;
+      if (!idCampanha) continue;
+      if (!rotasPorCampanha.has(idCampanha)) {
+        rotasPorCampanha.set(idCampanha, []);
+      }
+      rotasPorCampanha.get(idCampanha)!.push(rota);
+    }
+
+    const campanhaIds = Array.from(rotasPorCampanha.keys());
+    const candidatos = await this.getCandidatosPorCampanhas(campanhaIds);
+
+    const reatribuicoes: ReatribuicaoResult[] = [];
+
+    for (const [idCampanha, rotas] of rotasPorCampanha) {
+      const rota = rotas[0];
+      const promotorAtual = rota.campanhaPromotor?.promotor;
+      const cpAtual = rota.campanhaPromotor;
+
+      if (!promotorAtual?.LATITUDE || !promotorAtual?.LONGITUDE) {
+        reatribuicoes.push({
+          ID_CAMPANHA: idCampanha,
+          promotor_anterior: {
+            ID_PROMOTOR: promotorAtual?.ID_PROMOTOR ?? 0,
+            NOME: promotorAtual?.NOME ?? "Desconhecido",
+            distancia_km: 0,
+          },
+          promotor_novo: null,
+          rota_removida: null,
+          rota_criada: null,
+          status: "sem_promotor_disponivel",
+        });
+        continue;
+      }
+
+      const distanciaAtual = haversineDistanceKm(
+        parseFloat(promotorAtual.LATITUDE),
+        parseFloat(promotorAtual.LONGITUDE),
+        novaLat,
+        novaLong
+      );
+
+      const raioAtual = cpAtual?.RAIO ?? 20;
+
+      if (distanciaAtual <= raioAtual) {
+        reatribuicoes.push({
+          ID_CAMPANHA: idCampanha,
+          promotor_anterior: {
+            ID_PROMOTOR: promotorAtual.ID_PROMOTOR!,
+            NOME: promotorAtual.NOME,
+            distancia_km: Math.round(distanciaAtual * 10) / 10,
+          },
+          promotor_novo: null,
+          rota_removida: null,
+          rota_criada: null,
+          status: "mantida_dentro_do_raio",
+        });
+        continue;
+      }
+
+      // Fora do raio — buscar candidato mais próximo
+      const candidatosCampanha = (candidatos.get(idCampanha) ?? [])
+        .filter(c => c.ID_PROMOTOR !== promotorAtual.ID_PROMOTOR);
+
+      const candidatosElegiveis = candidatosCampanha
+        .map(c => ({
+          ...c,
+          distancia: haversineDistanceKm(c.lat, c.lon, novaLat, novaLong),
+        }))
+        .filter(c => c.distancia <= (c.RAIO ?? 20))
+        .sort((a, b) => a.distancia - b.distancia);
+
+      if (candidatosElegiveis.length === 0) {
+        reatribuicoes.push({
+          ID_CAMPANHA: idCampanha,
+          promotor_anterior: {
+            ID_PROMOTOR: promotorAtual.ID_PROMOTOR!,
+            NOME: promotorAtual.NOME,
+            distancia_km: Math.round(distanciaAtual * 10) / 10,
+          },
+          promotor_novo: null,
+          rota_removida: null,
+          rota_criada: null,
+          status: "sem_promotor_disponivel",
+        });
+        continue;
+      }
+
+      const melhorCandidato = candidatosElegiveis[0];
+
+      const { rotaRemovida, rotaCriada } = await AppDataSourceSync.transaction(
+        async (manager) => {
+          const idsParaDeletar = rotas
+            .map(r => r.ID_ROTA_PROMOTOR!)
+            .filter(Boolean);
+
+          await manager.softDelete(RotaPromotor, idsParaDeletar);
+
+          const novaRota = manager.create(RotaPromotor, {
+            ID_CAMPANHA_PROMOTOR: melhorCandidato.ID_CAMPANHA_PROMOTOR,
+            ID_OFICINA: idOficina,
+          });
+          const rotaSalva = await manager.save(novaRota);
+
+          return {
+            rotaRemovida: idsParaDeletar[0],
+            rotaCriada: rotaSalva.ID_ROTA_PROMOTOR!,
+          };
+        }
+      );
+
+      reatribuicoes.push({
+        ID_CAMPANHA: idCampanha,
+        promotor_anterior: {
+          ID_PROMOTOR: promotorAtual.ID_PROMOTOR!,
+          NOME: promotorAtual.NOME,
+          distancia_km: Math.round(distanciaAtual * 10) / 10,
+        },
+        promotor_novo: {
+          ID_PROMOTOR: melhorCandidato.ID_PROMOTOR,
+          NOME: melhorCandidato.NOME,
+          distancia_km: Math.round(melhorCandidato.distancia * 10) / 10,
+        },
+        rota_removida: rotaRemovida,
+        rota_criada: rotaCriada,
+        status: "reatribuida",
+      });
+    }
+
+    const resumo = {
+      mantidas: reatribuicoes.filter(r => r.status === "mantida_dentro_do_raio").length,
+      reatribuidas: reatribuicoes.filter(r => r.status === "reatribuida").length,
+      sem_promotor_disponivel: reatribuicoes.filter(r => r.status === "sem_promotor_disponivel").length,
+    };
+
+    return {
+      oficina: { ID_OFICINA: idOficina, novo_cep: cep, nova_latitude: novaLat, nova_longitude: novaLong },
+      campanhas_processadas: campanhaIds.length,
+      reatribuicoes,
+      resumo,
+    };
+  }
+
+  private static async getCandidatosPorCampanhas(
+    campanhaIds: number[]
+  ): Promise<Map<number, Array<{
+    ID_CAMPANHA_PROMOTOR: number;
+    ID_CAMPANHA: number;
+    ID_PROMOTOR: number;
+    NOME: string;
+    RAIO: number | null;
+    lat: number;
+    lon: number;
+  }>>> {
+    if (campanhaIds.length === 0) return new Map();
+
+    const results = await AppDataSourceSync.query(
+      `SELECT 
+        cp."ID_CAMPANHA_PROMOTOR",
+        cp."ID_CAMPANHA",
+        cp."ID_PROMOTOR",
+        cp."RAIO",
+        p."NOME",
+        p."LATITUDE",
+        p."LONGITUDE"
+      FROM "CAMPANHAS_OB"."CAMPANHA_PROMOTOR" cp
+      INNER JOIN "CAMPANHAS_OB"."PROMOTOR" p
+        ON cp."ID_PROMOTOR" = p."ID_PROMOTOR"
+      WHERE cp."ID_CAMPANHA" = ANY($1)
+        AND cp."DELETED_AT" IS NULL
+        AND p."DELETED_AT" IS NULL
+        AND p."LATITUDE" IS NOT NULL
+        AND p."LONGITUDE" IS NOT NULL`,
+      [campanhaIds]
+    );
+
+    const mapa = new Map<number, Array<any>>();
+    for (const row of results) {
+      const idCampanha = row.ID_CAMPANHA;
+      if (!mapa.has(idCampanha)) mapa.set(idCampanha, []);
+      mapa.get(idCampanha)!.push({
+        ID_CAMPANHA_PROMOTOR: row.ID_CAMPANHA_PROMOTOR,
+        ID_CAMPANHA: row.ID_CAMPANHA,
+        ID_PROMOTOR: row.ID_PROMOTOR,
+        NOME: row.NOME,
+        RAIO: row.RAIO,
+        lat: parseFloat(row.LATITUDE),
+        lon: parseFloat(row.LONGITUDE),
+      });
+    }
+    return mapa;
   }
 }

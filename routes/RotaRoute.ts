@@ -18,6 +18,8 @@ import {
   ReorderRotasSchema,
   OptimizeRotaResponseSchema,
   ReorderRotasResponseSchema,
+  ReassignByAddressSchema,
+  ReassignByAddressResponseSchema,
 } from "../schemas/rota";
 import { ErrorResponseSchema } from "../schemas/common";
 
@@ -320,6 +322,44 @@ createDocumentedRoute(router, {
       },
       400: {
         description: "Bad request - validation or business error",
+        schema: ErrorResponseSchema,
+      },
+      500: {
+        description: "Internal server error",
+        schema: ErrorResponseSchema,
+      },
+    },
+  },
+});
+
+// Reassign routes after oficina address change
+createDocumentedRoute(router, {
+  method: "post",
+  path: "/reassign-by-address",
+  handler: RotaController.reassignByAddress,
+  basePath: "/rota",
+  middlewares: [],
+  schemas: {
+    body: ReassignByAddressSchema,
+  },
+  documentation: {
+    tags: ["Rota"],
+    summary: "Reassign routes after oficina address change",
+    description:
+      "Receives a new CEP and ID_OFICINA. Geocodes the CEP, checks if the oficina is still within " +
+      "each assigned promotor's radius, and reassigns to the nearest eligible promotor if not.",
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: {
+        description: "Reassignment completed",
+        schema: ReassignByAddressResponseSchema,
+      },
+      400: {
+        description: "Invalid CEP or geocoding failure",
+        schema: ErrorResponseSchema,
+      },
+      404: {
+        description: "No active routes found for the oficina",
         schema: ErrorResponseSchema,
       },
       500: {
