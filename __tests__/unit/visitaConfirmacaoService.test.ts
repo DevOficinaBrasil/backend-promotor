@@ -1,4 +1,5 @@
 import VisitaConfirmacaoService from "../../service/visitaConfirmacaoService";
+import RotaService from "../../service/rotaService";
 import { AppDataSourceSync } from "../../data-source";
 import NotificacaoVisita, { StatusNotificacaoVisita } from "../../entities/NotificacaoVisita";
 import Oficina from "../../entities/Oficina";
@@ -12,6 +13,10 @@ import {
 import { MoreThan } from "typeorm";
 
 jest.mock("../../data-source");
+jest.mock("../../service/rotaService", () => ({
+  __esModule: true,
+  default: { reassignRotasByAddress: jest.fn() },
+}));
 
 const ID_NOTIFICACAO = 55;
 const ID_ROTA = 42;
@@ -579,5 +584,102 @@ describe("VisitaConfirmacaoService.atualizarEndereco", () => {
 
     expect(resultado).toEqual({ state: "EXPIRED" });
     expect(oficinaRepo.update).not.toHaveBeenCalled();
+  });
+
+  // A corrected CEP moves the workshop on the map, so promoter assignment is
+  // re-evaluated against the new coordinates.
+  describe("promoter reassignment after a corrected CEP", () => {
+    const reassign = RotaService.reassignRotasByAddress as jest.Mock;
+
+    beforeEach(() => {
+      reassign.mockReset();
+      reassign.mockResolvedValue({
+        resumo: { mantidas: 0, reatribuidas: 1, sem_promotor_disponivel: 0 },
+      });
+      jest.spyOn(console, "log").mockImplementation(() => {});
+    });
+
+    it("reassigns routes using the corrected CEP", async () => {
+      oficinaRepo.findOne.mockResolvedValue({ ID_OFICINA, CEP: "01001-000" } as Oficina);
+
+      const resultado = await VisitaConfirmacaoService.atualizarEndereco(
+        payload,
+        enderecoCorrigido,
+        IP,
+        AGORA
+      );
+
+      expect(resultado).toMatchObject({ state: "CONFIRMED", enderecoAtualizado: true });
+      expect(reassign).toHaveBeenCalledTimes(1);
+      expect(reassign).toHaveBeenCalledWith("13010-000", ID_OFICINA);
+    });
+
+    it("reassigns only after the CONFIRMADO transition is persisted", async () => {
+      oficinaRepo.findOne.mockResolvedValue({ ID_OFICINA, CEP: "01001-000" } as Oficina);
+      reassign.mockImplementation(async () => {
+        ordemDeChamadas.push("reassign");
+        return { resumo: { mantidas: 0, reatribuidas: 0, sem_promotor_disponivel: 0 } };
+      });
+
+      await VisitaConfirmacaoService.atualizarEndereco(payload, enderecoCorrigido, IP, AGORA);
+
+      expect(ordemDeChamadas).toEqual(["oficina", "notificacao", "reassign"]);
+    });
+
+    it("does not reassign when the CEP is unchanged", async () => {
+      oficinaRepo.findOne.mockResolvedValue({ ID_OFICINA, CEP: "13010-000" } as Oficina);
+
+      const resultado = await VisitaConfirmacaoService.atualizarEndereco(
+        payload,
+        { ...enderecoCorrigido, CEP: "13010-000" },
+        IP,
+        AGORA
+      );
+
+      expect(resultado).toMatchObject({ state: "CONFIRMED" });
+      expect(reassign).not.toHaveBeenCalled();
+    });
+
+    it("does not reassign when the confirmation did not go through", async () => {
+      oficinaRepo.findOne.mockResolvedValue({ ID_OFICINA, CEP: "01001-000" } as Oficina);
+      // The conditional UPDATE matches nothing: someone confirmed first.
+      notifRepo.update.mockResolvedValue({ affected: 0 });
+      notifRepo.findOne
+        .mockResolvedValueOnce(notificacaoEnviada())
+        .mockResolvedValueOnce(
+          new NotificacaoVisita({
+            ID_NOTIFICACAO_VISITA: ID_NOTIFICACAO,
+            ID_ROTA_PROMOTOR: ID_ROTA,
+            STATUS: StatusNotificacaoVisita.CONFIRMADO,
+            CONFIRMADO_EM: new Date("2026-08-05T11:00:00.000Z"),
+          })
+        );
+
+      const resultado = await VisitaConfirmacaoService.atualizarEndereco(
+        payload,
+        enderecoCorrigido,
+        IP,
+        AGORA
+      );
+
+      expect(resultado.state).not.toBe("CONFIRMED");
+      expect(reassign).not.toHaveBeenCalled();
+    });
+
+    // The confirmation is already committed; a workshop with no BACKLOG route
+    // throws NOT_FOUND and an unresolvable CEP throws too. Neither may undo it.
+    it("keeps the confirmation when the reassignment throws", async () => {
+      oficinaRepo.findOne.mockResolvedValue({ ID_OFICINA, CEP: "01001-000" } as Oficina);
+      reassign.mockRejectedValue(new Error("NOT_FOUND"));
+
+      const resultado = await VisitaConfirmacaoService.atualizarEndereco(
+        payload,
+        enderecoCorrigido,
+        IP,
+        AGORA
+      );
+
+      expect(resultado).toMatchObject({ state: "CONFIRMED", enderecoAtualizado: true });
+    });
   });
 });

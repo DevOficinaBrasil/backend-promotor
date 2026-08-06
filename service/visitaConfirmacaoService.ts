@@ -3,6 +3,7 @@ import { AppDataSourceSync } from "../data-source";
 import NotificacaoVisita, { StatusNotificacaoVisita } from "../entities/NotificacaoVisita";
 import Oficina from "../entities/Oficina";
 import RotaPromotor from "../entities/RotaPromotor";
+import RotaService from "./rotaService";
 import { statusEfetivo } from "../utils/statusNotificacaoVisita";
 import { emitirJwt, hashToken, VisitaJwtPayload } from "../utils/visitaToken";
 
@@ -208,7 +209,51 @@ export default class VisitaConfirmacaoService {
       return { state: "ADDRESS_UPDATE_FAILED" };
     }
 
-    return await this.transicionar(payload, ip, true, agora);
+    const resultado = await this.transicionar(payload, ip, true, agora);
+
+    // Only a CEP change moves the workshop on the map: reassignRotasByAddress
+    // geocodes by CEP alone, so correcting a street number or complement would
+    // recompute identical coordinates. Runs after the CONFIRMADO transition so
+    // the route created by a reassignment sees the confirmation and its
+    // notification is dispensed by the anti-spam guard (AC29) instead of
+    // messaging the reparador again seconds after they confirmed.
+    if (resultado.state === "CONFIRMED") {
+      const cepNovo = typeof endereco.CEP === "string" ? endereco.CEP : null;
+      if (cepNovo !== null && cepNovo !== (oficina.CEP ?? null)) {
+        await this.reatribuirRotas(oficina.ID_OFICINA, cepNovo, payload);
+      }
+    }
+
+    return resultado;
+  }
+
+  /**
+   * Re-runs promoter assignment after the reparador moves the workshop.
+   *
+   * Isolated on purpose: the confirmation is already committed and must stand
+   * on its own. A workshop with no BACKLOG route throws NOT_FOUND and an
+   * unresolvable CEP throws too — neither is a failure of the confirmation, so
+   * both are logged and swallowed.
+   */
+  private static async reatribuirRotas(
+    idOficina: number,
+    cep: string,
+    payload: VisitaJwtPayload
+  ): Promise<void> {
+    try {
+      const resultado = await RotaService.reassignRotasByAddress(cep, idOficina);
+      console.log("[visitaConfirmacao] rotas reavaliadas após correção de endereço", {
+        ID_NOTIFICACAO_VISITA: payload.ID_NOTIFICACAO_VISITA,
+        ID_OFICINA: idOficina,
+        ...resultado.resumo,
+      });
+    } catch (erro) {
+      console.error("[visitaConfirmacao] falha ao reatribuir rotas após correção", {
+        ID_NOTIFICACAO_VISITA: payload.ID_NOTIFICACAO_VISITA,
+        ID_OFICINA: idOficina,
+        erro: (erro as Error)?.message,
+      });
+    }
   }
 
   protected static async transicionar(

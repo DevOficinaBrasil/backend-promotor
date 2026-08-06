@@ -27,7 +27,7 @@ Explicitly excluded. Documented to prevent scope creep.
 | Consent gate / opt-in tracking of any kind | `Usuario.RECEBER_INFO` turned out not to be a usable consent signal (not reliably populated/scoped for this purpose), and no replacement field or collection flow exists. Product decision: MVP sends to any qualifying Usuario with a phone on file, no opt-in check. This is a deliberate scope cut, not an oversight — see Assumptions. |
 | Mutating `dw.cadastro_empresa` | The `dw` schema is a read-only data warehouse in this codebase. Address corrections land on `MAIN_REGISTER.OFICINA` only; any downstream reconciliation into `dw` is someone else's pipeline. |
 | Editing anything other than the address fields | The correction form exposes only `ENDERECO`, `NUMERO`, `COMPLEMENTO`, `BAIRRO`, `CIDADE`, `ESTADO`, `CEP`. A link-holder cannot alter phone, status, CNPJ, or any other `Oficina` column. |
-| Re-geocoding a corrected address | `Oficina.LATITUDE`/`LONGITUDE` are left untouched by an address edit, so route optimization keeps using the last known coordinates. Re-geocoding needs a geocoding provider this codebase does not have (`getGeolocationDataByCep` resolves from the database, not an external API). Flagged as a known consequence — see Assumptions. |
+| ~~Re-geocoding a corrected address~~ — **no longer out of scope** | Superseded on 2026-08-06 by the auto-assign merge, which brought `RotaService.reassignRotasByAddress` and with it a real geocoding path (`GeolocationService.getLatLongByCep`). A corrected **CEP** now re-evaluates promoter assignment against the new coordinates. See AC34. |
 | Approval workflow for address corrections | User's explicit call: edits write straight through to `Oficina`. No ops review queue. |
 | Marketing / bulk notification campaigns | This is a transactional, one-route-one-notification flow, not a messaging campaign tool. |
 | Reschedule (`reagendar`) implementation | User's explicit call: reserve the `REAGENDADO` STATUS value and the `/visita/reagendar` URL shape now, but ship no route or logic for it in this feature. |
@@ -125,6 +125,7 @@ Every ambiguity is resolved or recorded here — nothing is left silently unclea
 31. WHEN the reparador submits `PUT /visita/endereco` with a valid `visita:confirmar` JWT and a corrected address THEN the system SHALL update only the address columns of the linked `MAIN_REGISTER.OFICINA` row, SHALL apply the same `ENVIADO`→`CONFIRMADO` transition and audit fields as AC19, and SHALL set `ENDERECO_ATUALIZADO` to true on the `NotificacaoVisita`.
 32. IF a `PUT /visita/endereco` request carries any field outside the address column allowlist THEN the system SHALL reject the request with a validation error and SHALL NOT write to `Oficina`.
 33. IF the `Oficina` address update fails at the database level (including a missing `UPDATE` grant on `MAIN_REGISTER`) THEN the system SHALL leave `NotificacaoVisita` STATUS unchanged, SHALL NOT report the confirmation as successful, and SHALL surface a distinct error state to the caller.
+34. WHEN an address correction changes the workshop's `CEP` and the `CONFIRMADO` transition succeeds THEN the system SHALL re-evaluate promoter assignment for that workshop against the corrected coordinates, after the transition is persisted. IF the re-evaluation fails for any reason — including no active route to reassign or an unresolvable `CEP` — THEN the system SHALL leave the confirmation intact and SHALL NOT surface the failure to the reparador. IF the correction leaves `CEP` unchanged THEN the system SHALL NOT re-evaluate assignment, since geocoding resolves from `CEP` alone.
 
 **HTTP status codes (normative):**
 
@@ -231,6 +232,7 @@ Each requirement gets a unique ID for tracking across design, tasks, and validat
 | NOTIF-31 | P1: confirmation page returns current registered address, no visit date | CON26-88 | Design | Implementing |
 | NOTIF-32 | P1: address correction writes to Oficina + confirms, allowlisted columns only | CON26-87 | Design | Implementing |
 | NOTIF-33 | P1: address write failure does not report a false confirmation | CON26-87 | Design | Implementing |
+| NOTIF-34 | P1: a corrected CEP re-evaluates promoter assignment, isolated from the confirmation | CON26-87 | Design | Implementing |
 
 **ID format:** `NOTIF-NN`
 
