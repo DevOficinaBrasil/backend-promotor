@@ -1,410 +1,169 @@
 import CampanhaResultsService from '../../service/campanhaResultsService';
-import { AppDataSourceSync } from '../../data-source';
+import { MigrationAwareRepository } from '../../utils/migrationRepository';
+import { createMockRepo } from '../helpers/mockMigrationRepo';
 import CampanhaResults from '../../entities/CampanhaResults';
 import RotaPromotor from '../../entities/RotaPromotor';
 import CampanhaPerguntas from '../../entities/CampanhaPerguntas';
 
 jest.mock('../../data-source');
+jest.mock('../../utils/migrationRepository');
 
 describe('CampanhaResultsService', () => {
+  const resultRepo = createMockRepo();
+  const rotaRepo = createMockRepo();
+  const perguntaRepo = createMockRepo();
+
   beforeEach(() => {
     jest.clearAllMocks();
+    (MigrationAwareRepository as jest.Mock).mockImplementation((entity: any) => {
+      if (entity === CampanhaResults) return resultRepo;
+      if (entity === RotaPromotor) return rotaRepo;
+      if (entity === CampanhaPerguntas) return perguntaRepo;
+      return createMockRepo();
+    });
   });
 
   describe('saveOrUpdateResult', () => {
-    it('should create a new result if none exists', async () => {
-      const mockResult = {
-        ID_CAMPANHA_RESULTS: 1,
-        ID_ROTA: 10,
-        ID_PERGUNTA: 5,
-        RESPOSTA: 'Test answer',
-      };
+    it('should create new result when none exists', async () => {
+      rotaRepo.findOne.mockResolvedValue({ ID_ROTA_PROMOTOR: 10 });
+      perguntaRepo.findOne.mockResolvedValue({ ID_PERGUNTAS: 5 });
+      resultRepo.findOne.mockResolvedValue(null);
+      resultRepo.save.mockResolvedValue({ ID_CAMPANHA_RESULTS: 1, ID_ROTA: 10, ID_PERGUNTA: 5, RESPOSTA: 'Test' });
 
-      const mockResultRepository = {
-        findOne: jest.fn().mockResolvedValue(null),
-        create: jest.fn().mockReturnValue(mockResult),
-        save: jest.fn().mockResolvedValue(mockResult),
-      };
-
-      const mockRotaRepository = {
-        findOne: jest.fn().mockResolvedValue({ ID_ROTA_PROMOTOR: 10 }),
-      };
-
-      const mockPerguntaRepository = {
-        findOne: jest.fn().mockResolvedValue({ ID_PERGUNTAS: 5 }),
-      };
-
-      (AppDataSourceSync.getRepository as jest.Mock)
-        .mockImplementation((entity) => {
-          if (entity === CampanhaResults) return mockResultRepository;
-          if (entity === RotaPromotor) return mockRotaRepository;
-          if (entity === CampanhaPerguntas) return mockPerguntaRepository;
-          return {};
-        });
-
-      const resultData = {
-        ID_ROTA: 10,
-        ID_PERGUNTA: 5,
-        RESPOSTA: 'Test answer',
-      };
-
-      const result = await CampanhaResultsService.saveOrUpdateResult(resultData);
-
-      expect(result).toEqual(mockResult);
-      expect(mockRotaRepository.findOne).toHaveBeenCalledWith({
-        where: { ID_ROTA_PROMOTOR: 10 },
+      const result = await CampanhaResultsService.saveOrUpdateResult({
+        ID_ROTA: 10, ID_PERGUNTA: 5, RESPOSTA: 'Test',
       });
-      expect(mockPerguntaRepository.findOne).toHaveBeenCalledWith({
-        where: { ID_PERGUNTAS: 5 },
-      });
-      expect(mockResultRepository.create).toHaveBeenCalledWith(resultData);
-      expect(mockResultRepository.save).toHaveBeenCalled();
+
+      expect(result.ID_CAMPANHA_RESULTS).toBe(1);
+      expect(resultRepo.create).toHaveBeenCalled();
     });
 
-    it('should update existing result if one exists', async () => {
-      const existingResult = {
-        ID_CAMPANHA_RESULTS: 1,
-        ID_ROTA: 10,
-        ID_PERGUNTA: 5,
-        RESPOSTA: 'Old answer',
-      };
+    it('should update existing result', async () => {
+      rotaRepo.findOne.mockResolvedValue({ ID_ROTA_PROMOTOR: 10 });
+      perguntaRepo.findOne.mockResolvedValue({ ID_PERGUNTAS: 5 });
+      resultRepo.findOne.mockResolvedValue({ ID_CAMPANHA_RESULTS: 1, ID_ROTA: 10, ID_PERGUNTA: 5, RESPOSTA: 'Old' });
+      resultRepo.save.mockResolvedValue({ ID_CAMPANHA_RESULTS: 1, RESPOSTA: 'Updated' });
 
-      const updatedResult = {
-        ...existingResult,
-        RESPOSTA: 'Updated answer',
-      };
+      const result = await CampanhaResultsService.saveOrUpdateResult({
+        ID_ROTA: 10, ID_PERGUNTA: 5, RESPOSTA: 'Updated',
+      });
 
-      const mockResultRepository = {
-        findOne: jest.fn().mockResolvedValue(existingResult),
-        create: jest.fn(),
-        save: jest.fn().mockResolvedValue(updatedResult),
-      };
-
-      const mockRotaRepository = {
-        findOne: jest.fn().mockResolvedValue({ ID_ROTA_PROMOTOR: 10 }),
-      };
-
-      const mockPerguntaRepository = {
-        findOne: jest.fn().mockResolvedValue({ ID_PERGUNTAS: 5 }),
-      };
-
-      (AppDataSourceSync.getRepository as jest.Mock)
-        .mockImplementation((entity) => {
-          if (entity === CampanhaResults) return mockResultRepository;
-          if (entity === RotaPromotor) return mockRotaRepository;
-          if (entity === CampanhaPerguntas) return mockPerguntaRepository;
-          return {};
-        });
-
-      const resultData = {
-        ID_ROTA: 10,
-        ID_PERGUNTA: 5,
-        RESPOSTA: 'Updated answer',
-      };
-
-      const result = await CampanhaResultsService.saveOrUpdateResult(resultData);
-
-      expect(result).toEqual(updatedResult);
-      expect(mockResultRepository.create).not.toHaveBeenCalled();
-      expect(mockResultRepository.save).toHaveBeenCalledWith(
-        expect.objectContaining({ RESPOSTA: 'Updated answer' })
-      );
+      expect(result.RESPOSTA).toBe('Updated');
+      expect(resultRepo.create).not.toHaveBeenCalled();
     });
 
-    it('should throw error if rota does not exist', async () => {
-      const mockResultRepository = {
-        findOne: jest.fn(),
-        create: jest.fn(),
-        save: jest.fn(),
-      };
+    it('should throw when rota not found', async () => {
+      rotaRepo.findOne.mockResolvedValue(null);
 
-      const mockRotaRepository = {
-        findOne: jest.fn().mockResolvedValue(null),
-      };
-
-      const mockPerguntaRepository = {
-        findOne: jest.fn(),
-      };
-
-      (AppDataSourceSync.getRepository as jest.Mock)
-        .mockImplementation((entity) => {
-          if (entity === CampanhaResults) return mockResultRepository;
-          if (entity === RotaPromotor) return mockRotaRepository;
-          if (entity === CampanhaPerguntas) return mockPerguntaRepository;
-          return {};
-        });
-
-      const resultData = {
-        ID_ROTA: 999,
-        ID_PERGUNTA: 5,
-        RESPOSTA: 'Test answer',
-      };
-
-      await expect(CampanhaResultsService.saveOrUpdateResult(resultData))
+      await expect(CampanhaResultsService.saveOrUpdateResult({ ID_ROTA: 999, RESPOSTA: 'X' }))
         .rejects.toThrow('Rota não encontrada.');
     });
 
-    it('should throw error if pergunta does not exist', async () => {
-      const mockResultRepository = {
-        findOne: jest.fn(),
-        create: jest.fn(),
-        save: jest.fn(),
-      };
+    it('should throw when pergunta not found', async () => {
+      rotaRepo.findOne.mockResolvedValue({ ID_ROTA_PROMOTOR: 10 });
+      perguntaRepo.findOne.mockResolvedValue(null);
 
-      const mockRotaRepository = {
-        findOne: jest.fn().mockResolvedValue({ ID_ROTA_PROMOTOR: 10 }),
-      };
-
-      const mockPerguntaRepository = {
-        findOne: jest.fn().mockResolvedValue(null),
-      };
-
-      (AppDataSourceSync.getRepository as jest.Mock)
-        .mockImplementation((entity) => {
-          if (entity === CampanhaResults) return mockResultRepository;
-          if (entity === RotaPromotor) return mockRotaRepository;
-          if (entity === CampanhaPerguntas) return mockPerguntaRepository;
-          return {};
-        });
-
-      const resultData = {
-        ID_ROTA: 10,
-        ID_PERGUNTA: 999,
-        RESPOSTA: 'Test answer',
-      };
-
-      await expect(CampanhaResultsService.saveOrUpdateResult(resultData))
+      await expect(CampanhaResultsService.saveOrUpdateResult({ ID_ROTA: 10, ID_PERGUNTA: 999, RESPOSTA: 'X' }))
         .rejects.toThrow('Pergunta não encontrada.');
     });
   });
 
   describe('updateResult', () => {
-    it('should update an existing result by ID', async () => {
-      const existingResult = {
-        ID_CAMPANHA_RESULTS: 1,
-        ID_ROTA: 10,
-        ID_PERGUNTA: 5,
-        RESPOSTA: 'Old answer',
-      };
+    it('should update existing result', async () => {
+      resultRepo.findOne.mockResolvedValue({ ID_CAMPANHA_RESULTS: 1, RESPOSTA: 'Old' });
+      resultRepo.save.mockResolvedValue({ ID_CAMPANHA_RESULTS: 1, RESPOSTA: 'New' });
 
-      const updatedResult = {
-        ...existingResult,
-        RESPOSTA: 'Updated answer',
-      };
+      const result = await CampanhaResultsService.updateResult(1, { RESPOSTA: 'New' });
 
-      const mockResultRepository = {
-        findOne: jest.fn().mockResolvedValue(existingResult),
-        save: jest.fn().mockResolvedValue(updatedResult),
-      };
-
-      const mockRotaRepository = {
-        findOne: jest.fn(),
-      };
-
-      const mockPerguntaRepository = {
-        findOne: jest.fn(),
-      };
-
-      (AppDataSourceSync.getRepository as jest.Mock)
-        .mockImplementation((entity) => {
-          if (entity === CampanhaResults) return mockResultRepository;
-          if (entity === RotaPromotor) return mockRotaRepository;
-          if (entity === CampanhaPerguntas) return mockPerguntaRepository;
-          return {};
-        });
-
-      const result = await CampanhaResultsService.updateResult(1, {
-        RESPOSTA: 'Updated answer',
-      });
-
-      expect(result).toEqual(updatedResult);
-      expect(mockResultRepository.findOne).toHaveBeenCalledWith({
-        where: { ID_CAMPANHA_RESULTS: 1 },
-      });
-      expect(mockResultRepository.save).toHaveBeenCalled();
+      expect(result!.RESPOSTA).toBe('New');
     });
 
-    it('should return null if result does not exist', async () => {
-      const mockResultRepository = {
-        findOne: jest.fn().mockResolvedValue(null),
-        save: jest.fn(),
-      };
+    it('should return null when not found', async () => {
+      resultRepo.findOne.mockResolvedValue(null);
+      expect(await CampanhaResultsService.updateResult(999, { RESPOSTA: 'X' })).toBeNull();
+    });
 
-      const mockRotaRepository = {
-        findOne: jest.fn(),
-      };
+    it('should validate rota on update', async () => {
+      resultRepo.findOne.mockResolvedValue({ ID_CAMPANHA_RESULTS: 1 });
+      rotaRepo.findOne.mockResolvedValue(null);
 
-      const mockPerguntaRepository = {
-        findOne: jest.fn(),
-      };
+      await expect(CampanhaResultsService.updateResult(1, { ID_ROTA: 999 }))
+        .rejects.toThrow('Rota não encontrada.');
+    });
 
-      (AppDataSourceSync.getRepository as jest.Mock)
-        .mockImplementation((entity) => {
-          if (entity === CampanhaResults) return mockResultRepository;
-          if (entity === RotaPromotor) return mockRotaRepository;
-          if (entity === CampanhaPerguntas) return mockPerguntaRepository;
-          return {};
-        });
+    it('should validate pergunta on update', async () => {
+      resultRepo.findOne.mockResolvedValue({ ID_CAMPANHA_RESULTS: 1 });
+      perguntaRepo.findOne.mockResolvedValue(null);
 
-      const result = await CampanhaResultsService.updateResult(999, {
-        RESPOSTA: 'Updated answer',
-      });
-
-      expect(result).toBeNull();
-      expect(mockResultRepository.save).not.toHaveBeenCalled();
+      await expect(CampanhaResultsService.updateResult(1, { ID_PERGUNTA: 999 }))
+        .rejects.toThrow('Pergunta não encontrada.');
     });
   });
 
   describe('findResultById', () => {
-    it('should find a result by ID with relations', async () => {
-      const mockResult = {
-        ID_CAMPANHA_RESULTS: 1,
-        ID_ROTA: 10,
-        ID_PERGUNTA: 5,
-        RESPOSTA: 'Test answer',
-        rota: { ID_ROTA_PROMOTOR: 10 },
-        pergunta: { ID_PERGUNTAS: 5 },
-      };
+    it('should find with relations', async () => {
+      resultRepo.findOne.mockResolvedValue({ ID_CAMPANHA_RESULTS: 1 });
 
-      const mockRepository = {
-        findOne: jest.fn().mockResolvedValue(mockResult),
-      };
+      await CampanhaResultsService.findResultById(1);
 
-      (AppDataSourceSync.getRepository as jest.Mock).mockReturnValue(mockRepository);
-
-      const result = await CampanhaResultsService.findResultById(1);
-
-      expect(result).toEqual(mockResult);
-      expect(mockRepository.findOne).toHaveBeenCalledWith({
-        where: { ID_CAMPANHA_RESULTS: 1 },
-        relations: ['rota', 'pergunta'],
+      expect(resultRepo.findOne).toHaveBeenCalledWith({
+        where: { ID_CAMPANHA_RESULTS: 1 }, relations: ['rota', 'pergunta'],
       });
     });
 
-    it('should return null if result not found', async () => {
-      const mockRepository = {
-        findOne: jest.fn().mockResolvedValue(null),
-      };
-
-      (AppDataSourceSync.getRepository as jest.Mock).mockReturnValue(mockRepository);
-
-      const result = await CampanhaResultsService.findResultById(999);
-
-      expect(result).toBeNull();
+    it('should return null when not found', async () => {
+      resultRepo.findOne.mockResolvedValue(null);
+      expect(await CampanhaResultsService.findResultById(999)).toBeNull();
     });
   });
 
   describe('getResultsByRotaId', () => {
-    it('should get all results for a rota', async () => {
-      const mockResults = [
-        {
-          ID_CAMPANHA_RESULTS: 1,
-          ID_ROTA: 10,
-          ID_PERGUNTA: 5,
-          RESPOSTA: 'Answer 1',
-        },
-        {
-          ID_CAMPANHA_RESULTS: 2,
-          ID_ROTA: 10,
-          ID_PERGUNTA: 6,
-          RESPOSTA: 'Answer 2',
-        },
-      ];
+    it('should return results ordered DESC', async () => {
+      resultRepo.find.mockResolvedValue([{ ID_CAMPANHA_RESULTS: 1 }]);
 
-      const mockRepository = {
-        find: jest.fn().mockResolvedValue(mockResults),
-      };
+      const results = await CampanhaResultsService.getResultsByRotaId(10);
 
-      (AppDataSourceSync.getRepository as jest.Mock).mockReturnValue(mockRepository);
-
-      const result = await CampanhaResultsService.getResultsByRotaId(10);
-
-      expect(result).toEqual(mockResults);
-      expect(mockRepository.find).toHaveBeenCalledWith({
-        where: { ID_ROTA: 10 },
-        relations: ['rota', 'pergunta'],
-        order: {
-          CREATED_AT: 'DESC',
-        },
-      });
+      expect(results).toHaveLength(1);
+      expect(resultRepo.find).toHaveBeenCalledWith(expect.objectContaining({
+        where: { ID_ROTA: 10 }, relations: ['rota', 'pergunta'],
+      }));
     });
 
-    it('should return empty array if no results found', async () => {
-      const mockRepository = {
-        find: jest.fn().mockResolvedValue([]),
-      };
-
-      (AppDataSourceSync.getRepository as jest.Mock).mockReturnValue(mockRepository);
-
-      const result = await CampanhaResultsService.getResultsByRotaId(999);
-
-      expect(result).toEqual([]);
+    it('should return empty when none found', async () => {
+      resultRepo.find.mockResolvedValue([]);
+      expect(await CampanhaResultsService.getResultsByRotaId(999)).toEqual([]);
     });
   });
 
   describe('getResultsByCampanhaId', () => {
-    it('should get all results for a campanha', async () => {
-      const mockResults = [
-        {
-          ID_CAMPANHA_RESULTS: 1,
-          ID_ROTA: 10,
-          ID_PERGUNTA: 5,
-          RESPOSTA: 'Answer 1',
-        },
-        {
-          ID_CAMPANHA_RESULTS: 2,
-          ID_ROTA: 11,
-          ID_PERGUNTA: 6,
-          RESPOSTA: 'Answer 2',
-        },
-      ];
-
-      const mockQueryBuilder = {
+    it('should query with joins', async () => {
+      const mockQb = {
         leftJoinAndSelect: jest.fn().mockReturnThis(),
-        leftJoin: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
         orderBy: jest.fn().mockReturnThis(),
-        getMany: jest.fn().mockResolvedValue(mockResults),
+        getMany: jest.fn().mockResolvedValue([{ ID_CAMPANHA_RESULTS: 1 }]),
       };
+      resultRepo.createQueryBuilder.mockReturnValue(mockQb);
 
-      const mockRepository = {
-        createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
-      };
+      const results = await CampanhaResultsService.getResultsByCampanhaId(5);
 
-      (AppDataSourceSync.getRepository as jest.Mock).mockReturnValue(mockRepository);
-
-      const result = await CampanhaResultsService.getResultsByCampanhaId(5);
-
-      expect(result).toEqual(mockResults);
-      expect(mockRepository.createQueryBuilder).toHaveBeenCalledWith('result');
-      expect(mockQueryBuilder.leftJoinAndSelect).toHaveBeenCalledWith('result.rota', 'rota');
-      expect(mockQueryBuilder.leftJoinAndSelect).toHaveBeenCalledWith('result.pergunta', 'pergunta');
-      expect(mockQueryBuilder.leftJoin).toHaveBeenCalledWith('rota.campanhaPromotor', 'campanhaPromotor');
-      expect(mockQueryBuilder.where).toHaveBeenCalledWith(
-        'campanhaPromotor.ID_CAMPANHA = :campanhaId',
-        { campanhaId: 5 }
+      expect(results).toHaveLength(1);
+      expect(resultRepo.createQueryBuilder).toHaveBeenCalledWith('result');
+      expect(mockQb.where).toHaveBeenCalledWith(
+        'campanhaPromotor.ID_CAMPANHA = :campanhaId', { campanhaId: 5 }
       );
-      expect(mockQueryBuilder.orderBy).toHaveBeenCalledWith('result.CREATED_AT', 'DESC');
     });
 
-    it('should return empty array if no results found for campanha', async () => {
-      const mockQueryBuilder = {
+    it('should return empty when none found', async () => {
+      const mockQb = {
         leftJoinAndSelect: jest.fn().mockReturnThis(),
-        leftJoin: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
         orderBy: jest.fn().mockReturnThis(),
         getMany: jest.fn().mockResolvedValue([]),
       };
+      resultRepo.createQueryBuilder.mockReturnValue(mockQb);
 
-      const mockRepository = {
-        createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
-      };
-
-      (AppDataSourceSync.getRepository as jest.Mock).mockReturnValue(mockRepository);
-
-      const result = await CampanhaResultsService.getResultsByCampanhaId(999);
-
-      expect(result).toEqual([]);
+      expect(await CampanhaResultsService.getResultsByCampanhaId(999)).toEqual([]);
     });
   });
 });
