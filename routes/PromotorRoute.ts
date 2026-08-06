@@ -285,12 +285,12 @@ createDocumentedRoute(router, {
 // Unlink promoter from campaign(s)
 createDocumentedRoute(router, {
   method: 'delete',
-  path: '/unlink-campanha',
+  path: '/unlink-campanha-promotor/:id_campanha_promotor',
   handler: PromotorController.unlinkCampanhaPromotor,
   basePath: '/promotor',
   middlewares: [],
   schemas: {
-    body: UnlinkCampanhaPromotorSchema,
+    params: UnlinkCampanhaPromotorSchema,
   },
   documentation: {
     tags: ['Promotor'],

@@ -44,6 +44,15 @@ export default class Promotor {
   @Column({ type: "int", nullable: true, name: "CREATED_BY" })
   CREATED_BY?: number;
 
+  @Column({ type: "varchar", length: 30, nullable: true, name: "CEP" })
+  CEP?: string;
+
+  @Column({ type: "varchar", length: 20, nullable: true, name: "LONGITUDE" })
+  LONGITUDE?: string;
+
+  @Column({ type: "varchar", length: 20, nullable: true, name: "LATITUDE" })
+  LATITUDE?: string;
+
   @UpdateDateColumn({
     type: "timestamp",
     default: () => "CURRENT_TIMESTAMP",

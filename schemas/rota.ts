@@ -338,3 +338,51 @@ export const ReorderRotasResponseSchema = z.object({
     })),
   }),
 });
+
+/**
+ * POST /rota/reassign-by-address — reatribuir rotas após mudança de endereço
+ */
+export const ReassignByAddressSchema = z.object({
+  CEP: z.string().min(8).max(10),
+  ID_OFICINA: z.coerce.number().int().positive(),
+});
+
+const ReatribuicaoStatusSchema = z.enum([
+  "reatribuida",
+  "mantida_dentro_do_raio",
+  "sem_promotor_disponivel",
+]);
+
+export const ReassignByAddressResponseSchema = z.object({
+  message: z.string(),
+  data: z.object({
+    oficina: z.object({
+      ID_OFICINA: z.number(),
+      novo_cep: z.string(),
+      nova_latitude: z.number(),
+      nova_longitude: z.number(),
+    }),
+    campanhas_processadas: z.number(),
+    reatribuicoes: z.array(z.object({
+      ID_CAMPANHA: z.number(),
+      promotor_anterior: z.object({
+        ID_PROMOTOR: z.number(),
+        NOME: z.string(),
+        distancia_km: z.number(),
+      }),
+      promotor_novo: z.object({
+        ID_PROMOTOR: z.number(),
+        NOME: z.string(),
+        distancia_km: z.number(),
+      }).nullable(),
+      rota_removida: z.number().nullable(),
+      rota_criada: z.number().nullable(),
+      status: ReatribuicaoStatusSchema,
+    })),
+    resumo: z.object({
+      mantidas: z.number(),
+      reatribuidas: z.number(),
+      sem_promotor_disponivel: z.number(),
+    }),
+  }),
+});

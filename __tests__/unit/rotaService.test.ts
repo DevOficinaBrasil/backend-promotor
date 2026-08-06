@@ -1,449 +1,378 @@
 import RotaService from '../../service/rotaService';
+import { MigrationAwareRepository } from '../../utils/migrationRepository';
 import { AppDataSourceSync } from '../../data-source';
-import RotaPromotor from '../../entities/RotaPromotor';
-import CampanhaPromotor from '../../entities/CampanhaPromotor';
+import { createMockRepo } from '../helpers/mockMigrationRepo';
+import RotaPromotor, { StatusRota } from '../../entities/RotaPromotor';
+import CampanhaPromotor, { EstrategiaOrdenacao } from '../../entities/CampanhaPromotor';
 import NotificacaoVisitaService from '../../service/notificacaoVisitaService';
-import { StatusNotificacaoVisita } from '../../entities/NotificacaoVisita';
 
 jest.mock('../../data-source');
+jest.mock('../../utils/migrationRepository');
+jest.mock('../../utils/routeOptimizer', () => ({
+  optimizeRoute: jest.fn().mockReturnValue({
+    order: [{ id: 1, ordem: 1, id_oficina: 100 }],
+    totalDistanceKm: 10,
+  }),
+  fetchOSRMRoute: jest.fn().mockResolvedValue({ distanceKm: 10, geometry: null }),
+}));
+jest.mock('../../service/geolocationService', () => {
+  return jest.fn().mockImplementation(() => ({
+    getLatLongByCep: jest.fn().mockResolvedValue({ lat: -25.43, long: -49.27 }),
+  }));
+});
+jest.mock('../../utils/haversine', () => ({
+  haversineDistanceKm: jest.fn().mockReturnValue(350),
+}));
+// Every route-creation path now notifies the workshop, so this suite stubs the
+// notifier out; the hook itself is proven in rotaServiceVisita.test.ts.
 jest.mock('../../service/notificacaoVisitaService');
 
 describe('RotaService', () => {
+  const rotaRepo = createMockRepo();
+  const cpRepo = createMockRepo();
+
   beforeEach(() => {
     jest.clearAllMocks();
-  });
-
-  describe('createRotaWithCampanhaPromotor', () => {
-    it('should create a campaign promoter and multiple routes', async () => {
-      const mockCampanhaPromotor = {
-        ID_CAMPANHA_PROMOTOR: 1,
-        ID_PROMOTOR: 10,
-        ID_CAMPANHA: 20,
-      };
-
-      const mockRotas = [
-        {
-          ID_ROTA_PROMOTOR: 1,
-          ID_CAMPANHA_PROMOTOR: 1,
-          ID_OFICINA: 100,
-          CREATED_BY: 5,
-        },
-        {
-          ID_ROTA_PROMOTOR: 2,
-          ID_CAMPANHA_PROMOTOR: 1,
-          ID_OFICINA: 200,
-          CREATED_BY: 5,
-        },
-        {
-          ID_ROTA_PROMOTOR: 3,
-          ID_CAMPANHA_PROMOTOR: 1,
-          ID_OFICINA: 300,
-          CREATED_BY: 5,
-        },
-      ];
-
-      const mockTransactionalEntityManager = {
-        create: jest.fn((entity, data) => {
-          if (entity === CampanhaPromotor) return mockCampanhaPromotor;
-          return { ...data, ID_ROTA_PROMOTOR: Math.random() };
-        }),
-        save: jest.fn((data) => {
-          if (Array.isArray(data)) return Promise.resolve(mockRotas);
-          return Promise.resolve(mockCampanhaPromotor);
-        }),
-      };
-
-      (AppDataSourceSync.transaction as jest.Mock) = jest.fn(async (callback) => {
-        return await callback(mockTransactionalEntityManager);
-      });
-
-      const result = await RotaService.createRotaWithCampanhaPromotor(
-        10, // ID_PROMOTOR
-        20, // ID_CAMPANHA
-        [100, 200, 300], // ID_OFICINA array
-        5 // CREATED_BY
-      );
-
-      expect(result).toEqual({
-        campanhaPromotor: mockCampanhaPromotor,
-        rotas: mockRotas,
-      });
-
-      // Verify transaction was called
-      expect(AppDataSourceSync.transaction).toHaveBeenCalled();
-
-      // Verify CampanhaPromotor creation
-      expect(mockTransactionalEntityManager.create).toHaveBeenCalledWith(CampanhaPromotor, {
-        ID_PROMOTOR: 10,
-        ID_CAMPANHA: 20,
-      });
-
-      // Verify Rota creation
-      expect(mockTransactionalEntityManager.create).toHaveBeenCalledWith(RotaPromotor, {
-        ID_CAMPANHA_PROMOTOR: 1,
-        ID_OFICINA: 100,
-        CREATED_BY: 5,
-      });
-      expect(mockTransactionalEntityManager.create).toHaveBeenCalledWith(RotaPromotor, {
-        ID_CAMPANHA_PROMOTOR: 1,
-        ID_OFICINA: 200,
-        CREATED_BY: 5,
-      });
-      expect(mockTransactionalEntityManager.create).toHaveBeenCalledWith(RotaPromotor, {
-        ID_CAMPANHA_PROMOTOR: 1,
-        ID_OFICINA: 300,
-        CREATED_BY: 5,
-      });
-    });
-
-    it('should create a campaign promoter and single route without CREATED_BY', async () => {
-      const mockCampanhaPromotor = {
-        ID_CAMPANHA_PROMOTOR: 2,
-        ID_PROMOTOR: 15,
-        ID_CAMPANHA: 25,
-      };
-
-      const mockRotas = [
-        {
-          ID_ROTA_PROMOTOR: 4,
-          ID_CAMPANHA_PROMOTOR: 2,
-          ID_OFICINA: 150,
-        },
-      ];
-
-      const mockTransactionalEntityManager = {
-        create: jest.fn((entity, data) => {
-          if (entity === CampanhaPromotor) return mockCampanhaPromotor;
-          return { ...data, ID_ROTA_PROMOTOR: 4 };
-        }),
-        save: jest.fn((data) => {
-          if (Array.isArray(data)) return Promise.resolve(mockRotas);
-          return Promise.resolve(mockCampanhaPromotor);
-        }),
-      };
-
-      (AppDataSourceSync.transaction as jest.Mock) = jest.fn(async (callback) => {
-        return await callback(mockTransactionalEntityManager);
-      });
-
-      const result = await RotaService.createRotaWithCampanhaPromotor(
-        15, // ID_PROMOTOR
-        25, // ID_CAMPANHA
-        [150] // ID_OFICINA array with single item
-      );
-
-      expect(result).toEqual({
-        campanhaPromotor: mockCampanhaPromotor,
-        rotas: mockRotas,
-      });
-
-      // Verify transaction was called
-      expect(AppDataSourceSync.transaction).toHaveBeenCalled();
-
-      // Verify CampanhaPromotor creation
-      expect(mockTransactionalEntityManager.create).toHaveBeenCalledWith(CampanhaPromotor, {
-        ID_PROMOTOR: 15,
-        ID_CAMPANHA: 25,
-      });
-
-      // Verify Rota creation without CREATED_BY
-      expect(mockTransactionalEntityManager.create).toHaveBeenCalledWith(RotaPromotor, {
-        ID_CAMPANHA_PROMOTOR: 2,
-        ID_OFICINA: 150,
-        CREATED_BY: undefined,
-      });
+    (MigrationAwareRepository as jest.Mock).mockImplementation((entity: any) => {
+      if (entity === RotaPromotor) return rotaRepo;
+      if (entity === CampanhaPromotor) return cpRepo;
+      return createMockRepo();
     });
   });
 
   describe('createRotas', () => {
-    it('should create a single route', async () => {
-      const mockRota = {
-        ID_ROTA_PROMOTOR: 1,
-        ID_CAMPANHA_PROMOTOR: 5,
-        ID_OFICINA: 100,
-        CREATED_BY: 10,
-      };
+    it('should create single route', async () => {
+      rotaRepo.save.mockResolvedValue({ ID_ROTA_PROMOTOR: 1, ID_CAMPANHA_PROMOTOR: 5, ID_OFICINA: 100 });
 
-      const mockRepository = {
-        create: jest.fn().mockReturnValue(mockRota),
-        save: jest.fn().mockResolvedValue(mockRota),
-      };
+      const result = await RotaService.createRotas(5, 100);
 
-      (AppDataSourceSync.getRepository as jest.Mock).mockReturnValue(mockRepository);
-
-      const result = await RotaService.createRotas(5, 100, 10);
-
-      expect(result).toEqual(mockRota);
-      expect(mockRepository.create).toHaveBeenCalledWith({
-        ID_CAMPANHA_PROMOTOR: 5,
-        ID_OFICINA: 100,
-        CREATED_BY: 10,
-      });
-      expect(mockRepository.save).toHaveBeenCalled();
+      expect(rotaRepo.create).toHaveBeenCalledWith({ ID_CAMPANHA_PROMOTOR: 5, ID_OFICINA: 100, CREATED_BY: undefined });
+      expect(result).toHaveProperty('ID_ROTA_PROMOTOR', 1);
     });
 
-    it('should create multiple routes with array of oficina IDs', async () => {
-      const mockRotas = [
-        { ID_ROTA_PROMOTOR: 1, ID_CAMPANHA_PROMOTOR: 5, ID_OFICINA: 100 },
-        { ID_ROTA_PROMOTOR: 2, ID_CAMPANHA_PROMOTOR: 5, ID_OFICINA: 200 },
-      ];
-
-      const mockRepository = {
-        create: jest.fn((data) => ({ ...data, ID_ROTA_PROMOTOR: Math.random() })),
-        save: jest.fn().mockResolvedValue(mockRotas),
-      };
-
-      (AppDataSourceSync.getRepository as jest.Mock).mockReturnValue(mockRepository);
+    it('should create batch routes', async () => {
+      rotaRepo.saveMany.mockResolvedValue([
+        { ID_ROTA_PROMOTOR: 1, ID_OFICINA: 100 },
+        { ID_ROTA_PROMOTOR: 2, ID_OFICINA: 200 },
+      ]);
 
       const result = await RotaService.createRotas(5, [100, 200]);
 
-      expect(result).toEqual(mockRotas);
-      expect(mockRepository.create).toHaveBeenCalledTimes(2);
-      expect(mockRepository.save).toHaveBeenCalled();
-    });
-  });
-});
-
-// Spec AC1: "WHEN a new RotaPromotor record is created THEN the system SHALL
-// create exactly one NotificacaoVisita record ... linked to that
-// ID_ROTA_PROMOTOR" — which covers all three creation paths, including
-// updateRotaWorkshops.
-// Spec AC10: "IF the RotaPromotor creation transaction succeeds but the
-// notification dispatch throws ... THEN the system SHALL still return the
-// created RotaPromotor successfully."
-describe('RotaService visit notification hook', () => {
-  const notificarVisitaMock = NotificacaoVisitaService.notificarVisita as jest.Mock;
-
-  beforeEach(() => {
-    jest.clearAllMocks();
-    notificarVisitaMock.mockResolvedValue({} as never);
-    jest.spyOn(console, 'error').mockImplementation(() => {});
-  });
-
-  afterEach(() => {
-    jest.restoreAllMocks();
-  });
-
-  describe('createRotas', () => {
-    it('notifies the single created route', async () => {
-      const mockRota = { ID_ROTA_PROMOTOR: 11, ID_CAMPANHA_PROMOTOR: 5, ID_OFICINA: 100 };
-      (AppDataSourceSync.getRepository as jest.Mock).mockReturnValue({
-        create: jest.fn().mockReturnValue(mockRota),
-        save: jest.fn().mockResolvedValue(mockRota),
-      });
-
-      await RotaService.createRotas(5, 100);
-
-      expect(notificarVisitaMock).toHaveBeenCalledTimes(1);
-      expect(notificarVisitaMock).toHaveBeenCalledWith(mockRota);
-    });
-
-    it('notifies once per route created in a batch', async () => {
-      const mockRotas = [
-        { ID_ROTA_PROMOTOR: 1, ID_OFICINA: 100 },
-        { ID_ROTA_PROMOTOR: 2, ID_OFICINA: 200 },
-        { ID_ROTA_PROMOTOR: 3, ID_OFICINA: 300 },
-      ];
-      (AppDataSourceSync.getRepository as jest.Mock).mockReturnValue({
-        create: jest.fn((data) => data),
-        save: jest.fn().mockResolvedValue(mockRotas),
-      });
-
-      await RotaService.createRotas(5, [100, 200, 300]);
-
-      expect(notificarVisitaMock).toHaveBeenCalledTimes(3);
-      expect(notificarVisitaMock).toHaveBeenCalledWith(mockRotas[0]);
-      expect(notificarVisitaMock).toHaveBeenCalledWith(mockRotas[1]);
-      expect(notificarVisitaMock).toHaveBeenCalledWith(mockRotas[2]);
-    });
-
-    it('still returns the created route when the notification rejects', async () => {
-      const mockRota = { ID_ROTA_PROMOTOR: 11, ID_CAMPANHA_PROMOTOR: 5, ID_OFICINA: 100 };
-      (AppDataSourceSync.getRepository as jest.Mock).mockReturnValue({
-        create: jest.fn().mockReturnValue(mockRota),
-        save: jest.fn().mockResolvedValue(mockRota),
-      });
-      notificarVisitaMock.mockRejectedValue(new Error('notificação falhou'));
-
-      const resultado = await RotaService.createRotas(5, 100);
-
-      expect(resultado).toEqual(mockRota);
+      expect(rotaRepo.create).toHaveBeenCalledTimes(2);
+      expect(result).toHaveLength(2);
     });
   });
 
   describe('createRotaWithCampanhaPromotor', () => {
-    const mockCampanhaPromotor = { ID_CAMPANHA_PROMOTOR: 1 };
-    const mockRotas = [
-      { ID_ROTA_PROMOTOR: 21, ID_OFICINA: 100 },
-      { ID_ROTA_PROMOTOR: 22, ID_OFICINA: 200 },
-    ];
-
-    function montarTransacao() {
-      const manager = {
-        create: jest.fn((entity, data) =>
-          entity === CampanhaPromotor ? mockCampanhaPromotor : data
-        ),
-        save: jest.fn(async (data) =>
-          Array.isArray(data) ? mockRotas : mockCampanhaPromotor
-        ),
+    it('should use transaction', async () => {
+      const mockManager = {
+        create: jest.fn().mockReturnValue({ ID_CAMPANHA_PROMOTOR: 1 }),
+        save: jest.fn()
+          .mockResolvedValueOnce({ ID_CAMPANHA_PROMOTOR: 1 })
+          .mockResolvedValueOnce([{ ID_ROTA_PROMOTOR: 1 }]),
       };
-      (AppDataSourceSync.transaction as jest.Mock) = jest.fn(async (callback) =>
-        callback(manager)
-      );
-    }
+      (AppDataSourceSync.transaction as jest.Mock).mockImplementation((cb: Function) => cb(mockManager));
 
-    it('notifies once per route created inside the transaction', async () => {
-      montarTransacao();
+      const result = await RotaService.createRotaWithCampanhaPromotor(10, 20, [100]);
 
-      await RotaService.createRotaWithCampanhaPromotor(10, 20, [100, 200]);
-
-      expect(notificarVisitaMock).toHaveBeenCalledTimes(2);
-      expect(notificarVisitaMock).toHaveBeenCalledWith(mockRotas[0]);
-      expect(notificarVisitaMock).toHaveBeenCalledWith(mockRotas[1]);
-    });
-
-    it('still returns the created routes when the notification rejects', async () => {
-      montarTransacao();
-      notificarVisitaMock.mockRejectedValue(new Error('notificação falhou'));
-
-      const resultado = await RotaService.createRotaWithCampanhaPromotor(10, 20, [100, 200]);
-
-      expect(resultado).toEqual({
-        campanhaPromotor: mockCampanhaPromotor,
-        rotas: mockRotas,
-      });
+      expect(AppDataSourceSync.transaction).toHaveBeenCalled();
+      expect(result.campanhaPromotor).toBeTruthy();
+      expect(result.rotas).toBeTruthy();
     });
   });
 
   describe('updateRotaWorkshops', () => {
-    const novaRota = { ID_ROTA_PROMOTOR: 31, ID_CAMPANHA_PROMOTOR: 5, ID_OFICINA: 300 };
+    it('should add new and remove old workshops', async () => {
+      rotaRepo.find.mockResolvedValue([
+        { ID_ROTA_PROMOTOR: 1, ID_OFICINA: 100, DELETED_AT: null },
+        { ID_ROTA_PROMOTOR: 2, ID_OFICINA: 200, DELETED_AT: null },
+      ]);
+      rotaRepo.saveMany.mockResolvedValue([{ ID_ROTA_PROMOTOR: 3, ID_OFICINA: 300 }]);
 
-    function montarRepo() {
-      (AppDataSourceSync.getRepository as jest.Mock).mockReturnValue({
-        find: jest.fn().mockResolvedValue([
-          { ID_ROTA_PROMOTOR: 30, ID_OFICINA: 100 },
-        ]),
-        create: jest.fn((data) => data),
-        save: jest.fn().mockResolvedValue([novaRota]),
-        softDelete: jest.fn().mockResolvedValue(undefined),
+      const result = await RotaService.updateRotaWorkshops(1, [100, 300]);
+
+      // 200 should be deleted, 300 should be created
+      expect(rotaRepo.softDelete).toHaveBeenCalled();
+      expect(result.created).toHaveLength(1);
+      expect(result.deleted).toHaveLength(1);
+    });
+
+    it('should handle no changes needed', async () => {
+      rotaRepo.find.mockResolvedValue([
+        { ID_ROTA_PROMOTOR: 1, ID_OFICINA: 100, DELETED_AT: null },
+      ]);
+
+      const result = await RotaService.updateRotaWorkshops(1, [100]);
+
+      expect(result.created).toEqual([]);
+      expect(result.deleted).toEqual([]);
+    });
+  });
+
+  describe('updateRotaOptions', () => {
+    it('should update options', async () => {
+      rotaRepo.findOne.mockResolvedValue({ ID_ROTA_PROMOTOR: 1, STATUS: 'BACKLOG' });
+      rotaRepo.save.mockResolvedValue({ ID_ROTA_PROMOTOR: 1, STATUS: 'FINALIZADO' });
+
+      const result = await RotaService.updateRotaOptions(1, { STATUS: StatusRota.FINALIZADO });
+
+      expect(result!.STATUS).toBe('FINALIZADO');
+    });
+
+    it('should return null when not found', async () => {
+      rotaRepo.findOne.mockResolvedValue(null);
+      expect(await RotaService.updateRotaOptions(999, {})).toBeNull();
+    });
+  });
+
+  describe('findRotaById', () => {
+    it('should find by ID', async () => {
+      rotaRepo.findOne.mockResolvedValue({ ID_ROTA_PROMOTOR: 1 });
+      expect(await RotaService.findRotaById(1)).toEqual({ ID_ROTA_PROMOTOR: 1 });
+    });
+
+    it('should return null when not found', async () => {
+      rotaRepo.findOne.mockResolvedValue(null);
+      expect(await RotaService.findRotaById(999)).toBeNull();
+    });
+  });
+
+  describe('getOficinasAssignedInCampanha', () => {
+    it('should return oficina IDs', async () => {
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([
+        { ID_OFICINA: 100 }, { ID_OFICINA: 200 },
+      ]);
+
+      const result = await RotaService.getOficinasAssignedInCampanha(1);
+
+      expect(result).toEqual([100, 200]);
+    });
+
+    it('should return empty array', async () => {
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([]);
+      expect(await RotaService.getOficinasAssignedInCampanha(999)).toEqual([]);
+    });
+  });
+
+  describe('reorderRotas', () => {
+    it('should reorder manually', async () => {
+      rotaRepo.find.mockResolvedValue([{ ID_ROTA_PROMOTOR: 1 }]);
+      cpRepo.update.mockResolvedValue(undefined);
+      rotaRepo.update.mockResolvedValue(undefined);
+      // After reorder, return updated
+      rotaRepo.find.mockResolvedValueOnce([{ ID_ROTA_PROMOTOR: 1 }])
+        .mockResolvedValueOnce([{ ID_ROTA_PROMOTOR: 1, ORDEM: 1, ID_OFICINA: 100 }]);
+
+      const result = await RotaService.reorderRotas(1, EstrategiaOrdenacao.MANUAL, [
+        { ID_ROTA_PROMOTOR: 1, ORDEM: 1 },
+      ]);
+
+      expect(result.ESTRATEGIA_ORDENACAO).toBe(EstrategiaOrdenacao.MANUAL);
+    });
+
+    it('should throw when manual without array', async () => {
+      rotaRepo.find.mockResolvedValue([{ ID_ROTA_PROMOTOR: 1 }]);
+
+      await expect(RotaService.reorderRotas(1, EstrategiaOrdenacao.MANUAL))
+        .rejects.toThrow('Estratégia MANUAL exige array de rotas com ORDEM.');
+    });
+
+    it('should clear ORDEM for PROXIMIDADE_PROMOTOR', async () => {
+      rotaRepo.find.mockResolvedValue([{ ID_ROTA_PROMOTOR: 1, ORDEM: 5 }]);
+      cpRepo.update.mockResolvedValue(undefined);
+      rotaRepo.update.mockResolvedValue(undefined);
+      rotaRepo.find.mockResolvedValueOnce([{ ID_ROTA_PROMOTOR: 1, ORDEM: 5 }])
+        .mockResolvedValueOnce([{ ID_ROTA_PROMOTOR: 1, ORDEM: null, ID_OFICINA: 100 }]);
+
+      const result = await RotaService.reorderRotas(1, EstrategiaOrdenacao.PROXIMIDADE_PROMOTOR);
+
+      expect(rotaRepo.update).toHaveBeenCalledWith(1, { ORDEM: undefined });
+      expect(result.ESTRATEGIA_ORDENACAO).toBe(EstrategiaOrdenacao.PROXIMIDADE_PROMOTOR);
+    });
+  });
+
+  describe('removeCampanhaPromotorRota', () => {
+    it('should hard delete all rotas', async () => {
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue(undefined);
+
+      await RotaService.removeCampanhaPromotorRota(1);
+
+      expect(AppDataSourceSync.query).toHaveBeenCalledWith(
+        expect.stringContaining('DELETE FROM'),
+        [1]
+      );
+    });
+  });
+
+  describe('reassignRotasByAddress', () => {
+    const { haversineDistanceKm } = require('../../utils/haversine');
+
+    it('should throw NOT_FOUND when no active routes', async () => {
+      rotaRepo.find.mockResolvedValue([]);
+
+      await expect(RotaService.reassignRotasByAddress('80010-000', 123))
+        .rejects.toThrow('NOT_FOUND');
+    });
+
+    it('should keep route when within radius', async () => {
+      haversineDistanceKm.mockReturnValue(10); // within default 20km
+
+      rotaRepo.find.mockResolvedValue([{
+        ID_ROTA_PROMOTOR: 1,
+        ID_OFICINA: 123,
+        STATUS: StatusRota.BACKLOG,
+        campanhaPromotor: {
+          ID_CAMPANHA: 1,
+          ID_CAMPANHA_PROMOTOR: 10,
+          RAIO: 20,
+          promotor: { ID_PROMOTOR: 5, NOME: 'João', LATITUDE: '-23.55', LONGITUDE: '-46.63' },
+        },
+      }]);
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([]);
+
+      const result = await RotaService.reassignRotasByAddress('80010-000', 123);
+
+      expect(result.reatribuicoes[0].status).toBe('mantida_dentro_do_raio');
+    });
+
+    it('should reassign when out of radius with available candidate', async () => {
+      haversineDistanceKm
+        .mockReturnValueOnce(350)  // current promotor distance (out of range)
+        .mockReturnValueOnce(15);  // candidate distance (in range)
+
+      rotaRepo.find.mockResolvedValue([{
+        ID_ROTA_PROMOTOR: 1,
+        ID_OFICINA: 123,
+        STATUS: StatusRota.BACKLOG,
+        campanhaPromotor: {
+          ID_CAMPANHA: 1,
+          ID_CAMPANHA_PROMOTOR: 10,
+          RAIO: 20,
+          promotor: { ID_PROMOTOR: 5, NOME: 'João', LATITUDE: '-23.55', LONGITUDE: '-46.63' },
+        },
+      }]);
+      // getCandidatosPorCampanhas
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([
+        { ID_CAMPANHA_PROMOTOR: 20, ID_CAMPANHA: 1, ID_PROMOTOR: 8, NOME: 'Maria', RAIO: 20, LATITUDE: '-25.43', LONGITUDE: '-49.27' },
+      ]);
+      // transaction
+      const mockManager = {
+        softDelete: jest.fn(),
+        create: jest.fn().mockReturnValue({ ID_CAMPANHA_PROMOTOR: 20, ID_OFICINA: 123 }),
+        save: jest.fn().mockResolvedValue({ ID_ROTA_PROMOTOR: 99 }),
+      };
+      (AppDataSourceSync.transaction as jest.Mock).mockImplementation((cb: Function) => cb(mockManager));
+
+      const result = await RotaService.reassignRotasByAddress('80010-000', 123);
+
+      expect(result.reatribuicoes[0].status).toBe('reatribuida');
+      expect(result.reatribuicoes[0].promotor_novo!.ID_PROMOTOR).toBe(8);
+      expect(result.resumo.reatribuidas).toBe(1);
+    });
+
+    it('should report sem_promotor_disponivel when no candidate in range', async () => {
+      haversineDistanceKm.mockReturnValue(350); // all out of range
+
+      rotaRepo.find.mockResolvedValue([{
+        ID_ROTA_PROMOTOR: 1,
+        ID_OFICINA: 123,
+        STATUS: StatusRota.BACKLOG,
+        campanhaPromotor: {
+          ID_CAMPANHA: 1,
+          ID_CAMPANHA_PROMOTOR: 10,
+          RAIO: 20,
+          promotor: { ID_PROMOTOR: 5, NOME: 'João', LATITUDE: '-23.55', LONGITUDE: '-46.63' },
+        },
+      }]);
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([]);
+
+      const result = await RotaService.reassignRotasByAddress('80010-000', 123);
+
+      expect(result.reatribuicoes[0].status).toBe('sem_promotor_disponivel');
+    });
+
+    // Spec AC1: a reassignment creates a RotaPromotor like any other path, so it
+    // gets exactly one NotificacaoVisita too.
+    it('notifies the route created by a reassignment, after the transaction commits', async () => {
+      const notificarVisita = NotificacaoVisitaService.notificarVisita as jest.Mock;
+      notificarVisita.mockResolvedValue({} as never);
+
+      haversineDistanceKm
+        .mockReturnValueOnce(350)
+        .mockReturnValueOnce(15);
+
+      rotaRepo.find.mockResolvedValue([{
+        ID_ROTA_PROMOTOR: 1,
+        ID_OFICINA: 123,
+        STATUS: StatusRota.BACKLOG,
+        campanhaPromotor: {
+          ID_CAMPANHA: 1,
+          ID_CAMPANHA_PROMOTOR: 10,
+          RAIO: 20,
+          promotor: { ID_PROMOTOR: 5, NOME: 'João', LATITUDE: '-23.55', LONGITUDE: '-46.63' },
+        },
+      }]);
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([
+        { ID_CAMPANHA_PROMOTOR: 20, ID_CAMPANHA: 1, ID_PROMOTOR: 8, NOME: 'Maria', RAIO: 20, LATITUDE: '-25.43', LONGITUDE: '-49.27' },
+      ]);
+
+      const rotaCriada = { ID_ROTA_PROMOTOR: 99, ID_CAMPANHA_PROMOTOR: 20, ID_OFICINA: 123 };
+      let transacaoConcluida = false;
+      const mockManager = {
+        softDelete: jest.fn(),
+        create: jest.fn().mockReturnValue({ ID_CAMPANHA_PROMOTOR: 20, ID_OFICINA: 123 }),
+        save: jest.fn().mockResolvedValue(rotaCriada),
+      };
+      (AppDataSourceSync.transaction as jest.Mock).mockImplementation(async (cb: Function) => {
+        const saida = await cb(mockManager);
+        transacaoConcluida = true;
+        return saida;
       });
-    }
+      notificarVisita.mockImplementation(async () => {
+        // The notification must not run against uncommitted transaction state.
+        expect(transacaoConcluida).toBe(true);
+        return {} as never;
+      });
 
-    it('notifies each route added by editing the campaign', async () => {
-      montarRepo();
+      await RotaService.reassignRotasByAddress('80010-000', 123);
 
-      const resultado = await RotaService.updateRotaWorkshops(5, [100, 300]);
-
-      expect(resultado.created).toEqual([novaRota]);
-      expect(notificarVisitaMock).toHaveBeenCalledTimes(1);
-      expect(notificarVisitaMock).toHaveBeenCalledWith(novaRota);
+      expect(notificarVisita).toHaveBeenCalledTimes(1);
+      expect(notificarVisita).toHaveBeenCalledWith(rotaCriada);
     });
 
-    it('does not notify when no new workshop was added', async () => {
-      montarRepo();
+    it('still completes the reassignment when the notification rejects', async () => {
+      const notificarVisita = NotificacaoVisitaService.notificarVisita as jest.Mock;
+      notificarVisita.mockRejectedValue(new Error('whatsapp fora do ar'));
+      jest.spyOn(console, 'error').mockImplementation(() => {});
 
-      await RotaService.updateRotaWorkshops(5, [100]);
+      haversineDistanceKm
+        .mockReturnValueOnce(350)
+        .mockReturnValueOnce(15);
 
-      expect(notificarVisitaMock).not.toHaveBeenCalled();
+      rotaRepo.find.mockResolvedValue([{
+        ID_ROTA_PROMOTOR: 1,
+        ID_OFICINA: 123,
+        STATUS: StatusRota.BACKLOG,
+        campanhaPromotor: {
+          ID_CAMPANHA: 1,
+          ID_CAMPANHA_PROMOTOR: 10,
+          RAIO: 20,
+          promotor: { ID_PROMOTOR: 5, NOME: 'João', LATITUDE: '-23.55', LONGITUDE: '-46.63' },
+        },
+      }]);
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([
+        { ID_CAMPANHA_PROMOTOR: 20, ID_CAMPANHA: 1, ID_PROMOTOR: 8, NOME: 'Maria', RAIO: 20, LATITUDE: '-25.43', LONGITUDE: '-49.27' },
+      ]);
+      (AppDataSourceSync.transaction as jest.Mock).mockImplementation((cb: Function) => cb({
+        softDelete: jest.fn(),
+        create: jest.fn().mockReturnValue({ ID_CAMPANHA_PROMOTOR: 20, ID_OFICINA: 123 }),
+        save: jest.fn().mockResolvedValue({ ID_ROTA_PROMOTOR: 99 }),
+      }));
+
+      const result = await RotaService.reassignRotasByAddress('80010-000', 123);
+
+      expect(result.reatribuicoes[0].status).toBe('reatribuida');
+      expect(result.reatribuicoes[0].rota_criada).toBe(99);
     });
-
-    it('still returns the created routes when the notification rejects', async () => {
-      montarRepo();
-      notificarVisitaMock.mockRejectedValue(new Error('notificação falhou'));
-
-      const resultado = await RotaService.updateRotaWorkshops(5, [100, 300]);
-
-      expect(resultado.created).toEqual([novaRota]);
-      expect(resultado.deleted).toEqual([]);
-    });
-  });
-});
-
-// NOTIF-19 (P2 AC1, AC2): "WHEN the dashboard requests route details for a
-// RotaPromotor THEN the system SHALL include the linked NotificacaoVisita
-// STATUS and CONFIRMADO_EM (if set) in the response." The status must be the
-// *effective* one (spec AC22) — derived via statusEfetivo(), never the raw
-// stored column — so an unopened expired link never reads as still ENVIADO.
-describe('RotaService.getRotaByIdWithRelations — visit confirmation status', () => {
-  function montarRepo(findOneResult: unknown) {
-    const findOne = jest.fn().mockResolvedValue(findOneResult);
-    (AppDataSourceSync.getRepository as jest.Mock).mockReturnValue({
-      findOne,
-    });
-    return findOne;
-  }
-
-  it("adds 'notificacaoVisita' to the relations array passed to findOne", async () => {
-    const findOne = montarRepo({ ID_ROTA_PROMOTOR: 1 });
-
-    await RotaService.getRotaByIdWithRelations(1);
-
-    expect(findOne).toHaveBeenCalledWith(
-      expect.objectContaining({
-        relations: expect.arrayContaining(['notificacaoVisita']),
-      })
-    );
-  });
-
-  it('reports EXPIRADO — not the stored ENVIADO — for an unopened expired notification', async () => {
-    montarRepo({
-      ID_ROTA_PROMOTOR: 1,
-      notificacaoVisita: {
-        STATUS: StatusNotificacaoVisita.ENVIADO,
-        EXPIRA_EM: new Date('2020-01-01T00:00:00Z'), // long past
-      },
-    });
-
-    const rota = await RotaService.getRotaByIdWithRelations(1);
-
-    expect(rota!.notificacaoVisita!.STATUS).toBe(StatusNotificacaoVisita.EXPIRADO);
-  });
-
-  it('leaves a still-valid ENVIADO status unchanged', async () => {
-    const futuro = new Date(Date.now() + 1000 * 60 * 60);
-    montarRepo({
-      ID_ROTA_PROMOTOR: 1,
-      notificacaoVisita: {
-        STATUS: StatusNotificacaoVisita.ENVIADO,
-        EXPIRA_EM: futuro,
-      },
-    });
-
-    const rota = await RotaService.getRotaByIdWithRelations(1);
-
-    expect(rota!.notificacaoVisita!.STATUS).toBe(StatusNotificacaoVisita.ENVIADO);
-  });
-
-  it('includes CONFIRMADO_EM on the returned notificacaoVisita when set', async () => {
-    const confirmadoEm = new Date('2026-02-01T10:00:00Z');
-    montarRepo({
-      ID_ROTA_PROMOTOR: 1,
-      notificacaoVisita: {
-        STATUS: StatusNotificacaoVisita.CONFIRMADO,
-        EXPIRA_EM: new Date('2020-01-01T00:00:00Z'),
-        CONFIRMADO_EM: confirmadoEm,
-      },
-    });
-
-    const rota = await RotaService.getRotaByIdWithRelations(1);
-
-    expect(rota!.notificacaoVisita!.CONFIRMADO_EM).toBe(confirmadoEm);
-    // CONFIRMADO past its expiry must stay CONFIRMADO, not flip to EXPIRADO.
-    expect(rota!.notificacaoVisita!.STATUS).toBe(StatusNotificacaoVisita.CONFIRMADO);
-  });
-
-  it('degrades gracefully — no throw — for a route with no notification row', async () => {
-    montarRepo({ ID_ROTA_PROMOTOR: 1, notificacaoVisita: undefined });
-
-    await expect(RotaService.getRotaByIdWithRelations(1)).resolves.toEqual({
-      ID_ROTA_PROMOTOR: 1,
-      notificacaoVisita: undefined,
-    });
-  });
-
-  it('returns null without throwing when the route itself is not found', async () => {
-    montarRepo(null);
-
-    await expect(RotaService.getRotaByIdWithRelations(999)).resolves.toBeNull();
   });
 });

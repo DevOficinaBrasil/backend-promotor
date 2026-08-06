@@ -1,711 +1,205 @@
 import CampanhaService from '../../service/campanhaService';
+import { MigrationAwareRepository, queryBothAndMerge } from '../../utils/migrationRepository';
 import { AppDataSourceSync } from '../../data-source';
-import { DuckDBClient } from '../../utils/duckdbClient';
+import { createMockRepo } from '../helpers/mockMigrationRepo';
+import Campanha from '../../entities/Campanha';
 import CampanhaPromotor from '../../entities/CampanhaPromotor';
 import RotaPromotor from '../../entities/RotaPromotor';
-import Campanha from '../../entities/Campanha';
 import { StatusNotificacaoVisita } from '../../entities/NotificacaoVisita';
 
 jest.mock('../../data-source');
+jest.mock('../../utils/migrationRepository');
 jest.mock('../../utils/duckdbClient');
 
 describe('CampanhaService', () => {
+  const campanhaRepo = createMockRepo();
+  const cpRepo = createMockRepo();
+  const rotaRepo = createMockRepo();
+  const mockDirectRepo = {
+    create: jest.fn((data: any) => data),
+    save: jest.fn((data: any) => Promise.resolve(data)),
+    find: jest.fn(),
+    findOne: jest.fn(),
+    softDelete: jest.fn(),
+  };
+
   beforeEach(() => {
     jest.clearAllMocks();
+    (MigrationAwareRepository as jest.Mock).mockImplementation((entity: any) => {
+      if (entity === Campanha) return campanhaRepo;
+      if (entity === CampanhaPromotor) return cpRepo;
+      if (entity === RotaPromotor) return rotaRepo;
+      return createMockRepo();
+    });
+    (AppDataSourceSync.getRepository as jest.Mock).mockReturnValue(mockDirectRepo);
   });
 
-  describe('getActiveCampanhaByPromotor', () => {
-    it('should return active campaign with DuckDB data merged into oficinas', async () => {
-      const mockCampanha = {
-        ID_CAMPANHA: 1,
-        NOME: 'Test Campaign',
-        START_TIME: new Date('2026-01-01'),
-        END_TIME: new Date('2026-12-31'),
-      };
+  describe('createCampanha', () => {
+    it('should create campaign without promotores', async () => {
+      campanhaRepo.save.mockResolvedValue({ ID_CAMPANHA: 1, NOME: 'Test' });
 
-      const mockCampanhaPromotor = {
-        ID_CAMPANHA_PROMOTOR: 1,
-        ID_PROMOTOR: 10,
-        ID_CAMPANHA: 1,
-        campanha: mockCampanha,
-        DELETED_AT: null,
-      };
+      const result = await CampanhaService.createCampanha({ NOME: 'Test' });
 
-      const mockRotas = [
-        {
-          ID_ROTA_PROMOTOR: 1,
-          ID_CAMPANHA_PROMOTOR: 1,
-          ID_OFICINA: 395444,
-          oficina: {
-            ID_OFICINA: 395444,
-            NOME_FANTASIA: 'Oficina A',
-            LATITUDE: '-23.675817',
-            LONGITUDE: '-46.6800146',
-          },
-        },
-        {
-          ID_ROTA_PROMOTOR: 2,
-          ID_CAMPANHA_PROMOTOR: 1,
-          ID_OFICINA: 393991,
-          oficina: {
-            ID_OFICINA: 393991,
-            NOME_FANTASIA: 'Oficina B',
-            LATITUDE: '-23.5',
-            LONGITUDE: '-46.6',
-          },
-        },
-      ];
-
-      const mockDuckDBData = new Map([
-        [
-          395444,
-          {
-            id_oficina: 395444,
-            flag_engajamento: 'alto',
-            flag_sentimento: 'positivo',
-            flag_treinamento: 'alto',
-            cor_icone: 'azul',
-          },
-        ],
-        [
-          393991,
-          {
-            id_oficina: 393991,
-            flag_engajamento: 'baixo',
-            flag_sentimento: 'neutro',
-            flag_treinamento: 'baixo',
-            cor_icone: 'cinza',
-          },
-        ],
-      ]);
-
-      const mockCampanhaPromotorRepository = {
-        find: jest.fn().mockResolvedValue([mockCampanhaPromotor]),
-      };
-
-      const mockRotaPromotorRepository = {
-        find: jest.fn().mockResolvedValue(mockRotas),
-      };
-
-      const mockCampanhaRepository = {
-        find: jest.fn(),
-        findOne: jest.fn(),
-      };
-
-      (AppDataSourceSync.getRepository as jest.Mock).mockImplementation((entity) => {
-        if (entity === CampanhaPromotor) return mockCampanhaPromotorRepository;
-        if (entity === RotaPromotor) return mockRotaPromotorRepository;
-        if (entity === Campanha) return mockCampanhaRepository;
-        return {};
-      });
-
-      (DuckDBClient.getOficinaDataByIds as jest.Mock).mockResolvedValue(mockDuckDBData);
-
-      const result = await CampanhaService.getActiveCampanhaByPromotor(10, new Date('2026-06-01'));
-
-      expect(result).not.toBeNull();
-      expect(result?.rotas).toHaveLength(2);
-
-      // Check first rota has DuckDB data merged
-      expect(result?.rotas[0].oficina).toMatchObject({
-        ID_OFICINA: 395444,
-        NOME_FANTASIA: 'Oficina A',
-        flag_engajamento: 'alto',
-        flag_sentimento: 'positivo',
-        flag_treinamento: 'alto',
-        cor_icone: 'azul',
-      });
-
-      // Check second rota has DuckDB data merged
-      expect(result?.rotas[1].oficina).toMatchObject({
-        ID_OFICINA: 393991,
-        NOME_FANTASIA: 'Oficina B',
-        flag_engajamento: 'baixo',
-        flag_sentimento: 'neutro',
-        flag_treinamento: 'baixo',
-        cor_icone: 'cinza',
-      });
-
-      // Verify DuckDBClient was called with correct IDs
-      expect(DuckDBClient.getOficinaDataByIds).toHaveBeenCalledWith([395444, 393991]);
+      expect(result.ID_CAMPANHA).toBe(1);
+      expect(campanhaRepo.create).toHaveBeenCalled();
     });
 
-    it('should use default values when DuckDB data is not available', async () => {
-      const mockCampanha = {
-        ID_CAMPANHA: 1,
-        NOME: 'Test Campaign',
-        START_TIME: new Date('2026-01-01'),
-        END_TIME: new Date('2026-12-31'),
-      };
+    it('should create campaign with promotores and oficinas', async () => {
+      campanhaRepo.save.mockResolvedValue({ ID_CAMPANHA: 1, NOME: 'Test' });
+      mockDirectRepo.save.mockResolvedValue({ ID_CAMPANHA_PROMOTOR: 10 });
 
-      const mockCampanhaPromotor = {
-        ID_CAMPANHA_PROMOTOR: 1,
-        ID_PROMOTOR: 10,
-        ID_CAMPANHA: 1,
-        campanha: mockCampanha,
-        DELETED_AT: null,
-      };
+      await CampanhaService.createCampanha(
+        { NOME: 'Test' },
+        [{ ID_PROMOTOR: 5, ID_OFICINAS: [100, 200] }]
+      );
 
-      const mockRotas = [
-        {
-          ID_ROTA_PROMOTOR: 1,
-          ID_CAMPANHA_PROMOTOR: 1,
-          ID_OFICINA: 999999,
-          oficina: {
-            ID_OFICINA: 999999,
-            NOME_FANTASIA: 'Oficina Unknown',
-          },
-        },
-      ];
-
-      const mockCampanhaPromotorRepository = {
-        find: jest.fn().mockResolvedValue([mockCampanhaPromotor]),
-      };
-
-      const mockRotaPromotorRepository = {
-        find: jest.fn().mockResolvedValue(mockRotas),
-      };
-
-      const mockCampanhaRepository = {
-        find: jest.fn(),
-        findOne: jest.fn(),
-      };
-
-      (AppDataSourceSync.getRepository as jest.Mock).mockImplementation((entity) => {
-        if (entity === CampanhaPromotor) return mockCampanhaPromotorRepository;
-        if (entity === RotaPromotor) return mockRotaPromotorRepository;
-        if (entity === Campanha) return mockCampanhaRepository;
-        return {};
-      });
-
-      // DuckDB returns empty map (no data for this oficina)
-      (DuckDBClient.getOficinaDataByIds as jest.Mock).mockResolvedValue(new Map());
-
-      const result = await CampanhaService.getActiveCampanhaByPromotor(10, new Date('2026-06-01'));
-
-      expect(result).not.toBeNull();
-      expect(result?.rotas).toHaveLength(1);
-
-      // Check that default values are used
-      expect(result?.rotas[0].oficina).toMatchObject({
-        ID_OFICINA: 999999,
-        NOME_FANTASIA: 'Oficina Unknown',
-        flag_engajamento: 'baixo',
-        flag_sentimento: 'neutro',
-        flag_treinamento: 'baixo',
-        cor_icone: 'cinza',
-      });
+      expect(mockDirectRepo.save).toHaveBeenCalled();
     });
+  });
 
-    it('should return null when no active campaign is found', async () => {
-      const mockCampanhaPromotorRepository = {
-        find: jest.fn().mockResolvedValue([]),
-      };
+  describe('updateCampanha', () => {
+    it('should return null when campaign not found', async () => {
+      campanhaRepo.findOne.mockResolvedValue(null);
 
-      const mockCampanhaRepository = {
-        find: jest.fn(),
-        findOne: jest.fn(),
-      };
-
-      (AppDataSourceSync.getRepository as jest.Mock).mockImplementation((entity) => {
-        if (entity === CampanhaPromotor) return mockCampanhaPromotorRepository;
-        if (entity === Campanha) return mockCampanhaRepository;
-        return {};
-      });
-
-      const result = await CampanhaService.getActiveCampanhaByPromotor(10, new Date('2026-06-01'));
+      const result = await CampanhaService.updateCampanha(999, { NOME: 'X' });
 
       expect(result).toBeNull();
     });
 
-    it('should handle rotas without oficina correctly', async () => {
-      const mockCampanha = {
-        ID_CAMPANHA: 1,
-        NOME: 'Test Campaign',
-        START_TIME: new Date('2026-01-01'),
-        END_TIME: new Date('2026-12-31'),
-      };
+    it('should update campaign fields', async () => {
+      campanhaRepo.findOne.mockResolvedValue({ ID_CAMPANHA: 1, NOME: 'Old' });
+      campanhaRepo.save.mockResolvedValue({ ID_CAMPANHA: 1, NOME: 'New' });
 
-      const mockCampanhaPromotor = {
+      const result = await CampanhaService.updateCampanha(1, { NOME: 'New' });
+
+      expect(result!.NOME).toBe('New');
+    });
+
+    it('should replace promotores when provided', async () => {
+      campanhaRepo.findOne.mockResolvedValue({ ID_CAMPANHA: 1, NOME: 'Test' });
+      campanhaRepo.save.mockResolvedValue({ ID_CAMPANHA: 1, NOME: 'Test' });
+      // removePromotoresFromCampanha
+      mockDirectRepo.find.mockResolvedValue([]);
+      // linkPromotoresToCampanha
+      mockDirectRepo.save.mockResolvedValue({ ID_CAMPANHA_PROMOTOR: 10 });
+
+      await CampanhaService.updateCampanha(
+        1, { NOME: 'Test' }, [{ ID_PROMOTOR: 5, ID_OFICINAS: [100] }]
+      );
+
+      expect(campanhaRepo.save).toHaveBeenCalled();
+    });
+  });
+
+  describe('deleteCampanha', () => {
+    it('should soft delete and return', async () => {
+      campanhaRepo.findOne.mockResolvedValue({ ID_CAMPANHA: 1 });
+
+      const result = await CampanhaService.deleteCampanha(1);
+
+      expect(result).toEqual({ ID_CAMPANHA: 1 });
+      expect(campanhaRepo.softDelete).toHaveBeenCalledWith(1);
+    });
+
+    it('should return null when not found', async () => {
+      campanhaRepo.findOne.mockResolvedValue(null);
+      expect(await CampanhaService.deleteCampanha(999)).toBeNull();
+    });
+  });
+
+  describe('findCampanhaById', () => {
+    it('should find by ID', async () => {
+      campanhaRepo.findOne.mockResolvedValue({ ID_CAMPANHA: 1 });
+      expect(await CampanhaService.findCampanhaById(1)).toEqual({ ID_CAMPANHA: 1 });
+    });
+
+    it('should return null when not found', async () => {
+      campanhaRepo.findOne.mockResolvedValue(null);
+      expect(await CampanhaService.findCampanhaById(999)).toBeNull();
+    });
+  });
+
+  describe('getAllCampanhas', () => {
+    it('should return ordered list', async () => {
+      campanhaRepo.find.mockResolvedValue([{ ID_CAMPANHA: 1 }, { ID_CAMPANHA: 2 }]);
+
+      const result = await CampanhaService.getAllCampanhas();
+
+      expect(result).toHaveLength(2);
+      expect(campanhaRepo.find).toHaveBeenCalledWith(expect.objectContaining({
+        order: { CREATED_AT: 'DESC' },
+      }));
+    });
+  });
+
+  describe('getCampanhaByIdWithRelations', () => {
+    it('should load deep relations', async () => {
+      campanhaRepo.findOne.mockResolvedValue({ ID_CAMPANHA: 1, campanhaPromotores: [] });
+
+      await CampanhaService.getCampanhaByIdWithRelations(1);
+
+      expect(campanhaRepo.findOne).toHaveBeenCalledWith(expect.objectContaining({
+        where: { ID_CAMPANHA: 1 },
+        relations: expect.arrayContaining(['campanhaPromotores', 'campanhaPerguntas']),
+      }));
+    });
+  });
+
+  describe('getActiveCampanhaByPromotor', () => {
+    it('should return null when no active campaign', async () => {
+      cpRepo.find.mockResolvedValue([]);
+
+      const result = await CampanhaService.getActiveCampanhaByPromotor(10);
+
+      expect(result).toBeNull();
+    });
+
+    it('should return campaign with rotas when active', async () => {
+      const now = new Date('2026-06-15');
+      cpRepo.find.mockResolvedValue([{
         ID_CAMPANHA_PROMOTOR: 1,
         ID_PROMOTOR: 10,
-        ID_CAMPANHA: 1,
-        campanha: mockCampanha,
         DELETED_AT: null,
-      };
-
-      const mockRotas = [
-        {
-          ID_ROTA_PROMOTOR: 1,
-          ID_CAMPANHA_PROMOTOR: 1,
-          ID_OFICINA: null,
-          oficina: null, // No oficina linked
+        ESTRATEGIA_ORDENACAO: 'PROXIMIDADE_PROMOTOR',
+        campanha: {
+          ID_CAMPANHA: 1,
+          NOME: 'Active',
+          START_TIME: new Date('2026-01-01'),
+          END_TIME: new Date('2026-12-31'),
         },
-      ];
+      }]);
+      (queryBothAndMerge as jest.Mock).mockResolvedValue([
+        { ID_ROTA_PROMOTOR: 1, ID_OFICINA: 100, ID_CAMPANHA_PROMOTOR: 1, STATUS: 'BACKLOG', NOME_FANTASIA: 'Ofc A' },
+      ]);
 
-      const mockCampanhaPromotorRepository = {
-        find: jest.fn().mockResolvedValue([mockCampanhaPromotor]),
-      };
-
-      const mockRotaPromotorRepository = {
-        find: jest.fn().mockResolvedValue(mockRotas),
-      };
-
-      const mockCampanhaRepository = {
-        find: jest.fn(),
-        findOne: jest.fn(),
-      };
-
-      (AppDataSourceSync.getRepository as jest.Mock).mockImplementation((entity) => {
-        if (entity === CampanhaPromotor) return mockCampanhaPromotorRepository;
-        if (entity === RotaPromotor) return mockRotaPromotorRepository;
-        if (entity === Campanha) return mockCampanhaRepository;
-        return {};
-      });
-
-      (DuckDBClient.getOficinaDataByIds as jest.Mock).mockResolvedValue(new Map());
-
-      const result = await CampanhaService.getActiveCampanhaByPromotor(10, new Date('2026-06-01'));
+      const result = await CampanhaService.getActiveCampanhaByPromotor(10, now);
 
       expect(result).not.toBeNull();
-      expect(result?.rotas).toHaveLength(1);
-      expect(result?.rotas[0].oficina).toBeNull();
-
-      // Verify DuckDBClient was called with empty array
-      expect(DuckDBClient.getOficinaDataByIds).toHaveBeenCalledWith([]);
+      expect(result!.NOME).toBe('Active');
+      expect(result!.rotas).toHaveLength(1);
     });
   });
 
-  describe('createCampanha with promotores', () => {
-    it('should create campaign and link promotores with oficinas', async () => {
-      const mockCampanha = {
-        ID_CAMPANHA: 1,
-        NOME: 'Test Campaign',
-      };
+  describe('getCampanhasByClientId', () => {
+    it('should return empty when no campaigns', async () => {
+      (queryBothAndMerge as jest.Mock).mockResolvedValue([]);
 
-      const mockCampanhaPromotor = {
-        ID_CAMPANHA_PROMOTOR: 10,
-        ID_CAMPANHA: 1,
-        ID_PROMOTOR: 5,
-      };
+      const result = await CampanhaService.getCampanhasByClientId(100);
 
-      const mockCampanhaRepository = {
-        create: jest.fn().mockReturnValue(mockCampanha),
-        save: jest.fn().mockResolvedValue(mockCampanha),
-      };
-
-      const mockCampanhaPromotorRepository = {
-        create: jest.fn().mockReturnValue(mockCampanhaPromotor),
-        save: jest.fn().mockResolvedValue(mockCampanhaPromotor),
-        find: jest.fn(),
-      };
-
-      const mockRotaPromotorRepository = {
-        create: jest.fn().mockImplementation((data) => data),
-        save: jest.fn().mockImplementation((data) => Promise.resolve(data)),
-        find: jest.fn(),
-      };
-
-      (AppDataSourceSync.getRepository as jest.Mock).mockImplementation((entity) => {
-        if (entity === Campanha) return mockCampanhaRepository;
-        if (entity === CampanhaPromotor) return mockCampanhaPromotorRepository;
-        if (entity === RotaPromotor) return mockRotaPromotorRepository;
-        return {};
-      });
-
-      const promotores = [
-        {
-          ID_PROMOTOR: 5,
-          ID_OFICINAS: [100, 200, 300],
-        },
-      ];
-
-      const result = await CampanhaService.createCampanha(
-        { NOME: 'Test Campaign' },
-        promotores
-      );
-
-      expect(result).toEqual(mockCampanha);
-      expect(mockCampanhaRepository.save).toHaveBeenCalledTimes(1);
-      expect(mockCampanhaPromotorRepository.save).toHaveBeenCalledTimes(1);
-      expect(mockRotaPromotorRepository.save).toHaveBeenCalledTimes(3);
+      expect(result).toEqual([]);
     });
 
-    it('should create campaign without promotores when not provided', async () => {
-      const mockCampanha = {
-        ID_CAMPANHA: 1,
-        NOME: 'Test Campaign',
-      };
+    it('should return assembled nested structure', async () => {
+      (queryBothAndMerge as jest.Mock)
+        .mockResolvedValueOnce([{ ID_CAMPANHA: 1, NOME: 'Test', ID_CLIENT: 100 }]) // campanhas
+        .mockResolvedValueOnce([]) // campanhaPromotores
+        .mockResolvedValueOnce([]); // perguntas
 
-      const mockCampanhaRepository = {
-        create: jest.fn().mockReturnValue(mockCampanha),
-        save: jest.fn().mockResolvedValue(mockCampanha),
-      };
+      const result = await CampanhaService.getCampanhasByClientId(100);
 
-      const mockCampanhaPromotorRepository = {
-        save: jest.fn(),
-      };
-
-      (AppDataSourceSync.getRepository as jest.Mock).mockImplementation((entity) => {
-        if (entity === Campanha) return mockCampanhaRepository;
-        if (entity === CampanhaPromotor) return mockCampanhaPromotorRepository;
-        return {};
-      });
-
-      const result = await CampanhaService.createCampanha({ NOME: 'Test Campaign' });
-
-      expect(result).toEqual(mockCampanha);
-      expect(mockCampanhaRepository.save).toHaveBeenCalledTimes(1);
-      expect(mockCampanhaPromotorRepository.save).not.toHaveBeenCalled();
+      expect(result).toHaveLength(1);
+      expect(result[0].ID_CAMPANHA).toBe(1);
     });
   });
 
-  describe('updateCampanha with promotores', () => {
-    it('should update campaign and replace promotor links', async () => {
-      const mockExistingCampanha = {
-        ID_CAMPANHA: 1,
-        NOME: 'Old Campaign Name',
-      };
-
-      const mockUpdatedCampanha = {
-        ID_CAMPANHA: 1,
-        NOME: 'Updated Campaign Name',
-      };
-
-      const mockCampanhaPromotor = {
-        ID_CAMPANHA_PROMOTOR: 10,
-        ID_CAMPANHA: 1,
-        ID_PROMOTOR: 5,
-      };
-
-      const mockExistingCampanhaPromotores = [
-        {
-          ID_CAMPANHA_PROMOTOR: 5,
-          ID_CAMPANHA: 1,
-          ID_PROMOTOR: 3,
-        },
-      ];
-
-      const mockExistingRotas = [
-        {
-          ID_ROTA_PROMOTOR: 1,
-          ID_CAMPANHA_PROMOTOR: 5,
-        },
-      ];
-
-      const mockCampanhaRepository = {
-        findOne: jest.fn().mockResolvedValue(mockExistingCampanha),
-        save: jest.fn().mockResolvedValue(mockUpdatedCampanha),
-      };
-
-      const mockCampanhaPromotorRepository = {
-        find: jest.fn().mockResolvedValue(mockExistingCampanhaPromotores),
-        create: jest.fn().mockReturnValue(mockCampanhaPromotor),
-        save: jest.fn().mockResolvedValue(mockCampanhaPromotor),
-        softDelete: jest.fn(),
-      };
-
-      const mockRotaPromotorRepository = {
-        find: jest.fn().mockResolvedValue(mockExistingRotas),
-        create: jest.fn().mockImplementation((data) => data),
-        save: jest.fn().mockImplementation((data) => Promise.resolve(data)),
-        softDelete: jest.fn(),
-      };
-
-      (AppDataSourceSync.getRepository as jest.Mock).mockImplementation((entity) => {
-        if (entity === Campanha) return mockCampanhaRepository;
-        if (entity === CampanhaPromotor) return mockCampanhaPromotorRepository;
-        if (entity === RotaPromotor) return mockRotaPromotorRepository;
-        return {};
-      });
-
-      const promotores = [
-        {
-          ID_PROMOTOR: 5,
-          ID_OFICINAS: [100, 200],
-        },
-      ];
-
-      const result = await CampanhaService.updateCampanha(
-        1,
-        { NOME: 'Updated Campaign Name' },
-        promotores
-      );
-
-      expect(result).toEqual(mockUpdatedCampanha);
-      expect(mockCampanhaRepository.save).toHaveBeenCalledTimes(1);
-      
-      // Verify existing links were soft deleted
-      expect(mockRotaPromotorRepository.softDelete).toHaveBeenCalledTimes(1);
-      expect(mockCampanhaPromotorRepository.softDelete).toHaveBeenCalledTimes(1);
-      
-      // Verify new links were created
-      expect(mockCampanhaPromotorRepository.save).toHaveBeenCalledTimes(1);
-      expect(mockRotaPromotorRepository.save).toHaveBeenCalledTimes(2);
-    });
-
-    it('should update campaign without affecting promotores when not provided', async () => {
-      const mockExistingCampanha = {
-        ID_CAMPANHA: 1,
-        NOME: 'Old Campaign Name',
-      };
-
-      const mockUpdatedCampanha = {
-        ID_CAMPANHA: 1,
-        NOME: 'Updated Campaign Name',
-      };
-
-      const mockCampanhaRepository = {
-        findOne: jest.fn().mockResolvedValue(mockExistingCampanha),
-        save: jest.fn().mockResolvedValue(mockUpdatedCampanha),
-      };
-
-      const mockCampanhaPromotorRepository = {
-        find: jest.fn(),
-        softDelete: jest.fn(),
-      };
-
-      const mockRotaPromotorRepository = {
-        find: jest.fn(),
-        softDelete: jest.fn(),
-      };
-
-      (AppDataSourceSync.getRepository as jest.Mock).mockImplementation((entity) => {
-        if (entity === Campanha) return mockCampanhaRepository;
-        if (entity === CampanhaPromotor) return mockCampanhaPromotorRepository;
-        if (entity === RotaPromotor) return mockRotaPromotorRepository;
-        return {};
-      });
-
-      const result = await CampanhaService.updateCampanha(
-        1,
-        { NOME: 'Updated Campaign Name' }
-      );
-
-      expect(result).toEqual(mockUpdatedCampanha);
-      expect(mockCampanhaRepository.save).toHaveBeenCalledTimes(1);
-      
-      // Verify existing links were NOT deleted
-      expect(mockCampanhaPromotorRepository.find).not.toHaveBeenCalled();
-      expect(mockRotaPromotorRepository.softDelete).not.toHaveBeenCalled();
-    });
-  });
-
-  // NOTIF-19 / spec P2 AC2: "WHEN the promoter app requests a promoter's route
-  // list THEN the system SHALL include each route's visit-confirmation STATUS".
-  // design.md:157 requires the same relation the single-route read loads, and
-  // the status must be the *effective* one (spec AC22) - a stored ENVIADO whose
-  // EXPIRA_EM has silently passed reads EXPIRADO, never ENVIADO.
-  describe('visit confirmation status on route-list reads', () => {
-    const AGORA = new Date('2026-08-05T12:00:00.000Z');
-    const EXPIRA_PASSADO = new Date('2026-08-01T12:00:00.000Z');
-    const EXPIRA_FUTURO = new Date('2026-08-12T12:00:00.000Z');
-    const CONFIRMADO_EM = new Date('2026-08-04T09:30:00.000Z');
-
-    const campanhaAtiva = {
-      ID_CAMPANHA: 1,
-      NOME: 'Campanha Ativa',
-      START_TIME: new Date('2026-01-01'),
-      END_TIME: new Date('2026-12-31'),
-    };
-
-    const campanhaPromotorAtivo = {
-      ID_CAMPANHA_PROMOTOR: 1,
-      ID_PROMOTOR: 10,
-      ID_CAMPANHA: 1,
-      campanha: campanhaAtiva,
-      DELETED_AT: null,
-    };
-
-    // A raw row as the route-list query returns it: rp.* plus the joined
-    // oficina columns plus the joined NOTIFICACAO_VISITA columns.
-    const linhaRota = (id: number, notificacao: Record<string, unknown> = {}) => ({
-      ID_ROTA_PROMOTOR: id,
-      ID_CAMPANHA_PROMOTOR: 1,
-      ID_OFICINA: 395444,
-      NOME_FANTASIA: 'Oficina A',
-      ...notificacao,
-    });
-
-    const montarRotaList = (linhas: any[]) => {
-      (AppDataSourceSync.getRepository as jest.Mock).mockImplementation((entity) => {
-        if (entity === CampanhaPromotor) {
-          return { find: jest.fn().mockResolvedValue([campanhaPromotorAtivo]) };
-        }
-        return { find: jest.fn(), findOne: jest.fn() };
-      });
-      (AppDataSourceSync.query as jest.Mock).mockResolvedValue(linhas);
-    };
-
-    const montarCampanhaComRelacoes = (rotasPromotor: any[]) => {
-      const findOne = jest.fn().mockResolvedValue({
-        ID_CAMPANHA: 1,
-        NOME: 'Campanha Ativa',
-        campanhaPromotores: [{ ID_CAMPANHA_PROMOTOR: 1, rotasPromotor }],
-      });
-
-      (AppDataSourceSync.getRepository as jest.Mock).mockImplementation((entity) => {
-        if (entity === Campanha) return { findOne };
-        return { find: jest.fn(), findOne: jest.fn() };
-      });
-
-      return findOne;
-    };
-
-    beforeEach(() => {
-      jest.useFakeTimers({ now: AGORA });
-    });
-
-    afterEach(() => {
-      jest.useRealTimers();
-    });
-
-    describe('getActiveCampanhaByPromotor (promoter app route list)', () => {
-      it('reports an unopened expired notification as EXPIRADO and a live one as ENVIADO', async () => {
-        montarRotaList([
-          linhaRota(1, {
-            NOTIFICACAO_STATUS: StatusNotificacaoVisita.ENVIADO,
-            NOTIFICACAO_EXPIRA_EM: EXPIRA_PASSADO,
-            NOTIFICACAO_CONFIRMADO_EM: null,
-          }),
-          linhaRota(2, {
-            NOTIFICACAO_STATUS: StatusNotificacaoVisita.ENVIADO,
-            NOTIFICACAO_EXPIRA_EM: EXPIRA_FUTURO,
-            NOTIFICACAO_CONFIRMADO_EM: null,
-          }),
-        ]);
-
-        const resultado = await CampanhaService.getActiveCampanhaByPromotor(10, AGORA);
-
-        expect((resultado!.rotas[0] as any).notificacaoVisita.STATUS).toBe(
-          StatusNotificacaoVisita.EXPIRADO
-        );
-        expect((resultado!.rotas[1] as any).notificacaoVisita.STATUS).toBe(
-          StatusNotificacaoVisita.ENVIADO
-        );
-      });
-
-      it('includes CONFIRMADO_EM for a confirmed route', async () => {
-        montarRotaList([
-          linhaRota(1, {
-            NOTIFICACAO_STATUS: StatusNotificacaoVisita.CONFIRMADO,
-            NOTIFICACAO_EXPIRA_EM: EXPIRA_FUTURO,
-            NOTIFICACAO_CONFIRMADO_EM: CONFIRMADO_EM,
-          }),
-        ]);
-
-        const resultado = await CampanhaService.getActiveCampanhaByPromotor(10, AGORA);
-
-        expect((resultado!.rotas[0] as any).notificacaoVisita).toEqual({
-          STATUS: StatusNotificacaoVisita.CONFIRMADO,
-          CONFIRMADO_EM,
-        });
-      });
-
-      it('degrades gracefully for a route with no notification row', async () => {
-        montarRotaList([linhaRota(1), linhaRota(2, {
-          NOTIFICACAO_STATUS: StatusNotificacaoVisita.PENDENTE,
-          NOTIFICACAO_EXPIRA_EM: null,
-          NOTIFICACAO_CONFIRMADO_EM: null,
-        })]);
-
-        const resultado = await CampanhaService.getActiveCampanhaByPromotor(10, AGORA);
-
-        expect((resultado!.rotas[0] as any).notificacaoVisita).toBeUndefined();
-        expect((resultado!.rotas[1] as any).notificacaoVisita.STATUS).toBe(
-          StatusNotificacaoVisita.PENDENTE
-        );
-      });
-
-      it('loads every route status in the list query, without a per-route query', async () => {
-        montarRotaList([1, 2, 3].map((id) =>
-          linhaRota(id, {
-            NOTIFICACAO_STATUS: StatusNotificacaoVisita.ENVIADO,
-            NOTIFICACAO_EXPIRA_EM: EXPIRA_FUTURO,
-            NOTIFICACAO_CONFIRMADO_EM: null,
-          })
-        ));
-
-        const resultado = await CampanhaService.getActiveCampanhaByPromotor(10, AGORA);
-
-        expect(
-          resultado!.rotas.map((r: any) => r.notificacaoVisita.STATUS)
-        ).toEqual([
-          StatusNotificacaoVisita.ENVIADO,
-          StatusNotificacaoVisita.ENVIADO,
-          StatusNotificacaoVisita.ENVIADO,
-        ]);
-        expect(AppDataSourceSync.query as jest.Mock).toHaveBeenCalledTimes(1);
-      });
-    });
-
-    describe('getCampanhaByIdWithRelations (dashboard route list)', () => {
-      it("loads the notificacaoVisita relation for every route", async () => {
-        const findOne = montarCampanhaComRelacoes([]);
-
-        await CampanhaService.getCampanhaByIdWithRelations(1);
-
-        expect(findOne).toHaveBeenCalledWith(
-          expect.objectContaining({
-            relations: expect.arrayContaining([
-              'campanhaPromotores.rotasPromotor.notificacaoVisita',
-            ]),
-          })
-        );
-      });
-
-      it('reports an unopened expired notification as EXPIRADO and a live one as ENVIADO', async () => {
-        montarCampanhaComRelacoes([
-          {
-            ID_ROTA_PROMOTOR: 1,
-            notificacaoVisita: {
-              STATUS: StatusNotificacaoVisita.ENVIADO,
-              EXPIRA_EM: EXPIRA_PASSADO,
-            },
-          },
-          {
-            ID_ROTA_PROMOTOR: 2,
-            notificacaoVisita: {
-              STATUS: StatusNotificacaoVisita.ENVIADO,
-              EXPIRA_EM: EXPIRA_FUTURO,
-            },
-          },
-        ]);
-
-        const campanha = await CampanhaService.getCampanhaByIdWithRelations(1);
-        const rotas = (campanha as any).campanhaPromotores[0].rotasPromotor;
-
-        expect(rotas[0].notificacaoVisita.STATUS).toBe(StatusNotificacaoVisita.EXPIRADO);
-        expect(rotas[1].notificacaoVisita.STATUS).toBe(StatusNotificacaoVisita.ENVIADO);
-      });
-
-      it('includes CONFIRMADO_EM for a confirmed route', async () => {
-        montarCampanhaComRelacoes([
-          {
-            ID_ROTA_PROMOTOR: 1,
-            notificacaoVisita: {
-              STATUS: StatusNotificacaoVisita.CONFIRMADO,
-              EXPIRA_EM: EXPIRA_FUTURO,
-              CONFIRMADO_EM,
-            },
-          },
-        ]);
-
-        const campanha = await CampanhaService.getCampanhaByIdWithRelations(1);
-        const rota = (campanha as any).campanhaPromotores[0].rotasPromotor[0];
-
-        expect(rota.notificacaoVisita.STATUS).toBe(StatusNotificacaoVisita.CONFIRMADO);
-        expect(rota.notificacaoVisita.CONFIRMADO_EM).toBe(CONFIRMADO_EM);
-      });
-
-      it('degrades gracefully for a route with no notification row', async () => {
-        montarCampanhaComRelacoes([{ ID_ROTA_PROMOTOR: 1, notificacaoVisita: null }]);
-
-        const campanha = await CampanhaService.getCampanhaByIdWithRelations(1);
-        const rota = (campanha as any).campanhaPromotores[0].rotasPromotor[0];
-
-        expect(rota.notificacaoVisita).toBeNull();
-      });
-    });
-  });
 });

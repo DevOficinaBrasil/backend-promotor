@@ -6,6 +6,10 @@ import Promotor from "../entities/Promotor";
 import CampanhaPromotor from "../entities/CampanhaPromotor";
 import { encrypt, decrypt } from "../utils/encryption";
 import { MigrationAwareRepository } from "../utils/migrationRepository";
+import GeolocationService from "./geolocationService";
+import CampanhaPromotorService from "./campanhaPromotorService";
+import OficinaService from "./oficinaService";
+import RotaService from "./rotaService";
 
 export default class PromotorService {
   private static getPromotorRepo() {
@@ -16,6 +20,21 @@ export default class PromotorService {
     return new MigrationAwareRepository<CampanhaPromotor>(CampanhaPromotor, "ID_CAMPANHA_PROMOTOR");
   }
 
+  private static async includeLatLongToPromotor(promotor: Promotor): Promise<Promotor> 
+  {
+    const geolocationService = new GeolocationService();
+
+    const latLong = await geolocationService.getLatLongByCep(promotor.CEP as string);
+
+    if(latLong) 
+    {
+      promotor.LATITUDE = latLong.lat.toString();
+      promotor.LONGITUDE = latLong.long.toString();
+    }
+
+    return promotor;
+  }
+
   /**
    * Creates a new promoter in the database
    * @param promotorData - The promoter data to create
@@ -24,8 +43,10 @@ export default class PromotorService {
    */
   static async createPromotor(
     promotorData: Partial<Promotor>, 
-    campanhaIds?: number | number[]
-  ): Promise<Promotor> {
+    campanhaIds?: number | number[],
+    raio?: number,
+    empresaSlug?: string
+  ): Promise<{ promotor: Promotor; autoAssignResult?: { rotasCriadas: number; error?: string } }> {
     const repo = this.getPromotorRepo();
     
     // Encrypt password if provided
@@ -34,14 +55,61 @@ export default class PromotorService {
     }
     
     const novoPromotor = repo.create(promotorData);
+
+    if(novoPromotor.CEP) {
+      await this.includeLatLongToPromotor(novoPromotor);
+    }
+
     const promotorSalvo = await repo.save(novoPromotor);
-    
-    // If campaign IDs are provided, create the associations
+
+    let campanhaPromotores: CampanhaPromotor[] = [];
+    let autoAssignResult: { rotasCriadas: number; error?: string } | undefined;
     if (campanhaIds !== undefined) {
-      await this.linkCampanhaPromotor(campanhaIds, promotorSalvo.ID_PROMOTOR!);
+      const result = await this.linkCampanhaPromotor(campanhaIds, promotorSalvo.ID_PROMOTOR!, raio, empresaSlug);
+      campanhaPromotores = result.campanhaPromotores;
+      autoAssignResult = result.autoAssignResult;
     }
     
-    return promotorSalvo;
+    return { promotor: promotorSalvo, autoAssignResult };
+  }
+
+  private static async autoAssignRotas(
+    promotor: Promotor,
+    campanhaPromotores: CampanhaPromotor[],
+    empresaSlug: string
+  ): Promise<{ rotasCriadas: number; error?: string }> {
+    let totalRotasCriadas = 0;
+
+    for (const cp of campanhaPromotores) {
+      try {
+        const raio = cp.RAIO ?? 20;
+        const oficinas = await OficinaService.getComunityNearbyOficinas(
+          parseFloat(promotor.LATITUDE!),
+          parseFloat(promotor.LONGITUDE!),
+          raio,
+          empresaSlug
+        );
+
+        if (oficinas.length > 0) {
+          const assignedOficinas = await RotaService.getOficinasAssignedInCampanha(cp.ID_CAMPANHA!);
+          const assignedSet = new Set(assignedOficinas);
+          const availableOficinaIds = oficinas
+            .map((o: any) => o.ID_OFICINA)
+            .filter((id: number) => !assignedSet.has(id));
+
+          if (availableOficinaIds.length > 0) {
+            await RotaService.createRotas(cp.ID_CAMPANHA_PROMOTOR!, availableOficinaIds);
+            totalRotasCriadas += availableOficinaIds.length;
+            console.log(`Auto-assigned ${availableOficinaIds.length} rotas for CAMPANHA_PROMOTOR ${cp.ID_CAMPANHA_PROMOTOR} (${oficinas.length - availableOficinaIds.length} already assigned)`);
+          }
+        }
+      } catch (error) {
+        console.error(`Auto-assign rotas failed for CAMPANHA_PROMOTOR ${cp.ID_CAMPANHA_PROMOTOR}:`, error);
+        return { rotasCriadas: totalRotasCriadas, error: 'Erro na auto-atribuição de rotas.' };
+      }
+    }
+
+    return { rotasCriadas: totalRotasCriadas };
   }
 
   /**
@@ -50,7 +118,7 @@ export default class PromotorService {
    * @param promotorData - The promoter data to update
    * @returns The updated promoter or null if not found
    */
-  static async updatePromotor(id: number, promotorData: Partial<Promotor>): Promise<Promotor | null> {
+  static async updatePromotor(id: number, promotorData: Partial<Promotor>, raio?: number): Promise<Promotor | null> {
     const repo = this.getPromotorRepo();
     
     // Find the promoter by ID (searches both DBs)
@@ -69,6 +137,11 @@ export default class PromotorService {
 
     // Update the promoter fields
     Object.assign(promotorExistente, promotorData);
+
+    // atualiza a latitude e longitude se o CEP foi alterado
+    if(promotorData.CEP != promotorExistente.CEP) {
+      await this.includeLatLongToPromotor(promotorExistente);
+    }
     
     const promotorAtualizado = await repo.save(promotorExistente);
     
@@ -182,94 +255,47 @@ export default class PromotorService {
     return promotores;
   }
 
-  /**
-   * Links a promoter to one or more campaigns
-   * @param campanhaIds - Campaign ID or array of campaign IDs
-   * @param promotorId - The promoter ID
-   * @returns Array of created CampanhaPromotor relationships
-   */
+// Delegações para CampanhaPromotorService (mantidas para retrocompatibilidade)
   static async linkCampanhaPromotor(
     campanhaIds: number | number[], 
-    promotorId: number
-  ): Promise<CampanhaPromotor[]> {
-    const repo = this.getCampanhaPromotorRepo();
+    promotorId: number,
+    raio?: number,
+    empresaSlug?: string
+  ): 
+    Promise<{ campanhaPromotores: CampanhaPromotor[]; autoAssignResult?: { rotasCriadas: number; error?: string } }> 
+  {
+    const campanhaPromotores = await CampanhaPromotorService.linkCampanhaPromotor(campanhaIds, promotorId, raio);
+
+    let autoAssignResult: { rotasCriadas: number; error?: string } | undefined;
+
+    if (empresaSlug && campanhaPromotores.length > 0) 
+    {
+      const promotor = await this.findPromotorById(promotorId);
     
-    // Normalize to array
-    const idsArray = Array.isArray(campanhaIds) ? campanhaIds : [campanhaIds];
-    
-    // Check all existing relationships in a single query (both DBs)
-    const existingRelationships = await repo.find({
-      where: {
-        ID_PROMOTOR: promotorId,
-      },
-    });
-    
-    // Create a Set of existing campaign IDs for quick lookup
-    const existingCampanhaIds = new Set(
-      existingRelationships.map(rel => rel.ID_CAMPANHA!)
-    );
-    
-    // Create relationships for campaigns that don't exist yet
-    const newRelationships: CampanhaPromotor[] = [];
-    
-    for (const campanhaId of idsArray) {
-      if (!existingCampanhaIds.has(campanhaId)) {
-        const campanhaPromotor = repo.create({
-          ID_CAMPANHA: campanhaId,
-          ID_PROMOTOR: promotorId,
-        });
-        newRelationships.push(campanhaPromotor);
+      if (promotor?.LATITUDE && promotor?.LONGITUDE) {
+        autoAssignResult = await this.autoAssignRotas(promotor, campanhaPromotores, empresaSlug);
       }
     }
-    
-    // Bulk save all new relationships (always on new DB)
-    if (newRelationships.length > 0) {
-      const savedRelationships = await repo.saveMany(newRelationships);
-      return savedRelationships;
-    }
-    
-    return [];
+
+    return { campanhaPromotores, autoAssignResult };
   }
 
-    /**
-   * Unlinks a promoter from one or more campaigns
-   * @param campanhaIds - Campaign ID or array of campaign IDs
-   * @param promotorId - The promoter ID
-   * @returns Array of removed CampanhaPromotor relationships
-   */
+  static async updateCampanhaPromotorRaio(
+    idCampanhaPromotor: number,
+    raio: number
+  ): Promise<CampanhaPromotor | null> {
+    return CampanhaPromotorService.updateRaio(idCampanhaPromotor, raio);
+  }
+
   static async unlinkCampanhaPromotor(
-    campanhaIds: number | number[],
-    promotorId: number
+    idCampanhaPromotor: number
   ): Promise<CampanhaPromotor[]> {
-    const campanhaPromotorRepository = AppDataSourceSync.getRepository(CampanhaPromotor);
-    // Normalize to array
-    const idsArray = Array.isArray(campanhaIds) ? campanhaIds : [campanhaIds];
-    // Find all relationships to remove (new DB only for write operations)
-    const relationshipsToRemove = await campanhaPromotorRepository.find({
-      where: {
-        ID_PROMOTOR: promotorId,
-        ID_CAMPANHA: idsArray.length === 1 ? idsArray[0] : In(idsArray),
-      },
-    });
-    // Remove relationships
-    if (relationshipsToRemove.length > 0) {
-      await campanhaPromotorRepository.remove(relationshipsToRemove);
-    }
-    return relationshipsToRemove;
+    await RotaService.removeCampanhaPromotorRota(idCampanhaPromotor);
+    return CampanhaPromotorService.unlinkCampanhaPromotor(idCampanhaPromotor);
   }
 
-    /**
-   * Gets all campaign IDs linked to a promoter
-   * @param promotorId - The promoter ID
-   * @returns Array of campaign IDs
-   */
   static async getCampanhasByPromotor(promotorId: number): Promise<number[]> {
-    const campanhaPromotorRepository = AppDataSourceSync.getRepository(CampanhaPromotor);
-    const relationships = await campanhaPromotorRepository.find({
-      where: { ID_PROMOTOR: promotorId },
-      select: ["ID_CAMPANHA"],
-    });
-    return relationships.map(rel => rel.ID_CAMPANHA!);
+    return CampanhaPromotorService.getCampanhasByPromotor(promotorId);
   }
 
   /**

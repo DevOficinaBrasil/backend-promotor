@@ -258,4 +258,36 @@ export default class RotaController {
       });
     }
   };
+
+  /**
+   * Reatribui rotas após mudança de endereço de oficina
+   * POST /rota/reassign-by-address
+   */
+  static reassignByAddress = async (req: Request, res: Response) => {
+    try {
+      const { CEP, ID_OFICINA } = req.body;
+
+      const result = await RotaService.reassignRotasByAddress(CEP, ID_OFICINA);
+
+      return res.status(200).json({
+        message: "Reatribuição de rotas concluída.",
+        data: result,
+      });
+    } catch (error: any) {
+      if (error.message === "NOT_FOUND") {
+        return res.status(404).json({
+          message: "Nenhuma rota ativa encontrada para a oficina informada.",
+        });
+      }
+      if (error.message?.includes("geocodificar")) {
+        return res.status(400).json({
+          message: error.message,
+        });
+      }
+      console.error("Erro na reatribuição de rotas:", error);
+      return res.status(500).json({
+        message: "Erro interno ao processar reatribuição de rotas.",
+      });
+    }
+  };
 }

@@ -86,4 +86,84 @@ export default class OficinaService {
       throw error;
     }
   }
+
+  public static async getComunityNearbyOficinas(
+    latitude: number,
+    longitude: number,
+    radiusKm: number,
+    empresaSlug: string
+  ): Promise<Array<{
+    ID_OFICINA: number;
+    LATITUDE: number;
+    LONGITUDE: number;
+    NOME_FANTASIA: string;
+    ENDERECO: string;
+    BAIRRO: string;
+    CIDADE: string;
+    ESTADO: string;
+    NUMERO: string;
+    CEP: string;
+    CNPJ: string;
+    TELEFONE: string;
+    distance: number;
+  }>> {
+    const query = `
+      SELECT DISTINCT ON (ce."id_oficina")
+        ce."id_oficina" AS "ID_OFICINA",
+        ce."latitude" AS "LATITUDE",
+        ce."longitude" AS "LONGITUDE",
+        ce."razao_social" AS "NOME_FANTASIA",
+        CONCAT(ce."logradouro", ' ', ce."rua") AS "ENDERECO",
+        ce."bairro" AS "BAIRRO",
+        ce."cidade" AS "CIDADE",
+        ce."estado" AS "ESTADO",
+        ce."numero" AS "NUMERO",
+        ce."cep" AS "CEP",
+        ce."cnpj" AS "CNPJ",
+        ce."telefone" AS "TELEFONE",
+        (
+          ${EARTH_RADIUS_KM} * acos(
+            cos(radians($2)) * cos(radians(ce."latitude")) *
+            cos(radians(ce."longitude") - radians($3)) +
+            sin(radians($2)) * sin(radians(ce."latitude"))
+          )
+        ) AS distance
+      FROM "OFICINA_PORTAL"."COMMUNITIES" cm
+      INNER JOIN "MAIN_REGISTER"."USUARIO_COMMUNITY" uc
+        ON cm."CommunityID" = uc."id_community"
+      INNER JOIN "MAIN_REGISTER"."USUARIO" us
+        ON us."ID_USUARIO" = uc."id_usuario"
+      INNER JOIN "dw"."cadastro_empresa" ce
+        ON ce."id_oficina" = us."ID_OFICINA"
+      WHERE cm."EmpresaSlug" = $1
+        AND ce."longitude" IS NOT NULL
+        AND ce."latitude" IS NOT NULL
+        AND ce."status_receita" = 'ATIVA'
+        AND (
+          ${EARTH_RADIUS_KM} * acos(
+            cos(radians($2)) * cos(radians(ce."latitude")) *
+            cos(radians(ce."longitude") - radians($3)) +
+            sin(radians($2)) * sin(radians(ce."latitude"))
+          )
+        ) <= $4
+      ORDER BY ce."id_oficina", distance ASC
+    `;
+
+    try {
+      const results = await AppDataSourceSync.query(query, [
+        empresaSlug,
+        latitude,
+        longitude,
+        radiusKm,
+      ]);
+
+      return results;
+    } catch (error) {
+      console.error(
+        `Error finding community nearby oficinas (lat: ${latitude}, lon: ${longitude}, radius: ${radiusKm}km, slug: ${empresaSlug}):`,
+        error
+      );
+      throw error;
+    }
+  }
 }

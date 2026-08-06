@@ -8,13 +8,18 @@ const config: Config = {
   clearMocks: true,
   verbose: true,
   moduleNameMapper: {
-    "^@/(.*)$": "<rootDir>/$1" // como o projeto está na raiz
+    "^@/(.*)$": "<rootDir>/$1",
   },
   coveragePathIgnorePatterns: [
     "entities",
     "data-source.ts",
-    "utils"
-  ]
+  ],
+  transform: {
+    "^.+\.ts$": ["ts-jest", {
+      tsconfig: "tsconfig.json",
+      diagnostics: { ignoreDiagnostics: [5103] },
+    }],
+  },
 };
 
 export default config;
