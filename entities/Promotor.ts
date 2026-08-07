@@ -47,11 +47,11 @@ export default class Promotor {
   @Column({ type: "varchar", length: 30, nullable: true, name: "CEP" })
   CEP?: string;
 
-  @Column({ type: "varchar", length: 20, nullable: true, name: "LONGITUDE" })
-  LONGITUDE?: string;
+  @Column({ type: "float8", nullable: true, name: "LONGITUDE" })
+  LONGITUDE?: number | null;
 
-  @Column({ type: "varchar", length: 20, nullable: true, name: "LATITUDE" })
-  LATITUDE?: string;
+  @Column({ type: "float8", nullable: true, name: "LATITUDE" })
+  LATITUDE?: number | null;
 
   @UpdateDateColumn({
     type: "timestamp",

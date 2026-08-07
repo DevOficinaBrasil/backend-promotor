@@ -28,8 +28,8 @@ export default class PromotorService {
 
     if(latLong) 
     {
-      promotor.LATITUDE = latLong.lat.toString();
-      promotor.LONGITUDE = latLong.long.toString();
+      promotor.LATITUDE = latLong.lat;
+      promotor.LONGITUDE = latLong.long;
     }
 
     return promotor;
@@ -84,8 +84,8 @@ export default class PromotorService {
       try {
         const raio = cp.RAIO ?? 20;
         const oficinas = await OficinaService.getComunityNearbyOficinas(
-          parseFloat(promotor.LATITUDE!),
-          parseFloat(promotor.LONGITUDE!),
+          promotor.LATITUDE!,
+          promotor.LONGITUDE!,
           raio,
           empresaSlug
         );

@@ -544,8 +544,8 @@ export default class RotaService {
       }
 
       const distanciaAtual = haversineDistanceKm(
-        parseFloat(promotorAtual.LATITUDE),
-        parseFloat(promotorAtual.LONGITUDE),
+        promotorAtual.LATITUDE,
+        promotorAtual.LONGITUDE,
         novaLat,
         novaLong
       );
@@ -705,8 +705,8 @@ export default class RotaService {
         ID_PROMOTOR: row.ID_PROMOTOR,
         NOME: row.NOME,
         RAIO: row.RAIO,
-        lat: parseFloat(row.LATITUDE),
-        lon: parseFloat(row.LONGITUDE),
+        lat: row.LATITUDE,
+        lon: row.LONGITUDE,
       });
     }
     return mapa;
