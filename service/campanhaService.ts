@@ -3,8 +3,7 @@ import Campanha from "../entities/Campanha";
 import CampanhaPromotor, { EstrategiaOrdenacao } from "../entities/CampanhaPromotor";
 import RotaPromotor from "../entities/RotaPromotor";
 import Oficina from "../entities/Oficina";
-import { Between, LessThanOrEqual, MoreThanOrEqual, IsNull } from "typeorm";
-import { DuckDBClient } from "../utils/duckdbClient";
+import { IsNull } from "typeorm";
 import { MigrationAwareRepository, queryBothAndMerge } from "../utils/migrationRepository";
 import { StatusNotificacaoVisita } from "../entities/NotificacaoVisita";
 import { statusEfetivo } from "../utils/statusNotificacaoVisita";
@@ -23,9 +22,9 @@ export default class CampanhaService {
     return new MigrationAwareRepository<CampanhaPromotor>(CampanhaPromotor, "ID_CAMPANHA_PROMOTOR");
   }
 
-  private static getRotaPromotorRepo() {
-    return new MigrationAwareRepository<RotaPromotor>(RotaPromotor, "ID_ROTA_PROMOTOR");
-  }
+  // private static getRotaPromotorRepo() {
+  //   return new MigrationAwareRepository<RotaPromotor>(RotaPromotor, "ID_ROTA_PROMOTOR");
+  // }
 
   /**
    * Builds the nested visit-confirmation status object for one route row of a

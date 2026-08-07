@@ -78,7 +78,12 @@ export default class RotaService {
         CREATED_BY,
       });
       const rotaSalva = await repo.save(novaRota);
-      await this.notificarRotasCriadas([rotaSalva]);
+
+      if(process.env.NODE_ENV !== "development")
+      {
+        await this.notificarRotasCriadas([rotaSalva]);
+      }
+      
       return rotaSalva;
     }
 
@@ -91,7 +96,12 @@ export default class RotaService {
       })
     );
     const rotasSalvas = await repo.saveMany(novasRotas);
-    await this.notificarRotasCriadas(rotasSalvas);
+
+    if(process.env.NODE_ENV !== "development")
+    {
+      await this.notificarRotasCriadas(rotasSalvas);
+    }
+
     return rotasSalvas;
   }
 
@@ -154,7 +164,9 @@ export default class RotaService {
 
     // Notify after the transaction commits, so a rolled-back creation never
     // produces a notification for routes that do not exist.
-    await this.notificarRotasCriadas(resultado.rotas);
+    if (process.env.NODE_ENV !== "development") {
+      await this.notificarRotasCriadas(resultado.rotas);
+    }
 
     return resultado;
   }
@@ -219,7 +231,11 @@ export default class RotaService {
       );
       const savedRotas = await repo.saveMany(novasRotas);
       createdRotas.push(...savedRotas);
-      await this.notificarRotasCriadas(savedRotas);
+
+      if(process.env.NODE_ENV !== "development")
+      {
+        await this.notificarRotasCriadas(savedRotas);
+      }
     }
 
     return {
@@ -446,7 +462,15 @@ export default class RotaService {
 
   public static async removeCampanhaPromotorRota(idCampanhaPromotor: number): Promise<void> 
   {
-    // Hard-delete all rotas including soft-deleted ones to clear FK constraint
+    // Delete notifications that reference rotas being removed (FK constraint)
+    await AppDataSourceSync.query(
+      `DELETE FROM "CAMPANHAS_OB"."NOTIFICACAO_VISITA" WHERE "ID_ROTA_PROMOTOR" IN (
+        SELECT "ID_ROTA_PROMOTOR" FROM "CAMPANHAS_OB"."ROTA_PROMOTOR" WHERE "ID_CAMPANHA_PROMOTOR" = $1
+      )`,
+      [idCampanhaPromotor]
+    );
+
+    // Hard-delete all rotas including soft-deleted ones
     await AppDataSourceSync.query(
       `DELETE FROM "CAMPANHAS_OB"."ROTA_PROMOTOR" WHERE "ID_CAMPANHA_PROMOTOR" = $1`,
       [idCampanhaPromotor]
@@ -601,7 +625,10 @@ export default class RotaService {
       // AFTER the transaction commits — notificarVisita persists through its own
       // repository, outside this manager, so notifying inside would write against
       // uncommitted state and let a notification failure roll back the reassignment.
-      await this.notificarRotasCriadas([rotaCriadaEntidade]);
+      if(process.env.NODE_ENV !== "development")
+      {
+        await this.notificarRotasCriadas([rotaCriadaEntidade]);
+      }
 
       reatribuicoes.push({
         ID_CAMPANHA: idCampanha,
