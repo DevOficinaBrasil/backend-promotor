@@ -40,6 +40,8 @@ describe("GET /visita/:token", () => {
       state: "PENDING",
       jwt: "jwt-de-teste",
       oficinaNome: "Auto Center Silva",
+      promotorNome: "Carlos Promotor",
+      empresaNome: "Bosch Brasil",
       endereco: enderecoRegistrado,
     });
 
@@ -52,6 +54,8 @@ describe("GET /visita/:token", () => {
         state: "PENDING",
         jwt: "jwt-de-teste",
         oficinaNome: "Auto Center Silva",
+        promotorNome: "Carlos Promotor",
+        empresaNome: "Bosch Brasil",
         endereco: enderecoRegistrado,
       },
     });
@@ -64,6 +68,8 @@ describe("GET /visita/:token", () => {
       state: "PENDING",
       jwt: "jwt-de-teste",
       oficinaNome: "Auto Center Silva",
+      promotorNome: "Carlos Promotor",
+      empresaNome: "Bosch Brasil",
       endereco: enderecoRegistrado,
     });
 
@@ -74,6 +80,8 @@ describe("GET /visita/:token", () => {
       "state",
       "jwt",
       "oficinaNome",
+      "promotorNome",
+      "empresaNome",
       "endereco",
     ]);
   });
