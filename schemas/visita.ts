@@ -64,13 +64,19 @@ export const ExchangePendingResponseSchema = z.object({
 });
 
 /**
- * GET /visita/{token} - already-confirmed response (no JWT, no actions)
+ * GET /visita/{token} - already-confirmed response
+ *
+ * Carries no JWT: there is no remaining action to authorize. It does carry
+ * `promotorNome` and `endereco` so the confirmed screen can restate who is
+ * coming and which address was confirmed, rather than only the date.
  */
 export const ExchangeAlreadyConfirmedResponseSchema = z.object({
   message: z.string(),
   data: z.object({
     state: z.literal('ALREADY_CONFIRMED'),
     oficinaNome: z.string().nullable(),
+    promotorNome: z.string().nullable(),
+    endereco: EnderecoOficinaSchema,
     confirmadoEm: z.string().datetime().nullable(),
   }),
 });

@@ -9,6 +9,10 @@
 | 2026-07-13 | Banco antigo fica READ-ONLY para a app | Evita escritas divergentes durante transição |
 | 2026-07-13 | Merge em memória (não via DB link) | Cross-region impede DB links nativos; volume baixo (<5k registros) permite merge em app |
 | 2026-08-04 | Brownfield mapping executado | Base para próximas features; 7 docs em `.specs/codebase/` |
+| 2026-08-07 | Migration da `NOTIFICACAO_VISITA` adequada ao `dba-rules` (review do DBA) | TEXT em vez de VARCHAR, TIMESTAMPTZ em vez de TIMESTAMP, `COMMENT ON` em tabela e colunas, CHECKs de negócio. Entity alinhada no mesmo commit |
+| 2026-08-07 | CHECK de `STATUS` lista os 7 valores do enum, não os 4 propostos no review | `DISPENSADO` (supressão deliberada, não é falha) e `EXPIRADO` são gravados por code paths ativos — `envioGuards.ts` e as guardas de pré-envio. Com 4 valores, todo envio bloqueado por antispam estouraria constraint violation |
+| 2026-08-07 | FK para `ROTA_PROMOTOR` **removida** — padrão da casa (relacionamento implícito) | Além da conformidade: a FK sem `ON DELETE` da v1 bloqueava qualquer `DELETE` em `ROTA_PROMOTOR` com notificação. A regra de negócio (1 notificação por rota) nunca dependeu dela — quem garante é o `UNIQUE(ID_ROTA_PROMOTOR)`, que fica. As relations do TypeORM não mudam: são join em tempo de query, e o data source roda `synchronize: false` |
+| 2026-08-07 | Migration é de primeira execução, sem caminho de `ALTER` | O DBA cuida de prod, onde a tabela ainda não existe — não há dado antigo pra converter nem fuso a assumir. Dev é responsabilidade nossa e fica fora do arquivo versionado |
 
 ## Current Status
 
@@ -17,7 +21,9 @@
 - **Next**: Deploy com dual-mode (atualizar .env em produção) → Executar `npx ts-node scripts/migrate-data.ts` → Task 4.1
 - **Blockers**:
   - ⛔ `scripts/migrate-data.ts` **não existe** — o "Next" acima não pode ser executado como está. Verificar se o script foi perdido ou nunca foi escrito.
-  - ⚠️ Suíte de testes quebrada desde PR #39 (31/41 falhando). Causa: `__mocks__/data-source.ts` não exporta `isLegacyEnabled`/`LegacyDataSource`. Ver `.specs/codebase/TESTING.md`.
+  - ✅ ~~Suíte quebrada desde PR #39~~ — resolvido em `34216df`. Unit + integração de visita: 100% verde.
+  - ⚠️ 3 suítes de integração legadas falham no teardown por FK: `rotaService`, `campanhaPromotorService`, `campanhaResultsService`. Causa comum e pré-existente — a cadeia `PROMOTOR → CAMPANHA_PROMOTOR → ROTA_PROMOTOR` tem FKs herdadas sem `ON DELETE`, e o cleanup dos testes deleta de cima pra baixo. O elo da `NOTIFICACAO_VISITA` sai quando a migration rodar; os demais são pré-existentes e ficam. Não é regressão da feature de visita.
+  - ⏳ Migration da `NOTIFICACAO_VISITA` fechada e sem pendências de decisão, aguardando o DBA rodar em prod. O reset da tabela em dev (necessário porque a v1 subiu lá com o schema antigo) é manual e não versionado.
 
 ## Open Risks (do mapping de 2026-08-04)
 

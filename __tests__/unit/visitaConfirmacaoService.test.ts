@@ -266,9 +266,76 @@ describe("VisitaConfirmacaoService.trocarToken", () => {
     expect(resultado).toEqual({
       state: "ALREADY_CONFIRMED",
       oficinaNome: "Auto Center Silva",
+      promotorNome: null,
+      endereco: {
+        ENDERECO: "Rua das Oficinas",
+        NUMERO: "1234",
+        COMPLEMENTO: "Galpão 2",
+        BAIRRO: "Vila Industrial",
+        CIDADE: "São Paulo",
+        ESTADO: "SP",
+        CEP: "01234-567",
+      },
       confirmadoEm,
     });
     expect(resultado).not.toHaveProperty("jwt");
+  });
+
+  // The confirmed screen restates who is coming, so the promoter's name has to
+  // survive the CONFIRMADO branch the same way it does the PENDING one.
+  it("returns the promoter's name on the ALREADY_CONFIRMED branch", async () => {
+    notifRepo.findOne.mockResolvedValue(
+      new NotificacaoVisita({
+        ...notificacaoEnviada(),
+        STATUS: StatusNotificacaoVisita.CONFIRMADO,
+        CONFIRMADO_EM: new Date("2026-08-04T10:00:00.000Z"),
+      })
+    );
+    rotaRepo.findOne.mockImplementation(async (opcoes: { relations?: string[] }) =>
+      opcoes.relations === undefined
+        ? ({ ID_ROTA_PROMOTOR: ID_ROTA, ID_OFICINA } as RotaPromotor)
+        : ({
+            ID_ROTA_PROMOTOR: ID_ROTA,
+            ID_OFICINA,
+            campanhaPromotor: { promotor: { NOME: "Carlos Promotor" } },
+          } as unknown as RotaPromotor)
+    );
+
+    const resultado = await VisitaConfirmacaoService.trocarToken(RAW_TOKEN, AGORA);
+
+    expect(resultado).toMatchObject({
+      state: "ALREADY_CONFIRMED",
+      promotorNome: "Carlos Promotor",
+    });
+  });
+
+  // A gap in the registry must degrade to empty fields, never to a failed
+  // exchange — same rule the PENDING branch already follows.
+  it("returns null address fields on ALREADY_CONFIRMED when the workshop is missing", async () => {
+    notifRepo.findOne.mockResolvedValue(
+      new NotificacaoVisita({
+        ...notificacaoEnviada(),
+        STATUS: StatusNotificacaoVisita.CONFIRMADO,
+        CONFIRMADO_EM: new Date("2026-08-04T10:00:00.000Z"),
+      })
+    );
+    oficinaRepo.findOne.mockResolvedValue(null);
+
+    const resultado = await VisitaConfirmacaoService.trocarToken(RAW_TOKEN, AGORA);
+
+    expect(resultado).toMatchObject({
+      state: "ALREADY_CONFIRMED",
+      oficinaNome: null,
+      endereco: {
+        ENDERECO: null,
+        NUMERO: null,
+        COMPLEMENTO: null,
+        BAIRRO: null,
+        CIDADE: null,
+        ESTADO: null,
+        CEP: null,
+      },
+    });
   });
 
   // AC17: "IF the linked NotificacaoVisita's EXPIRA_EM has passed THEN ...

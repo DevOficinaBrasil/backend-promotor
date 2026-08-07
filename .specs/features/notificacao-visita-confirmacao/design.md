@@ -213,46 +213,46 @@ interface NotificacaoVisita {
 }
 ```
 
-**Relationships**: `@ManyToOne` → `RotaPromotor` (unique `ID_ROTA_PROMOTOR`, enforces NOTIF-09's one-notification-per-route rule at the DB level, not just in application code). `ID_USUARIO` stored as a plain FK-shaped int column (no `@ManyToOne` to `Usuario` required — `Usuario` lives in `MAIN_REGISTER`, read-only, same cross-schema pattern `RotaPromotor` already uses for `Oficina`).
+**Relationships**: `@ManyToOne` → `RotaPromotor`, an ORM-level join with no database FK behind it (house convention). NOTIF-09's one-notification-per-route rule is enforced at the DB level by `UNIQUE(ID_ROTA_PROMOTOR)`, not by the relation. `ID_USUARIO` stored as a plain FK-shaped int column (no `@ManyToOne` to `Usuario` required — `Usuario` lives in `MAIN_REGISTER`, read-only, same cross-schema pattern `RotaPromotor` already uses for `Oficina`).
 
-**Migration** (`scripts/migration-notificacao-visita.sql`, matching the existing raw-SQL convention):
+**Migration**: `scripts/migration-notificacao-visita.sql` (raw SQL, matching the existing convention). The full script is not duplicated here — it drifted from the file once already. Shape of the table:
 
 ```sql
 CREATE TABLE IF NOT EXISTS "CAMPANHAS_OB"."NOTIFICACAO_VISITA" (
   "ID_NOTIFICACAO_VISITA" SERIAL PRIMARY KEY,
-  "ID_ROTA_PROMOTOR" INT NOT NULL UNIQUE REFERENCES "CAMPANHAS_OB"."ROTA_PROMOTOR"("ID_ROTA_PROMOTOR"),
+  "ID_ROTA_PROMOTOR" INT NOT NULL UNIQUE,   -- no FK by house convention, see below
   -- ID_USUARIO / TOKEN_HASH / EXPIRA_EM are deliberately nullable: the row is INSERTed in
   -- PENDENTE (AC1) before a recipient is resolved (AC2) or a token issued (AC5), and the
   -- AC3 "no recipient with phone" path must be able to persist a FALHOU row with none of them.
   "ID_USUARIO" INT,
-  "CANAL" VARCHAR(20) NOT NULL DEFAULT 'WHATSAPP',
-  "STATUS" VARCHAR(20) NOT NULL DEFAULT 'PENDENTE',
-  "TELEFONE_NORMALIZADO" VARCHAR(20),
-  "TOKEN_HASH" VARCHAR(64),
-  "EXPIRA_EM" TIMESTAMP,
+  "CANAL" TEXT NOT NULL DEFAULT 'WHATSAPP',
+  "STATUS" TEXT NOT NULL DEFAULT 'PENDENTE',
+  "TELEFONE_NORMALIZADO" TEXT,   -- digits-only 55DDDNNNNNNNNN, not E.164
+  "TOKEN_HASH" TEXT,             -- SHA-256 hex, 64 chars
+  "EXPIRA_EM" TIMESTAMPTZ,
   "ERRO_ENVIO" TEXT,
-  "MESSAGE_ID" VARCHAR(100),
-  "PROVIDER_MESSAGE_ID" VARCHAR(100),
-  "ENVIADO_EM" TIMESTAMP,
-  "CONFIRMADO_EM" TIMESTAMP,
+  "MESSAGE_ID" TEXT,
+  "PROVIDER_MESSAGE_ID" TEXT,
+  "ENVIADO_EM" TIMESTAMPTZ,
+  "CONFIRMADO_EM" TIMESTAMPTZ,
   "CONFIRMADO_POR" INT,
-  "CONFIRMADO_IP" VARCHAR(45),
+  "CONFIRMADO_IP" TEXT,          -- TEXT so IPv6 is never truncated
   "ENDERECO_ATUALIZADO" BOOLEAN NOT NULL DEFAULT FALSE,
-  "CREATED_AT" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "UPDATED_AT" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+  "CREATED_AT" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "UPDATED_AT" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-
--- Supports the per-recipient anti-spam scan (NOTIF-28/29/30), which filters by
--- ID_USUARIO and STATUS on every route creation.
-CREATE INDEX IF NOT EXISTS "IDX_NOTIFICACAO_VISITA_USUARIO_STATUS"
-  ON "CAMPANHAS_OB"."NOTIFICACAO_VISITA" ("ID_USUARIO", "STATUS");
-
--- UNIQUE: TOKEN_HASH is the single-row lookup key for the exchange endpoint.
--- Postgres treats NULLs as distinct, so the nullable column above still allows
--- many un-issued (PENDENTE/FALHOU) rows to coexist.
-CREATE UNIQUE INDEX IF NOT EXISTS "IDX_NOTIFICACAO_VISITA_TOKEN_HASH"
-  ON "CAMPANHAS_OB"."NOTIFICACAO_VISITA" ("TOKEN_HASH");
 ```
+
+Two indexes: `(ID_USUARIO, STATUS)` for the per-recipient anti-spam scan (NOTIF-28/29/30), and a UNIQUE on `TOKEN_HASH` — the single-row lookup key for the exchange endpoint. Postgres treats NULLs as distinct, so the nullable column still allows many un-issued (PENDENTE/FALHOU/DISPENSADO) rows to coexist.
+
+Conventions imposed by the DBA review (2026-08-06, `dba-rules`), all of which the entity must mirror:
+
+- **No `VARCHAR`** — every string column is `TEXT`. Length rationale lives in `COMMENT ON COLUMN`, not in the type.
+- **No naive `TIMESTAMP`** — every temporal column is `TIMESTAMPTZ`. Load-bearing on `EXPIRA_EM`: a token expiry without a zone depends on the timezone of whichever session wrote it.
+- **`COMMENT ON`** for the table and every column, so the documentation lives in the database catalog.
+- **CHECK constraints**: `STATUS` must list all seven `StatusNotificacaoVisita` members — including `DISPENSADO` (deliberate suppression, *not* a failure) and `EXPIRADO`, both written by live code paths; `CANAL` (WHATSAPP/EMAIL/SMS); `TOKEN_HASH IS NULL` ⇔ `EXPIRA_EM IS NULL`; and `STATUS = ENVIADO`/`CONFIRMADO` implying their respective timestamp, which holds because each is written in the same UPDATE as the status transition.
+- **No database FK** (house rule: relationships are implicit by legacy convention, referential integrity is the application's job). The v1 of this table shipped one; the migration drops it. Two reasons beyond conformance: that FK had no `ON DELETE`, so it blocked every `DELETE` on `ROTA_PROMOTOR` that had a notification (reproducible in the integration teardown); and the constraint was never what enforced the domain rule — `UNIQUE(ID_ROTA_PROMOTOR)` is, and that stays. The TypeORM `@ManyToOne`/`@OneToOne` pair is unaffected: it is a query-time join, not a constraint, and the data source runs `synchronize: false`.
+- The script assumes the table **does not exist yet** in the target environment — it is a first-run migration for production, not an update path. `IF NOT EXISTS` guards against a double run; it is not a way to bring an existing table up to this shape, and will silently no-op against one.
 
 **Write sequence** (two writes, matching the AC ordering): `INSERT` the row in `PENDENTE` with only `ID_ROTA_PROMOTOR`/`CANAL` set (AC1) → resolve recipient, normalize phone, issue token → `UPDATE` with `ID_USUARIO`, `TELEFONE_NORMALIZADO`, `TOKEN_HASH`, `EXPIRA_EM` (AC2, AC4, AC5) → `UPDATE` again with the dispatch outcome (AC7–AC9, AC11–AC13). Any failure short-circuits to an `UPDATE` setting `FALHOU` + `ERRO_ENVIO`.
 

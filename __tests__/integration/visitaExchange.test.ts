@@ -89,9 +89,20 @@ describe("GET /visita/:token", () => {
   // AC18: already-confirmed is a distinct state and issues no JWT.
   it("returns 200 ALREADY_CONFIRMED with no JWT", async () => {
     const confirmadoEm = new Date("2026-08-04T10:00:00.000Z");
+    const endereco = {
+      ENDERECO: "Rua das Oficinas",
+      NUMERO: "1234",
+      COMPLEMENTO: null,
+      BAIRRO: "Vila Industrial",
+      CIDADE: "São Paulo",
+      ESTADO: "SP",
+      CEP: "01234-567",
+    };
     trocarTokenMock.mockResolvedValue({
       state: "ALREADY_CONFIRMED",
       oficinaNome: "Auto Center Silva",
+      promotorNome: "Carlos Promotor",
+      endereco,
       confirmadoEm,
     });
 
@@ -101,6 +112,40 @@ describe("GET /visita/:token", () => {
     expect(resposta.body.data.state).toBe("ALREADY_CONFIRMED");
     expect(resposta.body.data.confirmadoEm).toBe(confirmadoEm.toISOString());
     expect(resposta.body.data).not.toHaveProperty("jwt");
+  });
+
+  // The confirmed screen names the promoter and repeats the confirmed address,
+  // so both have to reach the client on this branch — not only on PENDING.
+  it("returns the promoter's name and the address on ALREADY_CONFIRMED", async () => {
+    const endereco = {
+      ENDERECO: "Rua das Oficinas",
+      NUMERO: "1234",
+      COMPLEMENTO: null,
+      BAIRRO: "Vila Industrial",
+      CIDADE: "São Paulo",
+      ESTADO: "SP",
+      CEP: "01234-567",
+    };
+    trocarTokenMock.mockResolvedValue({
+      state: "ALREADY_CONFIRMED",
+      oficinaNome: "Auto Center Silva",
+      promotorNome: "Carlos Promotor",
+      endereco,
+      confirmadoEm: new Date("2026-08-04T10:00:00.000Z"),
+    });
+
+    const resposta = await request(app).get("/visita/token-confirmado");
+
+    expect(resposta.status).toBe(200);
+    expect(resposta.body.data.promotorNome).toBe("Carlos Promotor");
+    expect(resposta.body.data.endereco).toEqual(endereco);
+    expect(Object.keys(resposta.body.data)).toEqual([
+      "state",
+      "oficinaNome",
+      "promotorNome",
+      "endereco",
+      "confirmadoEm",
+    ]);
   });
 
   // AC17: expired links get a distinct state and no JWT.

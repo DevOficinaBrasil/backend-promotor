@@ -41,7 +41,8 @@ GET /visita/{linkToken}          ← no auth header needed here
       ├─ 200 OK, pendente     → render workshop name + address + both action buttons
       │                          store the returned JWT (in memory only, see below)
       │
-      ├─ 200 OK, já confirmado → render "Você já confirmou em {data}" (no buttons)
+      ├─ 200 OK, já confirmado → render "Você já confirmou em {data}" + promotor + endereço
+      │                          confirmado (no buttons, no JWT)
       │
       ├─ 410 Gone, expirado    → render "Este link expirou"
       │
@@ -113,10 +114,26 @@ Any address field may be `null` — the registry has incomplete records. Render 
   "data": {
     "state": "ALREADY_CONFIRMED",
     "oficinaNome": "Auto Center Silva",
+    "promotorNome": "Carlos Pereira",
+    "endereco": {
+      "ENDERECO": "Rua das Oficinas",
+      "NUMERO": "1234",
+      "COMPLEMENTO": "Galpão 2",
+      "BAIRRO": "Vila Industrial",
+      "CIDADE": "São Paulo",
+      "ESTADO": "SP",
+      "CEP": "01234-567"
+    },
     "confirmadoEm": "2026-08-09T14:32:00.000Z"
   }
 }
 ```
+
+`promotorNome` and `endereco` follow the same rules as on `PENDING`: `promotorNome` may be `null` when the relation cannot be resolved, and every address field may be `null`. The confirmed screen uses them to name who is coming ("O {promotorNome} vai entrar em contato…") and to restate the confirmed address, so treat a `null` as "omit that line", never as text to render.
+
+There is still **no JWT** here — nothing on this screen is actionable, and `endereco` is read-only. To correct an address after confirming, the reparador needs a new link.
+
+`empresaNome` is deliberately **not** returned on this branch. Ask if the confirmed screen needs it too.
 
 **Response `410` — link expired:**
 ```json
@@ -232,7 +249,7 @@ This is the whole contract, pinned in `spec.md` under "HTTP status codes (normat
 | `PENDING` | `GET` returns pending | Workshop name, address fields, **"Confirmar"** + **"Corrigir endereço"** |
 | `EDITING` | User tapped "Corrigir endereço" | Editable form of the 7 fields, "Salvar" / "Cancelar" |
 | `CONFIRMED` | `POST` or `PUT` succeeds | Success message, no further action |
-| `ALREADY_CONFIRMED` | `GET`/`POST`/`PUT` reports it | "Você já confirmou em {data}" — no actions |
+| `ALREADY_CONFIRMED` | `GET`/`POST`/`PUT` reports it | "Você já confirmou em {data}" + promotor + endereço confirmado — no actions. Only the `GET` carries `promotorNome`/`endereco`; the `409` from `POST`/`PUT` does not, so re-run the `GET` to populate that screen |
 | `EXPIRED` | `GET`/`POST`/`PUT` returns `410` | "Este link expirou" — no actions, no retry |
 | `TOKEN_INVALID` | `GET`/`POST`/`PUT` returns `404` | "Link inválido" — no actions |
 | `VALIDATION_ERROR` | `PUT` returns `400` | Stay in `EDITING`, mark the offending field |

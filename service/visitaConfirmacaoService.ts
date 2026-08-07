@@ -32,7 +32,13 @@ export type ExchangeResult =
       empresaNome: string | null;
       endereco: EnderecoOficina;
     }
-  | { state: "ALREADY_CONFIRMED"; oficinaNome: string | null; confirmadoEm: Date | null }
+  | {
+      state: "ALREADY_CONFIRMED";
+      oficinaNome: string | null;
+      promotorNome: string | null;
+      endereco: EnderecoOficina;
+      confirmadoEm: Date | null;
+    }
   | { state: "EXPIRED" }
   | { state: "TOKEN_INVALID" };
 
@@ -93,10 +99,18 @@ export default class VisitaConfirmacaoService {
     }
 
     if (status === StatusNotificacaoVisita.CONFIRMADO) {
-      // AC18
+      // AC18. Carries the promoter's name and the address alongside the
+      // confirmation date: the confirmed screen restates who is coming and
+      // which address was confirmed, so the reparador can tell at a glance
+      // whether the visit they are looking at is the one they expect. No JWT —
+      // there is no further action to authorize.
+      const oficinaConfirmada = await this.carregarOficina(notificacao);
+
       return {
         state: "ALREADY_CONFIRMED",
-        oficinaNome: (await this.carregarOficina(notificacao))?.NOME_FANTASIA ?? null,
+        oficinaNome: oficinaConfirmada?.NOME_FANTASIA ?? null,
+        promotorNome: (await this.carregarVisitante(notificacao)).promotorNome,
+        endereco: extrairEndereco(oficinaConfirmada),
         confirmadoEm: notificacao.CONFIRMADO_EM ?? null,
       };
     }
