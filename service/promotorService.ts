@@ -10,15 +10,17 @@ import GeolocationService from "./geolocationService";
 import CampanhaPromotorService from "./campanhaPromotorService";
 import OficinaService from "./oficinaService";
 import RotaService from "./rotaService";
+import { haversineDistanceKm } from "../utils/haversine";
+import Oficina from "../entities/Oficina";
 
 export default class PromotorService {
   private static getPromotorRepo() {
     return new MigrationAwareRepository<Promotor>(Promotor, "ID_PROMOTOR");
   }
 
-  private static getCampanhaPromotorRepo() {
-    return new MigrationAwareRepository<CampanhaPromotor>(CampanhaPromotor, "ID_CAMPANHA_PROMOTOR");
-  }
+  // private static getCampanhaPromotorRepo() {
+  //   return new MigrationAwareRepository<CampanhaPromotor>(CampanhaPromotor, "ID_CAMPANHA_PROMOTOR");
+  // }
 
   private static async includeLatLongToPromotor(promotor: Promotor): Promise<Promotor> 
   {
@@ -118,10 +120,13 @@ export default class PromotorService {
    * @param promotorData - The promoter data to update
    * @returns The updated promoter or null if not found
    */
-  static async updatePromotor(id: number, promotorData: Partial<Promotor>, raio?: number): Promise<Promotor | null> {
+  static async updatePromotor(
+    id: number, 
+    promotorData: Partial<Promotor>, 
+    empresaSlug?: string
+  ): Promise<{ promotor: Promotor; autoAssignResult?: { rotasCriadas: number; error?: string } } | null> {
     const repo = this.getPromotorRepo();
     
-    // Find the promoter by ID (searches both DBs)
     const promotorExistente = await repo.findOne({
       where: { ID_PROMOTOR: id }
     });
@@ -135,17 +140,147 @@ export default class PromotorService {
       promotorData.SENHA = encrypt(promotorData.SENHA);
     }
 
+    const cepAlterado = promotorData.CEP !== undefined && promotorData.CEP !== promotorExistente.CEP;
+
     // Update the promoter fields
     Object.assign(promotorExistente, promotorData);
 
-    // atualiza a latitude e longitude se o CEP foi alterado
-    if(promotorData.CEP != promotorExistente.CEP) {
+    if (cepAlterado) {
       await this.includeLatLongToPromotor(promotorExistente);
     }
     
     const promotorAtualizado = await repo.save(promotorExistente);
+
+    let autoAssignResult: { rotasCriadas: number; error?: string } | undefined;
+    if (cepAlterado && promotorAtualizado.LATITUDE && promotorAtualizado.LONGITUDE) {
+      autoAssignResult = await this.reassignRotasAfterCepChange(promotorAtualizado, empresaSlug);
+    }
     
-    return promotorAtualizado;
+    return { promotor: promotorAtualizado, autoAssignResult };
+  }
+
+  private static async reassignRotasAfterCepChange(
+    promotor: Promotor,
+    empresaSlug?: string
+  ): Promise<{ rotasCriadas: number; error?: string }> {
+    const campanhaPromotorRepo = AppDataSourceSync.getRepository(CampanhaPromotor);
+    const campanhaPromotores = await campanhaPromotorRepo.find({
+      where: { ID_PROMOTOR: promotor.ID_PROMOTOR }
+    });
+
+    if (campanhaPromotores.length === 0) {
+      return { rotasCriadas: 0 };
+    }
+
+    // Capture oficinas assigned to this promoter before removing them
+    const freedOficinasPorCampanha = new Map<number, number[]>();
+    for (const cp of campanhaPromotores) {
+      const rotas = await AppDataSourceSync.query(
+        `SELECT "ID_OFICINA" FROM "CAMPANHAS_OB"."ROTA_PROMOTOR" 
+         WHERE "ID_CAMPANHA_PROMOTOR" = $1 AND "DELETED_AT" IS NULL`,
+        [cp.ID_CAMPANHA_PROMOTOR]
+      );
+      freedOficinasPorCampanha.set(cp.ID_CAMPANHA!, rotas.map((r: any) => r.ID_OFICINA));
+    }
+
+    // Remove existing routes for all campaign associations
+    for (const cp of campanhaPromotores) {
+      await RotaService.removeCampanhaPromotorRota(cp.ID_CAMPANHA_PROMOTOR!);
+    }
+
+    // Resolve empresaSlug from existing campaign data if not provided
+    const slug = empresaSlug ?? await this.resolveEmpresaSlugFromCampanha(campanhaPromotores[0].ID_CAMPANHA!);
+
+    let result: { rotasCriadas: number; error?: string } = { rotasCriadas: 0 };
+    if (slug) {
+      result = await this.autoAssignRotas(promotor, campanhaPromotores, slug);
+    }
+
+    // Redistribute freed oficinas to all promoters (including changed one) in the same campaigns
+    await this.redistributeFreedOficinas(freedOficinasPorCampanha);
+
+    return result;
+  }
+
+  private static async resolveEmpresaSlugFromCampanha(idCampanha: number): Promise<string | null> {
+    try {
+      const rows = await AppDataSourceSync.query(
+        `SELECT DISTINCT cm."EmpresaSlug"
+         FROM "CAMPANHAS_OB"."ROTA_PROMOTOR" rp
+         INNER JOIN "CAMPANHAS_OB"."CAMPANHA_PROMOTOR" cp ON rp."ID_CAMPANHA_PROMOTOR" = cp."ID_CAMPANHA_PROMOTOR"
+         INNER JOIN "MAIN_REGISTER"."USUARIO" us ON us."ID_OFICINA" = rp."ID_OFICINA"
+         INNER JOIN "MAIN_REGISTER"."USUARIO_COMMUNITY" uc ON us."ID_USUARIO" = uc."id_usuario"
+         INNER JOIN "OFICINA_PORTAL"."COMMUNITIES" cm ON cm."CommunityID" = uc."id_community"
+         WHERE cp."ID_CAMPANHA" = $1
+         LIMIT 1`,
+        [idCampanha]
+      );
+      return rows.length > 0 ? rows[0].EmpresaSlug : null;
+    } catch (error) {
+      console.error('Failed to resolve EmpresaSlug from campaign:', error);
+      return null;
+    }
+  }
+
+  private static async redistributeFreedOficinas(
+    freedOficinasPorCampanha: Map<number, number[]>
+  ): Promise<void> {
+    const campanhaPromotorRepo = AppDataSourceSync.getRepository(CampanhaPromotor);
+    const oficinaRepo = AppDataSourceSync.getRepository(Oficina);
+
+    for (const [idCampanha, freedOficinaIds] of freedOficinasPorCampanha) {
+      if (freedOficinaIds.length === 0) continue;
+
+      // Check which of the freed oficinas are still unassigned
+      const assignedOficinas = await RotaService.getOficinasAssignedInCampanha(idCampanha);
+      const assignedSet = new Set(assignedOficinas);
+      const unassignedIds = freedOficinaIds.filter(id => !assignedSet.has(id));
+
+      if (unassignedIds.length === 0) continue;
+
+      // Load coordinates of unassigned oficinas
+      const oficinas = await oficinaRepo.findBy({ ID_OFICINA: In(unassignedIds) });
+      const oficinasWithCoords = oficinas.filter(o => o.LATITUDE && o.LONGITUDE);
+
+      if (oficinasWithCoords.length === 0) continue;
+
+      // Find all promoters in this campaign
+      const allCPs = await campanhaPromotorRepo.find({
+        where: { ID_CAMPANHA: idCampanha }
+      });
+
+      for (const cp of allCPs) {
+
+        const promotor = await this.findPromotorById(cp.ID_PROMOTOR!);
+        if (!promotor?.LATITUDE || !promotor?.LONGITUDE) continue;
+
+        const raio = cp.RAIO ?? 20;
+
+        // Re-check what's still unassigned (previous iteration may have assigned some)
+        const currentAssigned = await RotaService.getOficinasAssignedInCampanha(idCampanha);
+        const currentAssignedSet = new Set(currentAssigned);
+
+        const oficinasParaAtribuir = oficinasWithCoords
+          .filter(o => !currentAssignedSet.has(o.ID_OFICINA!))
+          .filter(o => {
+            const dist = haversineDistanceKm(
+              promotor.LATITUDE!, promotor.LONGITUDE!,
+              parseFloat(o.LATITUDE!), parseFloat(o.LONGITUDE!)
+            );
+            return dist <= raio;
+          })
+          .map(o => o.ID_OFICINA!);
+
+        if (oficinasParaAtribuir.length > 0) {
+          try {
+            await RotaService.createRotas(cp.ID_CAMPANHA_PROMOTOR!, oficinasParaAtribuir);
+            console.log(`Redistributed ${oficinasParaAtribuir.length} freed oficinas to CAMPANHA_PROMOTOR ${cp.ID_CAMPANHA_PROMOTOR}`);
+          } catch (error) {
+            console.error(`Redistribute failed for CAMPANHA_PROMOTOR ${cp.ID_CAMPANHA_PROMOTOR}:`, error);
+          }
+        }
+      }
+    }
   }
 
   /**

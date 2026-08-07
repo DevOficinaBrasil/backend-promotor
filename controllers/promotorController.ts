@@ -75,7 +75,8 @@ export default class PromotorController {
         ID_CLIENT,
         CREATED_BY,
         CEP,
-        RAIO
+        RAIO,
+        EMPRESA_SLUG
       } = req.body;
 
       // Check if promoter exists
@@ -98,11 +99,20 @@ export default class PromotorController {
       if (CEP !== undefined) updateData.CEP = CEP;
 
       // Call the service to update the promoter
-      const promotorAtualizado = await PromotorService.updatePromotor(promotorId, updateData);
+      const result = await PromotorService.updatePromotor(promotorId, updateData, EMPRESA_SLUG);
+
+      if (!result) {
+        return res.status(404).json({
+          message: "Promotor não encontrado."
+        });
+      }
 
       return res.status(200).json({
-        message: "Promotor atualizado com sucesso.",
-        data: promotorAtualizado
+        message: result.autoAssignResult?.error
+          ? "Promotor atualizado, porém houve erro na auto-atribuição de rotas."
+          : "Promotor atualizado com sucesso.",
+        data: result.promotor,
+        ...(result.autoAssignResult && { rotasCriadas: result.autoAssignResult.rotasCriadas }),
       });
     } catch (error) {
       console.error("Erro ao atualizar promotor:", error);
