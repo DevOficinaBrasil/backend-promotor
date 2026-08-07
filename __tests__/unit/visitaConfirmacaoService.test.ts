@@ -4,6 +4,7 @@ import { AppDataSourceSync } from "../../data-source";
 import NotificacaoVisita, { StatusNotificacaoVisita } from "../../entities/NotificacaoVisita";
 import Oficina from "../../entities/Oficina";
 import RotaPromotor from "../../entities/RotaPromotor";
+import Clientes from "../../entities/Clientes";
 import {
   hashToken,
   verificarJwt,
@@ -22,6 +23,7 @@ const ID_NOTIFICACAO = 55;
 const ID_ROTA = 42;
 const ID_OFICINA = 900;
 const ID_USUARIO = 7;
+const ID_CLIENT = 31;
 const RAW_TOKEN = "token-de-teste-opaco";
 
 const AGORA = new Date("2026-08-05T12:00:00.000Z");
@@ -30,6 +32,7 @@ describe("VisitaConfirmacaoService.trocarToken", () => {
   let notifRepo: { findOne: jest.Mock; update: jest.Mock; save: jest.Mock };
   let rotaRepo: { findOne: jest.Mock };
   let oficinaRepo: { findOne: jest.Mock };
+  let clientesRepo: { findOne: jest.Mock };
 
   const oficinaPadrao = {
     ID_OFICINA,
@@ -67,11 +70,13 @@ describe("VisitaConfirmacaoService.trocarToken", () => {
       findOne: jest.fn(async () => ({ ID_ROTA_PROMOTOR: ID_ROTA, ID_OFICINA }) as RotaPromotor),
     };
     oficinaRepo = { findOne: jest.fn(async () => oficinaPadrao) };
+    clientesRepo = { findOne: jest.fn(async () => ({ ID: ID_CLIENT, NOME: "Bosch Brasil" })) };
 
     (AppDataSourceSync.getRepository as jest.Mock).mockImplementation((entidade: unknown) => {
       if (entidade === NotificacaoVisita) return notifRepo;
       if (entidade === RotaPromotor) return rotaRepo;
       if (entidade === Oficina) return oficinaRepo;
+      if (entidade === Clientes) return clientesRepo;
       throw new Error("repositório inesperado no teste");
     });
   });
@@ -108,6 +113,97 @@ describe("VisitaConfirmacaoService.trocarToken", () => {
         ESTADO: "SP",
         CEP: "01234-567",
       },
+    });
+  });
+
+  // The reparador needs to know who is coming, so the page names the promoter
+  // assigned to the route.
+  describe("visiting promoter", () => {
+    it("returns the promoter's name for the route", async () => {
+      rotaRepo.findOne.mockImplementation(async (opcoes: { relations?: string[] }) =>
+        opcoes.relations === undefined
+          ? ({ ID_ROTA_PROMOTOR: ID_ROTA, ID_OFICINA } as RotaPromotor)
+          : ({
+              ID_ROTA_PROMOTOR: ID_ROTA,
+              ID_OFICINA,
+              campanhaPromotor: { promotor: { NOME: "Carlos Promotor" } },
+            } as unknown as RotaPromotor)
+      );
+
+      const resultado = await VisitaConfirmacaoService.trocarToken(RAW_TOKEN, AGORA);
+
+      expect(resultado).toMatchObject({ state: "PENDING", promotorNome: "Carlos Promotor" });
+    });
+
+    it("loads the promoter through the campanhaPromotor relation", async () => {
+      await VisitaConfirmacaoService.trocarToken(RAW_TOKEN, AGORA);
+
+      expect(rotaRepo.findOne).toHaveBeenCalledWith(
+        expect.objectContaining({
+          relations: [
+            "campanhaPromotor",
+            "campanhaPromotor.promotor",
+            "campanhaPromotor.campanha",
+          ],
+        })
+      );
+    });
+
+    // The link must keep working even when the promoter cannot be resolved.
+    it("returns a null promoter name instead of failing when the relation is missing", async () => {
+      rotaRepo.findOne.mockResolvedValue({
+        ID_ROTA_PROMOTOR: ID_ROTA,
+        ID_OFICINA,
+      } as RotaPromotor);
+
+      const resultado = await VisitaConfirmacaoService.trocarToken(RAW_TOKEN, AGORA);
+
+      expect(resultado).toMatchObject({ state: "PENDING", promotorNome: null });
+    });
+
+    it("returns the client company the campaign runs for", async () => {
+      rotaRepo.findOne.mockResolvedValue({
+        ID_ROTA_PROMOTOR: ID_ROTA,
+        ID_OFICINA,
+        campanhaPromotor: {
+          promotor: { NOME: "Carlos Promotor" },
+          campanha: { ID_CLIENT: ID_CLIENT },
+        },
+      } as unknown as RotaPromotor);
+
+      const resultado = await VisitaConfirmacaoService.trocarToken(RAW_TOKEN, AGORA);
+
+      expect(clientesRepo.findOne).toHaveBeenCalledWith({ where: { ID: ID_CLIENT } });
+      expect(resultado).toMatchObject({ state: "PENDING", empresaNome: "Bosch Brasil" });
+    });
+
+    it("returns a null company name when the campaign carries no ID_CLIENT", async () => {
+      rotaRepo.findOne.mockResolvedValue({
+        ID_ROTA_PROMOTOR: ID_ROTA,
+        ID_OFICINA,
+        campanhaPromotor: { promotor: { NOME: "Carlos Promotor" }, campanha: {} },
+      } as unknown as RotaPromotor);
+
+      const resultado = await VisitaConfirmacaoService.trocarToken(RAW_TOKEN, AGORA);
+
+      expect(resultado).toMatchObject({ state: "PENDING", empresaNome: null });
+      expect(clientesRepo.findOne).not.toHaveBeenCalled();
+    });
+
+    it("returns a null company name when the client row is gone", async () => {
+      rotaRepo.findOne.mockResolvedValue({
+        ID_ROTA_PROMOTOR: ID_ROTA,
+        ID_OFICINA,
+        campanhaPromotor: {
+          promotor: { NOME: "Carlos Promotor" },
+          campanha: { ID_CLIENT: ID_CLIENT },
+        },
+      } as unknown as RotaPromotor);
+      clientesRepo.findOne.mockResolvedValue(null);
+
+      const resultado = await VisitaConfirmacaoService.trocarToken(RAW_TOKEN, AGORA);
+
+      expect(resultado).toMatchObject({ state: "PENDING", empresaNome: null });
     });
   });
 

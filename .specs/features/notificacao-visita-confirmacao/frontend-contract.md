@@ -87,6 +87,8 @@ Exchanges the WhatsApp link's opaque token for a JWT. Safe to call repeatedly (p
     "state": "PENDING",
     "jwt": "eyJhbGciOi...",
     "oficinaNome": "Auto Center Silva",
+    "promotorNome": "Carlos Promotor",
+    "empresaNome": "Bosch Brasil",
     "endereco": {
       "ENDERECO": "Rua das Oficinas",
       "NUMERO": "1234",
@@ -99,6 +101,8 @@ Exchanges the WhatsApp link's opaque token for a JWT. Safe to call repeatedly (p
   }
 }
 ```
+
+`promotorNome` is the promoter assigned to this visit; `empresaNome` is the client company the campaign runs for. Either may be `null` when the relation cannot be resolved — render the page without them rather than blocking on them.
 
 Any address field may be `null` — the registry has incomplete records. Render empty inputs, not the string `"null"`.
 

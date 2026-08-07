@@ -166,6 +166,8 @@ describe("POST /visita/confirmar", () => {
       state: "PENDING",
       jwt: jwtValido(),
       oficinaNome: "Auto Center Silva",
+      promotorNome: "Carlos Promotor",
+      empresaNome: "Bosch Brasil",
       endereco: {
         ENDERECO: "Rua das Oficinas",
         NUMERO: "1234",

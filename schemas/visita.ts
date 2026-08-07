@@ -57,6 +57,8 @@ export const ExchangePendingResponseSchema = z.object({
     state: z.literal('PENDING'),
     jwt: z.string(),
     oficinaNome: z.string().nullable(),
+    promotorNome: z.string().nullable(),
+    empresaNome: z.string().nullable(),
     endereco: EnderecoOficinaSchema,
   }),
 });

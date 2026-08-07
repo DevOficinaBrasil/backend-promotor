@@ -3,6 +3,7 @@ import { AppDataSourceSync } from "../data-source";
 import NotificacaoVisita, { StatusNotificacaoVisita } from "../entities/NotificacaoVisita";
 import Oficina from "../entities/Oficina";
 import RotaPromotor from "../entities/RotaPromotor";
+import Clientes from "../entities/Clientes";
 import RotaService from "./rotaService";
 import { statusEfetivo } from "../utils/statusNotificacaoVisita";
 import { emitirJwt, hashToken, VisitaJwtPayload } from "../utils/visitaToken";
@@ -27,6 +28,8 @@ export type ExchangeResult =
       state: "PENDING";
       jwt: string;
       oficinaNome: string | null;
+      promotorNome: string | null;
+      empresaNome: string | null;
       endereco: EnderecoOficina;
     }
   | { state: "ALREADY_CONFIRMED"; oficinaNome: string | null; confirmadoEm: Date | null }
@@ -105,8 +108,10 @@ export default class VisitaConfirmacaoService {
     }
 
     const oficina = await this.carregarOficina(notificacao);
+    const { promotorNome, empresaNome } = await this.carregarVisitante(notificacao);
 
-    // AC14: JWT plus the workshop's name and current registered address.
+    // AC14: JWT plus the workshop's name, who is visiting (promoter and the
+    // client company the campaign runs for) and the current registered address.
     // AC30: no visit date is returned — the schema has no per-visit date.
     return {
       state: "PENDING",
@@ -116,6 +121,8 @@ export default class VisitaConfirmacaoService {
         ID_ROTA_PROMOTOR: notificacao.ID_ROTA_PROMOTOR!,
       }),
       oficinaNome: oficina?.NOME_FANTASIA ?? null,
+      promotorNome,
+      empresaNome,
       endereco: extrairEndereco(oficina),
     };
   }
@@ -317,6 +324,36 @@ export default class VisitaConfirmacaoService {
    * gap in the registry degrades to empty inputs instead of a false
    * "link inválido".
    */
+  /**
+   * Who is visiting: the promoter assigned to the route and the client company
+   * the campaign runs for.
+   *
+   * Every field degrades to null rather than throwing. The page is still usable
+   * without them, and an unresolvable relation must never cost the reparador
+   * their link.
+   */
+  protected static async carregarVisitante(
+    notificacao: NotificacaoVisita
+  ): Promise<{ promotorNome: string | null; empresaNome: string | null }> {
+    const rota = await AppDataSourceSync.getRepository(RotaPromotor).findOne({
+      where: { ID_ROTA_PROMOTOR: notificacao.ID_ROTA_PROMOTOR },
+      relations: ["campanhaPromotor", "campanhaPromotor.promotor", "campanhaPromotor.campanha"],
+    });
+
+    const promotorNome = rota?.campanhaPromotor?.promotor?.NOME ?? null;
+    const idClient = rota?.campanhaPromotor?.campanha?.ID_CLIENT;
+
+    if (idClient == null) {
+      return { promotorNome, empresaNome: null };
+    }
+
+    const cliente = await AppDataSourceSync.getRepository(Clientes).findOne({
+      where: { ID: idClient },
+    });
+
+    return { promotorNome, empresaNome: cliente?.NOME ?? null };
+  }
+
   protected static async carregarOficina(
     notificacao: NotificacaoVisita
   ): Promise<Oficina | null> {
