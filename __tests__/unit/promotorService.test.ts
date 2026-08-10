@@ -7,6 +7,7 @@ import CampanhaPromotor from '../../entities/CampanhaPromotor';
 import CampanhaPromotorService from '../../service/campanhaPromotorService';
 import OficinaService from '../../service/oficinaService';
 import RotaService from '../../service/rotaService';
+import Oficina from '../../entities/Oficina';
 
 jest.mock('../../data-source');
 jest.mock('../../utils/migrationRepository');
@@ -162,6 +163,171 @@ describe('PromotorService', () => {
       await PromotorService.updatePromotor(1, { SENHA: 'newpass' });
 
       expect(promotorRepo.save).toHaveBeenCalled();
+    });
+
+    it('should not reassign rotas when CEP is unchanged', async () => {
+      promotorRepo.findOne.mockResolvedValue({ ID_PROMOTOR: 1, CEP: '01001-000' });
+      promotorRepo.save.mockResolvedValue({ ID_PROMOTOR: 1, CEP: '01001-000' });
+
+      const result = await PromotorService.updatePromotor(1, { CEP: '01001-000' });
+
+      expect(result!.autoAssignResult).toBeUndefined();
+      expect(RotaService.removeCampanhaPromotorRota).not.toHaveBeenCalled();
+    });
+
+    it('should reassign rotas when CEP changes', async () => {
+      promotorRepo.findOne
+        .mockResolvedValueOnce({ ID_PROMOTOR: 1, CEP: '01001-000' }) // findOne in updatePromotor
+        .mockResolvedValueOnce({ ID_PROMOTOR: 1, LATITUDE: '-23.55', LONGITUDE: '-46.63' }); // findPromotorById in redistributeFreedOficinas
+      promotorRepo.save.mockResolvedValue({
+        ID_PROMOTOR: 1, CEP: '02002-000', LATITUDE: '-23.55', LONGITUDE: '-46.63',
+      });
+
+      const mockCpRepo = { find: jest.fn(), findOne: jest.fn(), findBy: jest.fn() };
+      const mockOficinaRepo = { findBy: jest.fn().mockResolvedValue([]) };
+      (AppDataSourceSync.getRepository as jest.Mock).mockImplementation((entity: any) => {
+        if (entity === CampanhaPromotor) return mockCpRepo;
+        if (entity === Oficina) return mockOficinaRepo;
+        return mockDirectRepo;
+      });
+      mockCpRepo.find.mockResolvedValue([
+        { ID_CAMPANHA_PROMOTOR: 10, ID_CAMPANHA: 5, ID_PROMOTOR: 1, RAIO: 15 },
+      ]);
+      (AppDataSourceSync.query as jest.Mock)
+        .mockResolvedValueOnce([{ ID_OFICINA: 100 }, { ID_OFICINA: 200 }]); // capture existing rotas
+
+      (OficinaService.getComunityNearbyOficinas as jest.Mock).mockResolvedValue([
+        { ID_OFICINA: 300 }, { ID_OFICINA: 400 },
+      ]);
+      (RotaService.getOficinasAssignedInCampanha as jest.Mock)
+        .mockResolvedValueOnce([]) // autoAssignRotas check
+        .mockResolvedValueOnce([300, 400]); // redistributeFreedOficinas check (freed oficinas now reassigned)
+
+      const result = await PromotorService.updatePromotor(1, { CEP: '02002-000' }, 'empresa-x');
+
+      expect(RotaService.removeCampanhaPromotorRota).toHaveBeenCalledWith(10);
+      expect(RotaService.createRotas).toHaveBeenCalledWith(10, [300, 400]);
+      expect(result!.autoAssignResult).toEqual({ rotasCriadas: 2 });
+    });
+
+    it('should return rotasCriadas 0 when promotor has no campaigns', async () => {
+      promotorRepo.findOne.mockResolvedValue({ ID_PROMOTOR: 1, CEP: '01001-000' });
+      promotorRepo.save.mockResolvedValue({
+        ID_PROMOTOR: 1, CEP: '02002-000', LATITUDE: '-23.55', LONGITUDE: '-46.63',
+      });
+
+      const mockCpRepo = { find: jest.fn().mockResolvedValue([]) };
+      (AppDataSourceSync.getRepository as jest.Mock).mockImplementation((entity: any) => {
+        if (entity === CampanhaPromotor) return mockCpRepo;
+        return mockDirectRepo;
+      });
+
+      const result = await PromotorService.updatePromotor(1, { CEP: '02002-000' }, 'empresa-x');
+
+      expect(result!.autoAssignResult).toEqual({ rotasCriadas: 0 });
+      expect(RotaService.removeCampanhaPromotorRota).not.toHaveBeenCalled();
+    });
+
+    it('should resolve empresaSlug from campaign when not provided', async () => {
+      promotorRepo.findOne
+        .mockResolvedValueOnce({ ID_PROMOTOR: 1, CEP: '01001-000' })
+        .mockResolvedValueOnce({ ID_PROMOTOR: 1, LATITUDE: '-23.55', LONGITUDE: '-46.63' });
+      promotorRepo.save.mockResolvedValue({
+        ID_PROMOTOR: 1, CEP: '02002-000', LATITUDE: '-23.55', LONGITUDE: '-46.63',
+      });
+
+      const mockCpRepo = { find: jest.fn(), findBy: jest.fn() };
+      const mockOficinaRepo = { findBy: jest.fn().mockResolvedValue([]) };
+      (AppDataSourceSync.getRepository as jest.Mock).mockImplementation((entity: any) => {
+        if (entity === CampanhaPromotor) return mockCpRepo;
+        if (entity === Oficina) return mockOficinaRepo;
+        return mockDirectRepo;
+      });
+      mockCpRepo.find.mockResolvedValue([
+        { ID_CAMPANHA_PROMOTOR: 10, ID_CAMPANHA: 5, ID_PROMOTOR: 1, RAIO: 20 },
+      ]);
+      (AppDataSourceSync.query as jest.Mock)
+        .mockResolvedValueOnce([]) // capture existing rotas (none)
+        .mockResolvedValueOnce([{ EmpresaSlug: 'resolved-slug' }]); // resolveEmpresaSlugFromCampanha
+
+      (OficinaService.getComunityNearbyOficinas as jest.Mock).mockResolvedValue([
+        { ID_OFICINA: 500 },
+      ]);
+      (RotaService.getOficinasAssignedInCampanha as jest.Mock).mockResolvedValue([]);
+
+      // empresaSlug not provided — should resolve from DB
+      const result = await PromotorService.updatePromotor(1, { CEP: '02002-000' });
+
+      expect(RotaService.createRotas).toHaveBeenCalledWith(10, [500]);
+      expect(result!.autoAssignResult).toEqual({ rotasCriadas: 1 });
+    });
+
+    it('should redistribute freed oficinas to other promoters within radius', async () => {
+      // Promotor 1 changes CEP, freeing oficinas 100 and 200
+      promotorRepo.findOne
+        .mockResolvedValueOnce({ ID_PROMOTOR: 1, CEP: '01001-000' }) // updatePromotor findOne
+        .mockResolvedValueOnce({ ID_PROMOTOR: 1, LATITUDE: '-23.56', LONGITUDE: '-46.64' }) // findPromotorById for CP 10 (redistrib)
+        .mockResolvedValueOnce({ ID_PROMOTOR: 2, LATITUDE: '-23.55', LONGITUDE: '-46.63' }); // findPromotorById for CP 20 (redistrib)
+      promotorRepo.save.mockResolvedValue({
+        ID_PROMOTOR: 1, CEP: '09999-000', LATITUDE: '-23.56', LONGITUDE: '-46.64',
+      });
+
+      const mockCpRepo = { find: jest.fn() };
+      // Oficinas 100 and 200 are very close to promotor 2
+      const mockOficinaRepo = {
+        findBy: jest.fn().mockResolvedValue([
+          { ID_OFICINA: 100, LATITUDE: '-23.551', LONGITUDE: '-46.631' },
+          { ID_OFICINA: 200, LATITUDE: '-23.552', LONGITUDE: '-46.632' },
+        ]),
+      };
+      (AppDataSourceSync.getRepository as jest.Mock).mockImplementation((entity: any) => {
+        if (entity === CampanhaPromotor) return mockCpRepo;
+        if (entity === Oficina) return mockOficinaRepo;
+        return mockDirectRepo;
+      });
+      // Promotor 1 has one campaign association
+      mockCpRepo.find
+        .mockResolvedValueOnce([
+          { ID_CAMPANHA_PROMOTOR: 10, ID_CAMPANHA: 5, ID_PROMOTOR: 1, RAIO: 20 },
+        ])
+        // All CPs in campaign 5 (for redistribution)
+        .mockResolvedValueOnce([
+          { ID_CAMPANHA_PROMOTOR: 10, ID_CAMPANHA: 5, ID_PROMOTOR: 1, RAIO: 20 },
+          { ID_CAMPANHA_PROMOTOR: 20, ID_CAMPANHA: 5, ID_PROMOTOR: 2, RAIO: 20 },
+        ]);
+
+      (AppDataSourceSync.query as jest.Mock)
+        .mockResolvedValueOnce([{ ID_OFICINA: 100 }, { ID_OFICINA: 200 }]); // capture freed oficinas
+
+      // autoAssignRotas: no nearby oficinas at new location
+      (OficinaService.getComunityNearbyOficinas as jest.Mock).mockResolvedValue([]);
+      (RotaService.getOficinasAssignedInCampanha as jest.Mock)
+        .mockResolvedValueOnce([]) // redistribution: check what's assigned (nothing after removal)
+        .mockResolvedValueOnce([]); // redistribution second CP check
+
+      const result = await PromotorService.updatePromotor(1, { CEP: '09999-000' }, 'empresa-x');
+
+      expect(RotaService.removeCampanhaPromotorRota).toHaveBeenCalledWith(10);
+      // Oficinas 100 and 200 should be redistributed to promotor 2 (CP 20)
+      expect(RotaService.createRotas).toHaveBeenCalledWith(20, [100, 200]);
+      expect(result!.autoAssignResult).toEqual({ rotasCriadas: 0 });
+    });
+
+    it('should not reassign when CEP changes but geocoding returns no coordinates', async () => {
+      const GeolocationService = require('../../service/geolocationService');
+      GeolocationService.mockImplementationOnce(() => ({
+        getLatLongByCep: jest.fn().mockResolvedValue(null),
+      }));
+
+      promotorRepo.findOne.mockResolvedValue({ ID_PROMOTOR: 1, CEP: '01001-000' });
+      promotorRepo.save.mockResolvedValue({
+        ID_PROMOTOR: 1, CEP: '02002-000', LATITUDE: undefined, LONGITUDE: undefined,
+      });
+
+      const result = await PromotorService.updatePromotor(1, { CEP: '02002-000' });
+
+      expect(result!.autoAssignResult).toBeUndefined();
+      expect(RotaService.removeCampanhaPromotorRota).not.toHaveBeenCalled();
     });
   });
 
