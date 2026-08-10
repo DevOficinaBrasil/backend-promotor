@@ -147,7 +147,7 @@ describe('PromotorService', () => {
 
       const result = await PromotorService.updatePromotor(1, { NOME: 'New' });
 
-      expect(result!.NOME).toBe('New');
+      expect(result!.promotor.NOME).toBe('New');
     });
 
     it('should return null when not found', async () => {
