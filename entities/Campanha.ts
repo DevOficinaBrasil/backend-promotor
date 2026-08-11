@@ -22,8 +22,12 @@ export default class Campanha {
   @Column({ type: "varchar", length: 50, nullable: true, name: "OBJETIVO" })
   OBJETIVO?: string;
 
+  // OBS: esse ID é o ID do sql server, não use-o para associar com comunidades, use EMPRESA_SLUG para tal
   @Column({ type: "int", nullable: true, name: "ID_CLIENT" })
   ID_CLIENT?: number;
+
+  @Column({ type: "varchar", length: 100, nullable: true, name: "EMPRESA_SLUG" })
+  EMPRESA_SLUG?: string;
 
   @Column({ type: "timestamp", nullable: true, name: "START_TIME" })
   START_TIME?: Date;

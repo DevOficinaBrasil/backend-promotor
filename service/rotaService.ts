@@ -697,4 +697,181 @@ export default class RotaService {
     }
     return mapa;
   }
+
+  private static async getOficinaCoordinates(
+    idOficina: number
+  ): Promise<{ lat: number; lon: number; cep: string | null }> {
+    const ceResult = await AppDataSourceSync.query(
+      `SELECT ce."latitude", ce."longitude", ce."cep"
+       FROM "dw"."cadastro_empresa" ce
+       WHERE ce."id_oficina" = $1
+       LIMIT 1`,
+      [idOficina]
+    );
+
+    if (ceResult.length > 0 && ceResult[0].latitude && ceResult[0].longitude) {
+      return {
+        lat: parseFloat(ceResult[0].latitude),
+        lon: parseFloat(ceResult[0].longitude),
+        cep: ceResult[0].cep ?? null,
+      };
+    }
+
+    const oficinaResult = await AppDataSourceSync.query(
+      `SELECT o."CEP", o."LATITUDE", o."LONGITUDE"
+       FROM "MAIN_REGISTER"."OFICINA" o
+       WHERE o."ID_OFICINA" = $1`,
+      [idOficina]
+    );
+
+    if (oficinaResult.length === 0) {
+      throw new Error("NOT_FOUND");
+    }
+
+    const oficina = oficinaResult[0];
+
+    if (oficina.LATITUDE && oficina.LONGITUDE) {
+      return {
+        lat: parseFloat(oficina.LATITUDE),
+        lon: parseFloat(oficina.LONGITUDE),
+        cep: oficina.CEP ?? null,
+      };
+    }
+
+    if (!oficina.CEP) {
+      throw new Error("UNPROCESSABLE");
+    }
+
+    const geolocationService = new GeolocationService();
+    const coords = await geolocationService.getLatLongByCep(oficina.CEP);
+
+    if (!coords) {
+      throw new Error("UNPROCESSABLE");
+    }
+
+    return { lat: coords.lat, lon: coords.long, cep: oficina.CEP };
+  }
+
+  private static async getActiveCampanhasBySlug(
+    empresaSlug: string
+  ): Promise<Array<{ ID_CAMPANHA: number; NOME: string }>> {
+    const results = await AppDataSourceSync.query(
+      `SELECT c."ID_CAMPANHA", c."NOME"
+       FROM "CAMPANHAS_OB"."CAMPANHA" c
+       WHERE c."EMPRESA_SLUG" = $1
+         AND c."DELETED_AT" IS NULL
+         AND c."START_TIME" <= NOW()
+         AND c."END_TIME" >= NOW()`,
+      [empresaSlug]
+    );
+
+    return results.map((r: any) => ({
+      ID_CAMPANHA: r.ID_CAMPANHA,
+      NOME: r.NOME,
+    }));
+  }
+
+  static async assignOficinaFromCommunitySignup(
+    idOficina: number,
+    empresaSlug: string
+  ): Promise<{
+    oficina: { ID_OFICINA: number; CEP: string | null; latitude: number; longitude: number };
+    campanhas_processadas: number;
+    atribuicoes: Array<{
+      ID_CAMPANHA: number;
+      NOME_CAMPANHA: string;
+      status: "atribuida" | "sem_promotor_disponivel" | "ja_atribuida";
+      promotor: { ID_PROMOTOR: number; NOME: string; distancia_km: number } | null;
+      ID_ROTA_PROMOTOR: number | null;
+    }>;
+    resumo: { atribuidas: number; sem_promotor_disponivel: number; ja_atribuida: number };
+  }> {
+    const { lat, lon, cep } = await this.getOficinaCoordinates(idOficina);
+
+    const campanhasAtivas = await this.getActiveCampanhasBySlug(empresaSlug);
+
+    if (campanhasAtivas.length === 0) {
+      return {
+        oficina: { ID_OFICINA: idOficina, CEP: cep, latitude: lat, longitude: lon },
+        campanhas_processadas: 0,
+        atribuicoes: [],
+        resumo: { atribuidas: 0, sem_promotor_disponivel: 0, ja_atribuida: 0 },
+      };
+    }
+
+    const campanhaIds = campanhasAtivas.map(c => c.ID_CAMPANHA);
+    const candidatos = await this.getCandidatosPorCampanhas(campanhaIds);
+
+    const atribuicoes: Array<{
+      ID_CAMPANHA: number;
+      NOME_CAMPANHA: string;
+      status: "atribuida" | "sem_promotor_disponivel" | "ja_atribuida";
+      promotor: { ID_PROMOTOR: number; NOME: string; distancia_km: number } | null;
+      ID_ROTA_PROMOTOR: number | null;
+    }> = [];
+
+    for (const campanha of campanhasAtivas) {
+      const assignedOficinas = await this.getOficinasAssignedInCampanha(campanha.ID_CAMPANHA);
+      if (assignedOficinas.includes(idOficina)) {
+        atribuicoes.push({
+          ID_CAMPANHA: campanha.ID_CAMPANHA,
+          NOME_CAMPANHA: campanha.NOME,
+          status: "ja_atribuida",
+          promotor: null,
+          ID_ROTA_PROMOTOR: null,
+        });
+        continue;
+      }
+
+      const candidatosCampanha = candidatos.get(campanha.ID_CAMPANHA) ?? [];
+
+      const candidatosElegiveis = candidatosCampanha
+        .map(c => ({
+          ...c,
+          distancia: haversineDistanceKm(c.lat, c.lon, lat, lon),
+        }))
+        .filter(c => c.distancia <= (c.RAIO ?? 20))
+        .sort((a, b) => a.distancia - b.distancia || a.ID_CAMPANHA_PROMOTOR - b.ID_CAMPANHA_PROMOTOR);
+
+      if (candidatosElegiveis.length === 0) {
+        atribuicoes.push({
+          ID_CAMPANHA: campanha.ID_CAMPANHA,
+          NOME_CAMPANHA: campanha.NOME,
+          status: "sem_promotor_disponivel",
+          promotor: null,
+          ID_ROTA_PROMOTOR: null,
+        });
+        continue;
+      }
+
+      const melhor = candidatosElegiveis[0];
+      const rota = await this.createRotas(melhor.ID_CAMPANHA_PROMOTOR, idOficina);
+      const rotaCriada = Array.isArray(rota) ? rota[0] : rota;
+
+      atribuicoes.push({
+        ID_CAMPANHA: campanha.ID_CAMPANHA,
+        NOME_CAMPANHA: campanha.NOME,
+        status: "atribuida",
+        promotor: {
+          ID_PROMOTOR: melhor.ID_PROMOTOR,
+          NOME: melhor.NOME,
+          distancia_km: Math.round(melhor.distancia * 10) / 10,
+        },
+        ID_ROTA_PROMOTOR: rotaCriada.ID_ROTA_PROMOTOR!,
+      });
+    }
+
+    const resumo = {
+      atribuidas: atribuicoes.filter(a => a.status === "atribuida").length,
+      sem_promotor_disponivel: atribuicoes.filter(a => a.status === "sem_promotor_disponivel").length,
+      ja_atribuida: atribuicoes.filter(a => a.status === "ja_atribuida").length,
+    };
+
+    return {
+      oficina: { ID_OFICINA: idOficina, CEP: cep, latitude: lat, longitude: lon },
+      campanhas_processadas: campanhasAtivas.length,
+      atribuicoes,
+      resumo,
+    };
+  }
 }

@@ -386,3 +386,44 @@ export const ReassignByAddressResponseSchema = z.object({
     }),
   }),
 });
+
+/**
+ * POST /rota/assign-oficina-community
+ */
+export const AssignOficinaCommunitySchema = z.object({
+  ID_OFICINA: z.coerce.number().int().positive(),
+  empresaSlug: z.string().min(1).max(100),
+});
+
+const AtribuicaoStatusSchema = z.enum([
+  "atribuida",
+  "sem_promotor_disponivel",
+  "ja_atribuida",
+]);
+
+export const AssignOficinaCommunityResponseSchema = z.object({
+  success: z.boolean(),
+  oficina: z.object({
+    ID_OFICINA: z.number(),
+    CEP: z.string().nullable(),
+    latitude: z.number(),
+    longitude: z.number(),
+  }),
+  campanhas_processadas: z.number(),
+  atribuicoes: z.array(z.object({
+    ID_CAMPANHA: z.number(),
+    NOME_CAMPANHA: z.string(),
+    status: AtribuicaoStatusSchema,
+    promotor: z.object({
+      ID_PROMOTOR: z.number(),
+      NOME: z.string(),
+      distancia_km: z.number(),
+    }).nullable(),
+    ID_ROTA_PROMOTOR: z.number().nullable(),
+  })),
+  resumo: z.object({
+    atribuidas: z.number(),
+    sem_promotor_disponivel: z.number(),
+    ja_atribuida: z.number(),
+  }),
+});

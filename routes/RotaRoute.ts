@@ -20,6 +20,8 @@ import {
   ReorderRotasResponseSchema,
   ReassignByAddressSchema,
   ReassignByAddressResponseSchema,
+  AssignOficinaCommunitySchema,
+  AssignOficinaCommunityResponseSchema,
 } from "../schemas/rota";
 import { ErrorResponseSchema } from "../schemas/common";
 
@@ -366,6 +368,35 @@ createDocumentedRoute(router, {
         description: "Internal server error",
         schema: ErrorResponseSchema,
       },
+    },
+  },
+});
+
+// Assign oficina to nearest promotor on community signup
+createDocumentedRoute(router, {
+  method: "post",
+  path: "/assign-oficina-community",
+  handler: RotaController.assignOficinaCommunity,
+  basePath: "/rota",
+  middlewares: [],
+  schemas: {
+    body: AssignOficinaCommunitySchema,
+  },
+  documentation: {
+    tags: ["Rota"],
+    summary: "Atribui oficina ao promotor mais próximo na inscrição em comunidade",
+    description:
+      "Recebe ID_OFICINA e empresaSlug. Busca campanhas ativas do cliente, " +
+      "calcula distância para cada promotor e atribui ao mais próximo dentro do raio.",
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: {
+        description: "Atribuição processada (pode conter atribuições, skips ou sem promotor)",
+        schema: AssignOficinaCommunityResponseSchema,
+      },
+      404: { description: "Oficina não encontrada", schema: ErrorResponseSchema },
+      422: { description: "CEP sem coordenadas", schema: ErrorResponseSchema },
+      500: { description: "Erro interno", schema: ErrorResponseSchema },
     },
   },
 });
