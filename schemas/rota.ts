@@ -149,6 +149,7 @@ export const CampanhaSimplifiedSchema = z.object({
   NOME: z.string(),
   OBJETIVO: z.string().optional(),
   ID_CLIENT: z.number().optional(),
+  EMPRESA_SLUG: z.string().optional(),
   START_TIME: z.date().optional(),
   END_TIME: z.date().optional(),
   CREATED_BY: z.number().optional(),

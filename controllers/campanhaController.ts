@@ -12,6 +12,7 @@ export default class CampanhaController {
         NOME,
         OBJETIVO,
         ID_CLIENT,
+        EMPRESA_SLUG,
         START_TIME,
         END_TIME,
         CREATED_BY,
@@ -30,6 +31,7 @@ export default class CampanhaController {
         NOME,
         OBJETIVO,
         ID_CLIENT,
+        EMPRESA_SLUG,
         START_TIME: START_TIME ? new Date(START_TIME) : undefined,
         END_TIME: END_TIME ? new Date(END_TIME) : undefined,
         CREATED_BY
@@ -70,6 +72,7 @@ export default class CampanhaController {
         NOME,
         OBJETIVO,
         ID_CLIENT,
+        EMPRESA_SLUG,
         START_TIME,
         END_TIME,
         CREATED_BY,
@@ -90,6 +93,7 @@ export default class CampanhaController {
       if (NOME !== undefined) updateData.NOME = NOME;
       if (OBJETIVO !== undefined) updateData.OBJETIVO = OBJETIVO;
       if (ID_CLIENT !== undefined) updateData.ID_CLIENT = ID_CLIENT;
+      if (EMPRESA_SLUG !== undefined) updateData.EMPRESA_SLUG = EMPRESA_SLUG;
       if (START_TIME !== undefined) updateData.START_TIME = new Date(START_TIME);
       if (END_TIME !== undefined) updateData.END_TIME = new Date(END_TIME);
       if (CREATED_BY !== undefined) updateData.CREATED_BY = CREATED_BY;
