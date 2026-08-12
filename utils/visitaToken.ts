@@ -5,10 +5,16 @@ import { z } from "zod";
 // Read fresh on every call (not captured at module-load time like
 // promotorController.ts's SECRET_KEY) so the signing/verification path is
 // directly testable without relying on module-import ordering.
+//
+// Segredo próprio: estes tokens vão dentro de um link de WhatsApp, viajam por
+// canal de terceiro e ficam no histórico do destinatário — vazar um deles não
+// pode virar sessão de login. VISITA_TOKEN_SECRET permite rotacionar o link
+// sem deslogar promotor nenhum. Cai para JWT_SECRET onde a variável nova ainda
+// não foi provisionada, mantendo o comportamento anterior.
 const getSecretKey = (): string => {
-  const key = process.env.JWT_SECRET;
+  const key = process.env.VISITA_TOKEN_SECRET || process.env.JWT_SECRET;
   if (!key) {
-    throw new Error("JWT_SECRET is not configured");
+    throw new Error("VISITA_TOKEN_SECRET is not configured");
   }
   return key;
 };

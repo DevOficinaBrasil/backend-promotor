@@ -19,7 +19,7 @@ describe("visitaAuthMiddleware", () => {
     ({ headers: authorization === undefined ? {} : { authorization } }) as Request;
 
   beforeEach(() => {
-    process.env.JWT_SECRET = SEGREDO;
+    process.env.VISITA_TOKEN_SECRET = SEGREDO;
 
     const json = jest.fn();
     const status = jest.fn(() => ({ json }));

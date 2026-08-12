@@ -50,7 +50,7 @@ const jwtDaVisita = (idNotificacao: number) =>
 
 describe("PUT /visita/endereco", () => {
   beforeEach(() => {
-    process.env.JWT_SECRET = SEGREDO;
+    process.env.VISITA_TOKEN_SECRET = SEGREDO;
     atualizarEnderecoMock.mockResolvedValue({
       state: "CONFIRMED",
       confirmadoEm: CONFIRMADO_EM,

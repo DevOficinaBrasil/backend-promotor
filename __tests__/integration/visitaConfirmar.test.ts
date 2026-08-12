@@ -43,7 +43,7 @@ const jwtDaVisita = (idNotificacao: number) =>
 
 describe("POST /visita/confirmar", () => {
   beforeEach(() => {
-    process.env.JWT_SECRET = SEGREDO;
+    process.env.VISITA_TOKEN_SECRET = SEGREDO;
     confirmarMock.mockResolvedValue({
       state: "CONFIRMED",
       confirmadoEm: CONFIRMADO_EM,

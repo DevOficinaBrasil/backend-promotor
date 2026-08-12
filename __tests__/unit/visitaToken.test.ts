@@ -11,18 +11,18 @@ import {
 // re-exchangeable while valid.
 // Spec: AC14 — JWT issued on exchange: 30 minutes, scope visita:confirmar,
 // subject = ID_USUARIO, claims include ID_NOTIFICACAO_VISITA and
-// ID_ROTA_PROMOTOR, signed with JWT_SECRET via jsonwebtoken.
+// ID_ROTA_PROMOTOR, signed with VISITA_TOKEN_SECRET via jsonwebtoken.
 // Spec: AC19-20 — confirm endpoint validates signature, expiry, and scope;
 // rejects an expired, invalidly-signed, or wrong-scope JWT.
 describe('visitaToken', () => {
-  const originalSecret = process.env.JWT_SECRET;
+  const originalSecret = process.env.VISITA_TOKEN_SECRET;
 
   beforeEach(() => {
-    process.env.JWT_SECRET = 'test-jwt-secret';
+    process.env.VISITA_TOKEN_SECRET = 'test-jwt-secret';
   });
 
   afterAll(() => {
-    process.env.JWT_SECRET = originalSecret;
+    process.env.VISITA_TOKEN_SECRET = originalSecret;
   });
 
   describe('gerarLinkToken', () => {
@@ -95,7 +95,7 @@ describe('visitaToken', () => {
     it('throws on an expired token', () => {
       const expiredToken = jwt.sign(
         { sub: 1, ID_NOTIFICACAO_VISITA: 1, ID_ROTA_PROMOTOR: 1, scope: VISITA_SCOPE },
-        process.env.JWT_SECRET as string,
+        process.env.VISITA_TOKEN_SECRET as string,
         { expiresIn: '-1s' }
       );
 
@@ -105,7 +105,7 @@ describe('visitaToken', () => {
     it('throws when the scope claim is missing', () => {
       const noScopeToken = jwt.sign(
         { sub: 1, ID_NOTIFICACAO_VISITA: 1, ID_ROTA_PROMOTOR: 1 },
-        process.env.JWT_SECRET as string,
+        process.env.VISITA_TOKEN_SECRET as string,
         { expiresIn: '30m' }
       );
 
@@ -115,7 +115,7 @@ describe('visitaToken', () => {
     it('throws when the scope claim does not match visita:confirmar', () => {
       const wrongScopeToken = jwt.sign(
         { sub: 1, ID_NOTIFICACAO_VISITA: 1, ID_ROTA_PROMOTOR: 1, scope: 'promotor:login' },
-        process.env.JWT_SECRET as string,
+        process.env.VISITA_TOKEN_SECRET as string,
         { expiresIn: '30m' }
       );
 

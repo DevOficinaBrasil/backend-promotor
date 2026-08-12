@@ -59,7 +59,7 @@ describe("VisitaConfirmacaoService.trocarToken", () => {
     });
 
   beforeEach(() => {
-    process.env.JWT_SECRET = "segredo-de-teste";
+    process.env.VISITA_TOKEN_SECRET = "segredo-de-teste";
 
     notifRepo = {
       findOne: jest.fn(async () => notificacaoEnviada()),
