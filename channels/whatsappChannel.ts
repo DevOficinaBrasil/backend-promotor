@@ -69,11 +69,31 @@ function mapearErro(codigo: string | null): ChannelSendResult {
   return { success: false, reason: "provider error", providerCode: codigo };
 }
 
+/**
+ * Loopback base URL — o mock local de `scripts/whatsappMockServer.ts`. Só um
+ * host desses pode escapar da trava de dev, porque ele não alcança provider
+ * nenhum: no pior caso a mensagem morre no console do mock.
+ */
+function ehMockLocal(baseUrl: string | undefined): boolean {
+  if (!baseUrl) {
+    return false;
+  }
+  try {
+    const { hostname } = new URL(baseUrl);
+    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "[::1]";
+  } catch {
+    return false;
+  }
+}
+
 export class WhatsAppChannel implements ChannelSender {
   readonly canal = CanalNotificacao.WHATSAPP;
 
   async send(params: ChannelSendParams): Promise<ChannelSendResult> {
-    if(process.env.NODE_ENV === "development") {
+    // Trava de dev (c035a4d): a base de dev tem telefones reais, então nenhum
+    // envio sai daqui — exceto contra o mock em loopback, que por definição não
+    // chega a provider algum e é o único jeito de testar o fluxo localmente.
+    if (process.env.NODE_ENV === "development" && !ehMockLocal(process.env.WHATSAPP_BASE_URL)) {
       console.log("[whatsappChannel] Em dev - channel nao sera acionado", params);
       return { success: false, reason: CANAL_NAO_CONFIGURADO, providerCode: null };
     }
