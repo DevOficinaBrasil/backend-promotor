@@ -27,6 +27,15 @@ jest.mock('../../utils/haversine', () => ({
 // notifier out; the hook itself is proven in rotaServiceVisita.test.ts.
 jest.mock('../../service/notificacaoVisitaService');
 
+/**
+ * reassignRotasByAddress só considera rotas de campanha vigente (commit 8dba5cb),
+ * então a relation campanha precisa estar na fixture com datas cobrindo agora.
+ */
+const campanhaAtiva = () => ({
+  START_TIME: new Date(Date.now() - 86_400_000),
+  END_TIME: new Date(Date.now() + 86_400_000),
+});
+
 describe('RotaService', () => {
   const rotaRepo = createMockRepo();
   const cpRepo = createMockRepo();
@@ -225,6 +234,7 @@ describe('RotaService', () => {
           ID_CAMPANHA: 1,
           ID_CAMPANHA_PROMOTOR: 10,
           RAIO: 20,
+          campanha: campanhaAtiva(),
           promotor: { ID_PROMOTOR: 5, NOME: 'João', LATITUDE: '-23.55', LONGITUDE: '-46.63' },
         },
       }]);
@@ -248,6 +258,7 @@ describe('RotaService', () => {
           ID_CAMPANHA: 1,
           ID_CAMPANHA_PROMOTOR: 10,
           RAIO: 20,
+          campanha: campanhaAtiva(),
           promotor: { ID_PROMOTOR: 5, NOME: 'João', LATITUDE: '-23.55', LONGITUDE: '-46.63' },
         },
       }]);
@@ -281,6 +292,7 @@ describe('RotaService', () => {
           ID_CAMPANHA: 1,
           ID_CAMPANHA_PROMOTOR: 10,
           RAIO: 20,
+          campanha: campanhaAtiva(),
           promotor: { ID_PROMOTOR: 5, NOME: 'João', LATITUDE: '-23.55', LONGITUDE: '-46.63' },
         },
       }]);
@@ -315,6 +327,7 @@ describe('RotaService', () => {
           ID_CAMPANHA: 1,
           ID_CAMPANHA_PROMOTOR: 10,
           RAIO: 20,
+          campanha: campanhaAtiva(),
           promotor: { ID_PROMOTOR: 5, NOME: 'João', LATITUDE: '-23.55', LONGITUDE: '-46.63' },
         },
       }]);
@@ -363,6 +376,7 @@ describe('RotaService', () => {
           ID_CAMPANHA: 1,
           ID_CAMPANHA_PROMOTOR: 10,
           RAIO: 20,
+          campanha: campanhaAtiva(),
           promotor: { ID_PROMOTOR: 5, NOME: 'João', LATITUDE: '-23.55', LONGITUDE: '-46.63' },
         },
       }]);

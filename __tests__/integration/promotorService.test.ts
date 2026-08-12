@@ -77,7 +77,7 @@ describe("PromotorService Integration", () => {
       });
 
       expect(updated).not.toBeNull();
-      expect(updated!.NOME).toBe("__TEST_UPDATE_NEW__");
+      expect(updated!.promotor.NOME).toBe("__TEST_UPDATE_NEW__");
     });
 
     it("should return null for non-existent promotor", async () => {

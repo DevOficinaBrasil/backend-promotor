@@ -38,6 +38,16 @@ jest.mock('../../service/rotaService', () => ({
   },
 }));
 
+/**
+ * Auto-assign e redistribuição só rodam para campanha vigente (commit 8dba5cb),
+ * então toda fixture de CampanhaPromotor precisa carregar uma campanha ativa —
+ * sem ela o filtro descarta a linha e o teste exercita o caminho vazio.
+ */
+const campanhaAtiva = () => ({
+  START_TIME: new Date(Date.now() - 86_400_000),
+  END_TIME: new Date(Date.now() + 86_400_000),
+});
+
 describe('PromotorService', () => {
   const promotorRepo = createMockRepo();
   const cpRepo = createMockRepo();
@@ -191,10 +201,11 @@ describe('PromotorService', () => {
         return mockDirectRepo;
       });
       mockCpRepo.find.mockResolvedValue([
-        { ID_CAMPANHA_PROMOTOR: 10, ID_CAMPANHA: 5, ID_PROMOTOR: 1, RAIO: 15 },
+        { ID_CAMPANHA_PROMOTOR: 10, ID_CAMPANHA: 5, ID_PROMOTOR: 1, RAIO: 15, campanha: campanhaAtiva() },
       ]);
       (AppDataSourceSync.query as jest.Mock)
-        .mockResolvedValueOnce([{ ID_OFICINA: 100 }, { ID_OFICINA: 200 }]); // capture existing rotas
+        .mockResolvedValueOnce([{ ID_OFICINA: 100 }, { ID_OFICINA: 200 }]) // capture existing rotas
+        .mockResolvedValueOnce([campanhaAtiva()]); // redistribuição: checagem de campanha vigente
 
       (OficinaService.getComunityNearbyOficinas as jest.Mock).mockResolvedValue([
         { ID_OFICINA: 300 }, { ID_OFICINA: 400 },
@@ -244,7 +255,7 @@ describe('PromotorService', () => {
         return mockDirectRepo;
       });
       mockCpRepo.find.mockResolvedValue([
-        { ID_CAMPANHA_PROMOTOR: 10, ID_CAMPANHA: 5, ID_PROMOTOR: 1, RAIO: 20 },
+        { ID_CAMPANHA_PROMOTOR: 10, ID_CAMPANHA: 5, ID_PROMOTOR: 1, RAIO: 20, campanha: campanhaAtiva() },
       ]);
       (AppDataSourceSync.query as jest.Mock)
         .mockResolvedValueOnce([]) // capture existing rotas (none)
@@ -288,16 +299,17 @@ describe('PromotorService', () => {
       // Promotor 1 has one campaign association
       mockCpRepo.find
         .mockResolvedValueOnce([
-          { ID_CAMPANHA_PROMOTOR: 10, ID_CAMPANHA: 5, ID_PROMOTOR: 1, RAIO: 20 },
+          { ID_CAMPANHA_PROMOTOR: 10, ID_CAMPANHA: 5, ID_PROMOTOR: 1, RAIO: 20, campanha: campanhaAtiva() },
         ])
         // All CPs in campaign 5 (for redistribution)
         .mockResolvedValueOnce([
-          { ID_CAMPANHA_PROMOTOR: 10, ID_CAMPANHA: 5, ID_PROMOTOR: 1, RAIO: 20 },
-          { ID_CAMPANHA_PROMOTOR: 20, ID_CAMPANHA: 5, ID_PROMOTOR: 2, RAIO: 20 },
+          { ID_CAMPANHA_PROMOTOR: 10, ID_CAMPANHA: 5, ID_PROMOTOR: 1, RAIO: 20, campanha: campanhaAtiva() },
+          { ID_CAMPANHA_PROMOTOR: 20, ID_CAMPANHA: 5, ID_PROMOTOR: 2, RAIO: 20, campanha: campanhaAtiva() },
         ]);
 
       (AppDataSourceSync.query as jest.Mock)
-        .mockResolvedValueOnce([{ ID_OFICINA: 100 }, { ID_OFICINA: 200 }]); // capture freed oficinas
+        .mockResolvedValueOnce([{ ID_OFICINA: 100 }, { ID_OFICINA: 200 }]) // capture freed oficinas
+        .mockResolvedValueOnce([campanhaAtiva()]); // redistribuição: checagem de campanha vigente
 
       // autoAssignRotas: no nearby oficinas at new location
       (OficinaService.getComunityNearbyOficinas as jest.Mock).mockResolvedValue([]);
