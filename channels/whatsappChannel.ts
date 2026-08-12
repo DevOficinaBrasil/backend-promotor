@@ -73,6 +73,11 @@ export class WhatsAppChannel implements ChannelSender {
   readonly canal = CanalNotificacao.WHATSAPP;
 
   async send(params: ChannelSendParams): Promise<ChannelSendResult> {
+    if(process.env.NODE_ENV === "development") {
+      console.log("[whatsappChannel] Em dev - channel nao sera acionado", params);
+      return { success: false, reason: CANAL_NAO_CONFIGURADO, providerCode: null };
+    }
+
     const accountId = process.env.WHATSAPP_ACCOUNT_ID;
     const templateName = process.env.WHATSAPP_TEMPLATE_NAME_VISITA;
     const baseUrl = process.env.WHATSAPP_BASE_URL;
