@@ -488,18 +488,24 @@ export default class RotaService {
         STATUS: StatusRota.BACKLOG,
         DELETED_AT: IsNull(),
       },
-      relations: ["campanhaPromotor", "campanhaPromotor.promotor"],
+      relations: ["campanhaPromotor", "campanhaPromotor.promotor", "campanhaPromotor.campanha"],
     });
 
     if (rotasAtivas.length === 0) {
       throw new Error("NOT_FOUND");
     }
 
-    // Agrupar rotas por campanha
+    // Agrupar rotas por campanha (somente campanhas ativas)
+    const now = new Date();
     const rotasPorCampanha = new Map<number, RotaPromotor[]>();
     for (const rota of rotasAtivas) {
       const idCampanha = rota.campanhaPromotor?.ID_CAMPANHA;
       if (!idCampanha) continue;
+
+      const campanha = rota.campanhaPromotor?.campanha;
+      if (!campanha?.START_TIME || !campanha?.END_TIME) continue;
+      if (now < new Date(campanha.START_TIME) || now > new Date(campanha.END_TIME)) continue;
+
       if (!rotasPorCampanha.has(idCampanha)) {
         rotasPorCampanha.set(idCampanha, []);
       }

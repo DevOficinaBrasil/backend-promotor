@@ -164,8 +164,17 @@ export default class PromotorService {
     empresaSlug?: string
   ): Promise<{ rotasCriadas: number; error?: string }> {
     const campanhaPromotorRepo = AppDataSourceSync.getRepository(CampanhaPromotor);
-    const campanhaPromotores = await campanhaPromotorRepo.find({
-      where: { ID_PROMOTOR: promotor.ID_PROMOTOR }
+    const allCampanhaPromotores = await campanhaPromotorRepo.find({
+      where: { ID_PROMOTOR: promotor.ID_PROMOTOR },
+      relations: ["campanha"],
+    });
+
+    // Only process active campaigns
+    const now = new Date();
+    const campanhaPromotores = allCampanhaPromotores.filter(cp => {
+      const campanha = cp.campanha;
+      if (!campanha?.START_TIME || !campanha?.END_TIME) return false;
+      return now >= new Date(campanha.START_TIME) && now <= new Date(campanha.END_TIME);
     });
 
     if (campanhaPromotores.length === 0) {
@@ -227,9 +236,20 @@ export default class PromotorService {
   ): Promise<void> {
     const campanhaPromotorRepo = AppDataSourceSync.getRepository(CampanhaPromotor);
     const oficinaRepo = AppDataSourceSync.getRepository(Oficina);
+    const now = new Date();
 
     for (const [idCampanha, freedOficinaIds] of freedOficinasPorCampanha) {
       if (freedOficinaIds.length === 0) continue;
+
+      // Skip inactive campaigns
+      const campanhaRows = await AppDataSourceSync.query(
+        `SELECT "START_TIME", "END_TIME" FROM "CAMPANHAS_OB"."CAMPANHA" WHERE "ID_CAMPANHA" = $1 AND "DELETED_AT" IS NULL LIMIT 1`,
+        [idCampanha]
+      );
+      if (campanhaRows.length === 0) continue;
+      const camp = campanhaRows[0];
+      if (!camp.START_TIME || !camp.END_TIME) continue;
+      if (now < new Date(camp.START_TIME) || now > new Date(camp.END_TIME)) continue;
 
       // Check which of the freed oficinas are still unassigned
       const assignedOficinas = await RotaService.getOficinasAssignedInCampanha(idCampanha);
