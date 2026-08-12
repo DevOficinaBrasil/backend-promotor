@@ -107,6 +107,14 @@ function criarRepoFake(linhas: Linha[]) {
     findOne: jest.fn(async ({ where }: { where: Record<string, unknown> }) => {
       return linhas.find((linha) => combina(linha, where)) ?? null;
     }),
+    // An array `where` is TypeORM's OR: the row matches if it satisfies any of
+    // the branches.
+    find: jest.fn(
+      async ({ where }: { where: Record<string, unknown> | Record<string, unknown>[] }) => {
+        const ramos = Array.isArray(where) ? where : [where];
+        return linhas.filter((linha) => ramos.some((ramo) => combina(linha, ramo)));
+      }
+    ),
   };
 }
 
@@ -214,9 +222,9 @@ describe("avaliarGuardas", () => {
     await avaliarGuardas(RECEBEDOR, agora);
 
     expect(repo.update).toHaveBeenCalledTimes(1);
-    expect(repo.findOne).toHaveBeenCalled();
+    expect(repo.find).toHaveBeenCalled();
     expect(repo.update.mock.invocationCallOrder[0]).toBeLessThan(
-      repo.findOne.mock.invocationCallOrder[0]
+      repo.find.mock.invocationCallOrder[0]
     );
   });
 

@@ -4,7 +4,7 @@ import { AppDataSourceSync } from "../../data-source";
 import NotificacaoVisita, { StatusNotificacaoVisita } from "../../entities/NotificacaoVisita";
 import Oficina from "../../entities/Oficina";
 import RotaPromotor from "../../entities/RotaPromotor";
-import Clientes from "../../entities/Clientes";
+import Community from "../../entities/Community";
 import {
   hashToken,
   verificarJwt,
@@ -23,7 +23,7 @@ const ID_NOTIFICACAO = 55;
 const ID_ROTA = 42;
 const ID_OFICINA = 900;
 const ID_USUARIO = 7;
-const ID_CLIENT = 31;
+const EMPRESA_SLUG = "authomix";
 const RAW_TOKEN = "token-de-teste-opaco";
 
 const AGORA = new Date("2026-08-05T12:00:00.000Z");
@@ -32,7 +32,7 @@ describe("VisitaConfirmacaoService.trocarToken", () => {
   let notifRepo: { findOne: jest.Mock; update: jest.Mock; save: jest.Mock };
   let rotaRepo: { findOne: jest.Mock };
   let oficinaRepo: { findOne: jest.Mock };
-  let clientesRepo: { findOne: jest.Mock };
+  let communityRepo: { findOne: jest.Mock };
 
   const oficinaPadrao = {
     ID_OFICINA,
@@ -70,13 +70,13 @@ describe("VisitaConfirmacaoService.trocarToken", () => {
       findOne: jest.fn(async () => ({ ID_ROTA_PROMOTOR: ID_ROTA, ID_OFICINA }) as RotaPromotor),
     };
     oficinaRepo = { findOne: jest.fn(async () => oficinaPadrao) };
-    clientesRepo = { findOne: jest.fn(async () => ({ ID: ID_CLIENT, NOME: "Bosch Brasil" })) };
+    communityRepo = { findOne: jest.fn(async () => ({ CommunityID: 17, Nome: "Authomix" })) };
 
     (AppDataSourceSync.getRepository as jest.Mock).mockImplementation((entidade: unknown) => {
       if (entidade === NotificacaoVisita) return notifRepo;
       if (entidade === RotaPromotor) return rotaRepo;
       if (entidade === Oficina) return oficinaRepo;
-      if (entidade === Clientes) return clientesRepo;
+      if (entidade === Community) return communityRepo;
       throw new Error("repositório inesperado no teste");
     });
   });
@@ -161,23 +161,25 @@ describe("VisitaConfirmacaoService.trocarToken", () => {
       expect(resultado).toMatchObject({ state: "PENDING", promotorNome: null });
     });
 
-    it("returns the client company the campaign runs for", async () => {
+    it("returns the company the campaign runs for, resolved by EMPRESA_SLUG", async () => {
       rotaRepo.findOne.mockResolvedValue({
         ID_ROTA_PROMOTOR: ID_ROTA,
         ID_OFICINA,
         campanhaPromotor: {
           promotor: { NOME: "Carlos Promotor" },
-          campanha: { ID_CLIENT: ID_CLIENT },
+          campanha: { EMPRESA_SLUG },
         },
       } as unknown as RotaPromotor);
 
       const resultado = await VisitaConfirmacaoService.trocarToken(RAW_TOKEN, AGORA);
 
-      expect(clientesRepo.findOne).toHaveBeenCalledWith({ where: { ID: ID_CLIENT } });
-      expect(resultado).toMatchObject({ state: "PENDING", empresaNome: "Bosch Brasil" });
+      expect(communityRepo.findOne).toHaveBeenCalledWith({
+        where: { EmpresaSlug: EMPRESA_SLUG },
+      });
+      expect(resultado).toMatchObject({ state: "PENDING", empresaNome: "Authomix" });
     });
 
-    it("returns a null company name when the campaign carries no ID_CLIENT", async () => {
+    it("returns a null company name when the campaign carries no EMPRESA_SLUG", async () => {
       rotaRepo.findOne.mockResolvedValue({
         ID_ROTA_PROMOTOR: ID_ROTA,
         ID_OFICINA,
@@ -187,19 +189,19 @@ describe("VisitaConfirmacaoService.trocarToken", () => {
       const resultado = await VisitaConfirmacaoService.trocarToken(RAW_TOKEN, AGORA);
 
       expect(resultado).toMatchObject({ state: "PENDING", empresaNome: null });
-      expect(clientesRepo.findOne).not.toHaveBeenCalled();
+      expect(communityRepo.findOne).not.toHaveBeenCalled();
     });
 
-    it("returns a null company name when the client row is gone", async () => {
+    it("returns a null company name when the community row is gone", async () => {
       rotaRepo.findOne.mockResolvedValue({
         ID_ROTA_PROMOTOR: ID_ROTA,
         ID_OFICINA,
         campanhaPromotor: {
           promotor: { NOME: "Carlos Promotor" },
-          campanha: { ID_CLIENT: ID_CLIENT },
+          campanha: { EMPRESA_SLUG },
         },
       } as unknown as RotaPromotor);
-      clientesRepo.findOne.mockResolvedValue(null);
+      communityRepo.findOne.mockResolvedValue(null);
 
       const resultado = await VisitaConfirmacaoService.trocarToken(RAW_TOKEN, AGORA);
 

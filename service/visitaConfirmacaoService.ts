@@ -3,7 +3,7 @@ import { AppDataSourceSync } from "../data-source";
 import NotificacaoVisita, { StatusNotificacaoVisita } from "../entities/NotificacaoVisita";
 import Oficina from "../entities/Oficina";
 import RotaPromotor from "../entities/RotaPromotor";
-import Clientes from "../entities/Clientes";
+import Community from "../entities/Community";
 import RotaService from "./rotaService";
 import { statusEfetivo } from "../utils/statusNotificacaoVisita";
 import { emitirJwt, hashToken, VisitaJwtPayload } from "../utils/visitaToken";
@@ -104,13 +104,16 @@ export default class VisitaConfirmacaoService {
       // which address was confirmed, so the reparador can tell at a glance
       // whether the visit they are looking at is the one they expect. No JWT —
       // there is no further action to authorize.
-      const oficinaConfirmada = await this.carregarOficina(notificacao);
+      //
+      // comEmpresa: false — this branch has no empresaNome to render, so the
+      // client lookup is skipped rather than resolved and discarded.
+      const confirmado = await this.carregarContexto(notificacao, false);
 
       return {
         state: "ALREADY_CONFIRMED",
-        oficinaNome: oficinaConfirmada?.NOME_FANTASIA ?? null,
-        promotorNome: (await this.carregarVisitante(notificacao)).promotorNome,
-        endereco: extrairEndereco(oficinaConfirmada),
+        oficinaNome: confirmado.oficina?.NOME_FANTASIA ?? null,
+        promotorNome: confirmado.promotorNome,
+        endereco: extrairEndereco(confirmado.oficina),
         confirmadoEm: notificacao.CONFIRMADO_EM ?? null,
       };
     }
@@ -121,8 +124,7 @@ export default class VisitaConfirmacaoService {
       return { state: "TOKEN_INVALID" };
     }
 
-    const oficina = await this.carregarOficina(notificacao);
-    const { promotorNome, empresaNome } = await this.carregarVisitante(notificacao);
+    const { oficina, promotorNome, empresaNome } = await this.carregarContexto(notificacao, true);
 
     // AC14: JWT plus the workshop's name, who is visiting (promoter and the
     // client company the campaign runs for) and the current registered address.
@@ -331,43 +333,60 @@ export default class VisitaConfirmacaoService {
   }
 
   /**
-   * Resolves the workshop behind a notification through its route.
+   * Everything the confirmation page reads off the route in one pass: the
+   * workshop, the promoter assigned to the visit, and the company the campaign
+   * runs for — resolved through CAMPANHA.EMPRESA_SLUG, since CAMPANHA.ID_CLIENT
+   * is a SQL Server id with no table reachable from here.
    *
-   * Returns null when either row is missing rather than failing the exchange:
-   * the frontend contract already allows every address field to be null, so a
-   * gap in the registry degrades to empty inputs instead of a false
-   * "link inválido".
-   */
-  /**
-   * Who is visiting: the promoter assigned to the route and the client company
-   * the campaign runs for.
+   * The route is fetched once, with its relations, and both answers are derived
+   * from that single row — resolving them separately meant reading the same
+   * RotaPromotor row twice on every exchange.
    *
    * Every field degrades to null rather than throwing. The page is still usable
    * without them, and an unresolvable relation must never cost the reparador
-   * their link.
+   * their link; the frontend contract already allows every address field to be
+   * null, so a gap in the registry degrades to empty inputs instead of a false
+   * "link inválido".
+   *
+   * @param comEmpresa - false on the already-confirmed branch, which renders no
+   * company name and would otherwise pay for a lookup it discards
    */
-  protected static async carregarVisitante(
-    notificacao: NotificacaoVisita
-  ): Promise<{ promotorNome: string | null; empresaNome: string | null }> {
+  protected static async carregarContexto(
+    notificacao: NotificacaoVisita,
+    comEmpresa: boolean
+  ): Promise<{ oficina: Oficina | null; promotorNome: string | null; empresaNome: string | null }> {
     const rota = await AppDataSourceSync.getRepository(RotaPromotor).findOne({
       where: { ID_ROTA_PROMOTOR: notificacao.ID_ROTA_PROMOTOR },
       relations: ["campanhaPromotor", "campanhaPromotor.promotor", "campanhaPromotor.campanha"],
     });
 
     const promotorNome = rota?.campanhaPromotor?.promotor?.NOME ?? null;
-    const idClient = rota?.campanhaPromotor?.campanha?.ID_CLIENT;
+    const oficina = await this.carregarOficinaDaRota(rota);
 
-    if (idClient == null) {
-      return { promotorNome, empresaNome: null };
+    if (!comEmpresa) {
+      return { oficina, promotorNome, empresaNome: null };
     }
 
-    const cliente = await AppDataSourceSync.getRepository(Clientes).findOne({
-      where: { ID: idClient },
+    const empresaSlug = rota?.campanhaPromotor?.campanha?.EMPRESA_SLUG;
+
+    if (empresaSlug == null) {
+      return { oficina, promotorNome, empresaNome: null };
+    }
+
+    const community = await AppDataSourceSync.getRepository(Community).findOne({
+      where: { EmpresaSlug: empresaSlug },
     });
 
-    return { promotorNome, empresaNome: cliente?.NOME ?? null };
+    return { oficina, promotorNome, empresaNome: community?.Nome ?? null };
   }
 
+  /**
+   * Resolves the workshop behind a notification through its route.
+   *
+   * Kept for the address-correction path, which needs the workshop and nothing
+   * else — the exchange path goes through carregarContexto instead so it reads
+   * the route only once.
+   */
   protected static async carregarOficina(
     notificacao: NotificacaoVisita
   ): Promise<Oficina | null> {
@@ -375,6 +394,10 @@ export default class VisitaConfirmacaoService {
       where: { ID_ROTA_PROMOTOR: notificacao.ID_ROTA_PROMOTOR },
     });
 
+    return await this.carregarOficinaDaRota(rota);
+  }
+
+  private static async carregarOficinaDaRota(rota: RotaPromotor | null): Promise<Oficina | null> {
     if (rota === null || rota.ID_OFICINA == null) {
       return null;
     }

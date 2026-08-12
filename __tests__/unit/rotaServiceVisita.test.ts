@@ -1,7 +1,7 @@
 import RotaService from '../../service/rotaService';
 import { AppDataSourceSync } from '../../data-source';
 import CampanhaPromotor from '../../entities/CampanhaPromotor';
-import NotificacaoVisitaService from '../../service/notificacaoVisitaService';
+import NotificacaoVisitaService, { criarCacheCampanha } from '../../service/notificacaoVisitaService';
 import { StatusNotificacaoVisita } from '../../entities/NotificacaoVisita';
 
 // Deliberately does NOT mock utils/migrationRepository: these tests exercise the
@@ -22,6 +22,12 @@ describe('RotaService visit notification hook', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    // The automock returns undefined; hand back a real cache so the batch
+    // actually shares one, as production does.
+    (criarCacheCampanha as jest.Mock).mockReturnValue({
+      dados: new Map(),
+      nomeEmpresa: new Map(),
+    });
     notificarVisitaMock.mockResolvedValue({} as never);
     jest.spyOn(console, 'error').mockImplementation(() => {});
   });
@@ -41,7 +47,7 @@ describe('RotaService visit notification hook', () => {
       await RotaService.createRotas(5, 100);
 
       expect(notificarVisitaMock).toHaveBeenCalledTimes(1);
-      expect(notificarVisitaMock).toHaveBeenCalledWith(mockRota);
+      expect(notificarVisitaMock).toHaveBeenCalledWith(mockRota, expect.anything());
     });
 
     it('notifies once per route created in a batch', async () => {
@@ -58,9 +64,57 @@ describe('RotaService visit notification hook', () => {
       await RotaService.createRotas(5, [100, 200, 300]);
 
       expect(notificarVisitaMock).toHaveBeenCalledTimes(3);
-      expect(notificarVisitaMock).toHaveBeenCalledWith(mockRotas[0]);
-      expect(notificarVisitaMock).toHaveBeenCalledWith(mockRotas[1]);
-      expect(notificarVisitaMock).toHaveBeenCalledWith(mockRotas[2]);
+      expect(notificarVisitaMock).toHaveBeenCalledWith(mockRotas[0], expect.anything());
+      expect(notificarVisitaMock).toHaveBeenCalledWith(mockRotas[1], expect.anything());
+      expect(notificarVisitaMock).toHaveBeenCalledWith(mockRotas[2], expect.anything());
+    });
+
+    // One campaign per batch, so one cache per batch — a cache per route would
+    // memoize nothing.
+    it('hands every route of a batch the same campaign cache', async () => {
+      const mockRotas = [
+        { ID_ROTA_PROMOTOR: 1, ID_OFICINA: 100 },
+        { ID_ROTA_PROMOTOR: 2, ID_OFICINA: 200 },
+        { ID_ROTA_PROMOTOR: 3, ID_OFICINA: 300 },
+      ];
+      (AppDataSourceSync.getRepository as jest.Mock).mockReturnValue({
+        create: jest.fn((data) => data),
+        save: jest.fn().mockResolvedValue(mockRotas),
+      });
+
+      await RotaService.createRotas(5, [100, 200, 300]);
+
+      const caches = new Set(notificarVisitaMock.mock.calls.map((chamada) => chamada[1]));
+      expect(caches.size).toBe(1);
+    });
+
+    // The send is a network call inside the request cycle: routes go through a
+    // bounded pool, never all at once and never strictly one at a time.
+    it('dispatches a large batch with bounded concurrency', async () => {
+      const mockRotas = Array.from({ length: 12 }, (_, i) => ({
+        ID_ROTA_PROMOTOR: i + 1,
+        ID_OFICINA: 100 + i,
+      }));
+      (AppDataSourceSync.getRepository as jest.Mock).mockReturnValue({
+        create: jest.fn((data) => data),
+        save: jest.fn().mockResolvedValue(mockRotas),
+      });
+
+      let emVoo = 0;
+      let picoEmVoo = 0;
+      notificarVisitaMock.mockImplementation(async () => {
+        emVoo += 1;
+        picoEmVoo = Math.max(picoEmVoo, emVoo);
+        await new Promise((resolve) => setImmediate(resolve));
+        emVoo -= 1;
+        return {} as never;
+      });
+
+      await RotaService.createRotas(5, mockRotas.map((r) => r.ID_OFICINA));
+
+      expect(notificarVisitaMock).toHaveBeenCalledTimes(12);
+      expect(picoEmVoo).toBeGreaterThan(1);
+      expect(picoEmVoo).toBeLessThanOrEqual(5);
     });
 
     it('still returns the created route when the notification rejects', async () => {
@@ -104,8 +158,8 @@ describe('RotaService visit notification hook', () => {
       await RotaService.createRotaWithCampanhaPromotor(10, 20, [100, 200]);
 
       expect(notificarVisitaMock).toHaveBeenCalledTimes(2);
-      expect(notificarVisitaMock).toHaveBeenCalledWith(mockRotas[0]);
-      expect(notificarVisitaMock).toHaveBeenCalledWith(mockRotas[1]);
+      expect(notificarVisitaMock).toHaveBeenCalledWith(mockRotas[0], expect.anything());
+      expect(notificarVisitaMock).toHaveBeenCalledWith(mockRotas[1], expect.anything());
     });
 
     it('still returns the created routes when the notification rejects', async () => {
@@ -142,7 +196,7 @@ describe('RotaService visit notification hook', () => {
 
       expect(resultado.created).toEqual([novaRota]);
       expect(notificarVisitaMock).toHaveBeenCalledTimes(1);
-      expect(notificarVisitaMock).toHaveBeenCalledWith(novaRota);
+      expect(notificarVisitaMock).toHaveBeenCalledWith(novaRota, expect.anything());
     });
 
     it('does not notify when no new workshop was added', async () => {

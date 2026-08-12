@@ -79,31 +79,37 @@ export async function avaliarGuardas(
     { STATUS: StatusNotificacaoVisita.EXPIRADO }
   );
 
-  // 2. Outstanding request (AC28). The EXPIRA_EM filter is kept in addition to
-  // step 1 so a failed or partial persist can never resurrect an expired row
-  // as outstanding.
-  const pendente = await repo.findOne({
-    where: {
-      ID_USUARIO: idUsuario,
-      STATUS: StatusNotificacaoVisita.ENVIADO,
-      EXPIRA_EM: MoreThanOrEqual(agora),
-    },
+  // 2 & 3. Outstanding request (AC28) and recent confirmation (AC29), asked as
+  // one OR'd query rather than two round trips: both are keyed on ID_USUARIO
+  // and covered by IDX_NOTIFICACAO_VISITA_USUARIO_STATUS, and this runs on
+  // every route creation. Only STATUS is selected — the decision needs nothing
+  // else, and precedence is applied below rather than by query order.
+  //
+  // The EXPIRA_EM filter is kept in addition to step 1 so a failed or partial
+  // persist can never resurrect an expired row as outstanding.
+  const bloqueios = await repo.find({
+    where: [
+      {
+        ID_USUARIO: idUsuario,
+        STATUS: StatusNotificacaoVisita.ENVIADO,
+        EXPIRA_EM: MoreThanOrEqual(agora),
+      },
+      {
+        ID_USUARIO: idUsuario,
+        STATUS: StatusNotificacaoVisita.CONFIRMADO,
+        CONFIRMADO_EM: MoreThanOrEqual(mesesAtras(agora, MESES_CONFIRMACAO_RECENTE)),
+      },
+    ],
+    select: { ID_NOTIFICACAO_VISITA: true, STATUS: true },
   });
 
-  if (pendente !== null) {
+  // AC28 before AC29: an outstanding request is the more specific reason, and
+  // reversing them would relabel a live notification as a recent confirmation.
+  if (bloqueios.some((linha) => linha.STATUS === StatusNotificacaoVisita.ENVIADO)) {
     return { bloqueado: true, motivo: MOTIVO_PENDENTE };
   }
 
-  // 3. Recent confirmation (AC29).
-  const confirmadaRecente = await repo.findOne({
-    where: {
-      ID_USUARIO: idUsuario,
-      STATUS: StatusNotificacaoVisita.CONFIRMADO,
-      CONFIRMADO_EM: MoreThanOrEqual(mesesAtras(agora, MESES_CONFIRMACAO_RECENTE)),
-    },
-  });
-
-  if (confirmadaRecente !== null) {
+  if (bloqueios.some((linha) => linha.STATUS === StatusNotificacaoVisita.CONFIRMADO)) {
     return { bloqueado: true, motivo: MOTIVO_CONFIRMADO_RECENTE };
   }
 

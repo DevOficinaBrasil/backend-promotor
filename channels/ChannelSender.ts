@@ -3,8 +3,9 @@ import { CanalNotificacao } from "../entities/NotificacaoVisita";
 /**
  * Everything a channel needs to deliver one visit notification.
  *
- * `variables` is the ordered template-variable list — `[oficinaNome,
- * confirmationUrl]` for the visit template (spec AC6).
+ * `variables` is the ordered template-variable list — `[usuarioNome,
+ * clienteNome, confirmationUrl]` for the visit template
+ * (atualizacao_dados_visita_oficina), spec AC6.
  */
 export interface ChannelSendParams {
   toPhone: string;

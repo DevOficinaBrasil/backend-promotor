@@ -4,7 +4,7 @@ import { AppDataSourceSync } from '../../data-source';
 import { createMockRepo } from '../helpers/mockMigrationRepo';
 import RotaPromotor, { StatusRota } from '../../entities/RotaPromotor';
 import CampanhaPromotor, { EstrategiaOrdenacao } from '../../entities/CampanhaPromotor';
-import NotificacaoVisitaService from '../../service/notificacaoVisitaService';
+import NotificacaoVisitaService, { criarCacheCampanha } from '../../service/notificacaoVisitaService';
 
 jest.mock('../../data-source');
 jest.mock('../../utils/migrationRepository');
@@ -296,6 +296,12 @@ describe('RotaService', () => {
     it('notifies the route created by a reassignment, after the transaction commits', async () => {
       const notificarVisita = NotificacaoVisitaService.notificarVisita as jest.Mock;
       notificarVisita.mockResolvedValue({} as never);
+      // The automock returns undefined for the cache factory; the notifier is
+      // handed a real cache in production.
+      (criarCacheCampanha as jest.Mock).mockReturnValue({
+        dados: new Map(),
+        nomeEmpresa: new Map(),
+      });
 
       haversineDistanceKm
         .mockReturnValueOnce(350)
@@ -337,7 +343,7 @@ describe('RotaService', () => {
       await RotaService.reassignRotasByAddress('80010-000', 123);
 
       expect(notificarVisita).toHaveBeenCalledTimes(1);
-      expect(notificarVisita).toHaveBeenCalledWith(rotaCriada);
+      expect(notificarVisita).toHaveBeenCalledWith(rotaCriada, expect.anything());
     });
 
     it('still completes the reassignment when the notification rejects', async () => {
