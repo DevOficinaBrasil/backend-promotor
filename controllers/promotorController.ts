@@ -101,7 +101,7 @@ export default class PromotorController {
       if (CEP !== undefined) updateData.CEP = CEP;
 
       // Call the service to update the promoter
-      const result = await PromotorService.updatePromotor(promotorId, updateData, EMPRESA_SLUG, FILTRO_SEGMENTACAO);
+      const result = await PromotorService.updatePromotor(promotorId, updateData, EMPRESA_SLUG, FILTRO_SEGMENTACAO, RAIO);
 
       if (!result) {
         return res.status(404).json({

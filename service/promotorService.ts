@@ -167,7 +167,8 @@ export default class PromotorService {
     id: number, 
     promotorData: Partial<Promotor>, 
     empresaSlug?: string,
-    filtroSegmentacao?: Record<string, unknown> | null
+    filtroSegmentacao?: Record<string, unknown> | null,
+    raio?: number
   ): Promise<{ promotor: Promotor; autoAssignResult?: { rotasCriadas: number; error?: string } } | null> {
     const repo = this.getPromotorRepo();
     
@@ -185,9 +186,16 @@ export default class PromotorService {
     }
 
     const cepAlterado = promotorData.CEP !== undefined && promotorData.CEP !== promotorExistente.CEP;
+    const raioAlterado = raio !== undefined;
+    const filtroAlterado = filtroSegmentacao !== undefined;
+
+    // Atualiza RAIO em todos os vínculos campanha-promotor ativos
+    if (raioAlterado) {
+      await this.updateRaioEmCampanhaPromotores(id, raio);
+    }
 
     // Atualiza FILTRO_SEGMENTACAO em todos os vínculos campanha-promotor ativos
-    if (filtroSegmentacao !== undefined) {
+    if (filtroAlterado) {
       await this.updateFiltroEmCampanhaPromotores(id, filtroSegmentacao);
     }
 
@@ -200,8 +208,10 @@ export default class PromotorService {
     
     const promotorAtualizado = await repo.save(promotorExistente);
 
+    // Recalcula rotas se CEP, raio ou filtro mudaram
     let autoAssignResult: { rotasCriadas: number; error?: string } | undefined;
-    if (cepAlterado && promotorAtualizado.LATITUDE && promotorAtualizado.LONGITUDE) {
+    const devReassignar = cepAlterado || raioAlterado || filtroAlterado;
+    if (devReassignar && promotorAtualizado.LATITUDE && promotorAtualizado.LONGITUDE) {
       autoAssignResult = await this.reassignRotasAfterCepChange(promotorAtualizado, empresaSlug);
     }
     
@@ -217,6 +227,18 @@ export default class PromotorService {
        SET "FILTRO_SEGMENTACAO" = $1, "UPDATED_AT" = NOW()
        WHERE "ID_PROMOTOR" = $2 AND "DELETED_AT" IS NULL`,
       [filtroSegmentacao ? JSON.stringify(filtroSegmentacao) : null, idPromotor]
+    );
+  }
+
+  private static async updateRaioEmCampanhaPromotores(
+    idPromotor: number,
+    raio: number
+  ): Promise<void> {
+    await AppDataSourceSync.query(
+      `UPDATE "CAMPANHAS_OB"."CAMPANHA_PROMOTOR"
+       SET "RAIO" = $1, "UPDATED_AT" = NOW()
+       WHERE "ID_PROMOTOR" = $2 AND "DELETED_AT" IS NULL`,
+      [raio, idPromotor]
     );
   }
 
