@@ -193,12 +193,14 @@ T10 → T11 → T12 → T13 → T14
 
 **Done when**:
 
-- [ ] Creates exactly one `PENDENTE` row with `AVAILABLE_AT` from T3
-- [ ] Resolves no recipient, issues no token, calls no channel — asserted by a test spying on the channel
-- [ ] Never throws; a write failure resolves to a logged failure, not an exception
-- [ ] Logs loudly when `OUTBOX_VISITA_ENVIO_IMEDIATO` shortened the schedule
-- [ ] Gate check passes: `npm run test:unit`
-- [ ] Test count: ≥5 new tests pass (no silent deletions)
+- [x] Creates exactly one `PENDENTE` row with `AVAILABLE_AT` from T3
+- [x] Resolves no recipient, issues no token, calls no channel — asserted by a test spying on the channel
+- [x] Never throws; a write failure resolves to a logged failure, not an exception
+- [x] Logs loudly when `OUTBOX_VISITA_ENVIO_IMEDIATO` shortened the schedule
+- [x] Gate check passes: `npm run test:unit` — 339/339
+- [x] Test count: 8 new tests pass (no silent deletions)
+
+**Status**: ✅ Complete
 
 **Tests**: unit
 **Gate**: quick

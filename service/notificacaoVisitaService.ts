@@ -14,6 +14,7 @@ import { avaliarGuardas, enderecoRecente } from "./envioGuards";
 import { MigrationAwareRepository } from "../utils/migrationRepository";
 import { normalizarTelefone } from "../utils/telefone";
 import { gerarLinkToken } from "../utils/visitaToken";
+import { proximoHorarioEnvio } from "../utils/agendamento";
 
 // Fallback only. The link's real lifetime is the campaign's END_TIME; this is
 // what a campaign without an end date (or one whose rows can't be resolved)
@@ -181,6 +182,57 @@ function comporErroEnvio(reason: string, providerCode: string | null): string {
 }
 
 export default class NotificacaoVisitaService {
+  /**
+   * Enqueues one notification for a newly created route (AGND-01).
+   *
+   * Writes the PENDENTE row with AVAILABLE_AT and stops there: no recipient, no
+   * token, no provider call. Everything else happens at dispatch time, hours
+   * later, because the guards it depends on (endereço recente, campanha
+   * encerrada, antispam) are all time-dependent — evaluating them at import
+   * time answers the wrong question.
+   *
+   * Never throws (AGND-03). Route creation must not fail because a notification
+   * could not be queued.
+   */
+  static async agendarVisita(
+    rota: RotaPromotor,
+    agora: Date = new Date()
+  ): Promise<NotificacaoVisita> {
+    const idRota = rota.ID_ROTA_PROMOTOR;
+    const disponivelEm = proximoHorarioEnvio(agora);
+
+    if (process.env.OUTBOX_VISITA_ENVIO_IMEDIATO === "1") {
+      console.log(
+        "[notificacaoVisita] OUTBOX_VISITA_ENVIO_IMEDIATO ativo: notificação nasce vencida",
+        { ID_ROTA_PROMOTOR: idRota, AVAILABLE_AT: disponivelEm.toISOString() }
+      );
+    }
+
+    const repo = AppDataSourceSync.getRepository(NotificacaoVisita);
+    const linha = repo.create({
+      ID_ROTA_PROMOTOR: idRota,
+      CANAL: CanalNotificacao.WHATSAPP,
+      STATUS: StatusNotificacaoVisita.PENDENTE,
+      AVAILABLE_AT: disponivelEm,
+      ATTEMPTS: 0,
+    });
+
+    try {
+      const salva = await repo.save(linha);
+      NotificacaoVisitaService.log("notificação agendada", salva);
+      return salva;
+    } catch (erro) {
+      // Sem linha não há envio, mas a rota já existe e a resposta dela não pode
+      // depender disso. Devolve a linha em memória, como o catch de
+      // notificarVisita já faz.
+      console.error("[notificacaoVisita] falha ao agendar notificação", {
+        ID_ROTA_PROMOTOR: idRota,
+        erro: (erro as Error)?.message,
+      });
+      return linha;
+    }
+  }
+
   /**
    * Full send flow for one created route: create the row, run the pre-send
    * guards, resolve a recipient, issue the link token and dispatch.
