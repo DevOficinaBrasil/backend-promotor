@@ -383,12 +383,18 @@ know the channel's vocabulary.
 
 **Done when**:
 
-- [ ] `markEnviado` sets `ENVIADO`, `ENVIADO_EM`, `MESSAGE_ID`, `PROVIDER_MESSAGE_ID`, clears `LOCKED_AT`/`LOCKED_BY`
-- [ ] `markRetry` keeps `PENDENTE`, clears the lease, writes `ERRO_ENVIO`, pushes `AVAILABLE_AT` by the ladder
-- [ ] `markRetry` preserves the caller's real attempt count — never resets it to `1` (the bug not inherited from the target)
-- [ ] `markFalhou` sets `FALHOU` with `ERRO_ENVIO` and clears the lease
-- [ ] Gate check passes: `npm run test:unit`
-- [ ] Test count: ≥6 new tests pass (no silent deletions)
+- [x] `marcarEnviado` sets `ENVIADO`, `ENVIADO_EM`, `MESSAGE_ID`, `PROVIDER_MESSAGE_ID`, clears `LOCKED_AT`/`LOCKED_BY`
+- [x] `marcarRetentativa` keeps `PENDENTE`, clears the lease, writes `ERRO_ENVIO`, pushes `AVAILABLE_AT` by the ladder
+- [x] `marcarRetentativa` never rewrites `ATTEMPTS` — the bug not inherited from `OutboxPublisher.ts:116`, asserted by its own test
+- [x] `marcarFalhou` sets `FALHOU` with `ERRO_ENVIO` and clears the lease
+- [x] Gate check passes: `npm run test:unit` — 383/383
+- [x] Test count: 9 new tests pass (no silent deletions)
+
+**Fourth helper added**: `liberarLease`. `DISPENSADO` and terminal `FALHOU` are
+already persisted by the dispatch, so the queue must only release the row —
+rewriting STATUS there would overwrite the reason the dispatch recorded.
+
+**Status**: ✅ Complete
 
 **Tests**: unit
 **Gate**: quick

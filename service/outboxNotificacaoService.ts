@@ -1,4 +1,5 @@
 import { AppDataSourceSync } from "../data-source";
+import NotificacaoVisita, { StatusNotificacaoVisita } from "../entities/NotificacaoVisita";
 import { DesfechoDespacho } from "./notificacaoVisitaService";
 
 /**
@@ -107,6 +108,78 @@ export function idDoWorker(sufixo = ""): string {
 }
 
 export default class OutboxNotificacaoService {
+  private static repo() {
+    return AppDataSourceSync.getRepository(NotificacaoVisita);
+  }
+
+  /**
+   * Envio concluído: grava os identificadores do provider e solta o lease.
+   */
+  static async marcarEnviado(
+    id: number,
+    messageId: string | null,
+    providerMessageId: string | null
+  ): Promise<void> {
+    await this.repo().update(
+      { ID_NOTIFICACAO_VISITA: id },
+      {
+        STATUS: StatusNotificacaoVisita.ENVIADO,
+        ENVIADO_EM: new Date(),
+        MESSAGE_ID: messageId,
+        PROVIDER_MESSAGE_ID: providerMessageId,
+        LOCKED_AT: null,
+        LOCKED_BY: null,
+      }
+    );
+  }
+
+  /**
+   * Linha resolvida pelo despacho (DISPENSADO ou FALHOU terminal): o STATUS já
+   * está gravado, então aqui só se solta o lease. Escrever o STATUS de novo
+   * apagaria o motivo que o despacho registrou.
+   */
+  static async liberarLease(id: number): Promise<void> {
+    await this.repo().update(
+      { ID_NOTIFICACAO_VISITA: id },
+      { LOCKED_AT: null, LOCKED_BY: null }
+    );
+  }
+
+  /**
+   * Nova tentativa: mantém PENDENTE, registra o motivo e empurra AVAILABLE_AT
+   * pela escada de backoff. Soltar o lease é o que devolve a linha para a fila.
+   *
+   * Não toca em ATTEMPTS de propósito. O alvo faz isso em
+   * `OutboxPublisher.ts:116`, onde o handler de falha de lote reescreve
+   * `attempts` para 1: a contagem real se perde e uma linha que derruba o lote
+   * repete para sempre em vez de se aposentar no teto.
+   */
+  static async marcarRetentativa(id: number, erro: string, backoffMs: number): Promise<void> {
+    await this.repo().update(
+      { ID_NOTIFICACAO_VISITA: id },
+      {
+        STATUS: StatusNotificacaoVisita.PENDENTE,
+        ERRO_ENVIO: erro,
+        AVAILABLE_AT: new Date(Date.now() + backoffMs),
+        LOCKED_AT: null,
+        LOCKED_BY: null,
+      }
+    );
+  }
+
+  /** Teto de tentativas atingido: aposenta a linha e solta o lease. */
+  static async marcarFalhou(id: number, erro: string): Promise<void> {
+    await this.repo().update(
+      { ID_NOTIFICACAO_VISITA: id },
+      {
+        STATUS: StatusNotificacaoVisita.FALHOU,
+        ERRO_ENVIO: erro,
+        LOCKED_AT: null,
+        LOCKED_BY: null,
+      }
+    );
+  }
+
   /**
    * Reivindica até `tamanho` notificações vencidas, marcando cada uma como sua.
    *
