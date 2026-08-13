@@ -1,4 +1,5 @@
-import { parseArgs } from "../../scripts/outboxConsole";
+import { parseArgs, podeRearmar } from "../../scripts/outboxConsole";
+import { StatusNotificacaoVisita } from "../../entities/NotificacaoVisita";
 
 // AGND-17 a AGND-19: o parsing decide o que o console faz com a fila, então um
 // argumento mal lido é um tique ou um rearme no alvo errado.
@@ -51,4 +52,21 @@ describe("outboxConsole parseArgs", () => {
       expect(() => parseArgs(["agendar", "--rota", valor])).toThrow(/id inteiro positivo/);
     }
   );
+
+  // AGND-19: a única guarda do console cuja falha apaga dado real.
+  describe("podeRearmar", () => {
+    it("refuses a CONFIRMADO row, so a replay cannot destroy a real confirmation", () => {
+      expect(podeRearmar(StatusNotificacaoVisita.CONFIRMADO)).toBe(false);
+    });
+
+    it.each([
+      [StatusNotificacaoVisita.PENDENTE],
+      [StatusNotificacaoVisita.ENVIADO],
+      [StatusNotificacaoVisita.FALHOU],
+      [StatusNotificacaoVisita.DISPENSADO],
+      [StatusNotificacaoVisita.EXPIRADO],
+    ])("allows re-arming a row in %s", (status) => {
+      expect(podeRearmar(status)).toBe(true);
+    });
+  });
 });

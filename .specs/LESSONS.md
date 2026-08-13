@@ -38,6 +38,24 @@ Seen once or not yet corroborated. Tracked, not trusted.
 - evidence: .specs/features/notificacao-visita-confirmacao/validation.md M4, M11; service/campanhaService.ts:233-234, :225-227 (raw-sql)
 - last seen: 2026-08-05T19:21:55Z
 
+### L-005 - When a CLI script carries a guard that protects real data, extract it as a pure function and unit-test it — scoping the scripts layer to 'argument parsing' in the coverage matrix silently leaves that guard untested.
+- signal: `ac_gap` · recurrence: 1 feature(s) · scope: `scripts` · harmful: 0
+- features: agendamento-notificacao-visita
+- evidence: AGND-19 / scripts/outboxConsole.ts:165 (scripts)
+- last seen: 2026-08-13T23:55:01Z
+
+### L-006 - Before writing integration tests against a table, verify the target database's real constraints instead of trusting the versioned migration or the decision log — dev here still had an FK both said was removed.
+- signal: `spec_deviation` · recurrence: 1 feature(s) · scope: `database` · harmful: 0
+- features: agendamento-notificacao-visita
+- evidence: STATE.md 2026-08-07 FK decision vs dev schema (database)
+- last seen: 2026-08-13T23:55:01Z
+
+### L-007 - An AC whose outcome is console output cannot be verified by the test suite; either assert the rendered string or record in the spec that the AC is manual-only.
+- signal: `spec_precision_gap` · recurrence: 1 feature(s) · scope: `scripts` · harmful: 0
+- features: agendamento-notificacao-visita
+- evidence: AGND-17, AGND-18 (scripts)
+- last seen: 2026-08-13T23:55:01Z
+
 ## Quarantined (failed when applied - ignore)
 
 A confirmed lesson that recurred alongside failure. Kept for the maintainer to review.

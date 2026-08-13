@@ -317,31 +317,31 @@ Names, defaults and value convention are taken from `backend-communities` so the
 
 | Requirement ID | Story | Phase | Status |
 | --- | --- | --- | --- |
-| AGND-01 | P1: Enqueue instead of sending inline | Design | Pending |
-| AGND-02 | P1: Enqueue instead of sending inline | Design | Pending |
-| AGND-03 | P1: Enqueue instead of sending inline | Design | Pending |
-| AGND-04 | P1: Claim exactly once across copies | Design | Pending |
-| AGND-05 | P1: Claim exactly once across copies | Design | Pending |
-| AGND-06 | P1: Claim exactly once across copies | Design | Pending |
-| AGND-07 | P1: Claim exactly once across copies | Design | Pending |
-| AGND-08 | P1: Claim exactly once across copies | Design | Pending |
-| AGND-09 | P1: Dispatch on schedule, bounded retry | Design | Pending |
-| AGND-10 | P1: Dispatch on schedule, bounded retry | Design | Pending |
-| AGND-11 | P1: Dispatch on schedule, bounded retry | Design | Pending |
-| AGND-12 | P1: Dispatch on schedule, bounded retry | Design | Pending |
-| AGND-13 | P2: Deploy without re-sending history | Design | Pending |
-| AGND-14 | P2: See the queue | Design | Pending |
-| AGND-15 | P2: See the queue | Design | Pending |
-| AGND-16 | P3: Exercise the queue by hand | Design | Pending |
-| AGND-17 | P3: Exercise the queue by hand | Design | Pending |
-| AGND-18 | P3: Exercise the queue by hand | Design | Pending |
-| AGND-19 | P3: Exercise the queue by hand | Design | Pending |
-| AGND-20 | P1: Dispatch on schedule, bounded retry | Design | Pending |
-| AGND-21 | P1: Enqueue instead of sending inline | Design | Pending |
+| AGND-01 | P1: Enqueue instead of sending inline | Execute | ✅ Verified |
+| AGND-02 | P1: Enqueue instead of sending inline | Execute | ✅ Verified |
+| AGND-03 | P1: Enqueue instead of sending inline | Execute | ✅ Verified |
+| AGND-04 | P1: Claim exactly once across copies | Execute | ✅ Verified |
+| AGND-05 | P1: Claim exactly once across copies | Execute | ✅ Verified |
+| AGND-06 | P1: Claim exactly once across copies | Execute | ✅ Verified |
+| AGND-07 | P1: Claim exactly once across copies | Execute | ✅ Verified |
+| AGND-08 | P1: Claim exactly once across copies | Execute | ✅ Verified |
+| AGND-09 | P1: Dispatch on schedule, bounded retry | Execute | ✅ Verified |
+| AGND-10 | P1: Dispatch on schedule, bounded retry | Execute | ✅ Verified |
+| AGND-11 | P1: Dispatch on schedule, bounded retry | Execute | ✅ Verified |
+| AGND-12 | P1: Dispatch on schedule, bounded retry | Execute | ✅ Verified |
+| AGND-13 | P2: Deploy without re-sending history | Execute | ✅ Verified |
+| AGND-14 | P2: See the queue | Execute | ✅ Verified |
+| AGND-15 | P2: See the queue | Execute | ✅ Verified |
+| AGND-16 | P3: Exercise the queue by hand | Execute | ✅ Verified |
+| AGND-17 | P3: Exercise the queue by hand | Execute | ✅ Verified |
+| AGND-18 | P3: Exercise the queue by hand | Execute | ✅ Verified |
+| AGND-19 | P3: Exercise the queue by hand | Execute | ✅ Verified |
+| AGND-20 | P1: Dispatch on schedule, bounded retry | Execute | ✅ Verified |
+| AGND-21 | P1: Enqueue instead of sending inline | Execute | ✅ Verified |
 
 **ID mapping:** AGND-01…03 = P1 story 1 AC1-3; AGND-04…08 = P1 story 2 AC1-5; AGND-09…12 = P1 story 3 AC1-3 plus AC4-6 folded into AGND-11 (retry) and AGND-12 (tick isolation); AGND-13 = P2 story 1 AC1-3; AGND-14…15 = P2 story 2 AC1-2; AGND-16 = P3 AC1 (immediate scheduling), AGND-17 = P3 AC2 + AC6 (foreground tick and its test lock), AGND-18 = P3 AC3 (status), AGND-19 = P3 AC4 + AC5 (re-arm and its refusal); AGND-20 = P1 story 3 AC7 (send-rate ceiling); AGND-21 = P1 story 1 AC4 (no inline send from route creation).
 
-**Coverage:** 21 total, 0 mapped to tasks, 21 unmapped ⚠️ (Tasks phase pending)
+**Coverage:** 21 total, 21 mapped to tasks, 0 unmapped. Verified 2026-08-13 — see `validation.md` (AGND-07, 17, 18 carry spec-precision caveats recorded there).
 
 ---
 

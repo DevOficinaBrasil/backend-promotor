@@ -3,7 +3,7 @@
   "promote_threshold": 2,
   "window_days": 45,
   "quarantine_threshold": 2,
-  "next_id": 5,
+  "next_id": 8,
   "lessons": [
     {
       "id": "L-001",
@@ -76,6 +76,60 @@
       ],
       "created": "2026-08-05T19:21:55Z",
       "last_seen": "2026-08-05T19:21:55Z"
+    },
+    {
+      "id": "L-005",
+      "key": "ac_gap::when a cli script carries a guard that protects real data extract it as a pure function and unit test it scoping the scripts layer to argument parsing in the coverage matrix silently leaves that guard untested",
+      "text": "When a CLI script carries a guard that protects real data, extract it as a pure function and unit-test it — scoping the scripts layer to 'argument parsing' in the coverage matrix silently leaves that guard untested.",
+      "signal": "ac_gap",
+      "scope": "scripts",
+      "status": "candidate",
+      "features": [
+        "agendamento-notificacao-visita"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "AGND-19 / scripts/outboxConsole.ts:165 (scripts)"
+      ],
+      "created": "2026-08-13T23:55:01Z",
+      "last_seen": "2026-08-13T23:55:01Z"
+    },
+    {
+      "id": "L-006",
+      "key": "spec_deviation::before writing integration tests against a table verify the target database s real constraints instead of trusting the versioned migration or the decision log dev here still had an fk both said was removed",
+      "text": "Before writing integration tests against a table, verify the target database's real constraints instead of trusting the versioned migration or the decision log — dev here still had an FK both said was removed.",
+      "signal": "spec_deviation",
+      "scope": "database",
+      "status": "candidate",
+      "features": [
+        "agendamento-notificacao-visita"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "STATE.md 2026-08-07 FK decision vs dev schema (database)"
+      ],
+      "created": "2026-08-13T23:55:01Z",
+      "last_seen": "2026-08-13T23:55:01Z"
+    },
+    {
+      "id": "L-007",
+      "key": "spec_precision_gap::an ac whose outcome is console output cannot be verified by the test suite either assert the rendered string or record in the spec that the ac is manual only",
+      "text": "An AC whose outcome is console output cannot be verified by the test suite; either assert the rendered string or record in the spec that the AC is manual-only.",
+      "signal": "spec_precision_gap",
+      "scope": "scripts",
+      "status": "candidate",
+      "features": [
+        "agendamento-notificacao-visita"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "AGND-17, AGND-18 (scripts)"
+      ],
+      "created": "2026-08-13T23:55:01Z",
+      "last_seen": "2026-08-13T23:55:01Z"
     }
   ]
 }

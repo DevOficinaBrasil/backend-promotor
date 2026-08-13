@@ -134,11 +134,17 @@ async function tick(vezes: number): Promise<void> {
 }
 
 /**
- * AGND-19: rearma uma linha para sair agora.
+ * AGND-19: quais status podem ser rearmados.
  *
- * Recusa CONFIRMADO: repetir um teste nunca pode destruir a confirmação real de
- * um reparador.
+ * CONFIRMADO é o único não: repetir um teste nunca pode destruir a confirmação
+ * real de um reparador. Função pura de propósito — é a única guarda deste script
+ * cuja falha apaga dado de verdade, então precisa de teste próprio.
  */
+export function podeRearmar(status: string): boolean {
+  return status !== StatusNotificacaoVisita.CONFIRMADO;
+}
+
+/** AGND-19: rearma uma linha para sair agora. */
 async function agendar(idRota: number | null, idNotificacao: number | null): Promise<void> {
   const [linha] = idNotificacao
     ? await AppDataSourceSync.query(
@@ -162,7 +168,7 @@ async function agendar(idRota: number | null, idNotificacao: number | null): Pro
     return;
   }
 
-  if (linha.STATUS === StatusNotificacaoVisita.CONFIRMADO) {
+  if (!podeRearmar(linha.STATUS)) {
     console.error(
       `recusado: a notificação ${linha.ID_NOTIFICACAO_VISITA} está CONFIRMADO. ` +
         "Rearmar apagaria a confirmação real do reparador."
