@@ -224,12 +224,22 @@ T10 → T11 → T12 → T13 → T14
 
 **Done when**:
 
-- [ ] `notificarRotasCriadas` calls `agendarVisita` for every created route
-- [ ] `NOTIFICACOES_SIMULTANEAS` pool removed; a plain loop replaces it
-- [ ] Per-route try/catch retained — one bad row never fails route creation
-- [ ] A test asserts route creation triggers **zero** channel calls (AGND-21)
-- [ ] Gate check passes: `npm run test:unit`
-- [ ] Test count: existing `rotaService` tests still pass + ≥2 new
+- [x] `notificarRotasCriadas` calls `agendarVisita` for every created route — covers all 5 call sites, including `reassignRotasByAddress`
+- [x] `NOTIFICACOES_SIMULTANEAS` pool removed; a plain loop replaces it
+- [x] Per-route try/catch retained — one bad row never fails route creation
+- [x] A test asserts route creation triggers **zero** channel calls (AGND-21)
+- [x] Gate check passes: `npm run test:unit` — 341/341
+- [x] Test count: 3 new in `rotaService.test.ts`; `rotaServiceVisita.test.ts` retargeted (15 pass)
+
+**Existing tests changed (user-approved retarget):** `rotaService.test.ts` and
+`rotaServiceVisita.test.ts` asserted `notificarVisita`; both now assert
+`agendarVisita`. Two tests in `rotaServiceVisita.test.ts` covered behaviour this
+task deliberately removed — the per-batch campaign cache and the bounded
+dispatch pool, which existed only because the send was inline. The pool test was
+rewritten to assert every route of a large batch is queued; the cache test was
+dropped, since `agendarVisita` takes no cache.
+
+**Status**: ✅ Complete
 
 **Tests**: unit
 **Gate**: quick

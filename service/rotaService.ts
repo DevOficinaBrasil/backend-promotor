@@ -4,7 +4,7 @@ import CampanhaPromotor, { EstrategiaOrdenacao } from "../entities/CampanhaPromo
 import { In, IsNull } from "typeorm";
 import { optimizeRoute, fetchOSRMRoute } from "../utils/routeOptimizer";
 import { MigrationAwareRepository } from "../utils/migrationRepository";
-import NotificacaoVisitaService, { criarCacheCampanha } from "./notificacaoVisitaService";
+import NotificacaoVisitaService from "./notificacaoVisitaService";
 import { statusEfetivo } from "../utils/statusNotificacaoVisita";
 import { haversineDistanceKm } from "../utils/haversine";
 import GeolocationService from "./geolocationService";
@@ -40,52 +40,29 @@ export default class RotaService {
   }
 
   /**
-   * How many notifications are dispatched at once by notificarRotasCriadas.
+   * Enqueues one notification per newly created route (AGND-01).
    *
-   * Each one costs a handful of queries plus an outbound WhatsApp call with a
-   * 10s timeout, and the whole thing runs inside the route-creation request. A
-   * batch of a few hundred oficinas, sent strictly one at a time, could hold
-   * that request open for minutes. Bounded rather than unbounded so a large
-   * batch cannot open hundreds of provider connections or exhaust the DB pool.
-   */
-  private static readonly NOTIFICACOES_SIMULTANEAS = 5;
-
-  /**
-   * Notifies the workshop for each newly created route, one notification per
-   * route.
+   * Since the outbox took over delivery this is a single insert per route: no
+   * guards, no recipient lookup, no provider call inside the request. The
+   * bounded worker pool that used to live here existed only to stop a few
+   * hundred inline WhatsApp calls from holding the request open for minutes,
+   * and has no purpose against an insert.
    *
-   * Isolated per route: a notification failure never propagates, so route
-   * creation always returns successfully (spec AC10). This catch is belt and
-   * braces on top of notificarVisita's own internal handling.
-   *
-   * Order is not meaningful — each notification is independent and the guards
-   * are keyed per recipient — so routes are processed by a fixed pool of
-   * workers rather than sequentially. Every route in the batch shares one
-   * campaign, so they also share one campaign cache.
+   * Isolated per route all the same: a queueing failure never propagates, so
+   * route creation always returns successfully (spec AC10). Belt and braces on
+   * top of agendarVisita's own internal handling.
    */
   private static async notificarRotasCriadas(rotas: RotaPromotor[]): Promise<void> {
-    const cache = criarCacheCampanha();
-    const fila = [...rotas];
-
-    const trabalhador = async (): Promise<void> => {
-      for (let rota = fila.shift(); rota !== undefined; rota = fila.shift()) {
-        try {
-          await NotificacaoVisitaService.notificarVisita(rota, cache);
-        } catch (erro) {
-          console.error("[rotaService] falha ao notificar visita", {
-            ID_ROTA_PROMOTOR: rota?.ID_ROTA_PROMOTOR,
-            erro: (erro as Error)?.message,
-          });
-        }
+    for (const rota of rotas) {
+      try {
+        await NotificacaoVisitaService.agendarVisita(rota);
+      } catch (erro) {
+        console.error("[rotaService] falha ao agendar notificação de visita", {
+          ID_ROTA_PROMOTOR: rota?.ID_ROTA_PROMOTOR,
+          erro: (erro as Error)?.message,
+        });
       }
-    };
-
-    const trabalhadores = Array.from(
-      { length: Math.min(this.NOTIFICACOES_SIMULTANEAS, fila.length) },
-      trabalhador
-    );
-
-    await Promise.all(trabalhadores);
+    }
   }
 
   /**
