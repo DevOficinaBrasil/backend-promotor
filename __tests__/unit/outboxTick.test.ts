@@ -61,6 +61,13 @@ describe("OutboxNotificacaoService.tick", () => {
     expect(claimBatch).toHaveBeenCalledWith(7, expect.stringContaining("outbox-visita"));
   });
 
+  // Um tique manual não pode se disfarçar de cron em LOCKED_BY.
+  it("stamps the worker suffix it was given", async () => {
+    await OutboxNotificacaoService.tick("-cli");
+
+    expect(claimBatch).toHaveBeenCalledWith(20, expect.stringContaining("outbox-visita-cli-"));
+  });
+
   it("does not dispatch when nothing is due", async () => {
     claimBatch.mockResolvedValue([]);
 

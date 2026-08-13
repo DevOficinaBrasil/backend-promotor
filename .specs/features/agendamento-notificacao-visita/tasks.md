@@ -521,13 +521,27 @@ cleared along the way; only its `afterAll` still errors.
 
 **Done when**:
 
-- [ ] `status` prints counts by STATUS, rows due now, and the next rows with `AVAILABLE_AT`/`ATTEMPTS`/`LOCKED_BY`/`ERRO_ENVIO`
-- [ ] `tick` runs one cycle in the foreground and prints each outcome, ignoring `OUTBOX_VISITA_ENABLED`
-- [ ] `agendar --rota ID` / `--notificacao ID` re-arms a row (`AVAILABLE_AT = now()`, lease cleared, terminal → `PENDENTE` with `ATTEMPTS = 0`)
-- [ ] `agendar` refuses a `CONFIRMADO` row and explains why (AGND-19)
-- [ ] Console worker id is `outbox-visita-cli-${process.pid}`
-- [ ] Gate check passes: `npm run test:unit`
-- [ ] Test count: ≥5 new tests pass (no silent deletions)
+- [x] `status` prints counts by STATUS, rows due now, and the next rows with `AVAILABLE_AT`/`ATTEMPTS`/`LOCKED_BY`/`ERRO_ENVIO`
+- [x] `tick` runs one cycle in the foreground and prints each outcome, ignoring `OUTBOX_VISITA_ENABLED`
+- [x] `agendar --rota ID` / `--notificacao ID` re-arms a row (`AVAILABLE_AT = now()`, lease cleared, terminal → `PENDENTE` with `ATTEMPTS = 0`)
+- [x] `agendar` refuses a `CONFIRMADO` row and explains why (AGND-19)
+- [x] Console worker id is `outbox-visita-cli-${process.pid}`
+- [x] Gate check passes: `npm run test:unit` — 418/418
+- [x] Test count: 12 new tests pass (no silent deletions)
+
+**Bug found by using it**: `tick()` hardcoded the cron's worker id, so a manual
+tick stamped `outbox-visita-<pid>` in `LOCKED_BY` while announcing itself as
+`-cli`. It now takes a suffix; the console passes `"-cli"`. Without that, "which
+copy claimed this row" — the whole point of `LOCKED_BY` — answers wrong for
+every manual run.
+
+**End-to-end run against dev** (mock provider on localhost:4000): notification
+454 went enqueue → claim → guards → recipient → token → channel → `ENVIADO`, with
+`MESSAGE_ID` stored and the lease released. Verified two failure paths on the way:
+`oficina not found` and `rota not found` (a soft-deleted route), both terminal
+with `ATTEMPTS = 1`.
+
+**Status**: ✅ Complete
 
 **Tests**: unit
 **Gate**: quick

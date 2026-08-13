@@ -125,8 +125,8 @@ export default class OutboxNotificacaoService {
    * ATTEMPTS é que aposenta a linha, e ele já foi incrementado no claim, então
    * nem uma linha que derruba o worker toda vez repete para sempre.
    */
-  static async tick(): Promise<void> {
-    const workerId = idDoWorker();
+  static async tick(sufixoWorker = ""): Promise<void> {
+    const workerId = idDoWorker(sufixoWorker);
     let ids: number[] = [];
 
     try {
