@@ -25,7 +25,8 @@ export default class PromotorController {
         CEP,
         ID_CAMPANHA,
         RAIO,
-        EMPRESA_SLUG
+        EMPRESA_SLUG,
+        FILTRO_SEGMENTACAO
       } = req.body;
 
       // Create promoter data object
@@ -40,7 +41,7 @@ export default class PromotorController {
       };
 
       // Call the service to create the promoter with optional campaign associations
-      const { promotor, autoAssignResult } = await PromotorService.createPromotor(promotorData, ID_CAMPANHA, RAIO, EMPRESA_SLUG);
+      const { promotor, autoAssignResult } = await PromotorService.createPromotor(promotorData, ID_CAMPANHA, RAIO, EMPRESA_SLUG, FILTRO_SEGMENTACAO);
 
       return res.status(201).json({
         message: autoAssignResult?.error
@@ -76,7 +77,8 @@ export default class PromotorController {
         CREATED_BY,
         CEP,
         RAIO,
-        EMPRESA_SLUG
+        EMPRESA_SLUG,
+        FILTRO_SEGMENTACAO
       } = req.body;
 
       // Check if promoter exists
@@ -99,7 +101,7 @@ export default class PromotorController {
       if (CEP !== undefined) updateData.CEP = CEP;
 
       // Call the service to update the promoter
-      const result = await PromotorService.updatePromotor(promotorId, updateData, EMPRESA_SLUG);
+      const result = await PromotorService.updatePromotor(promotorId, updateData, EMPRESA_SLUG, FILTRO_SEGMENTACAO);
 
       if (!result) {
         return res.status(404).json({
@@ -281,7 +283,7 @@ export default class PromotorController {
    */
   static linkCampanhaPromotor = async (req: Request, res: Response) => {
     try {
-      const { ID_CAMPANHA, ID_PROMOTOR, RAIO, EMPRESA_SLUG } = req.body;
+      const { ID_CAMPANHA, ID_PROMOTOR, RAIO, EMPRESA_SLUG, FILTRO_SEGMENTACAO } = req.body;
 
       // Validate that promoter exists
       const promotor = await PromotorService.findPromotorById(ID_PROMOTOR);
@@ -292,7 +294,7 @@ export default class PromotorController {
       }
 
       // Call the service to link the promoter with campaigns and auto-assign rotas
-      const { campanhaPromotores, autoAssignResult } = await PromotorService.linkCampanhaPromotor(ID_CAMPANHA, ID_PROMOTOR, RAIO, EMPRESA_SLUG);
+      const { campanhaPromotores, autoAssignResult } = await PromotorService.linkCampanhaPromotor(ID_CAMPANHA, ID_PROMOTOR, RAIO, EMPRESA_SLUG, FILTRO_SEGMENTACAO);
 
       return res.status(201).json({
         message: autoAssignResult?.error

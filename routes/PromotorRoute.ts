@@ -69,7 +69,17 @@ createDocumentedRoute(router, {
   documentation: {
     tags: ['Promotor'],
     summary: 'Create a new promoter',
-    description: 'Creates a new promoter with the provided data',
+    description: `Creates a new promoter with the provided data. Accepts optional FILTRO_SEGMENTACAO to apply CRM segmentation on initial route auto-assignment.
+
+**FILTRO_SEGMENTACAO example:**
+\`\`\`json
+{
+  "if": { "and": [{ "equals": ["contact.professionalOccupation", "Mecânico"] }] },
+  "then": { "decision": "include", "reason": "segment_rule_matched" },
+  "default": { "decision": "exclude", "reason": "default_exclude" }
+}
+\`\`\`
+Available fields from \`GET /segmentacao/getFiltrosSegmentacaoByCampanha/:idCampanha\`. Operators: equals, in, gt, gte, lt, lte, exists, and, or, not.`,
     security: [{ bearerAuth: [] }],
     responses: {
       201: {
@@ -106,7 +116,17 @@ createDocumentedRoute(router, {
   documentation: {
     tags: ['Promotor'],
     summary: 'Update an existing promoter',
-    description: 'Updates a promoter with the provided data',
+    description: `Updates a promoter with the provided data. Accepts optional FILTRO_SEGMENTACAO to update the CRM segmentation filter on all active campanha-promotor links.
+
+**FILTRO_SEGMENTACAO example:**
+\`\`\`json
+{
+  "if": { "equals": ["contact.state", "SP"] },
+  "then": { "decision": "include", "reason": "segment_rule_matched" },
+  "default": { "decision": "exclude", "reason": "default_exclude" }
+}
+\`\`\`
+Send \`null\` to remove the filter. If CEP is also changed, routes will be reassigned using the new filter.`,
     security: [{ bearerAuth: [] }],
     responses: {
       200: {
@@ -255,7 +275,17 @@ createDocumentedRoute(router, {
   documentation: {
     tags: ['Promotor'],
     summary: 'Link promoter to campaign(s)',
-    description: 'Creates a relationship between a promoter and one or more campaigns',
+    description: `Creates a relationship between a promoter and one or more campaigns. Accepts optional FILTRO_SEGMENTACAO to apply CRM segmentation during route auto-assignment.
+
+**FILTRO_SEGMENTACAO example:**
+\`\`\`json
+{
+  "if": { "in": ["contact.state", ["SP", "RJ", "MG"]] },
+  "then": { "decision": "include", "reason": "segment_rule_matched" },
+  "default": { "decision": "exclude", "reason": "default_exclude" }
+}
+\`\`\`
+Available fields from \`GET /segmentacao/getFiltrosSegmentacaoByCampanha/:idCampanha\`.`,
     security: [{ bearerAuth: [] }],
     responses: {
       201: {

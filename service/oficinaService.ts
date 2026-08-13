@@ -166,4 +166,94 @@ export default class OficinaService {
       throw error;
     }
   }
+
+  public static async getSegmentedNearbyOficinas(
+    latitude: number,
+    longitude: number,
+    radiusKm: number,
+    externalUserIds: number[]
+  ): Promise<Array<{
+    ID_OFICINA: number;
+    LATITUDE: number;
+    LONGITUDE: number;
+    NOME_FANTASIA: string;
+    ENDERECO: string;
+    BAIRRO: string;
+    CIDADE: string;
+    ESTADO: string;
+    NUMERO: string;
+    CEP: string;
+    CNPJ: string;
+    TELEFONE: string;
+    distance: number;
+  }>> {
+    if (externalUserIds.length === 0) return [];
+
+    const BATCH_SIZE = 1000;
+    const allResults: any[] = [];
+
+    for (let i = 0; i < externalUserIds.length; i += BATCH_SIZE) {
+      const batch = externalUserIds.slice(i, i + BATCH_SIZE);
+      const placeholders = batch.map((_, idx) => `$${idx + 4}`).join(", ");
+
+      const query = `
+        SELECT DISTINCT ON (ce."id_oficina")
+          ce."id_oficina" AS "ID_OFICINA",
+          ce."latitude" AS "LATITUDE",
+          ce."longitude" AS "LONGITUDE",
+          ce."razao_social" AS "NOME_FANTASIA",
+          CONCAT(ce."logradouro", ' ', ce."rua") AS "ENDERECO",
+          ce."bairro" AS "BAIRRO",
+          ce."cidade" AS "CIDADE",
+          ce."estado" AS "ESTADO",
+          ce."numero" AS "NUMERO",
+          ce."cep" AS "CEP",
+          ce."cnpj" AS "CNPJ",
+          ce."telefone" AS "TELEFONE",
+          (
+            ${EARTH_RADIUS_KM} * acos(
+              cos(radians($1)) * cos(radians(ce."latitude")) *
+              cos(radians(ce."longitude") - radians($2)) +
+              sin(radians($1)) * sin(radians(ce."latitude"))
+            )
+          ) AS distance
+        FROM "MAIN_REGISTER"."USUARIO" us
+        INNER JOIN "dw"."cadastro_empresa" ce
+          ON ce."id_oficina" = us."ID_OFICINA"
+        WHERE us."ID_USUARIO" IN (${placeholders})
+          AND ce."longitude" IS NOT NULL
+          AND ce."latitude" IS NOT NULL
+          AND ce."status_receita" = 'ATIVA'
+          AND (
+            ${EARTH_RADIUS_KM} * acos(
+              cos(radians($1)) * cos(radians(ce."latitude")) *
+              cos(radians(ce."longitude") - radians($2)) +
+              sin(radians($1)) * sin(radians(ce."latitude"))
+            )
+          ) <= $3
+        ORDER BY ce."id_oficina", distance ASC
+      `;
+
+      try {
+        const results = await AppDataSourceSync.query(query, [
+          latitude, longitude, radiusKm, ...batch
+        ]);
+        allResults.push(...results);
+      } catch (error) {
+        console.error(
+          `Error finding segmented nearby oficinas (lat: ${latitude}, lon: ${longitude}, radius: ${radiusKm}km, batch ${i / BATCH_SIZE + 1}):`,
+          error
+        );
+        throw error;
+      }
+    }
+
+    // Deduplica por ID_OFICINA (batches podem ter overlap)
+    const seen = new Set<number>();
+    return allResults.filter((r: any) => {
+      if (seen.has(r.ID_OFICINA)) return false;
+      seen.add(r.ID_OFICINA);
+      return true;
+    });
+  }
 }

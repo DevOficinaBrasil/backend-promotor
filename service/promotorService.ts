@@ -10,6 +10,7 @@ import GeolocationService from "./geolocationService";
 import CampanhaPromotorService from "./campanhaPromotorService";
 import OficinaService from "./oficinaService";
 import RotaService from "./rotaService";
+import SegmentacaoService from "./segmentacaoService";
 import { haversineDistanceKm } from "../utils/haversine";
 import Oficina from "../entities/Oficina";
 
@@ -47,7 +48,8 @@ export default class PromotorService {
     promotorData: Partial<Promotor>, 
     campanhaIds?: number | number[],
     raio?: number,
-    empresaSlug?: string
+    empresaSlug?: string,
+    filtroSegmentacao?: Record<string, unknown> | null
   ): Promise<{ promotor: Promotor; autoAssignResult?: { rotasCriadas: number; error?: string } }> {
     const repo = this.getPromotorRepo();
     
@@ -67,7 +69,7 @@ export default class PromotorService {
     let campanhaPromotores: CampanhaPromotor[] = [];
     let autoAssignResult: { rotasCriadas: number; error?: string } | undefined;
     if (campanhaIds !== undefined) {
-      const result = await this.linkCampanhaPromotor(campanhaIds, promotorSalvo.ID_PROMOTOR!, raio, empresaSlug);
+      const result = await this.linkCampanhaPromotor(campanhaIds, promotorSalvo.ID_PROMOTOR!, raio, empresaSlug, filtroSegmentacao);
       campanhaPromotores = result.campanhaPromotores;
       autoAssignResult = result.autoAssignResult;
     }
@@ -85,12 +87,28 @@ export default class PromotorService {
     for (const cp of campanhaPromotores) {
       try {
         const raio = cp.RAIO ?? 20;
-        const oficinas = await OficinaService.getComunityNearbyOficinas(
-          promotor.LATITUDE!,
-          promotor.LONGITUDE!,
-          raio,
-          empresaSlug
-        );
+        let oficinas;
+
+        if (cp.FILTRO_SEGMENTACAO) {
+          try {
+            oficinas = await this.getOficinasViaSegmentacao(
+              cp.FILTRO_SEGMENTACAO, empresaSlug,
+              promotor.LATITUDE!, promotor.LONGITUDE!, raio
+            );
+          } catch (error) {
+            console.error(
+              `Segmentação CRM falhou para CP ${cp.ID_CAMPANHA_PROMOTOR}, fallback para comunidade:`,
+              error
+            );
+            oficinas = await OficinaService.getComunityNearbyOficinas(
+              promotor.LATITUDE!, promotor.LONGITUDE!, raio, empresaSlug
+            );
+          }
+        } else {
+          oficinas = await OficinaService.getComunityNearbyOficinas(
+            promotor.LATITUDE!, promotor.LONGITUDE!, raio, empresaSlug
+          );
+        }
 
         if (oficinas.length > 0) {
           const assignedOficinas = await RotaService.getOficinasAssignedInCampanha(cp.ID_CAMPANHA!);
@@ -114,6 +132,31 @@ export default class PromotorService {
     return { rotasCriadas: totalRotasCriadas };
   }
 
+  private static async getOficinasViaSegmentacao(
+    dsl: Record<string, unknown>,
+    empresaSlug: string,
+    latitude: number,
+    longitude: number,
+    radiusKm: number
+  ) {
+    const tenantId = await SegmentacaoService.resolveTenantId(empresaSlug);
+    if (!tenantId) throw new Error(`TenantId não encontrado para slug: ${empresaSlug}`);
+
+    const PREVIEW_LIMIT = 5000;
+    const preview = await SegmentacaoService.previewContacts(dsl, tenantId, PREVIEW_LIMIT);
+
+    if (preview.hasMore) {
+      console.warn(
+        `Preview CRM retornou hasMore=true para slug ${empresaSlug}. ` +
+        `Processando apenas ${preview.externalUserIds.length} de ~${preview.estimatedCount} contatos.`
+      );
+    }
+
+    return OficinaService.getSegmentedNearbyOficinas(
+      latitude, longitude, radiusKm, preview.externalUserIds
+    );
+  }
+
   /**
    * Updates an existing promoter in the database
    * @param id - The promoter ID to update
@@ -123,7 +166,8 @@ export default class PromotorService {
   static async updatePromotor(
     id: number, 
     promotorData: Partial<Promotor>, 
-    empresaSlug?: string
+    empresaSlug?: string,
+    filtroSegmentacao?: Record<string, unknown> | null
   ): Promise<{ promotor: Promotor; autoAssignResult?: { rotasCriadas: number; error?: string } } | null> {
     const repo = this.getPromotorRepo();
     
@@ -142,6 +186,11 @@ export default class PromotorService {
 
     const cepAlterado = promotorData.CEP !== undefined && promotorData.CEP !== promotorExistente.CEP;
 
+    // Atualiza FILTRO_SEGMENTACAO em todos os vínculos campanha-promotor ativos
+    if (filtroSegmentacao !== undefined) {
+      await this.updateFiltroEmCampanhaPromotores(id, filtroSegmentacao);
+    }
+
     // Update the promoter fields
     Object.assign(promotorExistente, promotorData);
 
@@ -157,6 +206,18 @@ export default class PromotorService {
     }
     
     return { promotor: promotorAtualizado, autoAssignResult };
+  }
+
+  private static async updateFiltroEmCampanhaPromotores(
+    idPromotor: number,
+    filtroSegmentacao: Record<string, unknown> | null
+  ): Promise<void> {
+    await AppDataSourceSync.query(
+      `UPDATE "CAMPANHAS_OB"."CAMPANHA_PROMOTOR"
+       SET "FILTRO_SEGMENTACAO" = $1, "UPDATED_AT" = NOW()
+       WHERE "ID_PROMOTOR" = $2 AND "DELETED_AT" IS NULL`,
+      [filtroSegmentacao ? JSON.stringify(filtroSegmentacao) : null, idPromotor]
+    );
   }
 
   private static async reassignRotasAfterCepChange(
@@ -415,11 +476,12 @@ export default class PromotorService {
     campanhaIds: number | number[], 
     promotorId: number,
     raio?: number,
-    empresaSlug?: string
+    empresaSlug?: string,
+    filtroSegmentacao?: Record<string, unknown> | null
   ): 
     Promise<{ campanhaPromotores: CampanhaPromotor[]; autoAssignResult?: { rotasCriadas: number; error?: string } }> 
   {
-    const campanhaPromotores = await CampanhaPromotorService.linkCampanhaPromotor(campanhaIds, promotorId, raio);
+    const campanhaPromotores = await CampanhaPromotorService.linkCampanhaPromotor(campanhaIds, promotorId, raio, filtroSegmentacao);
 
     let autoAssignResult: { rotasCriadas: number; error?: string } | undefined;
 

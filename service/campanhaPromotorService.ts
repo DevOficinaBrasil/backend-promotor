@@ -10,7 +10,8 @@ export default class CampanhaPromotorService {
   static async linkCampanhaPromotor(
     campanhaIds: number | number[], 
     promotorId: number,
-    raio?: number
+    raio?: number,
+    filtroSegmentacao?: Record<string, unknown> | null
   ): Promise<CampanhaPromotor[]> {
     const repo = this.getRepo();
     
@@ -34,6 +35,7 @@ export default class CampanhaPromotorService {
           ID_CAMPANHA: campanhaId,
           ID_PROMOTOR: promotorId,
           RAIO: raio ?? 20,
+          FILTRO_SEGMENTACAO: filtroSegmentacao ?? null,
         });
         newRelationships.push(campanhaPromotor);
       }
@@ -93,5 +95,32 @@ export default class CampanhaPromotorService {
       select: ["ID_CAMPANHA"],
     });
     return relationships.map(rel => rel.ID_CAMPANHA!);
+  }
+
+  static async updateFiltroSegmentacao(
+    idCampanhaPromotor: number,
+    filtro: Record<string, unknown> | null
+  ): Promise<CampanhaPromotor | null> {
+    const repo = AppDataSourceSync.getRepository(CampanhaPromotor);
+    const cp = await repo.findOne({ where: { ID_CAMPANHA_PROMOTOR: idCampanhaPromotor } });
+    if (!cp) return null;
+
+    cp.FILTRO_SEGMENTACAO = filtro;
+    await repo.save(cp);
+    return cp;
+  }
+
+  static async getFiltroSegmentacao(
+    idCampanhaPromotor: number
+  ): Promise<{ filtro: Record<string, unknown> | null; empresaSlug: string | null } | null> {
+    const rows = await AppDataSourceSync.query(
+      `SELECT cp."FILTRO_SEGMENTACAO", c."EMPRESA_SLUG"
+       FROM "CAMPANHAS_OB"."CAMPANHA_PROMOTOR" cp
+       INNER JOIN "CAMPANHAS_OB"."CAMPANHA" c ON c."ID_CAMPANHA" = cp."ID_CAMPANHA"
+       WHERE cp."ID_CAMPANHA_PROMOTOR" = $1`,
+      [idCampanhaPromotor]
+    );
+    if (rows.length === 0) return null;
+    return { filtro: rows[0].FILTRO_SEGMENTACAO, empresaSlug: rows[0].EMPRESA_SLUG };
   }
 }
