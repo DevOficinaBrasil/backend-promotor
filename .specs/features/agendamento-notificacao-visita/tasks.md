@@ -9,7 +9,7 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 ---
 
 **Design**: `.specs/features/agendamento-notificacao-visita/design.md`
-**Status**: Draft
+**Status**: In Progress
 
 ---
 
@@ -565,11 +565,13 @@ with `ATTEMPTS = 1`.
 
 **Done when**:
 
-- [ ] `outbox:status`, `outbox:tick`, `outbox:agendar` scripts added
-- [ ] All seven variables documented with defaults and the `'1'` convention called out
-- [ ] `OUTBOX_VISITA_BATCH_SIZE`'s comment states the worst-case rate `batch × copies` per tick (AGND-20)
-- [ ] `OUTBOX_VISITA_ENVIO_IMEDIATO` marked local-only, with its production consequence spelled out
-- [ ] Gate check passes: `npx tsc --noEmit && npm test`
+- [x] `outbox:status`, `outbox:tick`, `outbox:agendar` scripts added
+- [x] All seven variables documented with defaults and the `'1'` convention called out
+- [x] `OUTBOX_VISITA_BATCH_SIZE`'s comment states the worst-case rate `batch × copies` per tick (AGND-20)
+- [x] `OUTBOX_VISITA_ENVIO_IMEDIATO` marked local-only, with its production consequence spelled out
+- [x] Gate check passes: `npx tsc --noEmit` clean; unit 418/418; integration baseline unchanged
+
+**Status**: ✅ Complete
 
 **Tests**: none
 **Gate**: build

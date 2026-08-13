@@ -6,6 +6,10 @@
   "scripts": {
     "start": "npx ts-node app.ts",
     "dev": "nodemon app.ts",
+    "whatsapp:mock": "npx ts-node scripts/whatsappMockServer.ts",
+    "outbox:status": "npx ts-node scripts/outboxConsole.ts status",
+    "outbox:tick": "npx ts-node scripts/outboxConsole.ts tick",
+    "outbox:agendar": "npx ts-node scripts/outboxConsole.ts agendar",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
