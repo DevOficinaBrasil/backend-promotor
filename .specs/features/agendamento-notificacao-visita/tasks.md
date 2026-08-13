@@ -450,13 +450,19 @@ rewriting STATUS there would overwrite the reason the dispatch recorded.
 
 **Done when**:
 
-- [ ] Registers on `OUTBOX_VISITA_CRON_EXPRESSION` (default `*/1 * * * *`)
-- [ ] Does not start unless `OUTBOX_VISITA_ENABLED === '1'`
-- [ ] Does not start under `NODE_ENV=test`, regardless of any other value
-- [ ] Worker id is `outbox-visita-${process.pid}`
-- [ ] Startup logs the parsed enabled flag, so `=true` cannot fail silently
-- [ ] Gate check passes: `npm run test:unit`
-- [ ] Test count: ≥4 new tests pass (no silent deletions)
+- [x] Registers on `OUTBOX_VISITA_CRON_EXPRESSION` (default `*/1 * * * *`)
+- [x] Does not start unless `OUTBOX_VISITA_ENABLED === '1'` — a test asserts `"true"` does **not** register
+- [x] Does not start under `NODE_ENV=test`, regardless of any other value
+- [x] Worker id is `outbox-visita-${process.pid}`
+- [x] Startup logs the parsed enabled flag, so `=true` cannot fail silently
+- [x] Gate check passes: `npm run test:unit` — 405/405
+- [x] Test count: 9 new tests pass (no silent deletions)
+
+**Added beyond the design**: a reentrancy guard, so a batch slower than the cron
+interval cannot stack ticks on itself. It lives in the registration closure, not
+at module level, so it cannot leak between registrations.
+
+**Status**: ✅ Complete
 
 **Tests**: unit
 **Gate**: quick
