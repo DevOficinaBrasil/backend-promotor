@@ -161,12 +161,15 @@ T10 → T11 → T12 → T13 → T14
 
 **Done when**:
 
-- [ ] Returns the same day's hour when called before it, the next day's when called after
-- [ ] Returns the input instant unchanged when `OUTBOX_VISITA_ENVIO_IMEDIATO === '1'`
-- [ ] Hour configurable; invalid/absent env falls back to `9`
-- [ ] Tests inject the "now" instant — no dependence on the wall clock
-- [ ] Gate check passes: `npm run test:unit`
-- [ ] Test count: ≥6 new tests pass (no silent deletions)
+- [x] Returns the same day's hour when called before it, the next day's when called after
+- [x] Returns the input instant unchanged when `OUTBOX_VISITA_ENVIO_IMEDIATO === '1'`
+- [x] Hour configurable; invalid/absent env falls back to `9`
+- [x] Tests inject the "now" instant — no dependence on the wall clock
+- [x] Gate check passes: `npm run test:unit` — 331/331
+- [x] Test count: 10 new tests pass (no silent deletions)
+- [x] Extra: suite re-run under `TZ=UTC`, `Asia/Tokyo`, `Europe/Lisbon`, `America/Sao_Paulo` — 10/10 in each, so the rule does not depend on the process timezone (prod ECS runs UTC)
+
+**Status**: ✅ Complete
 
 **Tests**: unit
 **Gate**: quick
