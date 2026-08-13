@@ -1,6 +1,8 @@
 import { Request, Response } from "express";
 import CampanhaPromotorService from "../service/campanhaPromotorService";
 import SegmentacaoService from "../service/segmentacaoService";
+import OficinaService from "../service/oficinaService";
+import GeolocationService from "../service/geolocationService";
 
 export default class SegmentacaoController {
   /**
@@ -75,13 +77,72 @@ export default class SegmentacaoController {
   };
 
   /**
-   * Retorna preview dos contatos que atendem ao filtro de segmentação salvo,
-   * sem criar rotas. Útil para o operador validar o filtro antes de confirmar.
-   * POST /segmentacao/previewSegmentacao/:idCampanhaPromotor
+   * Retorna as oficinas que seriam atribuídas dado um filtro, raio e localização.
+   * Não cria rotas — serve para o operador validar antes de criar o promotor.
+   * POST /segmentacao/previewOficinasSegmentadas
    *
-   * @body limit — Quantidade máxima de contatos no preview (default 20, max 100)
+   * @body idCampanha — ID da campanha (resolve tenantId internamente)
+   * @body raio — Raio em km a partir da localização
+   * @body filtroSegmentacao — DSL de segmentação do CRM
+   * @body latitude/longitude — Coordenadas de referência (ou CEP para geocodificar)
+   * @body CEP — Alternativa a lat/lon, será geocodificado
    */
-  static previewSegmentacao = async (req: Request, res: Response) => {
+  static previewOficinasSegmentadas = async (req: Request, res: Response) => {
+    try {
+      const { idCampanha, raio, filtroSegmentacao, CEP } = req.body;
+      let { latitude, longitude } = req.body;
+
+      // Geocodifica CEP se lat/lon não fornecidos
+      if (latitude === undefined || longitude === undefined) {
+        const geo = new GeolocationService();
+        const coords = await geo.getLatLongByCep(CEP);
+        if (!coords) {
+          return res.status(400).json({ message: "Não foi possível geocodificar o CEP informado." });
+        }
+        latitude = coords.lat;
+        longitude = coords.long;
+      }
+
+      const validation = SegmentacaoService.validateDsl(filtroSegmentacao);
+      if (!validation.valid) {
+        return res.status(400).json({
+          message: "Filtro de segmentação inválido.",
+          details: validation.errors,
+        });
+      }
+
+      const tenantId = await SegmentacaoService.resolveTenantIdByCampanha(idCampanha);
+      if (!tenantId) {
+        return res.status(404).json({ message: "Campanha não possui EMPRESA_SLUG ou comunidade não encontrada." });
+      }
+
+      const PREVIEW_LIMIT = 100;
+      const preview = await SegmentacaoService.previewContacts(filtroSegmentacao, tenantId, PREVIEW_LIMIT);
+
+      const oficinas = await OficinaService.getSegmentedNearbyOficinas(
+        latitude, longitude, raio, preview.externalUserIds
+      );
+
+      return res.json({
+        totalOficinasEncontradas: oficinas.length,
+        contatosCrmTotal: preview.estimatedCount,
+        contatosCrmHasMore: preview.hasMore,
+        oficinas,
+      });
+    } catch (error) {
+      console.error("Erro ao gerar preview de oficinas segmentadas:", error);
+      return res.status(500).json({
+        message: "Erro interno ao gerar preview de oficinas segmentadas.",
+        error: error instanceof Error ? error.message : "Erro desconhecido"
+      });
+    }
+  };
+
+  /**
+   * Debug: retorna contatos brutos do CRM que atendem ao filtro salvo no vínculo.
+   * POST /segmentacao/previewContatosCrm/:idCampanhaPromotor
+   */
+  static previewContatosCrm = async (req: Request, res: Response) => {
     try {
       const idCampanhaPromotor = parseInt(req.params.idCampanhaPromotor, 10);
       if (isNaN(idCampanhaPromotor)) {
@@ -113,9 +174,9 @@ export default class SegmentacaoController {
         sampleArray: preview.sampleArray,
       });
     } catch (error) {
-      console.error("Erro ao gerar preview de segmentação:", error);
+      console.error("Erro ao gerar preview de contatos CRM:", error);
       return res.status(500).json({
-        message: "Erro interno ao gerar preview de segmentação.",
+        message: "Erro interno ao gerar preview de contatos CRM.",
         error: error instanceof Error ? error.message : "Erro desconhecido"
       });
     }

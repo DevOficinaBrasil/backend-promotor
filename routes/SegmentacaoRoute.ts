@@ -4,6 +4,7 @@ import { createDocumentedRoute } from "../utils/routeDocumentation";
 import {
   UpdateFiltroSegmentacaoSchema,
   PreviewSegmentacaoSchema,
+  PreviewOficinasSegmentadasSchema,
   CampanhaIdParamsSchema,
   CampanhaPromotorIdParamsSchema,
 } from "../schemas/segmentacao";
@@ -109,11 +110,71 @@ Os campos disponíveis (\`contact.professionalOccupation\`, \`contact.state\`, e
   },
 });
 
-// Preview de contatos que atendem ao filtro salvo (sem criar rotas)
+// Preview de oficinas que seriam atribuídas dado filtro + raio + localização
 createDocumentedRoute(router, {
   method: 'post',
-  path: '/previewSegmentacao/:idCampanhaPromotor',
-  handler: SegmentacaoController.previewSegmentacao,
+  path: '/previewOficinasSegmentadas',
+  handler: SegmentacaoController.previewOficinasSegmentadas,
+  basePath: '/segmentacao',
+  middlewares: [],
+  schemas: {
+    body: PreviewOficinasSegmentadasSchema,
+  },
+  documentation: {
+    tags: ['Segmentação'],
+    summary: 'Preview de oficinas segmentadas',
+    description: `Retorna as oficinas que seriam atribuídas ao promotor considerando o filtro de segmentação CRM, o raio e a localização de referência. Não cria rotas — serve para o operador validar antes de criar o promotor.
+
+**Body:**
+\`\`\`json
+{
+  "idCampanha": 123,
+  "raio": 20,
+  "filtroSegmentacao": {
+    "if": { "equals": ["contact.professionalOccupation", "Mecânico"] },
+    "then": { "decision": "include", "reason": "segment_rule_matched" },
+    "default": { "decision": "exclude", "reason": "default_exclude" }
+  },
+  "latitude": -23.55,
+  "longitude": -46.63
+}
+\`\`\`
+
+Ou com CEP (será geocodificado):
+\`\`\`json
+{
+  "idCampanha": 123,
+  "raio": 20,
+  "filtroSegmentacao": { ... },
+  "CEP": "01001-000"
+}
+\`\`\``,
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: {
+        description: 'Preview gerado — totalOficinasEncontradas, contatosCrmTotal, oficinas[]',
+      },
+      400: {
+        description: 'Filtro inválido, CEP não geocodificável ou parâmetros ausentes',
+        schema: ErrorResponseSchema,
+      },
+      404: {
+        description: 'Campanha sem EMPRESA_SLUG ou comunidade não encontrada',
+        schema: ErrorResponseSchema,
+      },
+      500: {
+        description: 'Erro interno',
+        schema: ErrorResponseSchema,
+      },
+    },
+  },
+});
+
+// Debug: preview de contatos brutos do CRM (sem cálculo de oficinas)
+createDocumentedRoute(router, {
+  method: 'post',
+  path: '/previewContatosCrm/:idCampanhaPromotor',
+  handler: SegmentacaoController.previewContatosCrm,
   basePath: '/segmentacao',
   middlewares: [],
   schemas: {
@@ -122,8 +183,8 @@ createDocumentedRoute(router, {
   },
   documentation: {
     tags: ['Segmentação'],
-    summary: 'Preview de contatos segmentados',
-    description: 'Executa o filtro de segmentação salvo no CRM e retorna uma amostra de contatos que atendem aos critérios. Não cria rotas — serve para o operador validar o filtro antes de confirmar.',
+    summary: 'Debug: preview de contatos CRM',
+    description: 'Retorna os contatos brutos do CRM que atendem ao filtro de segmentação salvo no vínculo campanha-promotor. Endpoint de debug — não retorna oficinas, apenas contatos.',
     security: [{ bearerAuth: [] }],
     responses: {
       200: {

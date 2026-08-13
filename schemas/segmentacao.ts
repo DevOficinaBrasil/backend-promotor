@@ -20,6 +20,18 @@ export const PreviewSegmentacaoSchema = z.object({
   limit: z.number().int().min(1).max(100).optional().default(20),
 });
 
+export const PreviewOficinasSegmentadasSchema = z.object({
+  idCampanha: z.number().int().positive(),
+  raio: z.number().positive(),
+  filtroSegmentacao: FiltroSegmentacaoSchema,
+  latitude: z.number().optional(),
+  longitude: z.number().optional(),
+  CEP: z.string().max(30).optional(),
+}).refine(
+  (data) => (data.latitude !== undefined && data.longitude !== undefined) || data.CEP !== undefined,
+  { message: "Informe latitude + longitude ou CEP para referência de localização." }
+);
+
 export const CampanhaIdParamsSchema = z.object({
   idCampanha: z.coerce.number().int().positive(),
 });

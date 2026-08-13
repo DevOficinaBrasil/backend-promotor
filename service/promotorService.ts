@@ -142,7 +142,7 @@ export default class PromotorService {
     const tenantId = await SegmentacaoService.resolveTenantId(empresaSlug);
     if (!tenantId) throw new Error(`TenantId não encontrado para slug: ${empresaSlug}`);
 
-    const PREVIEW_LIMIT = 5000;
+    const PREVIEW_LIMIT = 100;
     const preview = await SegmentacaoService.previewContacts(dsl, tenantId, PREVIEW_LIMIT);
 
     if (preview.hasMore) {
