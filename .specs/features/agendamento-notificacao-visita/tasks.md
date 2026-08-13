@@ -486,9 +486,18 @@ at module level, so it cannot leak between registrations.
 
 **Done when**:
 
-- [ ] `registrarOutboxCron()` invoked once at startup, after the data source is initialised
-- [ ] Server still boots with the flag unset — registration is a no-op, not a crash
-- [ ] Gate check passes: `npx tsc --noEmit && npm test`
+- [x] `registrarOutboxCron()` invoked once at startup, after the data source is initialised
+- [x] Server still boots with the flag unset — registration is a no-op, not a crash
+- [x] Gate check passes: `npx tsc --noEmit` clean; unit 405/405
+
+**Integration baseline** (unchanged by this feature, tracked since T1): dev has
+16 → now 13 failing integration tests, all from the FK
+`NOTIFICACAO_VISITA_ID_ROTA_PROMOTOR_fkey` / `ROTA_PROMOTOR_ID_CAMPANHA_PROMOTOR_fkey`
+blocking fixture teardown — precisely the failure mode `STATE.md` (2026-08-07)
+says those FKs were dropped to avoid. `rotaService.test.ts`'s 3 test failures
+cleared along the way; only its `afterAll` still errors.
+
+**Status**: ✅ Complete
 
 **Tests**: none
 **Gate**: build
