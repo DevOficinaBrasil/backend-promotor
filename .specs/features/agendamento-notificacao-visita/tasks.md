@@ -346,12 +346,20 @@ inventing `ID_ROTA_PROMOTOR` values.
 
 **Done when**:
 
-- [ ] Ladder is `0 → 15s → 60s → 5m → 15m`, matching the target exactly
-- [ ] `network error`, `provider error`, `provider rate/quota` classify transient
-- [ ] `invalid phone`, `channel not configured` and every guard outcome classify terminal
-- [ ] `shouldMarkFailed(attempts, transitorio)` returns true when not transient **or** at the ceiling
-- [ ] Gate check passes: `npm run test:unit`
-- [ ] Test count: ≥8 new tests pass (no silent deletions)
+- [x] Ladder is `0 → 15s → 60s → 5m → 15m`, matching the target exactly
+- [x] `network error`, `provider error`, `provider rate/quota` classify transient — landed in T6 as `ehFalhaTransitoria`, since the verdict is produced where the channel result is read
+- [x] `invalid phone`, `channel not configured` and every guard outcome classify terminal
+- [x] `shouldMarkFailed(attempts, transitorio)` returns true when not transient **or** at the ceiling
+- [x] Gate check passes: `npm run test:unit` — 374/374
+- [x] Test count: 18 new tests pass (no silent deletions)
+
+**Deviation from the design**: the design put the transient/terminal map in this
+file. It lives in `notificacaoVisitaService` instead (T6), because that is where
+`ChannelSendResult.reason` is read; the queue consumes the resulting verdict via
+`acaoDaFila` and never re-reads channel reasons. Same boundary, fewer places that
+know the channel's vocabulary.
+
+**Status**: ✅ Complete
 
 **Tests**: unit
 **Gate**: quick

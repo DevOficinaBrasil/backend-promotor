@@ -1,4 +1,5 @@
 import { AppDataSourceSync } from "../data-source";
+import { DesfechoDespacho } from "./notificacaoVisitaService";
 
 /**
  * Fila de envio das notificações de visita.
@@ -17,6 +18,7 @@ import { AppDataSourceSync } from "../data-source";
 
 const TAMANHO_LOTE_PADRAO = 20;
 const LEASE_MINUTOS_PADRAO = 5;
+const MAX_TENTATIVAS_PADRAO = 3;
 
 function inteiroDeEnv(chave: string, padrao: number): number {
   const bruto = process.env[chave];
@@ -33,6 +35,70 @@ export function tamanhoLote(): number {
 
 export function leaseMinutos(): number {
   return inteiroDeEnv("OUTBOX_VISITA_LOCK_LEASE_MINUTES", LEASE_MINUTOS_PADRAO);
+}
+
+export function maxTentativas(): number {
+  return inteiroDeEnv("OUTBOX_VISITA_MAX_ATTEMPTS", MAX_TENTATIVAS_PADRAO);
+}
+
+/**
+ * Escada de backoff, copiada verbatim de `OutboxService.computeBackoffMs` do
+ * backend-communities. Copiada, e não redesenhada, para que os dois serviços
+ * envelheçam igual: 0 → 15s → 60s → 5min → 15min.
+ */
+export function computeBackoffMs(tentativa: number): number {
+  if (tentativa <= 1) return 0;
+  if (tentativa === 2) return 15_000;
+  if (tentativa === 3) return 60_000;
+  if (tentativa === 4) return 5 * 60_000;
+
+  return 15 * 60_000;
+}
+
+/**
+ * Mesma semântica do alvo: aposenta a linha se a falha não é transitória, ou se
+ * já bateu no teto de tentativas.
+ */
+export function shouldMarkFailed(tentativas: number, transitorio: boolean): boolean {
+  return !transitorio || tentativas >= maxTentativas();
+}
+
+/** O que a fila faz com uma linha, dado o veredito do despacho. */
+export type AcaoFila =
+  | { acao: "ENVIADO"; messageId: string | null; providerMessageId: string | null }
+  | { acao: "CONCLUIDO" }
+  | { acao: "RETENTAR"; erro: string; backoffMs: number }
+  | { acao: "FALHOU"; erro: string };
+
+/**
+ * Traduz o veredito do despacho na ação da fila.
+ *
+ * A fila lê o veredito e nunca os motivos do canal: classificar é decisão de
+ * quem despacha, retentar é decisão de quem enfileira. É essa fronteira que
+ * permite o sistema de entrega compartilhado assumir o agendamento depois sem
+ * herdar a política daqui.
+ *
+ * `DISPENSADO` e `FALHOU_TERMINAL` já foram persistidos pelo despacho, então
+ * para a fila os dois são só "acabou, solta o lease".
+ */
+export function acaoDaFila(desfecho: DesfechoDespacho, tentativas: number): AcaoFila {
+  if (desfecho.desfecho === "ENVIADO") {
+    return {
+      acao: "ENVIADO",
+      messageId: desfecho.messageId,
+      providerMessageId: desfecho.providerMessageId,
+    };
+  }
+
+  if (desfecho.desfecho === "DISPENSADO" || desfecho.desfecho === "FALHOU_TERMINAL") {
+    return { acao: "CONCLUIDO" };
+  }
+
+  if (shouldMarkFailed(tentativas, true)) {
+    return { acao: "FALHOU", erro: desfecho.erro };
+  }
+
+  return { acao: "RETENTAR", erro: desfecho.erro, backoffMs: computeBackoffMs(tentativas) };
 }
 
 /** Identifica qual cópia do servidor está com a linha na mão. */
