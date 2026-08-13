@@ -263,14 +263,26 @@ dropped, since `agendarVisita` takes no cache.
 
 **Done when**:
 
-- [ ] Loads the row by `ID_NOTIFICACAO_VISITA` and runs the existing flow unchanged
-- [ ] Returns a verdict; persists status only for terminal domain outcomes, never retry state
-- [ ] Guard outcomes (`DISPENSADO`) and non-transient failures classify as terminal
-- [ ] An unexpected throw classifies as `FALHOU_TRANSITORIO` so unknown crashes retry rather than silently retiring
-- [ ] `notificarVisita` still works, now as `agendar` + `despachar`
-- [ ] `notificarVisita`'s doc comment states it is for tests and the manual console only (AGND-21)
-- [ ] Gate check passes: `npm run test:unit`
-- [ ] Test count: existing notification tests still pass + ≥6 new
+- [x] Loads the row by `ID_NOTIFICACAO_VISITA` and runs the existing flow unchanged
+- [x] Returns a verdict; persists status only for terminal domain outcomes, never retry state
+- [x] Guard outcomes (`DISPENSADO`) and non-transient failures classify as terminal
+- [x] An unexpected throw classifies as `FALHOU_TRANSITORIO` so unknown crashes retry rather than silently retiring
+- [x] `notificarVisita` still works, now as `agendar` + `despachar`
+- [x] `notificarVisita`'s doc comment states it is for tests and the manual console only (AGND-21)
+- [x] Gate check passes: `npm run test:unit` — 356/356
+- [x] Test count: 15 new in `despacharNotificacao.test.ts`; legacy suite adapted (33 pass)
+
+**Existing tests changed:** `notificacaoVisitaService.test.ts` needed three
+kinds of update. (a) Fixtures: dispatch reloads the row and route by id, so the
+mocks gained `notifRepo.findOne` and a `RotaPromotor` migration repo. (b) The
+enqueued row now carries `AVAILABLE_AT` and `ATTEMPTS`, so the creation
+assertion includes them. (c) **Behaviour, per AGND-11**: a `network error` or an
+unexpected throw used to persist terminal `FALHOU`; it now leaves the row
+`PENDENTE` with the reason recorded, because retiring a notification is the
+queue's decision at the ceiling. Three tests were rewritten to assert the new
+contract; none were weakened or deleted.
+
+**Status**: ✅ Complete
 
 **Tests**: unit
 **Gate**: quick
