@@ -306,15 +306,23 @@ contract; none were weakened or deleted.
 
 **Done when**:
 
-- [ ] Claims only `PENDENTE` + non-null `AVAILABLE_AT` + due + lease-free rows, ordered by `AVAILABLE_AT`, limited by `OUTBOX_VISITA_BATCH_SIZE`
-- [ ] Sets `LOCKED_AT`, `LOCKED_BY` and increments `ATTEMPTS` in the same statement
-- [ ] Due-ness and lease expiry use `now()` from the database, never `Date.now()`
-- [ ] Integration test: two concurrent claims return **disjoint** id sets (AGND-05)
-- [ ] Integration test: a row with null `AVAILABLE_AT` is never claimed (AGND-13)
-- [ ] Integration test: a row whose `LOCKED_AT` is older than the lease is re-claimable (AGND-08)
-- [ ] Test rows use the `__TEST_` convention and are cleaned up in `afterAll`
-- [ ] Gate check passes: `npm run test:unit && npm run test:integration`
-- [ ] Test count: ≥5 new integration tests pass (no silent deletions)
+- [x] Claims only `PENDENTE` + non-null `AVAILABLE_AT` + due + lease-free rows, ordered by `AVAILABLE_AT`, limited by `OUTBOX_VISITA_BATCH_SIZE`
+- [x] Sets `LOCKED_AT`, `LOCKED_BY` and increments `ATTEMPTS` in the same statement
+- [x] Due-ness and lease expiry use `now()` from the database, never `Date.now()`
+- [x] Integration test: two concurrent claims return **disjoint** id sets (AGND-05)
+- [x] Integration test: a row with null `AVAILABLE_AT` is never claimed (AGND-13)
+- [x] Integration test: a row whose `LOCKED_AT` is older than the lease is re-claimable (AGND-08)
+- [x] Test rows hang off real routes with no notification, and only the notifications created here are deleted in `afterAll`
+- [x] Gate check passes: unit 356/356 + 14/14 new integration
+- [x] Test count: 14 new integration tests pass (no silent deletions)
+
+**Environment finding**: dev has the FK `NOTIFICACAO_VISITA_ID_ROTA_PROMOTOR_fkey`,
+which `STATE.md` (2026-08-07) records as removed and which
+`scripts/migration-notificacao-visita.sql` does not create. Dev's schema diverges
+from the versioned migration, so the tests hang off real routes instead of
+inventing `ID_ROTA_PROMOTOR` values.
+
+**Status**: ✅ Complete
 
 **Tests**: integration
 **Gate**: full
