@@ -1,6 +1,6 @@
 import { AppDataSourceSync } from "../data-source";
 import NotificacaoVisita, { StatusNotificacaoVisita } from "../entities/NotificacaoVisita";
-import { DesfechoDespacho } from "./notificacaoVisitaService";
+import NotificacaoVisitaService, { DesfechoDespacho } from "./notificacaoVisitaService";
 
 /**
  * Fila de envio das notificações de visita.
@@ -110,6 +110,101 @@ export function idDoWorker(sufixo = ""): string {
 export default class OutboxNotificacaoService {
   private static repo() {
     return AppDataSourceSync.getRepository(NotificacaoVisita);
+  }
+
+  /**
+   * Um ciclo da fila: reivindica o que venceu, despacha cada linha e grava o
+   * desfecho.
+   *
+   * Nunca lança (AGND-12). Roda dentro do processo da API, então uma falha de
+   * banco no meio da madrugada não pode derrubar quem atende request. Cada linha
+   * tem seu próprio try/catch: uma oficina com dado ruim não custa o lote
+   * inteiro.
+   *
+   * Uma exceção no despacho vira nova tentativa, não fim de linha — o teto de
+   * ATTEMPTS é que aposenta a linha, e ele já foi incrementado no claim, então
+   * nem uma linha que derruba o worker toda vez repete para sempre.
+   */
+  static async tick(): Promise<void> {
+    const workerId = idDoWorker();
+    let ids: number[] = [];
+
+    try {
+      ids = await OutboxNotificacaoService.claimBatch(tamanhoLote(), workerId);
+    } catch (erro) {
+      console.error("[outboxNotificacao] falha no tick ao reivindicar lote", {
+        workerId,
+        erro: (erro as Error)?.message,
+      });
+      return;
+    }
+
+    if (ids.length === 0) {
+      return;
+    }
+
+    console.log("[outboxNotificacao] notificações reivindicadas", {
+      workerId,
+      quantidade: ids.length,
+      ids,
+    });
+
+    for (const id of ids) {
+      try {
+        await OutboxNotificacaoService.processarLinha(id);
+      } catch (erro) {
+        // O catch de dentro já cobre o despacho; este pega falha do próprio
+        // registro do desfecho, que não pode interromper o resto do lote.
+        console.error("[outboxNotificacao] falha ao processar notificação", {
+          ID_NOTIFICACAO_VISITA: id,
+          erro: (erro as Error)?.message,
+        });
+      }
+    }
+  }
+
+  /** Despacha uma linha reivindicada e grava o desfecho. */
+  private static async processarLinha(id: number): Promise<void> {
+    const linha = await this.repo().findOne({ where: { ID_NOTIFICACAO_VISITA: id } });
+    const tentativas = linha?.ATTEMPTS ?? 1;
+    const idRota = linha?.ID_ROTA_PROMOTOR ?? null;
+
+    let desfecho: DesfechoDespacho;
+    try {
+      desfecho = await NotificacaoVisitaService.despacharNotificacao(id);
+    } catch (erro) {
+      // despacharNotificacao já promete não lançar; se lançar mesmo assim, a
+      // falha é desconhecida e portanto transitória — aposentar em silêncio
+      // seria perder uma notificação por um bug nosso.
+      desfecho = {
+        desfecho: "FALHOU_TRANSITORIO",
+        erro: `dispatch throw: ${(erro as Error)?.message}`,
+      };
+    }
+
+    const acao = acaoDaFila(desfecho, tentativas);
+
+    switch (acao.acao) {
+      case "ENVIADO":
+        await OutboxNotificacaoService.marcarEnviado(id, acao.messageId, acao.providerMessageId);
+        break;
+      case "CONCLUIDO":
+        await OutboxNotificacaoService.liberarLease(id);
+        break;
+      case "RETENTAR":
+        await OutboxNotificacaoService.marcarRetentativa(id, acao.erro, acao.backoffMs);
+        break;
+      case "FALHOU":
+        await OutboxNotificacaoService.marcarFalhou(id, acao.erro);
+        break;
+    }
+
+    console.log("[outboxNotificacao] desfecho da notificação", {
+      ID_NOTIFICACAO_VISITA: id,
+      ID_ROTA_PROMOTOR: idRota,
+      tentativas,
+      acao: acao.acao,
+    });
   }
 
   /**
