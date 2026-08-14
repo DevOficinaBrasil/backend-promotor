@@ -3,6 +3,7 @@ import RotaService from "../../service/rotaService";
 import { AppDataSourceSync } from "../../data-source";
 import NotificacaoVisita, { StatusNotificacaoVisita } from "../../entities/NotificacaoVisita";
 import Oficina from "../../entities/Oficina";
+import Empresa from "../../entities/CadastroEmpresa";
 import RotaPromotor from "../../entities/RotaPromotor";
 import Community from "../../entities/Community";
 import {
@@ -540,6 +541,7 @@ describe("VisitaConfirmacaoService.atualizarEndereco", () => {
   let notifRepo: { findOne: jest.Mock; update: jest.Mock };
   let rotaRepo: { findOne: jest.Mock };
   let oficinaRepo: { findOne: jest.Mock; update: jest.Mock };
+  let empresaRepo: { update: jest.Mock };
   let ordemDeChamadas: string[];
 
   const IP = "203.0.113.7";
@@ -590,13 +592,34 @@ describe("VisitaConfirmacaoService.atualizarEndereco", () => {
         return { affected: 1 };
       }),
     };
+    empresaRepo = {
+      update: jest.fn(async () => {
+        ordemDeChamadas.push("empresa");
+        return { affected: 1 };
+      }),
+    };
 
     (AppDataSourceSync.getRepository as jest.Mock).mockImplementation((entidade: unknown) => {
       if (entidade === NotificacaoVisita) return notifRepo;
       if (entidade === RotaPromotor) return rotaRepo;
       if (entidade === Oficina) return oficinaRepo;
+      if (entidade === Empresa) return empresaRepo;
       throw new Error("repositório inesperado no teste");
     });
+
+    // The manager handed to the transaction routes each update to the entity's
+    // repository, so a rejected update propagates out of the transaction the
+    // way a real rollback does.
+    (AppDataSourceSync.transaction as jest.Mock).mockImplementation(
+      async (executar: (manager: unknown) => Promise<unknown>) => {
+        ordemDeChamadas.push("transacao:inicio");
+        const manager = {
+          update: (entidade: unknown, criterio: unknown, valores: unknown) =>
+            (AppDataSourceSync.getRepository as jest.Mock)(entidade).update(criterio, valores),
+        };
+        return await executar(manager);
+      }
+    );
 
     jest.spyOn(console, "error").mockImplementation(() => {});
   });
@@ -707,11 +730,133 @@ describe("VisitaConfirmacaoService.atualizarEndereco", () => {
     expect(resultado.state).not.toBe("CONFIRMED");
   });
 
-  // Design: "the Oficina write happens first and must succeed".
-  it("writes the Oficina row before transitioning the notification", async () => {
+  // Design: "the address write happens first and must succeed".
+  // VISIB-07: both writes live inside a single transaction, before the transition.
+  it("writes both address rows inside one transaction before transitioning the notification", async () => {
     await VisitaConfirmacaoService.atualizarEndereco(payload, enderecoCorrigido, IP, AGORA);
 
-    expect(ordemDeChamadas).toEqual(["oficina", "notificacao"]);
+    expect(ordemDeChamadas).toEqual([
+      "transacao:inicio",
+      "oficina",
+      "empresa",
+      "notificacao",
+    ]);
+  });
+
+  // VISIB-07 / P1 endereço AC1: "SHALL atualizar MAIN_REGISTER.OFICINA e
+  // dw.cadastro_empresa para a mesma oficina, dentro de uma única transação."
+  describe("escrita em dw.cadastro_empresa (VISIB-07, VISIB-08, VISIB-11)", () => {
+    it("grava o endereço dividido usando as propriedades da entity, não os nomes das colunas", async () => {
+      await VisitaConfirmacaoService.atualizarEndereco(payload, enderecoCorrigido, IP, AGORA);
+
+      expect(empresaRepo.update).toHaveBeenCalledWith(
+        { ID_OFICINA },
+        {
+          LOGRADOURO: "Avenida",
+          ENDERECO: "Nova",
+          NUMERO: "500",
+          COMPLEMENTO: null,
+          BAIRRO: "Centro",
+          CIDADE: "Campinas",
+          ESTADO: "SP",
+          CEP: "13010-000",
+        }
+      );
+
+      const escrito = empresaRepo.update.mock.calls[0][1] as Record<string, unknown>;
+      // As colunas do dw são `logradouro` e `rua`; passar esses nomes seria
+      // ignorado em silêncio pelo TypeORM.
+      expect(escrito).not.toHaveProperty("logradouro");
+      expect(escrito).not.toHaveProperty("rua");
+    });
+
+    // AC4 do split: primeiro token desconhecido -> logradouro nulo, string inteira em rua.
+    it("grava logradouro nulo e a string inteira quando o tipo não é reconhecido", async () => {
+      await VisitaConfirmacaoService.atualizarEndereco(
+        payload,
+        { ...enderecoCorrigido, ENDERECO: "Chacara do Ze" },
+        IP,
+        AGORA
+      );
+
+      const escrito = empresaRepo.update.mock.calls[0][1] as Record<string, unknown>;
+      expect(escrito.LOGRADOURO).toBeNull();
+      expect(escrito.ENDERECO).toBe("Chacara do Ze");
+    });
+
+    // AC7: "SHALL NOT alterar dw.cadastro_empresa.latitude e .longitude".
+    it("não toca em LATITUDE nem LONGITUDE", async () => {
+      await VisitaConfirmacaoService.atualizarEndereco(payload, enderecoCorrigido, IP, AGORA);
+
+      const escrito = empresaRepo.update.mock.calls[0][1] as Record<string, unknown>;
+      expect(escrito).not.toHaveProperty("LATITUDE");
+      expect(escrito).not.toHaveProperty("LONGITUDE");
+    });
+
+    // Edge case: "IF a oficina não tem linha em dw.cadastro_empresa THEN ...
+    // SHALL NOT falhar a confirmação por causa da linha ausente no dw."
+    it("confirma a visita mesmo quando o update no dw afeta 0 linhas", async () => {
+      empresaRepo.update.mockResolvedValue({ affected: 0 });
+
+      const resultado = await VisitaConfirmacaoService.atualizarEndereco(
+        payload,
+        enderecoCorrigido,
+        IP,
+        AGORA
+      );
+
+      expect(resultado).toEqual({
+        state: "CONFIRMED",
+        confirmadoEm: AGORA,
+        enderecoAtualizado: true,
+      });
+    });
+  });
+
+  // VISIB-13 / AC2: "IF a atualização de qualquer uma das duas tabelas falha
+  // THEN o sistema SHALL reverter ambas, SHALL NOT registrar a confirmação, e
+  // SHALL responder 500 com error ADDRESS_UPDATE_FAILED."
+  describe("falha parcial reverte as duas escritas (VISIB-13)", () => {
+    it("devolve ADDRESS_UPDATE_FAILED e não confirma quando o update no dw falha", async () => {
+      empresaRepo.update.mockRejectedValue(
+        new Error('permission denied for table "cadastro_empresa"')
+      );
+
+      const resultado = await VisitaConfirmacaoService.atualizarEndereco(
+        payload,
+        enderecoCorrigido,
+        IP,
+        AGORA
+      );
+
+      expect(resultado).toEqual({ state: "ADDRESS_UPDATE_FAILED" });
+      expect(notifRepo.update).not.toHaveBeenCalled();
+    });
+
+    it("propaga o erro para fora da transação, para o rollback alcançar as duas tabelas", async () => {
+      empresaRepo.update.mockRejectedValue(new Error("deadlock detected"));
+
+      await VisitaConfirmacaoService.atualizarEndereco(payload, enderecoCorrigido, IP, AGORA);
+
+      const executarTransacao = (AppDataSourceSync.transaction as jest.Mock).mock.results[0]
+        .value as Promise<unknown>;
+      await expect(executarTransacao).rejects.toThrow("deadlock detected");
+    });
+
+    it("não grava no dw quando o update em OFICINA falha antes", async () => {
+      oficinaRepo.update.mockRejectedValue(new Error("permission denied"));
+
+      const resultado = await VisitaConfirmacaoService.atualizarEndereco(
+        payload,
+        enderecoCorrigido,
+        IP,
+        AGORA
+      );
+
+      expect(resultado).toEqual({ state: "ADDRESS_UPDATE_FAILED" });
+      expect(empresaRepo.update).not.toHaveBeenCalled();
+      expect(notifRepo.update).not.toHaveBeenCalled();
+    });
   });
 
   // AC31 applies "the same transition as AC19", so AC20's rejection rules hold:
@@ -788,7 +933,13 @@ describe("VisitaConfirmacaoService.atualizarEndereco", () => {
 
       await VisitaConfirmacaoService.atualizarEndereco(payload, enderecoCorrigido, IP, AGORA);
 
-      expect(ordemDeChamadas).toEqual(["oficina", "notificacao", "reassign"]);
+      expect(ordemDeChamadas).toEqual([
+        "transacao:inicio",
+        "oficina",
+        "empresa",
+        "notificacao",
+        "reassign",
+      ]);
     });
 
     it("does not reassign when the CEP is unchanged", async () => {

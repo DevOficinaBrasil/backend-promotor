@@ -125,7 +125,7 @@ T13 → T14 → T15 → T16
 
 ---
 
-### T2: Gravar o endereço corrigido nas duas tabelas, em transação
+### T2: Gravar o endereço corrigido nas duas tabelas, em transação ✅
 
 **What**: `atualizarEndereco` passa a atualizar `MAIN_REGISTER.OFICINA` e `dw.cadastro_empresa` dentro de uma única transação, com o `ENDERECO` dividido por `dividirLogradouro`.
 **Where**: `service/visitaConfirmacaoService.ts`
@@ -140,16 +140,16 @@ T13 → T14 → T15 → T16
 
 **Done when**:
 
-- [ ] Os dois `update` rodam dentro de `AppDataSourceSync.transaction`
-- [ ] O `update` de `Empresa` usa **propriedades da entity**: `LOGRADOURO` (coluna `logradouro`) e `ENDERECO` (coluna `rua`) — não os nomes das colunas
-- [ ] `NUMERO`, `COMPLEMENTO`, `BAIRRO`, `CIDADE`, `ESTADO` e `CEP` vão sem transformação para as duas tabelas
-- [ ] `latitude` e `longitude` de `dw.cadastro_empresa` não são tocadas
-- [ ] Falha em qualquer um dos dois `update` reverte ambos, devolve `ADDRESS_UPDATE_FAILED` e não confirma a visita
-- [ ] Oficina sem linha em `dw.cadastro_empresa` não falha a confirmação (0 linhas afetadas não é erro)
-- [ ] Unit: transação chamada, dois updates com os nomes de propriedade certos, rollback no erro de cada um dos dois updates
-- [ ] Integração: `PUT /visita/endereco` grava de fato nas duas tabelas e a visita fica `CONFIRMADO`; caso de erro não deixa nenhuma das duas gravada
-- [ ] Gate check passes: `npm run test:unit && npm run test:integration`
-- [ ] Test count: novos testes passam; as 3 suítes de integração legadas seguem falhando só no teardown por FK (baseline)
+- [x] Os dois `update` rodam dentro de `AppDataSourceSync.transaction`
+- [x] O `update` de `Empresa` usa **propriedades da entity**: `LOGRADOURO` (coluna `logradouro`) e `ENDERECO` (coluna `rua`) — não os nomes das colunas
+- [x] `NUMERO`, `COMPLEMENTO`, `BAIRRO`, `CIDADE`, `ESTADO` e `CEP` vão sem transformação para as duas tabelas
+- [x] `latitude` e `longitude` de `dw.cadastro_empresa` não são tocadas
+- [x] Falha em qualquer um dos dois `update` reverte ambos, devolve `ADDRESS_UPDATE_FAILED` e não confirma a visita
+- [x] Oficina sem linha em `dw.cadastro_empresa` não falha a confirmação (0 linhas afetadas não é erro)
+- [x] Unit: transação chamada, dois updates com os nomes de propriedade certos, rollback no erro de cada um dos dois updates
+- [x] Integração: `PUT /visita/endereco` grava de fato nas duas tabelas e a visita fica `CONFIRMADO`; caso de erro não deixa nenhuma das duas gravada
+- [x] Gate check passes: `npm run test:unit && npm run test:integration`
+- [x] Test count: novos testes passam; as 3 suítes de integração legadas seguem falhando só no teardown por FK (baseline)
 
 **Tests**: integration
 **Gate**: full

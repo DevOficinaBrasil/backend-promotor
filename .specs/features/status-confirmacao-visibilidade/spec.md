@@ -182,15 +182,15 @@ Levantado no código, não presumido:
 | VISIB-04 | P1: Promotor vê o status antes de sair | AC1-AC2 | Design | Pending |
 | VISIB-05 | P1: Promotor vê o status antes de sair | AC4 | Design | Pending |
 | VISIB-06 | P1 dashboard AC5, P1 promotor AC5, Edge cases (legado) | - | Design | Pending |
-| VISIB-07 | P1: Endereço corrigido chega ao promotor | AC1, AC5, AC8 | Design | Pending |
-| VISIB-08 | P1: Endereço corrigido chega ao promotor | AC7 | Design | Pending |
+| VISIB-07 | P1: Endereço corrigido chega ao promotor | AC1, AC5, AC8 | T2 | Done |
+| VISIB-08 | P1: Endereço corrigido chega ao promotor | AC7 | T2 | Done |
 | VISIB-09 | P2: Visão gerencial (regressão de schema) | AC4 | Design | Pending |
 | VISIB-10 | P2: Visão gerencial | AC7, AC8 | Design | Pending |
 | VISIB-14 | P2: Tipos de rota nos frontends | AC5 | Design | Pending |
 | VISIB-15 | P2: Mapper do `frontend-promotor` preserva o campo | AC6 | Design | Pending |
 | VISIB-11 | P1: Endereço corrigido — split `logradouro`/`rua` | AC3, AC4 | T1 | Done |
 | VISIB-12 | P1: Endereço corrigido — `TRIM` na leitura | AC6 | Design | Pending |
-| VISIB-13 | P1: Endereço corrigido — transação e falha parcial | AC2 | Design | Pending |
+| VISIB-13 | P1: Endereço corrigido — transação e falha parcial | AC2 | T2 | Done |
 
 **ID format:** `VISIB-[NUMBER]`
 

@@ -1,7 +1,10 @@
 import { MoreThan } from "typeorm";
+import { QueryDeepPartialEntity } from "typeorm/query-builder/QueryPartialEntity";
 import { AppDataSourceSync } from "../data-source";
 import NotificacaoVisita, { StatusNotificacaoVisita } from "../entities/NotificacaoVisita";
 import Oficina from "../entities/Oficina";
+import Empresa from "../entities/CadastroEmpresa";
+import { dividirLogradouro } from "../utils/logradouro";
 import RotaPromotor from "../entities/RotaPromotor";
 import Community from "../entities/Community";
 import RotaService from "./rotaService";
@@ -168,12 +171,18 @@ export default class VisitaConfirmacaoService {
    * Three guarantees, in this order:
    * 1. Only the seven allowlisted address columns are writable. Any other key
    *    is rejected outright and nothing is written (AC32).
-   * 2. The Oficina write happens before the CONFIRMADO transition and must
+   * 2. The address write happens before the CONFIRMADO transition and must
    *    succeed. A rejected write — including a missing UPDATE grant on
    *    MAIN_REGISTER — leaves the notification STATUS untouched and surfaces a
    *    distinct error, never a false confirmation (AC33).
    * 3. LATITUDE/LONGITUDE are deliberately left alone: no geocoding provider
    *    exists in this codebase, so a corrected address keeps its old pin.
+   *
+   * The correction lands on both address sources in a single transaction
+   * (VISIB-07, VISIB-13): MAIN_REGISTER.OFICINA, read by GET /campanha/:id, and
+   * dw.cadastro_empresa, read by the two raw-SQL campaign queries. Writing only
+   * the first is what made a corrected address invisible to the promoter. A
+   * failure on either side rolls both back and the visit stays unconfirmed.
    *
    * @param agora - injectable clock so the expiry boundary is testable
    */
@@ -221,8 +230,29 @@ export default class VisitaConfirmacaoService {
       return { state: "TOKEN_INVALID" };
     }
 
+    // dw.cadastro_empresa splits the single-line address in two columns:
+    // `logradouro` is the type and `rua` is the name. Entity property names,
+    // not column names — TypeORM ignores unknown keys without complaining.
+    const { logradouro, rua } = dividirLogradouro((endereco.ENDERECO as string | null) ?? null);
+
     try {
-      await AppDataSourceSync.getRepository(Oficina).update({ ID_OFICINA: oficina.ID_OFICINA }, endereco);
+      await AppDataSourceSync.transaction(async (manager) => {
+        await manager.update(Oficina, { ID_OFICINA: oficina.ID_OFICINA }, endereco);
+        await manager.update(
+          Empresa,
+          { ID_OFICINA: oficina.ID_OFICINA },
+          {
+            LOGRADOURO: logradouro,
+            ENDERECO: rua,
+            NUMERO: endereco.NUMERO,
+            COMPLEMENTO: endereco.COMPLEMENTO,
+            BAIRRO: endereco.BAIRRO,
+            CIDADE: endereco.CIDADE,
+            ESTADO: endereco.ESTADO,
+            CEP: endereco.CEP,
+          } as QueryDeepPartialEntity<Empresa>
+        );
+      });
     } catch (erro) {
       console.error("[visitaConfirmacao] falha ao atualizar endereço da oficina", {
         ID_NOTIFICACAO_VISITA: payload.ID_NOTIFICACAO_VISITA,
