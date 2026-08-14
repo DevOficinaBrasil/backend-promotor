@@ -311,7 +311,7 @@ T13 → T14 → T15 → T16
 
 ---
 
-### T8: Exibir o badge na distribuição de rotas (ob-ads)
+### T8: Exibir o badge na distribuição de rotas (ob-ads) ✅
 
 **What**: Consumir o badge na tela de distribuição de rotas.
 **Where**: `ob-ads/app/(dashboard)/dashboard/campanha-para-promotores/components/RotasDistributionSection.tsx`
@@ -326,9 +326,9 @@ T13 → T14 → T15 → T16
 
 **Done when**:
 
-- [ ] Badge aparece por rota, alimentado por `rota.notificacaoVisita`
-- [ ] Nenhuma chamada de API nova — o dado vem do payload de `GET /campanha/:id` já carregado
-- [ ] Gate check passes: `npm run lint && npm run build`
+- [x] Badge aparece por rota, alimentado por `rota.notificacaoVisita`. Nota de implementação: esta tela não renderiza uma lista de rotas — a única listagem por rota é a de oficinas (`:696`), então o badge é ligado por `ID_OFICINA` a partir de um índice montado com `vinculo.rotasPromotor`
+- [x] Nenhuma chamada de API nova — o dado vem do payload de `GET /campanha/:id` já carregado
+- [x] Gate check passes: `npm run lint && npm run build`
 
 **Tests**: none
 **Gate**: build
