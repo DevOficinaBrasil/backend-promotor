@@ -283,7 +283,7 @@ T13 → T14 → T15 → T16
 
 ---
 
-### T7: Criar o badge de status de confirmação (ob-ads)
+### T7: Criar o badge de status de confirmação (ob-ads) ✅
 
 **What**: Componente único usado pelas duas telas, para não divergirem.
 **Where**: `ob-ads/app/(dashboard)/dashboard/campanha-para-promotores/components/StatusConfirmacaoBadge.tsx`
@@ -298,11 +298,11 @@ T13 → T14 → T15 → T16
 
 **Done when**:
 
-- [ ] Renderiza os três estados de forma visualmente distinta
-- [ ] Estado `nao-recebe` é distinto tanto de confirmada quanto de pendente
-- [ ] `null` do mapeamento não renderiza nada
-- [ ] Data de confirmação exibida quando `CONFIRMADO_EM` existe; ausente não vira `null` na tela
-- [ ] Gate check passes: `npm run lint && npm run build`
+- [x] Renderiza os três estados de forma visualmente distinta (cor + ícone: emerald/`CheckCircle2`, amber/`Clock`, red/`XCircle`)
+- [x] Estado `nao-recebe` é distinto tanto de confirmada quanto de pendente
+- [x] `null` do mapeamento não renderiza nada
+- [x] Data de confirmação exibida quando `CONFIRMADO_EM` existe; ausente ou inválida cai no rótulo sem data
+- [x] Gate check passes: `npm run lint && npm run build`
 
 **Tests**: none
 **Gate**: build
