@@ -49,10 +49,12 @@ Decisão do usuário: componentes ficam no gate de build; o que é testado de ve
 | Quick (backend) | Tasks com teste unitário apenas | `npm run test:unit` |
 | Full (backend) | Tasks com teste de integração | `npm run test:unit && npm run test:integration` |
 | Build (backend) | Tasks de entity/schema ou fim de fase | `npx tsc --noEmit && npm test` |
-| Quick (ob-ads) | Tasks com teste unitário | `npm test` |
+| Quick (ob-ads) | Tasks com teste unitário | `npm test` — **quebrado hoje**, ver nota abaixo; passa a valer a partir da T6 |
 | Build (ob-ads) | Tasks de tipo/componente | `npm run lint && npm run build` |
 | Quick (frontend-promotor) | Tasks com teste unitário (após T12) | `npm test` |
 | Build (frontend-promotor) | Tasks de tipo/componente | `npm run lint && npm run build` |
+
+**Nota — jest do `ob-ads` está quebrado antes desta feature**: `jest.config.js` usa `babel-jest` para `.js|.jsx|.ts|.tsx`, mas o repo não tem nenhum arquivo de config do babel (`.babelrc`/`babel.config.js` não existem). Os presets estão no `package.json` e nunca são aplicados, então `npm test` morre no parser: `1 failed, 0 total`. Não há `@babel/preset-typescript` e o `moduleNameMapper` não mapeia o alias `@/`. Decisão do usuário: consertar dentro da T6 com `next/jest` (SWC, resolve TS e o alias). O gate Quick (ob-ads) só é confiável a partir da T6.
 
 **Baseline conhecido**: backend-promotor tem 432 testes unitários verdes em 29 suites. Três suítes de integração legadas (`rotaService`, `campanhaPromotorService`, `campanhaResultsService`) já falham no teardown por FK — pré-existente, registrado no `STATE.md`. O gate Full compara contra esse baseline, não contra verde absoluto.
 
@@ -221,7 +223,7 @@ T13 → T14 → T15 → T16
 
 ---
 
-### T5: Declarar o campo no tipo de rota do vínculo (ob-ads)
+### T5: Declarar o campo no tipo de rota do vínculo (ob-ads) ✅
 
 **What**: `CampanhaPromotorRota` ganha `notificacaoVisita` opcional.
 **Where**: `ob-ads/types/vinculo.ts`
@@ -236,9 +238,9 @@ T13 → T14 → T15 → T16
 
 **Done when**:
 
-- [ ] `notificacaoVisita?: { STATUS: string; CONFIRMADO_EM?: string | null }` declarado
-- [ ] Opcional, porque rota sem notificação e rota legada não trazem o campo
-- [ ] Gate check passes: `npm run lint && npm run build`
+- [x] `notificacaoVisita?: { STATUS: string; CONFIRMADO_EM?: string | null }` declarado
+- [x] Opcional, porque rota sem notificação e rota legada não trazem o campo
+- [x] Gate check passes: `npm run lint && npm run build`
 
 **Tests**: none
 **Gate**: build
@@ -260,13 +262,19 @@ T13 → T14 → T15 → T16
 - MCP: NONE
 - Skill: NONE
 
+**Pré-requisito dentro desta task** (decisão do usuário): o `npm test` do `ob-ads` está quebrado antes desta feature — `babel-jest` sem nenhum arquivo de config do babel, `1 failed, 0 total`. Consertar aqui, com `next/jest`, senão esta task não tem gate. Arquivos extras autorizados só para isso: `ob-ads/jest.config.js`, `ob-ads/jest.setup.js`, `ob-ads/package.json` (dependência).
+
 **Done when**:
 
+- [ ] `jest.config.js` migrado para `next/jest`, que resolve TypeScript e o alias `@/` via SWC
+- [ ] `npm test` volta a executar: o teste existente `app/(dashboard)/dashboard/Email.test.js` roda em vez de morrer no parser
 - [ ] `CONFIRMADO` → `confirmada`; `PENDENTE`, `ENVIADO`, `DISPENSADO` → `pendente`; `EXPIRADO`, `FALHOU` → `nao-recebe`
 - [ ] Campo ausente, `undefined` ou status desconhecido → `null` (não renderiza indicador, não vira pendente)
 - [ ] Testes cobrem os 7 valores do enum, o ausente e um valor desconhecido
 - [ ] Gate check passes: `npm test`
-- [ ] Test count: novos testes passam
+- [ ] Test count: novos testes passam, e o teste pré-existente deixa de falhar
+
+**Se `Email.test.js` falhar por motivo próprio depois da migração** (asserção velha, não parser), não conserte nem delete: reporte. O escopo aqui é destravar o runner, não adotar teste alheio.
 
 **Tests**: unit
 **Gate**: quick
@@ -412,7 +420,7 @@ T13 → T14 → T15 → T16
 **What**: Instalar e configurar jest para testar funções puras — sem RTL, sem DOM.
 **Where**: `frontend-promotor/jest.config.js`
 **Depends on**: None
-**Reuses**: `ob-ads/jest.config.js` como referência de configuração
+**Reuses**: `next/jest` (mesma abordagem adotada na T6; NÃO copiar a config babel do `ob-ads`, que estava quebrada)
 **Requirement**: VISIB-15
 
 **Tools**:
