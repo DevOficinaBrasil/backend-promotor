@@ -188,7 +188,7 @@ T13 → T14 → T15 → T16
 
 ---
 
-### T4: Devolver o status de confirmação na consulta por cliente
+### T4: Devolver o status de confirmação na consulta por cliente ✅
 
 **What**: `getCampanhasByClientId` ganha o `LEFT JOIN` em `NOTIFICACAO_VISITA` e passa a anexar `notificacaoVisita` em cada rota montada.
 **Where**: `service/campanhaService.ts`
@@ -203,16 +203,16 @@ T13 → T14 → T15 → T16
 
 **Done when**:
 
-- [ ] `fullQuery` tem o `LEFT JOIN ... NOTIFICACAO_VISITA nv ON rp."ID_ROTA_PROMOTOR" = nv."ID_ROTA_PROMOTOR"` e as colunas `NOTIFICACAO_STATUS`, `NOTIFICACAO_EXPIRA_EM`, `NOTIFICACAO_CONFIRMADO_EM`
-- [ ] `legacyQuery` não mudou
-- [ ] O objeto literal da rota (`:565-593`) recebe `notificacaoVisita` — sem isso a coluna vem do banco e é descartada em silêncio
-- [ ] `STATUS` devolvido é o efetivo (`statusEfetivo`), não o valor bruto
-- [ ] Rota sem linha em `NOTIFICACAO_VISITA` omite o campo, não devolve `null`
-- [ ] Nenhuma consulta adicional por rota foi introduzida — a contagem de queries da função não muda
-- [ ] Regressão: `RotaPromotorSchema` segue declarando `notificacaoVisita`, então `/openapi.json` continua documentando o campo
-- [ ] Unit: rota confirmada, rota pendente, rota expirada (efetivo), rota sem notificação e rota legada
-- [ ] Gate check passes: `npm run test:unit`
-- [ ] Test count: novos testes passam (sem deleção silenciosa)
+- [x] `fullQuery` tem o `LEFT JOIN ... NOTIFICACAO_VISITA nv ON rp."ID_ROTA_PROMOTOR" = nv."ID_ROTA_PROMOTOR"` e as colunas `NOTIFICACAO_STATUS`, `NOTIFICACAO_EXPIRA_EM`, `NOTIFICACAO_CONFIRMADO_EM`
+- [x] `legacyQuery` não mudou
+- [x] O objeto literal da rota (`:565-593`) recebe `notificacaoVisita` — sem isso a coluna vem do banco e é descartada em silêncio
+- [x] `STATUS` devolvido é o efetivo (`statusEfetivo`), não o valor bruto
+- [x] Rota sem linha em `NOTIFICACAO_VISITA` omite o campo, não devolve `null`
+- [x] Nenhuma consulta adicional por rota foi introduzida — a contagem de queries da função não muda
+- [x] Regressão: `RotaPromotorSchema` segue declarando `notificacaoVisita`, então `/openapi.json` continua documentando o campo
+- [x] Unit: rota confirmada, rota pendente, rota expirada (efetivo), rota sem notificação e rota legada
+- [x] Gate check passes: `npm run test:unit`
+- [x] Test count: novos testes passam (sem deleção silenciosa)
 
 **Tests**: unit
 **Gate**: quick

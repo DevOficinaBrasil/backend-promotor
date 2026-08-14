@@ -176,15 +176,15 @@ Levantado no código, não presumido:
 
 | Requirement ID | Story | AC | Phase | Status |
 | --- | --- | --- | --- | --- |
-| VISIB-01 | P2: Visão gerencial | AC1, AC2 | Design | Pending |
-| VISIB-02 | P2: Visão gerencial | AC3 | Design | Pending |
+| VISIB-01 | P2: Visão gerencial | AC1, AC2 | T4 | Done |
+| VISIB-02 | P2: Visão gerencial | AC3 | T4 | Done |
 | VISIB-03 | P1: Operador vê o status no dashboard | AC1-AC4, AC6 | Design | Pending |
 | VISIB-04 | P1: Promotor vê o status antes de sair | AC1-AC2 | Design | Pending |
 | VISIB-05 | P1: Promotor vê o status antes de sair | AC4 | T3 | Done |
-| VISIB-06 | P1 dashboard AC5, P1 promotor AC5, Edge cases (legado) | - | Design | Pending |
+| VISIB-06 | P1 dashboard AC5, P1 promotor AC5, Edge cases (legado) | - | T4 (backend) | Partial - falta UI (T6, T15) |
 | VISIB-07 | P1: Endereço corrigido chega ao promotor | AC1, AC5, AC8 | T2 | Done |
 | VISIB-08 | P1: Endereço corrigido chega ao promotor | AC7 | T2 | Done |
-| VISIB-09 | P2: Visão gerencial (regressão de schema) | AC4 | Design | Pending |
+| VISIB-09 | P2: Visão gerencial (regressão de schema) | AC4 | T4 | Done |
 | VISIB-10 | P2: Visão gerencial | AC7, AC8 | Design | Pending |
 | VISIB-14 | P2: Tipos de rota nos frontends | AC5 | Design | Pending |
 | VISIB-15 | P2: Mapper do `frontend-promotor` preserva o campo | AC6 | Design | Pending |

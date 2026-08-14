@@ -254,5 +254,139 @@ describe('CampanhaService', () => {
         expect(rota.notificacaoVisita).toBeNull();
       });
     });
+
+    // VISIB-01/02/06/09 — P2 "Visão gerencial reflete o status".
+    // AC1: "SHALL incluir, em cada rota que possua linha em NOTIFICACAO_VISITA,
+    // o objeto notificacaoVisita com STATUS e CONFIRMADO_EM."
+    // AC2: "por um único LEFT JOIN ... sem emitir nenhuma consulta adicional por rota."
+    // AC3: "SHALL devolver em notificacaoVisita.STATUS o status efetivo."
+    describe('getCampanhasByClientId (visão gerencial)', () => {
+      const linhaRotaCliente = (id: number, extra: Record<string, unknown> = {}) => ({
+        ID_ROTA_PROMOTOR: id,
+        ID_CAMPANHA_PROMOTOR: 1,
+        ID_OFICINA: 395444,
+        STATUS: 'BACKLOG',
+        oficina_NOME_FANTASIA: 'Oficina A',
+        oficina_ENDERECO: 'Avenida Nova 500',
+        oficina_LATITUDE: '-22.9099',
+        oficina_LONGITUDE: '-47.0626',
+        ...extra,
+      });
+
+      const montarConsultaPorCliente = (linhas: any[]) => {
+        (AppDataSourceSync.query as jest.Mock).mockImplementation(async (sql: string) => {
+          if (sql.includes('"CAMPANHAS_OB"."CAMPANHA" c')) {
+            return [{ ID_CAMPANHA: 1, NOME: 'Campanha Ativa', ID_CLIENT: 77 }];
+          }
+          if (sql.includes('"CAMPANHAS_OB"."CAMPANHA_PROMOTOR" cp')) {
+            return [{ ID_CAMPANHA_PROMOTOR: 1, ID_CAMPANHA: 1, ID_PROMOTOR: 10 }];
+          }
+          if (sql.includes('"CAMPANHAS_OB"."ROTA_PROMOTOR" rp')) {
+            return linhas;
+          }
+          return [];
+        });
+      };
+
+      const rotasDe = (campanhas: any[]) => campanhas[0].campanhaPromotores[0].rotasPromotor;
+
+      it('devolve o status efetivo por rota: confirmada, pendente e expirada', async () => {
+        montarConsultaPorCliente([
+          linhaRotaCliente(1, {
+            NOTIFICACAO_STATUS: StatusNotificacaoVisita.CONFIRMADO,
+            NOTIFICACAO_EXPIRA_EM: EXPIRA_FUTURO,
+            NOTIFICACAO_CONFIRMADO_EM: CONFIRMADO_EM,
+          }),
+          linhaRotaCliente(2, {
+            NOTIFICACAO_STATUS: StatusNotificacaoVisita.PENDENTE,
+            NOTIFICACAO_EXPIRA_EM: null,
+            NOTIFICACAO_CONFIRMADO_EM: null,
+          }),
+          linhaRotaCliente(3, {
+            NOTIFICACAO_STATUS: StatusNotificacaoVisita.ENVIADO,
+            NOTIFICACAO_EXPIRA_EM: EXPIRA_PASSADO,
+            NOTIFICACAO_CONFIRMADO_EM: null,
+          }),
+        ]);
+
+        const rotas = rotasDe(await CampanhaService.getCampanhasByClientId(77));
+
+        expect(rotas[0].notificacaoVisita).toEqual({
+          STATUS: StatusNotificacaoVisita.CONFIRMADO,
+          CONFIRMADO_EM,
+        });
+        expect(rotas[1].notificacaoVisita.STATUS).toBe(StatusNotificacaoVisita.PENDENTE);
+        // Status efetivo, não o bruto: o link venceu sem ser aberto.
+        expect(rotas[2].notificacaoVisita.STATUS).toBe(StatusNotificacaoVisita.EXPIRADO);
+      });
+
+      // Edge case: "IF uma rota vem do banco legado (sem NOTIFICACAO_VISITA)
+      // THEN o sistema SHALL omitir o campo em vez de devolvê-lo nulo."
+      it('omite o campo na rota sem notificação e na rota legada', async () => {
+        montarConsultaPorCliente([
+          linhaRotaCliente(1, {
+            NOTIFICACAO_STATUS: null,
+            NOTIFICACAO_EXPIRA_EM: null,
+            NOTIFICACAO_CONFIRMADO_EM: null,
+          }),
+          // Rota legada: a query legada é join-free, então as colunas nem vêm.
+          { ID_ROTA_PROMOTOR: 2, ID_CAMPANHA_PROMOTOR: 1, ID_OFICINA: null, STATUS: 'BACKLOG' },
+        ]);
+
+        const rotas = rotasDe(await CampanhaService.getCampanhasByClientId(77));
+
+        expect(rotas[0]).not.toHaveProperty('notificacaoVisita');
+        expect(rotas[1]).not.toHaveProperty('notificacaoVisita');
+      });
+
+      // O objeto da rota é montado campo a campo: sem a entrada no literal, a
+      // coluna vem do banco e é descartada em silêncio.
+      it('preserva os campos existentes da rota ao anexar o status', async () => {
+        montarConsultaPorCliente([
+          linhaRotaCliente(1, {
+            NOTIFICACAO_STATUS: StatusNotificacaoVisita.CONFIRMADO,
+            NOTIFICACAO_EXPIRA_EM: EXPIRA_FUTURO,
+            NOTIFICACAO_CONFIRMADO_EM: CONFIRMADO_EM,
+          }),
+        ]);
+
+        const rota = rotasDe(await CampanhaService.getCampanhasByClientId(77))[0];
+
+        // STATUS da rota, não o da notificação — nomes colidem de propósito.
+        expect(rota.STATUS).toBe('BACKLOG');
+        expect(rota.oficina).toMatchObject({
+          ENDERECO: 'Avenida Nova 500',
+          LATITUDE: '-22.9099',
+          LONGITUDE: '-47.0626',
+        });
+      });
+
+      // AC2: um único LEFT JOIN na consulta de rotas já existente.
+      it('traz o status no mesmo SELECT das rotas, sem consulta por rota', async () => {
+        montarConsultaPorCliente([
+          linhaRotaCliente(1, {
+            NOTIFICACAO_STATUS: StatusNotificacaoVisita.CONFIRMADO,
+            NOTIFICACAO_EXPIRA_EM: EXPIRA_FUTURO,
+            NOTIFICACAO_CONFIRMADO_EM: CONFIRMADO_EM,
+          }),
+          linhaRotaCliente(2, {
+            NOTIFICACAO_STATUS: StatusNotificacaoVisita.ENVIADO,
+            NOTIFICACAO_EXPIRA_EM: EXPIRA_FUTURO,
+            NOTIFICACAO_CONFIRMADO_EM: null,
+          }),
+        ]);
+
+        await CampanhaService.getCampanhasByClientId(77);
+
+        const consultasDeRota = (AppDataSourceSync.query as jest.Mock).mock.calls.filter(
+          ([sql]: [string]) => sql.includes('"CAMPANHAS_OB"."ROTA_PROMOTOR" rp')
+        );
+
+        expect(consultasDeRota).toHaveLength(1);
+        expect(consultasDeRota[0][0]).toContain(
+          'LEFT JOIN "CAMPANHAS_OB"."NOTIFICACAO_VISITA" nv'
+        );
+      });
+    });
   });
 });

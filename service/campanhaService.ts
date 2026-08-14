@@ -452,10 +452,15 @@ export default class CampanhaService {
           ce.numero as "oficina_NUMERO",
           ce.cep as "oficina_CEP",
           ce.cnpj as "oficina_CNPJ",
-          ce.telefone as "oficina_TELEFONE"
+          ce.telefone as "oficina_TELEFONE",
+          nv."STATUS" as "NOTIFICACAO_STATUS",
+          nv."EXPIRA_EM" as "NOTIFICACAO_EXPIRA_EM",
+          nv."CONFIRMADO_EM" as "NOTIFICACAO_CONFIRMADO_EM"
         FROM "CAMPANHAS_OB"."ROTA_PROMOTOR" rp
         LEFT JOIN "MAIN_REGISTER"."OFICINA" o ON rp."ID_OFICINA" = o."ID_OFICINA"
         LEFT JOIN dw.cadastro_empresa ce ON rp."ID_OFICINA" = ce.id_oficina
+        LEFT JOIN "CAMPANHAS_OB"."NOTIFICACAO_VISITA" nv
+          ON rp."ID_ROTA_PROMOTOR" = nv."ID_ROTA_PROMOTOR"
         WHERE rp."ID_CAMPANHA_PROMOTOR" = ANY($1)
           AND rp."DELETED_AT" IS NULL
         ORDER BY rp."ORDEM" ASC NULLS LAST`;
@@ -562,36 +567,49 @@ export default class CampanhaService {
 
           const rotas = rotasPromotor
             .filter((r: any) => r.ID_CAMPANHA_PROMOTOR === cp.ID_CAMPANHA_PROMOTOR)
-            .map((r: any) => ({
-              ID_ROTA_PROMOTOR: r.ID_ROTA_PROMOTOR,
-              ID_OFICINA: r.ID_OFICINA,
-              ID_CAMPANHA_PROMOTOR: r.ID_CAMPANHA_PROMOTOR,
-              STATUS: r.STATUS,
-              SUCCESS: r.SUCCESS,
-              CHECKIN_TIME: r.CHECKIN_TIME,
-              DONE_AT: r.DONE_AT,
-              OBS: r.OBS,
-              REDIRECT: r.REDIRECT,
-              CREATED_BY: r.CREATED_BY,
-              ORDEM: r.ORDEM,
-              UPDATED_AT: r.UPDATED_AT,
-              CREATED_AT: r.CREATED_AT,
-              DELETED_AT: r.DELETED_AT,
-              oficina: r.ID_OFICINA ? {
+            .map((r: any) => {
+              // P2 AC1/AC3: the route carries its effective confirmation status.
+              // This literal lists its fields one by one - it is not a spread of
+              // `r` - so a column added to the query above and not added here is
+              // silently dropped.
+              const notificacaoVisita = this.montarNotificacaoVisita({
+                STATUS: r.NOTIFICACAO_STATUS,
+                EXPIRA_EM: r.NOTIFICACAO_EXPIRA_EM,
+                CONFIRMADO_EM: r.NOTIFICACAO_CONFIRMADO_EM,
+              });
+
+              return {
+                ID_ROTA_PROMOTOR: r.ID_ROTA_PROMOTOR,
                 ID_OFICINA: r.ID_OFICINA,
-                LATITUDE: r.oficina_LATITUDE,
-                LONGITUDE: r.oficina_LONGITUDE,
-                NOME_FANTASIA: r.oficina_NOME_FANTASIA,
-                ENDERECO: r.oficina_ENDERECO,
-                BAIRRO: r.oficina_BAIRRO,
-                CIDADE: r.oficina_CIDADE,
-                ESTADO: r.oficina_ESTADO,
-                NUMERO: r.oficina_NUMERO,
-                CEP: r.oficina_CEP,
-                CNPJ: r.oficina_CNPJ,
-                TELEFONE: r.oficina_TELEFONE,
-              } : null,
-            }));
+                ID_CAMPANHA_PROMOTOR: r.ID_CAMPANHA_PROMOTOR,
+                STATUS: r.STATUS,
+                SUCCESS: r.SUCCESS,
+                CHECKIN_TIME: r.CHECKIN_TIME,
+                DONE_AT: r.DONE_AT,
+                OBS: r.OBS,
+                REDIRECT: r.REDIRECT,
+                CREATED_BY: r.CREATED_BY,
+                ORDEM: r.ORDEM,
+                UPDATED_AT: r.UPDATED_AT,
+                CREATED_AT: r.CREATED_AT,
+                DELETED_AT: r.DELETED_AT,
+                ...(notificacaoVisita ? { notificacaoVisita } : {}),
+                oficina: r.ID_OFICINA ? {
+                  ID_OFICINA: r.ID_OFICINA,
+                  LATITUDE: r.oficina_LATITUDE,
+                  LONGITUDE: r.oficina_LONGITUDE,
+                  NOME_FANTASIA: r.oficina_NOME_FANTASIA,
+                  ENDERECO: r.oficina_ENDERECO,
+                  BAIRRO: r.oficina_BAIRRO,
+                  CIDADE: r.oficina_CIDADE,
+                  ESTADO: r.oficina_ESTADO,
+                  NUMERO: r.oficina_NUMERO,
+                  CEP: r.oficina_CEP,
+                  CNPJ: r.oficina_CNPJ,
+                  TELEFONE: r.oficina_TELEFONE,
+                } : null,
+                };
+            });
 
           return {
             ID_CAMPANHA_PROMOTOR: cp.ID_CAMPANHA_PROMOTOR,
