@@ -1,4 +1,6 @@
 import "./setup";
+import { readFileSync } from "fs";
+import { join } from "path";
 import { AppDataSourceSync } from "../../data-source";
 import CampanhaService from "../../service/campanhaService";
 import Campanha from "../../entities/Campanha";
@@ -96,5 +98,55 @@ describe("CampanhaService Integration", () => {
       const result = await CampanhaService.getAllCampanhas();
       expect(Array.isArray(result)).toBe(true);
     });
+  });
+});
+
+/**
+ * VISIB-12 / P1 endereço AC6: "SHALL montar ENDERECO nas duas consultas em SQL
+ * cru com TRIM sobre a concatenação de logradouro e rua, de modo que um
+ * logradouro nulo não produza espaço à esquerda."
+ *
+ * Integração de propósito: o resultado de `CONCAT(NULL, ' ', x)` é semântica do
+ * Postgres. A mesma expressão que as quatro consultas usam é executada aqui
+ * contra o banco, com valores controlados.
+ */
+describe("montagem do ENDERECO nas consultas em SQL cru (VISIB-12)", () => {
+  const EXPRESSAO = `TRIM(CONCAT(COALESCE(ce.logradouro,''), ' ', COALESCE(ce.rua,'')))`;
+  const arquivo = readFileSync(
+    join(__dirname, "..", "..", "service", "campanhaService.ts"),
+    "utf-8"
+  );
+
+  const montar = async (logradouro: string | null, rua: string | null) => {
+    const [linha] = await AppDataSourceSync.query(
+      `SELECT ${EXPRESSAO} as "ENDERECO"
+         FROM (SELECT $1::text as logradouro, $2::text as rua) ce`,
+      [logradouro, rua]
+    );
+    return linha.ENDERECO as string;
+  };
+
+  it("monta tipo e nome separados por um único espaço", async () => {
+    expect(await montar("Rua", "das Flores")).toBe("Rua das Flores");
+  });
+
+  it("não deixa espaço à esquerda quando o logradouro é nulo", async () => {
+    expect(await montar(null, "Chacara do Ze")).toBe("Chacara do Ze");
+  });
+
+  it("não deixa espaço à direita quando a rua é nula", async () => {
+    expect(await montar("Rua", null)).toBe("Rua");
+  });
+
+  it("devolve string vazia quando as duas colunas são nulas", async () => {
+    expect(await montar(null, null)).toBe("");
+  });
+
+  // As quatro ocorrências incluem os dois caminhos de enriquecimento das rotas
+  // legadas. Deixar uma de fora produz endereço com espaço à esquerda só para
+  // rota legada — divergência que nenhum teste de payload pega.
+  it("aplica a expressão nas quatro montagens de endereço do service", () => {
+    expect(arquivo.split(EXPRESSAO).length - 1).toBe(4);
+    expect(arquivo).not.toContain("CONCAT(ce.logradouro, ' ', ce.rua)");
   });
 });

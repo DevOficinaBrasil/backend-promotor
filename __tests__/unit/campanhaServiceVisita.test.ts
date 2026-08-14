@@ -162,6 +162,28 @@ describe('CampanhaService', () => {
         ]);
         expect(AppDataSourceSync.query as jest.Mock).toHaveBeenCalledTimes(1);
       });
+
+      // VISIB-05 / P1 promotor AC4: "SHALL continuar devolvendo, em cada rota de
+      // GET /campanha/ativa, o objeto oficina com LATITUDE e LONGITUDE, para que
+      // o app navegue até a oficina." Regressão do TRIM no endereço montado: a
+      // consulta que monta o ENDERECO é a mesma que traz as coordenadas.
+      it('keeps LATITUDE and LONGITUDE on the oficina of every route', async () => {
+        montarRotaList([
+          linhaRota(1, {
+            LATITUDE: '-22.9099',
+            LONGITUDE: '-47.0626',
+            ENDERECO: 'Chacara do Ze',
+          }),
+        ]);
+
+        const resultado = await CampanhaService.getActiveCampanhaByPromotor(10, AGORA);
+
+        expect((resultado!.rotas[0] as any).oficina).toMatchObject({
+          LATITUDE: '-22.9099',
+          LONGITUDE: '-47.0626',
+          ENDERECO: 'Chacara do Ze',
+        });
+      });
     });
 
     describe('getCampanhaByIdWithRelations (dashboard route list)', () => {

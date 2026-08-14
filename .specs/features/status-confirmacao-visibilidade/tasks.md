@@ -158,7 +158,7 @@ T13 → T14 → T15 → T16
 
 ---
 
-### T3: Aplicar `TRIM` nas quatro montagens de endereço
+### T3: Aplicar `TRIM` nas quatro montagens de endereço ✅
 
 **What**: Trocar `CONCAT(ce.logradouro, ' ', ce.rua)` por `TRIM(CONCAT(COALESCE(ce.logradouro,''), ' ', COALESCE(ce.rua,'')))` nas quatro ocorrências do arquivo.
 **Where**: `service/campanhaService.ts`
@@ -173,13 +173,13 @@ T13 → T14 → T15 → T16
 
 **Done when**:
 
-- [ ] As quatro ocorrências foram alteradas — as duas principais e as duas dos caminhos de enriquecimento das rotas legadas
-- [ ] `grep -c "CONCAT(ce.logradouro, ' ', ce.rua)"` no arquivo devolve 0
-- [ ] `GET /campanha/ativa` continua devolvendo `oficina.LATITUDE` e `oficina.LONGITUDE` (regressão VISIB-05)
-- [ ] Endereço com `logradouro` nulo volta sem espaço à esquerda
-- [ ] Integração: suíte `campanhaService` verde no mesmo patamar do baseline
-- [ ] Gate check passes: `npm run test:unit && npm run test:integration`
-- [ ] Test count: baseline mantido, nenhum teste removido
+- [x] As quatro ocorrências foram alteradas — as duas principais e as duas dos caminhos de enriquecimento das rotas legadas
+- [x] `grep -c "CONCAT(ce.logradouro, ' ', ce.rua)"` no arquivo devolve 0
+- [x] `GET /campanha/ativa` continua devolvendo `oficina.LATITUDE` e `oficina.LONGITUDE` (regressão VISIB-05)
+- [x] Endereço com `logradouro` nulo volta sem espaço à esquerda
+- [x] Integração: suíte `campanhaService` verde no mesmo patamar do baseline
+- [x] Gate check passes: `npm run test:unit && npm run test:integration`
+- [x] Test count: baseline mantido, nenhum teste removido
 
 **Tests**: integration
 **Gate**: full
