@@ -363,7 +363,7 @@ T13 → T14 → T15 → T16
 
 ---
 
-### T10: Declarar o campo no tipo da visão gerencial (ob-ads)
+### T10: Declarar o campo no tipo da visão gerencial (ob-ads) ✅
 
 **What**: `RotaPromotor` da visão ganha `notificacaoVisita` opcional.
 **Where**: `ob-ads/app/(dashboard)/dashboard/campanha-para-promotores/visao/components/types.ts`
@@ -378,8 +378,8 @@ T13 → T14 → T15 → T16
 
 **Done when**:
 
-- [ ] `notificacaoVisita?: { STATUS: string; CONFIRMADO_EM?: string | null }` declarado
-- [ ] Gate check passes: `npm run lint && npm run build`
+- [x] `notificacaoVisita?: { STATUS: string; CONFIRMADO_EM?: string | null }` declarado
+- [x] Gate check passes: `npm run lint && npm run build`
 
 **Tests**: none
 **Gate**: build
