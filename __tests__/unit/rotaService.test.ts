@@ -70,6 +70,50 @@ describe('RotaService', () => {
       expect(rotaRepo.create).toHaveBeenCalledTimes(2);
       expect(result).toHaveLength(2);
     });
+
+    // AGND-01/AGND-21: route creation enqueues and never dispatches. The
+    // inline-send regression this feature removes would show up here as
+    // notificarVisita being called instead of agendarVisita.
+    it('enqueues one notification per created route', async () => {
+      rotaRepo.saveMany.mockResolvedValue([
+        { ID_ROTA_PROMOTOR: 1, ID_OFICINA: 100 },
+        { ID_ROTA_PROMOTOR: 2, ID_OFICINA: 200 },
+      ]);
+
+      await RotaService.createRotas(5, [100, 200]);
+
+      expect(NotificacaoVisitaService.agendarVisita).toHaveBeenCalledTimes(2);
+      // Posição e total do lote espalham os envios pela janela (AGND-02).
+      expect(NotificacaoVisitaService.agendarVisita).toHaveBeenCalledWith(
+        expect.objectContaining({ ID_ROTA_PROMOTOR: 1 }),
+        0,
+        2
+      );
+      expect(NotificacaoVisitaService.agendarVisita).toHaveBeenCalledWith(
+        expect.objectContaining({ ID_ROTA_PROMOTOR: 2 }),
+        1,
+        2
+      );
+    });
+
+    it('never dispatches inline during route creation', async () => {
+      rotaRepo.save.mockResolvedValue({ ID_ROTA_PROMOTOR: 1, ID_OFICINA: 100 });
+
+      await RotaService.createRotas(5, 100);
+
+      expect(NotificacaoVisitaService.notificarVisita).not.toHaveBeenCalled();
+    });
+
+    it('still returns the created routes when queueing throws', async () => {
+      rotaRepo.save.mockResolvedValue({ ID_ROTA_PROMOTOR: 1, ID_OFICINA: 100 });
+      (NotificacaoVisitaService.agendarVisita as jest.Mock).mockRejectedValueOnce(
+        new Error('fila indisponível')
+      );
+
+      const result = await RotaService.createRotas(5, 100);
+
+      expect(result).toHaveProperty('ID_ROTA_PROMOTOR', 1);
+    });
   });
 
   describe('createRotaWithCampanhaPromotor', () => {
@@ -303,13 +347,11 @@ describe('RotaService', () => {
       expect(result.reatribuicoes[0].status).toBe('sem_promotor_disponivel');
     });
 
-    // Spec AC1: a reassignment creates a RotaPromotor like any other path, so it
-    // gets exactly one NotificacaoVisita too.
-    it('notifies the route created by a reassignment, after the transaction commits', async () => {
-      const notificarVisita = NotificacaoVisitaService.notificarVisita as jest.Mock;
-      notificarVisita.mockResolvedValue({} as never);
-      // The automock returns undefined for the cache factory; the notifier is
-      // handed a real cache in production.
+    // Spec AC1 + AGND-01: a reassignment creates a RotaPromotor like any other
+    // path, so it gets exactly one NotificacaoVisita too — queued, not sent.
+    it('queues the route created by a reassignment, after the transaction commits', async () => {
+      const agendarVisita = NotificacaoVisitaService.agendarVisita as jest.Mock;
+      agendarVisita.mockResolvedValue({} as never);
       (criarCacheCampanha as jest.Mock).mockReturnValue({
         dados: new Map(),
         nomeEmpresa: new Map(),
@@ -347,21 +389,21 @@ describe('RotaService', () => {
         transacaoConcluida = true;
         return saida;
       });
-      notificarVisita.mockImplementation(async () => {
-        // The notification must not run against uncommitted transaction state.
+      agendarVisita.mockImplementation(async () => {
+        // The notification must not be queued against uncommitted transaction state.
         expect(transacaoConcluida).toBe(true);
         return {} as never;
       });
 
       await RotaService.reassignRotasByAddress('80010-000', 123);
 
-      expect(notificarVisita).toHaveBeenCalledTimes(1);
-      expect(notificarVisita).toHaveBeenCalledWith(rotaCriada, expect.anything());
+      expect(agendarVisita).toHaveBeenCalledTimes(1);
+      expect(agendarVisita).toHaveBeenCalledWith(rotaCriada, 0, 1);
     });
 
     it('still completes the reassignment when the notification rejects', async () => {
-      const notificarVisita = NotificacaoVisitaService.notificarVisita as jest.Mock;
-      notificarVisita.mockRejectedValue(new Error('whatsapp fora do ar'));
+      const agendarVisita = NotificacaoVisitaService.agendarVisita as jest.Mock;
+      agendarVisita.mockRejectedValue(new Error('fila indisponível'));
       jest.spyOn(console, 'error').mockImplementation(() => {});
 
       haversineDistanceKm

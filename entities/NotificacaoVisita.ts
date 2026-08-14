@@ -73,6 +73,34 @@ export default class NotificacaoVisita {
   @Column({ type: "text", nullable: true, name: "ERRO_ENVIO" })
   ERRO_ENVIO?: string | null;
 
+  // Colunas de fila do outbox (scripts/migration-outbox-notificacao-visita.sql).
+  // Espelham CRM.integration_outbox do backend-communities — available_at,
+  // locked_at, locked_by, attempts — para que a migração futura ao sistema de
+  // entrega compartilhado seja mapeamento coluna a coluna.
+
+  // NULL carrega significado: linha criada antes do outbox, já despachada pelo
+  // fluxo inline antigo. A query de claim exige NOT NULL para que o primeiro
+  // deploy do worker não reenvie o histórico.
+  @Column({ type: "timestamptz", nullable: true, name: "AVAILABLE_AT" })
+  AVAILABLE_AT?: Date | null;
+
+  // Início do lease. O vencimento é comparado na query de claim contra
+  // OUTBOX_VISITA_LOCK_LEASE_MINUTES, não gravado aqui — worker morto libera a
+  // linha sozinho quando o lease vence.
+  @Column({ type: "timestamptz", nullable: true, name: "LOCKED_AT" })
+  LOCKED_AT?: Date | null;
+
+  // outbox-visita-<pid> (cron) ou outbox-visita-cli-<pid> (console). Responde
+  // "qual cópia do servidor pegou esta linha".
+  @Column({ type: "text", nullable: true, name: "LOCKED_BY" })
+  LOCKED_BY?: string | null;
+
+  // Incrementado no mesmo statement do claim, não no fim do despacho: processo
+  // morto no meio ainda queima tentativa, então linha que derruba o worker se
+  // aposenta no teto em vez de repetir para sempre.
+  @Column({ type: "int", default: 0, name: "ATTEMPTS" })
+  ATTEMPTS?: number;
+
   @Column({ type: "text", nullable: true, name: "MESSAGE_ID" })
   MESSAGE_ID?: string | null;
 

@@ -44,6 +44,7 @@ describe("NotificacaoVisitaService.notificarVisita", () => {
   let notifRepo: {
     create: jest.Mock;
     save: jest.Mock;
+    findOne: jest.Mock;
   };
   // Snapshot of the row as each save saw it — the service mutates one entity
   // instance across the flow, so mock.calls alone only shows the final state.
@@ -53,6 +54,8 @@ describe("NotificacaoVisitaService.notificarVisita", () => {
   let campanhaPromotorRepo: { findOne: jest.Mock };
   let campanhaRepo: { findOne: jest.Mock };
   let communityRepo: { findOne: jest.Mock };
+  let rotaRepo: { findOne: jest.Mock };
+  let rotaAtual: RotaPromotor;
   let sendMock: jest.Mock;
 
   // The default route carries no ID_CAMPANHA_PROMOTOR, so the campaign chain is
@@ -81,15 +84,20 @@ describe("NotificacaoVisitaService.notificarVisita", () => {
 
   beforeEach(() => {
     persistidos = [];
+    rotaAtual = rota;
+    let ultimaLinha: NotificacaoVisita | null = null;
     notifRepo = {
       create: jest.fn((dados) => new NotificacaoVisita(dados)),
       save: jest.fn(async (linha: NotificacaoVisita) => {
         if (linha.ID_NOTIFICACAO_VISITA === undefined) {
           linha.ID_NOTIFICACAO_VISITA = 1;
         }
+        ultimaLinha = linha;
         persistidos.push(new NotificacaoVisita({ ...linha }));
         return linha;
       }),
+      // O despacho recarrega a linha pelo id (o worker só conhece o id).
+      findOne: jest.fn(async () => ultimaLinha),
     };
     oficinaRepo = { findOne: jest.fn(async () => oficinaPadrao) };
     usuarioRepo = { find: jest.fn(async () => [usuarioPadrao]) };
@@ -110,9 +118,14 @@ describe("NotificacaoVisitaService.notificarVisita", () => {
       findOne: jest.fn(async () => ({ ID_CAMPANHA, EMPRESA_SLUG, END_TIME: null })),
     };
 
+    // A rota também é recarregada pelo id no despacho. Cada teste ajusta
+    // rotaAtual quando precisa de uma rota diferente da padrão.
+    rotaRepo = { findOne: jest.fn(async () => rotaAtual) };
+
     MigrationAwareRepositoryMock.mockImplementation((entidade: unknown) => {
       if (entidade === CampanhaPromotor) return campanhaPromotorRepo as never;
       if (entidade === Campanha) return campanhaRepo as never;
+      if (entidade === RotaPromotor) return rotaRepo as never;
       throw new Error("repositório de migração inesperado no teste");
     });
 
@@ -145,6 +158,9 @@ describe("NotificacaoVisitaService.notificarVisita", () => {
       ID_ROTA_PROMOTOR: ID_ROTA,
       CANAL: CanalNotificacao.WHATSAPP,
       STATUS: StatusNotificacaoVisita.PENDENTE,
+      // AGND-01: a linha já nasce agendada e sem tentativas.
+      AVAILABLE_AT: expect.any(Date),
+      ATTEMPTS: 0,
     });
     expect(persistidos[0].STATUS).toBe(StatusNotificacaoVisita.PENDENTE);
     expect(persistidos[0].ID_ROTA_PROMOTOR).toBe(ID_ROTA);
@@ -293,6 +309,10 @@ describe("NotificacaoVisitaService.notificarVisita", () => {
   // Every route of one createRotas call shares a campaign, so the chain is read
   // once for the whole batch instead of once per route.
   describe("per-batch campaign cache", () => {
+    beforeEach(() => {
+      rotaAtual = rotaComCampanha;
+    });
+
     it("reads the campaign chain and the client only once across a batch", async () => {
       const cache = criarCacheCampanha();
 
@@ -328,6 +348,10 @@ describe("NotificacaoVisitaService.notificarVisita", () => {
   // The notification belongs to a rota, the rota to a campanha, and the
   // confirmation link may not outlive the campaign it was issued for.
   describe("campaign-bound expiry", () => {
+    beforeEach(() => {
+      rotaAtual = rotaComCampanha;
+    });
+
     const AGORA = new Date("2026-08-05T12:00:00.000Z");
     const FALLBACK_168H = new Date("2026-08-12T12:00:00.000Z");
 
@@ -410,6 +434,10 @@ describe("NotificacaoVisitaService.notificarVisita", () => {
     });
 
     it("falls back to 168h without touching the campaign when the route has no ID_CAMPANHA_PROMOTOR", async () => {
+      // Esta é a exceção do bloco: rota sem campanha, inclusive na releitura
+      // que o despacho faz.
+      rotaAtual = rota;
+
       const resultado = await NotificacaoVisitaService.notificarVisita(rota);
 
       expect(resultado.STATUS).toBe(StatusNotificacaoVisita.ENVIADO);
@@ -422,6 +450,10 @@ describe("NotificacaoVisitaService.notificarVisita", () => {
   // {{1}} recipient's name, {{2}} client the campaign runs for,
   // {{3}} confirmation link. The order is the template contract.
   describe("template variables", () => {
+    beforeEach(() => {
+      rotaAtual = rotaComCampanha;
+    });
+
     it("dispatches the recipient name, the client name and the confirmation URL in order", async () => {
       process.env.VISITA_CONFIRMACAO_BASE_URL = "https://app.example.com";
       try {
@@ -507,7 +539,9 @@ describe("NotificacaoVisitaService.notificarVisita", () => {
 
     const resultado = await NotificacaoVisitaService.notificarVisita(rota);
 
-    expect(resultado.STATUS).toBe(StatusNotificacaoVisita.FALHOU);
+    // AGND-11: falha de rede é transitória. O motivo fica registrado, mas o
+    // STATUS segue PENDENTE — aposentar a linha é decisão da fila, no teto.
+    expect(resultado.STATUS).toBe(StatusNotificacaoVisita.PENDENTE);
     expect(resultado.ERRO_ENVIO).toBe("network error");
   });
 
@@ -529,22 +563,25 @@ describe("NotificacaoVisitaService.notificarVisita", () => {
 
   // AC10: notification failure must never propagate to route creation.
   describe("never throws", () => {
-    it("resolves with a FALHOU row when the channel rejects", async () => {
+    // AGND-11: uma exceção inesperada é classificada como transitória, para que
+    // uma falha desconhecida seja repetida em vez de aposentar a notificação em
+    // silêncio. A linha continua PENDENTE e a chamada não estoura.
+    it("resolves without throwing when the channel rejects", async () => {
       sendMock.mockRejectedValue(new Error("provider exploded"));
 
       const resultado = await NotificacaoVisitaService.notificarVisita(rota);
 
-      expect(resultado.STATUS).toBe(StatusNotificacaoVisita.FALHOU);
-      expect(resultado.ERRO_ENVIO).toContain("provider exploded");
+      expect(resultado.STATUS).toBe(StatusNotificacaoVisita.PENDENTE);
+      expect(resultado.ID_ROTA_PROMOTOR).toBe(ID_ROTA);
     });
 
-    it("resolves with a FALHOU row when the recipient query rejects", async () => {
+    it("resolves without throwing when the recipient query rejects", async () => {
       usuarioRepo.find.mockRejectedValue(new Error("connection lost"));
 
       const resultado = await NotificacaoVisitaService.notificarVisita(rota);
 
-      expect(resultado.STATUS).toBe(StatusNotificacaoVisita.FALHOU);
-      expect(resultado.ERRO_ENVIO).toContain("connection lost");
+      expect(resultado.STATUS).toBe(StatusNotificacaoVisita.PENDENTE);
+      expect(resultado.ID_ROTA_PROMOTOR).toBe(ID_ROTA);
     });
 
     // No spec AC covers a route whose Oficina row is missing; it is handled
@@ -559,13 +596,14 @@ describe("NotificacaoVisitaService.notificarVisita", () => {
       expect(sendMock).not.toHaveBeenCalled();
     });
 
-    it("resolves with a FALHOU row even when the row itself can never be persisted", async () => {
+    it("resolves with the in-memory row even when it can never be persisted", async () => {
       notifRepo.save.mockRejectedValue(new Error("database down"));
 
       const resultado = await NotificacaoVisitaService.notificarVisita(rota);
 
-      expect(resultado.STATUS).toBe(StatusNotificacaoVisita.FALHOU);
+      // Sem banco não há o que agendar, mas a criação da rota não pode quebrar.
       expect(resultado.ID_ROTA_PROMOTOR).toBe(ID_ROTA);
+      expect(resultado.STATUS).toBe(StatusNotificacaoVisita.PENDENTE);
     });
   });
 
@@ -576,7 +614,7 @@ describe("NotificacaoVisitaService.notificarVisita", () => {
 
     const ids = { ID_ROTA_PROMOTOR: ID_ROTA, ID_NOTIFICACAO_VISITA: 1 };
     expect(console.log).toHaveBeenCalledWith(
-      "[notificacaoVisita] notificação criada em PENDENTE",
+      "[notificacaoVisita] notificação agendada",
       ids
     );
     expect(console.log).toHaveBeenCalledWith("[notificacaoVisita] link token emitido", ids);

@@ -14,6 +14,7 @@ import { avaliarGuardas, enderecoRecente } from "./envioGuards";
 import { MigrationAwareRepository } from "../utils/migrationRepository";
 import { normalizarTelefone } from "../utils/telefone";
 import { gerarLinkToken } from "../utils/visitaToken";
+import { proximoHorarioEnvio } from "../utils/agendamento";
 
 // Fallback only. The link's real lifetime is the campaign's END_TIME; this is
 // what a campaign without an end date (or one whose rows can't be resolved)
@@ -26,6 +27,30 @@ export const MOTIVO_SEM_TELEFONE = "no recipient with phone";
 export const MOTIVO_TELEFONE_INVALIDO = "invalid phone";
 export const MOTIVO_OFICINA_INEXISTENTE = "oficina not found";
 export const MOTIVO_CAMPANHA_ENCERRADA = "campanha already ended";
+export const MOTIVO_NOTIFICACAO_INEXISTENTE = "notificacao not found";
+export const MOTIVO_ROTA_INEXISTENTE = "rota not found";
+
+/**
+ * Motivos de falha do canal que uma nova tentativa pode resolver. São
+ * exatamente os desfechos não determinísticos do provider: telefone inválido ou
+ * canal mal configurado falham igual em toda tentativa, então repetir só gasta
+ * quota e adia o registro terminal.
+ */
+const MOTIVOS_TRANSITORIOS = new Set(["network error", "provider error", "provider rate/quota"]);
+
+function ehFalhaTransitoria(reason: string): boolean {
+  return MOTIVOS_TRANSITORIOS.has(reason);
+}
+
+/**
+ * O que o despacho conseguiu decidir sozinho. Quem despacha não decide política
+ * de retentativa: devolve a classificação e o dono da fila aplica a dele.
+ */
+export type DesfechoDespacho =
+  | { desfecho: "ENVIADO"; messageId: string | null; providerMessageId: string | null }
+  | { desfecho: "DISPENSADO"; motivo: string }
+  | { desfecho: "FALHOU_TERMINAL"; erro: string }
+  | { desfecho: "FALHOU_TRANSITORIO"; erro: string };
 
 /**
  * Builds the public confirmation URL carried in the WhatsApp message.
@@ -182,52 +207,122 @@ function comporErroEnvio(reason: string, providerCode: string | null): string {
 
 export default class NotificacaoVisitaService {
   /**
-   * Full send flow for one created route: create the row, run the pre-send
-   * guards, resolve a recipient, issue the link token and dispatch.
+   * Enqueues one notification for a newly created route (AGND-01).
    *
-   * Never throws. Every failure path resolves to a persisted row so the caller
-   * (RotaService) cannot be broken by a notification problem, even without its
-   * own try/catch (spec AC10).
+   * Writes the PENDENTE row with AVAILABLE_AT and stops there: no recipient, no
+   * token, no provider call. Everything else happens at dispatch time, hours
+   * later, because the guards it depends on (endereço recente, campanha
+   * encerrada, antispam) are all time-dependent — evaluating them at import
+   * time answers the wrong question.
    *
-   * @param cache - optional per-batch memo for the campaign chain, shared by
-   * every route of one createRotas call. Omit it for a standalone send.
+   * `posicaoNoLote`/`totalDoLote` distribuem o lote pela janela de envio, quando
+   * há janela configurada. Sem eles, tudo vence no mesmo instante e o lote da
+   * manhã vira rajada contra o provider.
+   *
+   * Never throws (AGND-03). Route creation must not fail because a notification
+   * could not be queued.
    */
-  static async notificarVisita(
+  static async agendarVisita(
     rota: RotaPromotor,
-    cache?: CacheCampanha
+    posicaoNoLote = 0,
+    totalDoLote = 1,
+    agora: Date = new Date()
   ): Promise<NotificacaoVisita> {
-    const repo = AppDataSourceSync.getRepository(NotificacaoVisita);
     const idRota = rota.ID_ROTA_PROMOTOR;
-    let notificacao: NotificacaoVisita | null = null;
+    const disponivelEm = proximoHorarioEnvio(agora, posicaoNoLote, totalDoLote);
+
+    if (process.env.OUTBOX_VISITA_ENVIO_IMEDIATO === "1") {
+      console.log(
+        "[notificacaoVisita] OUTBOX_VISITA_ENVIO_IMEDIATO ativo: notificação nasce vencida",
+        { ID_ROTA_PROMOTOR: idRota, AVAILABLE_AT: disponivelEm.toISOString() }
+      );
+    }
+
+    const repo = AppDataSourceSync.getRepository(NotificacaoVisita);
+    const linha = repo.create({
+      ID_ROTA_PROMOTOR: idRota,
+      CANAL: CanalNotificacao.WHATSAPP,
+      STATUS: StatusNotificacaoVisita.PENDENTE,
+      AVAILABLE_AT: disponivelEm,
+      ATTEMPTS: 0,
+    });
 
     try {
-      // AC1: exactly one row per route, created in PENDENTE before anything else.
-      notificacao = await repo.save(
-        repo.create({
-          ID_ROTA_PROMOTOR: idRota,
-          CANAL: CanalNotificacao.WHATSAPP,
-          STATUS: StatusNotificacaoVisita.PENDENTE,
-        })
-      );
-      NotificacaoVisitaService.log("notificação criada em PENDENTE", notificacao);
+      const salva = await repo.save(linha);
+      NotificacaoVisitaService.log("notificação agendada", salva);
+      return salva;
+    } catch (erro) {
+      // Sem linha não há envio, mas a rota já existe e a resposta dela não pode
+      // depender disso. Devolve a linha em memória, como o catch de
+      // notificarVisita já faz.
+      console.error("[notificacaoVisita] falha ao agendar notificação", {
+        ID_ROTA_PROMOTOR: idRota,
+        erro: (erro as Error)?.message,
+      });
+      return linha;
+    }
+  }
+
+  /**
+   * Dispatches one already-queued notification (AGND-09).
+   *
+   * Runs the flow against state as of *now*, not as of route creation: the
+   * guards it depends on (endereço recente, campanha encerrada, antispam) are
+   * all time-dependent, so a row queued yesterday can legitimately resolve to
+   * DISPENSADO today.
+   *
+   * Returns a verdict and persists only the domain status — ENVIADO,
+   * DISPENSADO, or a terminal FALHOU. It never writes ATTEMPTS, the lease, or
+   * AVAILABLE_AT: whoever owns the queue decides whether a transient failure is
+   * retried, and that separation is what lets the shared delivery system take
+   * over scheduling later without inheriting this service's retry policy.
+   *
+   * Never throws. An unexpected crash resolves to FALHOU_TRANSITORIO so an
+   * unknown fault is retried rather than silently retiring a notification.
+   */
+  static async despacharNotificacao(
+    idNotificacao: number,
+    cache?: CacheCampanha
+  ): Promise<DesfechoDespacho> {
+    const repo = AppDataSourceSync.getRepository(NotificacaoVisita);
+
+    try {
+      const notificacaoCarregada = await repo.findOne({
+        where: { ID_NOTIFICACAO_VISITA: idNotificacao },
+      });
+
+      if (notificacaoCarregada === null) {
+        return { desfecho: "FALHOU_TERMINAL", erro: MOTIVO_NOTIFICACAO_INEXISTENTE };
+      }
+
+      let notificacao = notificacaoCarregada;
+
+      // A rota vem do banco, não do chamador: quem despacha é o worker, que só
+      // conhece o id da linha.
+      const rota = await new MigrationAwareRepository<RotaPromotor>(
+        RotaPromotor,
+        "ID_ROTA_PROMOTOR"
+      ).findOne({ where: { ID_ROTA_PROMOTOR: notificacao.ID_ROTA_PROMOTOR } });
+
+      if (rota == null) {
+        await this.finalizar(repo, notificacao, {
+          STATUS: StatusNotificacaoVisita.FALHOU,
+          ERRO_ENVIO: MOTIVO_ROTA_INEXISTENTE,
+        });
+        return { desfecho: "FALHOU_TERMINAL", erro: MOTIVO_ROTA_INEXISTENTE };
+      }
 
       const oficina = await AppDataSourceSync.getRepository(Oficina).findOne({
         where: { ID_OFICINA: rota.ID_OFICINA },
       });
 
       if (oficina === null) {
-        return await this.finalizar(repo, notificacao, {
-          STATUS: StatusNotificacaoVisita.FALHOU,
-          ERRO_ENVIO: MOTIVO_OFICINA_INEXISTENTE,
-        });
+        return await this.encerrarTerminal(repo, notificacao, MOTIVO_OFICINA_INEXISTENTE);
       }
 
       // Guard 1 (AC26): a workshop updated recently is not asked to re-confirm.
       if (enderecoRecente(oficina)) {
-        return await this.finalizar(repo, notificacao, {
-          STATUS: StatusNotificacaoVisita.DISPENSADO,
-          ERRO_ENVIO: MOTIVO_ENDERECO_RECENTE,
-        });
+        return await this.encerrarDispensado(repo, notificacao, MOTIVO_ENDERECO_RECENTE);
       }
 
       // Guard 3: the link cannot outlive its campaign, so a campaign that has
@@ -237,10 +332,7 @@ export default class NotificacaoVisitaService {
       const { fim: fimCampanha, empresaSlug } = await resolverDadosCampanha(rota, cache);
 
       if (fimCampanha !== null && fimCampanha.getTime() <= Date.now()) {
-        return await this.finalizar(repo, notificacao, {
-          STATUS: StatusNotificacaoVisita.DISPENSADO,
-          ERRO_ENVIO: MOTIVO_CAMPANHA_ENCERRADA,
-        });
+        return await this.encerrarDispensado(repo, notificacao, MOTIVO_CAMPANHA_ENCERRADA);
       }
 
       // AC2: most recently touched Usuario first, nulls last, lowest ID as tiebreak.
@@ -262,44 +354,36 @@ export default class NotificacaoVisitaService {
       });
 
       if (usuarios.length === 0) {
-        return await this.finalizar(repo, notificacao, {
-          STATUS: StatusNotificacaoVisita.FALHOU,
-          ERRO_ENVIO: MOTIVO_SEM_USUARIO,
-        });
+        return await this.encerrarTerminal(repo, notificacao, MOTIVO_SEM_USUARIO);
       }
 
       const destinatario = usuarios.find((usuario) => (usuario.CELULAR ?? "").trim() !== "");
 
       // AC3
       if (destinatario === undefined) {
-        return await this.finalizar(repo, notificacao, {
-          STATUS: StatusNotificacaoVisita.FALHOU,
-          ERRO_ENVIO: MOTIVO_SEM_TELEFONE,
-        });
+        return await this.encerrarTerminal(repo, notificacao, MOTIVO_SEM_TELEFONE);
       }
 
       // Guard 2 (AC27-AC29): per-recipient anti-spam.
       const guarda = await avaliarGuardas(destinatario.ID_USUARIO!);
       if (guarda.bloqueado) {
-        return await this.finalizar(repo, notificacao, {
+        return await this.encerrarDispensado(repo, notificacao, guarda.motivo!, {
           ID_USUARIO: destinatario.ID_USUARIO,
-          STATUS: StatusNotificacaoVisita.DISPENSADO,
-          ERRO_ENVIO: guarda.motivo,
         });
       }
 
       // AC4: fail closed on a number that does not normalize.
       const telefone = normalizarTelefone(destinatario.CELULAR);
       if (telefone === null) {
-        return await this.finalizar(repo, notificacao, {
+        return await this.encerrarTerminal(repo, notificacao, MOTIVO_TELEFONE_INVALIDO, {
           ID_USUARIO: destinatario.ID_USUARIO,
-          STATUS: StatusNotificacaoVisita.FALHOU,
-          ERRO_ENVIO: MOTIVO_TELEFONE_INVALIDO,
         });
       }
 
       // AC5: the token is issued BEFORE dispatch — the message needs its URL —
-      // and stays valid whether or not the dispatch succeeds (AC11).
+      // and stays valid whether or not the dispatch succeeds (AC11). Issued at
+      // send time, not at enqueue: EXPIRA_EM must not burn part of its window
+      // sitting in the queue.
       const { raw, hash } = gerarLinkToken();
       // The link expires with the campaign it belongs to; the 168h window is
       // only what a campaign without an END_TIME falls back to. Guard 3 above
@@ -339,40 +423,99 @@ export default class NotificacaoVisitaService {
           PROVIDER_MESSAGE_ID: resultado.providerMessageId,
         });
         NotificacaoVisitaService.log("notificação enviada", enviada);
-        return enviada;
+        return {
+          desfecho: "ENVIADO",
+          messageId: resultado.messageId,
+          providerMessageId: resultado.providerMessageId,
+        };
       }
 
-      // AC8, AC9, AC11-AC13
-      const falhou = await this.finalizar(repo, notificacao, {
-        STATUS: StatusNotificacaoVisita.FALHOU,
-        ERRO_ENVIO: comporErroEnvio(resultado.reason, resultado.providerCode),
-      });
-      NotificacaoVisitaService.log("falha no envio da notificação", falhou);
-      return falhou;
+      const erro = comporErroEnvio(resultado.reason, resultado.providerCode);
+
+      // AC8, AC9: a config or per-recipient problem fails identically on every
+      // attempt, so it retires now. Only the provider's non-deterministic
+      // failures go back to the queue.
+      if (!ehFalhaTransitoria(resultado.reason)) {
+        const falhou = await this.finalizar(repo, notificacao, {
+          STATUS: StatusNotificacaoVisita.FALHOU,
+          ERRO_ENVIO: erro,
+        });
+        NotificacaoVisitaService.log("falha terminal no envio da notificação", falhou);
+        return { desfecho: "FALHOU_TERMINAL", erro };
+      }
+
+      // Transitório: só registra o motivo. STATUS segue PENDENTE, e o dono da
+      // fila decide entre nova tentativa e aposentadoria no teto.
+      const pendente = await this.finalizar(repo, notificacao, { ERRO_ENVIO: erro });
+      NotificacaoVisitaService.log("falha transitória no envio da notificação", pendente);
+      return { desfecho: "FALHOU_TRANSITORIO", erro };
     } catch (erro) {
-      console.error("[notificacaoVisita] erro inesperado no envio", {
-        ID_ROTA_PROMOTOR: idRota,
-        ID_NOTIFICACAO_VISITA: notificacao?.ID_NOTIFICACAO_VISITA ?? null,
+      console.error("[notificacaoVisita] erro inesperado no despacho", {
+        ID_NOTIFICACAO_VISITA: idNotificacao,
         erro: (erro as Error)?.message,
       });
-
-      const linha =
-        notificacao ??
-        new NotificacaoVisita({
-          ID_ROTA_PROMOTOR: idRota,
-          CANAL: CanalNotificacao.WHATSAPP,
-        });
-      linha.STATUS = StatusNotificacaoVisita.FALHOU;
-      linha.ERRO_ENVIO = `unexpected error: ${(erro as Error)?.message}`;
-
-      try {
-        return await repo.save(linha);
-      } catch {
-        // The datasource itself is unavailable; returning the in-memory row is
-        // all that is left, and still must not throw at the caller.
-        return linha;
-      }
+      return {
+        desfecho: "FALHOU_TRANSITORIO",
+        erro: `unexpected error: ${(erro as Error)?.message}`,
+      };
     }
+  }
+
+  /**
+   * Full send flow for one created route: queue the row, then dispatch it
+   * immediately.
+   *
+   * NÃO usar em caminho de produção de criação de rota (AGND-21): despacha
+   * inline, que é exatamente o comportamento que o outbox removeu. Existe para
+   * os testes e para o console manual, onde "agenda e envia agora" é o que se
+   * quer. `RotaService` chama `agendarVisita`.
+   */
+  static async notificarVisita(
+    rota: RotaPromotor,
+    cache?: CacheCampanha
+  ): Promise<NotificacaoVisita> {
+    const agendada = await this.agendarVisita(rota);
+    const id = agendada.ID_NOTIFICACAO_VISITA;
+
+    if (id === undefined) {
+      return agendada;
+    }
+
+    await this.despacharNotificacao(id, cache);
+
+    const repo = AppDataSourceSync.getRepository(NotificacaoVisita);
+    const atual = await repo.findOne({ where: { ID_NOTIFICACAO_VISITA: id } });
+    return atual ?? agendada;
+  }
+
+  /** Terminal FALHOU: persists the reason and reports it, no retry. */
+  private static async encerrarTerminal(
+    repo: ReturnType<typeof AppDataSourceSync.getRepository<NotificacaoVisita>>,
+    notificacao: NotificacaoVisita,
+    erro: string,
+    extra: Partial<NotificacaoVisita> = {}
+  ): Promise<DesfechoDespacho> {
+    await this.finalizar(repo, notificacao, {
+      ...extra,
+      STATUS: StatusNotificacaoVisita.FALHOU,
+      ERRO_ENVIO: erro,
+    });
+    return { desfecho: "FALHOU_TERMINAL", erro };
+  }
+
+  /** DISPENSADO: deliberate suppression, never a failure. */
+  private static async encerrarDispensado(
+    repo: ReturnType<typeof AppDataSourceSync.getRepository<NotificacaoVisita>>,
+    notificacao: NotificacaoVisita,
+    motivo: string,
+    extra: Partial<NotificacaoVisita> = {}
+  ): Promise<DesfechoDespacho> {
+    await this.finalizar(repo, notificacao, {
+      ...extra,
+      STATUS: StatusNotificacaoVisita.DISPENSADO,
+      ERRO_ENVIO: motivo,
+    });
+    return { desfecho: "DISPENSADO", motivo };
   }
 
   private static async finalizar(

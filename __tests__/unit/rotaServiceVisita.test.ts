@@ -1,7 +1,7 @@
 import RotaService from '../../service/rotaService';
 import { AppDataSourceSync } from '../../data-source';
 import CampanhaPromotor from '../../entities/CampanhaPromotor';
-import NotificacaoVisitaService, { criarCacheCampanha } from '../../service/notificacaoVisitaService';
+import NotificacaoVisitaService from '../../service/notificacaoVisitaService';
 import { StatusNotificacaoVisita } from '../../entities/NotificacaoVisita';
 
 // Deliberately does NOT mock utils/migrationRepository: these tests exercise the
@@ -18,17 +18,11 @@ jest.mock('../../service/notificacaoVisitaService');
 // created RotaPromotor successfully."
 
 describe('RotaService visit notification hook', () => {
-  const notificarVisitaMock = NotificacaoVisitaService.notificarVisita as jest.Mock;
+  const agendarVisitaMock = NotificacaoVisitaService.agendarVisita as jest.Mock;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    // The automock returns undefined; hand back a real cache so the batch
-    // actually shares one, as production does.
-    (criarCacheCampanha as jest.Mock).mockReturnValue({
-      dados: new Map(),
-      nomeEmpresa: new Map(),
-    });
-    notificarVisitaMock.mockResolvedValue({} as never);
+    agendarVisitaMock.mockResolvedValue({} as never);
     jest.spyOn(console, 'error').mockImplementation(() => {});
   });
 
@@ -37,7 +31,7 @@ describe('RotaService visit notification hook', () => {
   });
 
   describe('createRotas', () => {
-    it('notifies the single created route', async () => {
+    it('queues the single created route', async () => {
       const mockRota = { ID_ROTA_PROMOTOR: 11, ID_CAMPANHA_PROMOTOR: 5, ID_OFICINA: 100 };
       (AppDataSourceSync.getRepository as jest.Mock).mockReturnValue({
         create: jest.fn().mockReturnValue(mockRota),
@@ -46,11 +40,11 @@ describe('RotaService visit notification hook', () => {
 
       await RotaService.createRotas(5, 100);
 
-      expect(notificarVisitaMock).toHaveBeenCalledTimes(1);
-      expect(notificarVisitaMock).toHaveBeenCalledWith(mockRota, expect.anything());
+      expect(agendarVisitaMock).toHaveBeenCalledTimes(1);
+      expect(agendarVisitaMock).toHaveBeenCalledWith(mockRota, 0, 1);
     });
 
-    it('notifies once per route created in a batch', async () => {
+    it('queues once per route created in a batch', async () => {
       const mockRotas = [
         { ID_ROTA_PROMOTOR: 1, ID_OFICINA: 100 },
         { ID_ROTA_PROMOTOR: 2, ID_OFICINA: 200 },
@@ -63,34 +57,16 @@ describe('RotaService visit notification hook', () => {
 
       await RotaService.createRotas(5, [100, 200, 300]);
 
-      expect(notificarVisitaMock).toHaveBeenCalledTimes(3);
-      expect(notificarVisitaMock).toHaveBeenCalledWith(mockRotas[0], expect.anything());
-      expect(notificarVisitaMock).toHaveBeenCalledWith(mockRotas[1], expect.anything());
-      expect(notificarVisitaMock).toHaveBeenCalledWith(mockRotas[2], expect.anything());
+      expect(agendarVisitaMock).toHaveBeenCalledTimes(3);
+      expect(agendarVisitaMock).toHaveBeenCalledWith(mockRotas[0], 0, 3);
+      expect(agendarVisitaMock).toHaveBeenCalledWith(mockRotas[1], 1, 3);
+      expect(agendarVisitaMock).toHaveBeenCalledWith(mockRotas[2], 2, 3);
     });
 
-    // One campaign per batch, so one cache per batch — a cache per route would
-    // memoize nothing.
-    it('hands every route of a batch the same campaign cache', async () => {
-      const mockRotas = [
-        { ID_ROTA_PROMOTOR: 1, ID_OFICINA: 100 },
-        { ID_ROTA_PROMOTOR: 2, ID_OFICINA: 200 },
-        { ID_ROTA_PROMOTOR: 3, ID_OFICINA: 300 },
-      ];
-      (AppDataSourceSync.getRepository as jest.Mock).mockReturnValue({
-        create: jest.fn((data) => data),
-        save: jest.fn().mockResolvedValue(mockRotas),
-      });
-
-      await RotaService.createRotas(5, [100, 200, 300]);
-
-      const caches = new Set(notificarVisitaMock.mock.calls.map((chamada) => chamada[1]));
-      expect(caches.size).toBe(1);
-    });
-
-    // The send is a network call inside the request cycle: routes go through a
-    // bounded pool, never all at once and never strictly one at a time.
-    it('dispatches a large batch with bounded concurrency', async () => {
+    // Every route of a large batch is queued, with no pool bounding the work:
+    // enqueue is one insert, so the concurrency limit that used to guard a
+    // request full of 10s provider calls has nothing left to guard (AGND-01).
+    it('queues every route of a large batch', async () => {
       const mockRotas = Array.from({ length: 12 }, (_, i) => ({
         ID_ROTA_PROMOTOR: i + 1,
         ID_OFICINA: 100 + i,
@@ -100,21 +76,10 @@ describe('RotaService visit notification hook', () => {
         save: jest.fn().mockResolvedValue(mockRotas),
       });
 
-      let emVoo = 0;
-      let picoEmVoo = 0;
-      notificarVisitaMock.mockImplementation(async () => {
-        emVoo += 1;
-        picoEmVoo = Math.max(picoEmVoo, emVoo);
-        await new Promise((resolve) => setImmediate(resolve));
-        emVoo -= 1;
-        return {} as never;
-      });
-
       await RotaService.createRotas(5, mockRotas.map((r) => r.ID_OFICINA));
 
-      expect(notificarVisitaMock).toHaveBeenCalledTimes(12);
-      expect(picoEmVoo).toBeGreaterThan(1);
-      expect(picoEmVoo).toBeLessThanOrEqual(5);
+      expect(agendarVisitaMock).toHaveBeenCalledTimes(12);
+      expect(agendarVisitaMock).toHaveBeenCalledWith(mockRotas[11], 11, 12);
     });
 
     it('still returns the created route when the notification rejects', async () => {
@@ -123,7 +88,7 @@ describe('RotaService visit notification hook', () => {
         create: jest.fn().mockReturnValue(mockRota),
         save: jest.fn().mockResolvedValue(mockRota),
       });
-      notificarVisitaMock.mockRejectedValue(new Error('notificação falhou'));
+      agendarVisitaMock.mockRejectedValue(new Error('notificação falhou'));
 
       const resultado = await RotaService.createRotas(5, 100);
 
@@ -152,19 +117,19 @@ describe('RotaService visit notification hook', () => {
       );
     }
 
-    it('notifies once per route created inside the transaction', async () => {
+    it('queues once per route created inside the transaction', async () => {
       montarTransacao();
 
       await RotaService.createRotaWithCampanhaPromotor(10, 20, [100, 200]);
 
-      expect(notificarVisitaMock).toHaveBeenCalledTimes(2);
-      expect(notificarVisitaMock).toHaveBeenCalledWith(mockRotas[0], expect.anything());
-      expect(notificarVisitaMock).toHaveBeenCalledWith(mockRotas[1], expect.anything());
+      expect(agendarVisitaMock).toHaveBeenCalledTimes(2);
+      expect(agendarVisitaMock).toHaveBeenCalledWith(mockRotas[0], 0, 2);
+      expect(agendarVisitaMock).toHaveBeenCalledWith(mockRotas[1], 1, 2);
     });
 
     it('still returns the created routes when the notification rejects', async () => {
       montarTransacao();
-      notificarVisitaMock.mockRejectedValue(new Error('notificação falhou'));
+      agendarVisitaMock.mockRejectedValue(new Error('notificação falhou'));
 
       const resultado = await RotaService.createRotaWithCampanhaPromotor(10, 20, [100, 200]);
 
@@ -189,27 +154,27 @@ describe('RotaService visit notification hook', () => {
       });
     }
 
-    it('notifies each route added by editing the campaign', async () => {
+    it('queues each route added by editing the campaign', async () => {
       montarRepo();
 
       const resultado = await RotaService.updateRotaWorkshops(5, [100, 300]);
 
       expect(resultado.created).toEqual([novaRota]);
-      expect(notificarVisitaMock).toHaveBeenCalledTimes(1);
-      expect(notificarVisitaMock).toHaveBeenCalledWith(novaRota, expect.anything());
+      expect(agendarVisitaMock).toHaveBeenCalledTimes(1);
+      expect(agendarVisitaMock).toHaveBeenCalledWith(novaRota, 0, 1);
     });
 
-    it('does not notify when no new workshop was added', async () => {
+    it('does not queue when no new workshop was added', async () => {
       montarRepo();
 
       await RotaService.updateRotaWorkshops(5, [100]);
 
-      expect(notificarVisitaMock).not.toHaveBeenCalled();
+      expect(agendarVisitaMock).not.toHaveBeenCalled();
     });
 
     it('still returns the created routes when the notification rejects', async () => {
       montarRepo();
-      notificarVisitaMock.mockRejectedValue(new Error('notificação falhou'));
+      agendarVisitaMock.mockRejectedValue(new Error('notificação falhou'));
 
       const resultado = await RotaService.updateRotaWorkshops(5, [100, 300]);
 
