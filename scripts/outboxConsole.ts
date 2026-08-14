@@ -96,12 +96,33 @@ async function status(): Promise<void> {
      FROM "CAMPANHAS_OB"."NOTIFICACAO_VISITA"`
   );
 
+  // O destinatário é resolvido por JOIN, não lido da linha: linha PENDENTE não
+  // tem ID_USUARIO porque quem resolve é o despacho, no momento do envio. Ler
+  // aqui mostra quem seria escolhido AGORA — que é a pergunta útil antes de a
+  // mensagem sair. Se alguém corrigir um telefone hoje à noite, esta coluna já
+  // mostra o novo amanhã de manhã.
+  //
+  // A ordenação repete a de despacharNotificacao: mais recentemente alterado
+  // primeiro, nulos por último, menor ID como desempate, entre os que têm
+  // telefone.
   const proximas = await AppDataSourceSync.query(
-    `SELECT "ID_NOTIFICACAO_VISITA", "ID_ROTA_PROMOTOR", "AVAILABLE_AT",
-            "ATTEMPTS", "LOCKED_BY", "LOCKED_AT", "ERRO_ENVIO"
-       FROM "CAMPANHAS_OB"."NOTIFICACAO_VISITA"
-      WHERE "STATUS" = 'PENDENTE' AND "AVAILABLE_AT" IS NOT NULL
-      ORDER BY "AVAILABLE_AT" ASC
+    `SELECT n."ID_NOTIFICACAO_VISITA", n."ID_ROTA_PROMOTOR", n."AVAILABLE_AT",
+            n."ATTEMPTS", n."LOCKED_BY", n."ERRO_ENVIO",
+            d."NOME" AS destinatario, d."CELULAR" AS telefone
+       FROM "CAMPANHAS_OB"."NOTIFICACAO_VISITA" n
+       LEFT JOIN "CAMPANHAS_OB"."ROTA_PROMOTOR" r
+              ON r."ID_ROTA_PROMOTOR" = n."ID_ROTA_PROMOTOR"
+             AND r."DELETED_AT" IS NULL
+       LEFT JOIN LATERAL (
+            SELECT u."ID_USUARIO", u."NOME", u."CELULAR"
+              FROM "MAIN_REGISTER"."USUARIO" u
+             WHERE u."ID_OFICINA" = r."ID_OFICINA"
+               AND coalesce(u."CELULAR", '') <> ''
+             ORDER BY u."DATA_ALTERACAO" DESC NULLS LAST, u."ID_USUARIO" ASC
+             LIMIT 1
+       ) d ON true
+      WHERE n."STATUS" = 'PENDENTE' AND n."AVAILABLE_AT" IS NOT NULL
+      ORDER BY n."AVAILABLE_AT" ASC
       LIMIT 10`
   );
 
@@ -123,6 +144,17 @@ async function status(): Promise<void> {
 
   console.log("\n── próximas a sair ───────────────────────────────────");
   console.table(proximas);
+
+  const semDestinatario = proximas.filter(
+    (linha: { destinatario: string | null }) => linha.destinatario === null
+  ).length;
+
+  if (semDestinatario > 0) {
+    console.log(
+      `\nnota: ${semDestinatario} das listadas não têm destinatário com telefone hoje ` +
+        "e vão terminar em FALHOU 'no recipient with phone' se nada mudar até o envio."
+    );
+  }
 }
 
 /** AGND-17: um ciclo em primeiro plano, rode ou não o cron. */
