@@ -74,12 +74,18 @@ createDocumentedRoute(router, {
 **FILTRO_SEGMENTACAO example:**
 \`\`\`json
 {
-  "if": { "and": [{ "equals": ["contact.professionalOccupation", "Mecânico"] }] },
+  "if": {
+    "behavior": {
+      "section": "LEAD_DATA",
+      "criterion": "LEAD_FIELD",
+      "value": { "fieldKey": "professionalOccupation", "fieldType": "text", "operator": "EQUALS", "value": "Mecânico" }
+    }
+  },
   "then": { "decision": "include", "reason": "segment_rule_matched" },
   "default": { "decision": "exclude", "reason": "default_exclude" }
 }
 \`\`\`
-Available fields from \`GET /segmentacao/getFiltrosSegmentacaoByCampanha/:idCampanha\`. Operators: equals, in, gt, gte, lt, lte, exists, and, or, not.`,
+\`fieldKey\` deve ser o nome do campo sem prefixo (ex: \`"gender"\`, não \`"attributeKey.gender"\`). Campos disponíveis via \`GET /segmentacao/getFiltrosSegmentacaoByCampanha/:idCampanha\`.`,
     security: [{ bearerAuth: [] }],
     responses: {
       201: {
@@ -121,12 +127,18 @@ createDocumentedRoute(router, {
 **FILTRO_SEGMENTACAO example:**
 \`\`\`json
 {
-  "if": { "equals": ["contact.state", "SP"] },
+  "if": {
+    "behavior": {
+      "section": "LEAD_DATA",
+      "criterion": "LEAD_FIELD",
+      "value": { "fieldKey": "gender", "fieldType": "text", "operator": "EQUALS", "value": "Masculino" }
+    }
+  },
   "then": { "decision": "include", "reason": "segment_rule_matched" },
   "default": { "decision": "exclude", "reason": "default_exclude" }
 }
 \`\`\`
-Send \`null\` to remove the filter. If CEP is also changed, routes will be reassigned using the new filter.`,
+\`fieldKey\` deve ser o nome do campo sem prefixo (ex: \`"gender"\`, não \`"attributeKey.gender"\`). Send \`null\` to remove the filter. If CEP is also changed, routes will be reassigned using the new filter.`,
     security: [{ bearerAuth: [] }],
     responses: {
       200: {
@@ -280,12 +292,18 @@ createDocumentedRoute(router, {
 **FILTRO_SEGMENTACAO example:**
 \`\`\`json
 {
-  "if": { "in": ["contact.state", ["SP", "RJ", "MG"]] },
+  "if": {
+    "behavior": {
+      "section": "LEAD_DATA",
+      "criterion": "LEAD_FIELD",
+      "value": { "fieldKey": "professionalOccupation", "fieldType": "text", "operator": "EQUALS", "value": "Mecânico" }
+    }
+  },
   "then": { "decision": "include", "reason": "segment_rule_matched" },
   "default": { "decision": "exclude", "reason": "default_exclude" }
 }
 \`\`\`
-Available fields from \`GET /segmentacao/getFiltrosSegmentacaoByCampanha/:idCampanha\`.`,
+\`fieldKey\` deve ser o nome do campo sem prefixo (ex: \`"gender"\`, não \`"attributeKey.gender"\`). Campos disponíveis via \`GET /segmentacao/getFiltrosSegmentacaoByCampanha/:idCampanha\`.`,
     security: [{ bearerAuth: [] }],
     responses: {
       201: {

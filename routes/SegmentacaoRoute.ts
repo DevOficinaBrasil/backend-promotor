@@ -70,8 +70,30 @@ createDocumentedRoute(router, {
   "filtroSegmentacao": {
     "if": {
       "and": [
-        { "equals": ["contact.professionalOccupation", "Trabalho na área de Mecânica"] },
-        { "in": ["contact.state", ["SP", "RJ", "MG"]] }
+        {
+          "behavior": {
+            "section": "LEAD_DATA",
+            "criterion": "LEAD_FIELD",
+            "value": {
+              "fieldKey": "professionalOccupation",
+              "fieldType": "text",
+              "operator": "EQUALS",
+              "value": "Trabalho na área de Mecânica"
+            }
+          }
+        },
+        {
+          "behavior": {
+            "section": "LEAD_DATA",
+            "criterion": "LEAD_FIELD",
+            "value": {
+              "fieldKey": "gender",
+              "fieldType": "text",
+              "operator": "EXISTS",
+              "value": true
+            }
+          }
+        }
       ]
     },
     "then": { "decision": "include", "reason": "segment_rule_matched" },
@@ -80,16 +102,15 @@ createDocumentedRoute(router, {
 }
 \`\`\`
 
-**Operadores disponíveis no \`if\`:**
-- \`equals\`: \`{ "equals": ["<campo>", <valor>] }\`
-- \`in\`: \`{ "in": ["<campo>", [<valor1>, <valor2>]] }\`
-- \`gt\` / \`gte\` / \`lt\` / \`lte\`: \`{ "gte": ["<campo>", <numero>] }\`
-- \`exists\`: \`{ "exists": "<campo>" }\`
-- \`and\`: \`{ "and": [<condição1>, <condição2>] }\`
-- \`or\`: \`{ "or": [<condição1>, <condição2>] }\`
-- \`not\`: \`{ "not": <condição> }\`
+**Estrutura do behavior:**
+- \`section\`: \`"LEAD_DATA"\`
+- \`criterion\`: \`"LEAD_FIELD"\`
+- \`value.fieldKey\`: nome do campo (ex: \`"gender"\`, \`"professionalOccupation"\`). **Usar apenas o nome do campo, sem prefixo** (ex: \`"gender"\`, não \`"attributeKey.gender"\`).
+- \`value.fieldType\`: \`"text"\`, \`"number"\`, etc.
+- \`value.operator\`: \`"EQUALS"\`, \`"EXISTS"\`, \`"IN"\`, \`"GT"\`, \`"GTE"\`, \`"LT"\`, \`"LTE"\`
+- \`value.value\`: valor para comparação (\`true\` para EXISTS)
 
-Os campos disponíveis (\`contact.professionalOccupation\`, \`contact.state\`, etc.) são retornados pelo endpoint \`GET /segmentacao/getFiltrosSegmentacaoByCampanha/:idCampanha\`.`,
+Combine condições com \`and\`, \`or\`, \`not\`. Campos disponíveis via \`GET /segmentacao/getFiltrosSegmentacaoByCampanha/:idCampanha\`.`,
     security: [{ bearerAuth: [] }],
     responses: {
       200: {
@@ -126,13 +147,24 @@ createDocumentedRoute(router, {
     summary: 'Preview de oficinas segmentadas',
     description: `Retorna as oficinas que seriam atribuídas ao promotor considerando o filtro de segmentação CRM, o raio e a localização de referência. Não cria rotas — serve para o operador validar antes de criar o promotor.
 
-**Body:**
+**Body com lat/lon:**
 \`\`\`json
 {
   "idCampanha": 123,
   "raio": 20,
   "filtroSegmentacao": {
-    "if": { "equals": ["contact.professionalOccupation", "Mecânico"] },
+    "if": {
+      "behavior": {
+        "section": "LEAD_DATA",
+        "criterion": "LEAD_FIELD",
+        "value": {
+          "fieldKey": "professionalOccupation",
+          "fieldType": "text",
+          "operator": "EQUALS",
+          "value": "Mecânico"
+        }
+      }
+    },
     "then": { "decision": "include", "reason": "segment_rule_matched" },
     "default": { "decision": "exclude", "reason": "default_exclude" }
   },
