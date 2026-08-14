@@ -9,7 +9,7 @@ The obvious fix, a cron, is the one thing that must not be built: **this project
 ## Goals
 
 - [ ] Route creation performs zero outbound provider calls; every notification is enqueued and delivered later.
-- [ ] Notifications go out at a configurable hour (default 09:00 America/São_Paulo, next day), never at night.
+- [ ] Notifications go out in a configurable window on the next day (default 09:00 America/São_Paulo), never at night, with a batch spread across the window rather than landing on one instant.
 - [ ] N copies of the server deliver each notification once, with no leader election and no new infrastructure.
 - [ ] A due notification survives the process dying mid-send, and survives every server being down at the scheduled hour.
 - [ ] What is queued, for whom, for when, and why anything failed is answerable with a single `SELECT`.
@@ -51,7 +51,9 @@ Every ambiguity is resolved or recorded here — nothing is left silently unclea
 | Seam placement for that migration | `outboxNotificacaoService` owns claim + tick + retry decisions; `despacharNotificacao(id)` is the unit of work and knows nothing about how it was scheduled | Keeps the replaceable part (scheduling/claiming) separate from the part that must survive (guards, recipient, token, channel). The shared system, when ready, calls the same dispatch entry point | y |
 | Row-level portability | `AVAILABLE_AT`, `ATTEMPTS` and `ERRO_ENVIO` stay on `NOTIFICACAO_VISITA` rather than in a separate queue table | The columns are meaningful notification history regardless of who schedules the send, so they survive the migration. A dedicated queue table would become dead weight the day the shared system takes over | y |
 | Redis reachability from this service | Unverified | `backend-promotor` has no `REDIS_*` config today; only `backend-communities` connects to that private IP. Not blocking, since Redis is not on the chosen path, but it would be a prerequisite to verify before any future move to BullMQ | n |
-| Send window | Next occurrence of `NOTIFICACAO_HORA_ENVIO` (default `9`) in `America/Sao_Paulo` | User's explicit call. Predictable for the reparador and structurally incapable of sending at night, whenever the batch was imported | y |
+| Send window | **Next day's** window, `NOTIFICACAO_HORA_ENVIO` (default `9`) to optional `NOTIFICACAO_HORA_ENVIO_FIM`, in `America/Sao_Paulo` | User's explicit call, revised 2026-08-14. Predictable for the reparador and structurally incapable of sending at night. "Always tomorrow" means send time never depends on what hour ops imported; the known cost is that a 06:00 import waits ~27h instead of 3h | y |
+| Batch spreading | Even spacing across the window, by position in the created batch | User's explicit call over random jitter: predictable and reproducible. Spreading is what keeps AGND-20's ceiling (`batch x copies` per tick) off the critical path — 500 routes over 3h is a trickle, the same 500 at one instant is a burst. Per-batch, not global: two large imports on the same day overlap, which is accepted and still far better than both landing on one instant | y |
+| Window unset | `NOTIFICACAO_HORA_ENVIO_FIM` unset, or not later than the start, collapses to the single-hour behaviour | Keeps the simple case simple and makes the window opt-in; an unusable value degrades instead of failing | y |
 | Timezone handling | `date-fns-tz` — installed and in `package.json`, but **imported nowhere in this repo today** | Corrected 2026-08-13: an earlier draft claimed it was already in use. It is not — there is no `date-fns` import and no `America/` string anywhere in the codebase, consistent with `CLAUDE.md`'s warning that these dependency lists are inflated by forking. So this is a first use, not a free reuse: no install needed, but the timezone conversion is new code that must be unit-tested on its own (`utils/agendamento.ts`) rather than assumed correct. `Intl.DateTimeFormat` with a `timeZone` option is the dependency-free alternative if preferred | y |
 | Clock of record | Postgres `now()`, never the Node process clock | A copied server may carry a skewed clock; the database is the single clock all copies agree on. This is what makes due-ness unambiguous | y |
 | Worker host | Inside the API process, started from `app.ts`, gated by `OUTBOX_VISITA_ENABLED` | User's explicit call. No new deploy artifact; the env gate keeps it off locally | y |
@@ -111,7 +113,8 @@ Large scope: every dimension resolves to a requirement or an explicit N/A.
 **Acceptance Criteria**:
 
 1. WHEN a `RotaPromotor` is created THEN the system SHALL persist exactly one `NotificacaoVisita` row in STATUS `PENDENTE` with `AVAILABLE_AT` set, and SHALL NOT resolve a recipient, issue a token, or perform any outbound provider call during the creation request.
-2. WHEN computing `AVAILABLE_AT`, AND `OUTBOX_VISITA_ENVIO_IMEDIATO` is not `"1"`, THEN the system SHALL use the next occurrence of `NOTIFICACAO_HORA_ENVIO` in `America/Sao_Paulo` strictly after the creation instant, persisted as `timestamptz`. (AGND-16 defines the `"1"` case and takes precedence over this criterion.)
+2. WHEN computing `AVAILABLE_AT`, AND `OUTBOX_VISITA_ENVIO_IMEDIATO` is not `"1"`, THEN the system SHALL place the notification in the **next day's** send window in `America/Sao_Paulo`, persisted as `timestamptz` — regardless of the hour of creation. (AGND-16 defines the `"1"` case and takes precedence over this criterion.)
+5. WHERE `NOTIFICACAO_HORA_ENVIO_FIM` defines a window later than `NOTIFICACAO_HORA_ENVIO`, WHEN a batch of routes is created THEN the system SHALL space the batch evenly across that window, placing route `i` of `n` at `inicio + (fim - inicio) x i/n`, so no notification is scheduled at or after the window's end.
 3. IF the notification row cannot be written THEN the system SHALL still return the created `RotaPromotor` successfully, preserving the isolation guarantee of the parent spec's AC10.
 4. WHILE the outbox owns delivery, no production route-creation path SHALL call `notificarVisita` (which dispatches inline); it is retained only for the manual console and existing tests, and `RotaService` SHALL enqueue via `agendarVisita`.
 
@@ -292,7 +295,8 @@ Names, defaults and value convention are taken from `backend-communities` so the
 | `OUTBOX_VISITA_BATCH_SIZE` | `20` | same name, target uses `100` | Rows claimed per tick. Lower here: each row costs a provider call with a 10s timeout, not an EventBridge put. |
 | `OUTBOX_VISITA_LOCK_LEASE_MINUTES` | `5` | same | Lease length. Dwarfs the channel's 10s timeout. |
 | `OUTBOX_VISITA_MAX_ATTEMPTS` | `3` | same name, target uses `5` | Attempts before a transient failure becomes terminal `FALHOU`. |
-| `NOTIFICACAO_HORA_ENVIO` | `9` | none | Hour of day (America/São_Paulo) the batch goes out. |
+| `NOTIFICACAO_HORA_ENVIO` | `9` | none | Hour the window opens (America/São_Paulo). |
+| `NOTIFICACAO_HORA_ENVIO_FIM` | *(unset)* | none | Hour the window closes. Unset, or not later than the start, means every notification goes out at the opening hour. |
 | `OUTBOX_VISITA_ENVIO_IMEDIATO` | `0` | none | Local testing only. `"1"` makes every new notification due immediately instead of at the scheduled hour. Never set in production — it would send at import time, which is the behaviour this feature removes. |
 
 ## Affected Code
@@ -338,10 +342,11 @@ Names, defaults and value convention are taken from `backend-communities` so the
 | AGND-19 | P3: Exercise the queue by hand | Execute | ✅ Verified |
 | AGND-20 | P1: Dispatch on schedule, bounded retry | Execute | ✅ Verified |
 | AGND-21 | P1: Enqueue instead of sending inline | Execute | ✅ Verified |
+| AGND-22 | P1: Enqueue instead of sending inline | Execute | ✅ Verified |
 
-**ID mapping:** AGND-01…03 = P1 story 1 AC1-3; AGND-04…08 = P1 story 2 AC1-5; AGND-09…12 = P1 story 3 AC1-3 plus AC4-6 folded into AGND-11 (retry) and AGND-12 (tick isolation); AGND-13 = P2 story 1 AC1-3; AGND-14…15 = P2 story 2 AC1-2; AGND-16 = P3 AC1 (immediate scheduling), AGND-17 = P3 AC2 + AC6 (foreground tick and its test lock), AGND-18 = P3 AC3 (status), AGND-19 = P3 AC4 + AC5 (re-arm and its refusal); AGND-20 = P1 story 3 AC7 (send-rate ceiling); AGND-21 = P1 story 1 AC4 (no inline send from route creation).
+**ID mapping:** AGND-01…03 = P1 story 1 AC1-3; AGND-04…08 = P1 story 2 AC1-5; AGND-09…12 = P1 story 3 AC1-3 plus AC4-6 folded into AGND-11 (retry) and AGND-12 (tick isolation); AGND-13 = P2 story 1 AC1-3; AGND-14…15 = P2 story 2 AC1-2; AGND-16 = P3 AC1 (immediate scheduling), AGND-17 = P3 AC2 + AC6 (foreground tick and its test lock), AGND-18 = P3 AC3 (status), AGND-19 = P3 AC4 + AC5 (re-arm and its refusal); AGND-20 = P1 story 3 AC7 (send-rate ceiling); AGND-21 = P1 story 1 AC4 (no inline send from route creation); AGND-22 = P1 story 1 AC5 (batch spread across the send window).
 
-**Coverage:** 21 total, 21 mapped to tasks, 0 unmapped. Verified 2026-08-13 — see `validation.md` (AGND-07, 17, 18 carry spec-precision caveats recorded there).
+**Coverage:** 22 total, 22 mapped to tasks, 0 unmapped. Verified 2026-08-13 — see `validation.md` (AGND-07, 17, 18 carry spec-precision caveats recorded there).
 
 ---
 

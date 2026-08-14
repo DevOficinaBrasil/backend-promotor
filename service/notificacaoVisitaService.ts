@@ -215,15 +215,21 @@ export default class NotificacaoVisitaService {
    * encerrada, antispam) are all time-dependent — evaluating them at import
    * time answers the wrong question.
    *
+   * `posicaoNoLote`/`totalDoLote` distribuem o lote pela janela de envio, quando
+   * há janela configurada. Sem eles, tudo vence no mesmo instante e o lote da
+   * manhã vira rajada contra o provider.
+   *
    * Never throws (AGND-03). Route creation must not fail because a notification
    * could not be queued.
    */
   static async agendarVisita(
     rota: RotaPromotor,
+    posicaoNoLote = 0,
+    totalDoLote = 1,
     agora: Date = new Date()
   ): Promise<NotificacaoVisita> {
     const idRota = rota.ID_ROTA_PROMOTOR;
-    const disponivelEm = proximoHorarioEnvio(agora);
+    const disponivelEm = proximoHorarioEnvio(agora, posicaoNoLote, totalDoLote);
 
     if (process.env.OUTBOX_VISITA_ENVIO_IMEDIATO === "1") {
       console.log(

@@ -41,7 +41,7 @@ describe('RotaService visit notification hook', () => {
       await RotaService.createRotas(5, 100);
 
       expect(agendarVisitaMock).toHaveBeenCalledTimes(1);
-      expect(agendarVisitaMock).toHaveBeenCalledWith(mockRota);
+      expect(agendarVisitaMock).toHaveBeenCalledWith(mockRota, 0, 1);
     });
 
     it('queues once per route created in a batch', async () => {
@@ -58,9 +58,9 @@ describe('RotaService visit notification hook', () => {
       await RotaService.createRotas(5, [100, 200, 300]);
 
       expect(agendarVisitaMock).toHaveBeenCalledTimes(3);
-      expect(agendarVisitaMock).toHaveBeenCalledWith(mockRotas[0]);
-      expect(agendarVisitaMock).toHaveBeenCalledWith(mockRotas[1]);
-      expect(agendarVisitaMock).toHaveBeenCalledWith(mockRotas[2]);
+      expect(agendarVisitaMock).toHaveBeenCalledWith(mockRotas[0], 0, 3);
+      expect(agendarVisitaMock).toHaveBeenCalledWith(mockRotas[1], 1, 3);
+      expect(agendarVisitaMock).toHaveBeenCalledWith(mockRotas[2], 2, 3);
     });
 
     // Every route of a large batch is queued, with no pool bounding the work:
@@ -79,7 +79,7 @@ describe('RotaService visit notification hook', () => {
       await RotaService.createRotas(5, mockRotas.map((r) => r.ID_OFICINA));
 
       expect(agendarVisitaMock).toHaveBeenCalledTimes(12);
-      expect(agendarVisitaMock).toHaveBeenCalledWith(mockRotas[11]);
+      expect(agendarVisitaMock).toHaveBeenCalledWith(mockRotas[11], 11, 12);
     });
 
     it('still returns the created route when the notification rejects', async () => {
@@ -123,8 +123,8 @@ describe('RotaService visit notification hook', () => {
       await RotaService.createRotaWithCampanhaPromotor(10, 20, [100, 200]);
 
       expect(agendarVisitaMock).toHaveBeenCalledTimes(2);
-      expect(agendarVisitaMock).toHaveBeenCalledWith(mockRotas[0]);
-      expect(agendarVisitaMock).toHaveBeenCalledWith(mockRotas[1]);
+      expect(agendarVisitaMock).toHaveBeenCalledWith(mockRotas[0], 0, 2);
+      expect(agendarVisitaMock).toHaveBeenCalledWith(mockRotas[1], 1, 2);
     });
 
     it('still returns the created routes when the notification rejects', async () => {
@@ -161,7 +161,7 @@ describe('RotaService visit notification hook', () => {
 
       expect(resultado.created).toEqual([novaRota]);
       expect(agendarVisitaMock).toHaveBeenCalledTimes(1);
-      expect(agendarVisitaMock).toHaveBeenCalledWith(novaRota);
+      expect(agendarVisitaMock).toHaveBeenCalledWith(novaRota, 0, 1);
     });
 
     it('does not queue when no new workshop was added', async () => {

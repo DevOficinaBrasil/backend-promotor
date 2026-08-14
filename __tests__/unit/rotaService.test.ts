@@ -83,11 +83,16 @@ describe('RotaService', () => {
       await RotaService.createRotas(5, [100, 200]);
 
       expect(NotificacaoVisitaService.agendarVisita).toHaveBeenCalledTimes(2);
+      // Posição e total do lote espalham os envios pela janela (AGND-02).
       expect(NotificacaoVisitaService.agendarVisita).toHaveBeenCalledWith(
-        expect.objectContaining({ ID_ROTA_PROMOTOR: 1 })
+        expect.objectContaining({ ID_ROTA_PROMOTOR: 1 }),
+        0,
+        2
       );
       expect(NotificacaoVisitaService.agendarVisita).toHaveBeenCalledWith(
-        expect.objectContaining({ ID_ROTA_PROMOTOR: 2 })
+        expect.objectContaining({ ID_ROTA_PROMOTOR: 2 }),
+        1,
+        2
       );
     });
 
@@ -393,7 +398,7 @@ describe('RotaService', () => {
       await RotaService.reassignRotasByAddress('80010-000', 123);
 
       expect(agendarVisita).toHaveBeenCalledTimes(1);
-      expect(agendarVisita).toHaveBeenCalledWith(rotaCriada);
+      expect(agendarVisita).toHaveBeenCalledWith(rotaCriada, 0, 1);
     });
 
     it('still completes the reassignment when the notification rejects', async () => {
