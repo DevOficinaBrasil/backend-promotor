@@ -5,6 +5,7 @@ import {
   UpdateFiltroSegmentacaoSchema,
   PreviewSegmentacaoSchema,
   PreviewOficinasSegmentadasSchema,
+  DebugPreviewCrmSchema,
   CampanhaIdParamsSchema,
   CampanhaPromotorIdParamsSchema,
 } from "../schemas/segmentacao";
@@ -200,6 +201,33 @@ createDocumentedRoute(router, {
       },
       500: {
         description: 'Erro interno',
+        schema: ErrorResponseSchema,
+      },
+    },
+  },
+});
+
+// Debug: chama previewSegmentDefinition diretamente
+createDocumentedRoute(router, {
+  method: 'post',
+  path: '/debugPreviewCrm',
+  handler: SegmentacaoController.debugPreviewCrm,
+  basePath: '/segmentacao',
+  middlewares: [],
+  schemas: {
+    body: DebugPreviewCrmSchema,
+  },
+  documentation: {
+    tags: ['Segmentação'],
+    summary: 'Debug: previewSegmentDefinition direto',
+    description: 'Chama previewSegmentDefinition do @obcrm/segmentation com tenantId e DSL informados. Retorna resposta bruta do CRM sem processamento.',
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: {
+        description: 'Resposta bruta do CRM — sampleArray, estimatedCount, hasMore',
+      },
+      500: {
+        description: 'Erro na chamada ao CRM',
         schema: ErrorResponseSchema,
       },
     },

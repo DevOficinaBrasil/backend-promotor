@@ -32,6 +32,12 @@ export const PreviewOficinasSegmentadasSchema = z.object({
   { message: "Informe latitude + longitude ou CEP para referência de localização." }
 );
 
+export const DebugPreviewCrmSchema = z.object({
+  tenantId: z.number().int().positive(),
+  filtroSegmentacao: FiltroSegmentacaoSchema,
+  limit: z.number().int().min(1).max(5000).optional().default(20),
+});
+
 export const CampanhaIdParamsSchema = z.object({
   idCampanha: z.coerce.number().int().positive(),
 });

@@ -181,4 +181,30 @@ export default class SegmentacaoController {
       });
     }
   };
+
+  /**
+   * Debug: chama previewSegmentDefinition diretamente com tenantId + DSL.
+   * POST /segmentacao/debugPreviewCrm
+   */
+  static debugPreviewCrm = async (req: Request, res: Response) => {
+    try {
+      const { tenantId, filtroSegmentacao, limit } = req.body;
+
+      const { previewSegmentDefinition } = require("@obcrm/segmentation");
+      const result = await previewSegmentDefinition(filtroSegmentacao, {
+        tenantId,
+        limit: limit ?? 20,
+        includeEstimatedCount: true,
+        accessToken: process.env.CRM_API_TOKEN!,
+      });
+
+      return res.json(result);
+    } catch (error) {
+      console.error("Erro no debugPreviewCrm:", error);
+      return res.status(500).json({
+        message: "Erro ao chamar previewSegmentDefinition.",
+        error: error instanceof Error ? error.message : "Erro desconhecido",
+      });
+    }
+  };
 }
