@@ -337,7 +337,7 @@ T13 → T14 → T15 → T16
 
 ---
 
-### T9: Exibir o badge na ordenação de visitas (ob-ads)
+### T9: Exibir o badge na ordenação de visitas (ob-ads) ✅
 
 **What**: Consumir o mesmo badge na tela de ordenação de visitas.
 **Where**: `ob-ads/app/(dashboard)/dashboard/campanha-para-promotores/components/RouteOrderingSection.tsx`
@@ -352,9 +352,9 @@ T13 → T14 → T15 → T16
 
 **Done when**:
 
-- [ ] Badge aparece por rota na listagem ordenada
-- [ ] Mesmo componente da T8 — sem cópia de lógica de mapeamento
-- [ ] Gate check passes: `npm run lint && npm run build`
+- [x] Badge aparece por rota na listagem ordenada (`manualOrder.map`, `:475`)
+- [x] Mesmo componente da T8 — sem cópia de lógica de mapeamento
+- [x] Gate check passes: `npm run lint && npm run build`
 
 **Tests**: none
 **Gate**: build
