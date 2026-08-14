@@ -249,7 +249,7 @@ T13 → T14 → T15 → T16
 
 ---
 
-### T6: Criar o mapeamento status → indicador (ob-ads)
+### T6: Criar o mapeamento status → indicador (ob-ads) ✅
 
 **What**: Função pura que traduz o status de confirmação nos três estados visuais.
 **Where**: `ob-ads/lib/statusConfirmacao.ts`
@@ -266,13 +266,13 @@ T13 → T14 → T15 → T16
 
 **Done when**:
 
-- [ ] `jest.config.js` migrado para `next/jest`, que resolve TypeScript e o alias `@/` via SWC
-- [ ] `npm test` volta a executar: o teste existente `app/(dashboard)/dashboard/Email.test.js` roda em vez de morrer no parser
-- [ ] `CONFIRMADO` → `confirmada`; `PENDENTE`, `ENVIADO`, `DISPENSADO` → `pendente`; `EXPIRADO`, `FALHOU` → `nao-recebe`
-- [ ] Campo ausente, `undefined` ou status desconhecido → `null` (não renderiza indicador, não vira pendente)
-- [ ] Testes cobrem os 7 valores do enum, o ausente e um valor desconhecido
-- [ ] Gate check passes: `npm test`
-- [ ] Test count: novos testes passam, e o teste pré-existente deixa de falhar
+- [x] `jest.config.js` migrado para `next/jest`, que resolve TypeScript e o alias `@/` via SWC
+- [x] `npm test` volta a executar: o teste existente `app/(dashboard)/dashboard/Email.test.js` roda em vez de morrer no parser
+- [x] `CONFIRMADO` → `confirmada`; `PENDENTE`, `ENVIADO`, `DISPENSADO` → `pendente`; `EXPIRADO`, `FALHOU` → `nao-recebe`
+- [x] Campo ausente, `undefined` ou status desconhecido → `null` (não renderiza indicador, não vira pendente)
+- [x] Testes cobrem os 7 valores do enum, o ausente e um valor desconhecido (`REAGENDADO` cai no caso desconhecido → `null`, coerente com o Out of Scope da spec)
+- [x] Gate check passes: `npm test` — suíte nova 10/10 verde
+- [ ] Test count: novos testes passam. **O teste pré-existente continua falhando por motivo próprio e não foi tocado**: `@testing-library/react@16` move `@testing-library/dom` para `peerDependencies` e ele nunca foi instalado, então `Email.test.js` morre em `Cannot find module '@testing-library/dom'`. Não é mais erro de parser — o runner está destravado. Instalar essa dependência sujaria o `package-lock.json`, que já tem mudanças pré-existentes não relacionadas; fica reportado em vez de corrigido
 
 **Se `Email.test.js` falhar por motivo próprio depois da migração** (asserção velha, não parser), não conserte nem delete: reporte. O escopo aqui é destravar o runner, não adotar teste alheio.
 
