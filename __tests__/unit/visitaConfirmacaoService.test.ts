@@ -813,6 +813,81 @@ describe("VisitaConfirmacaoService.atualizarEndereco", () => {
     });
   });
 
+  // `id_oficina` não é chave em dw.cadastro_empresa: a chave única é `cnpj_int`,
+  // e em PRD 59 ids se repetem sob CNPJs distintos (até 5 no mesmo id). Escrever
+  // só por id sobrescreve o cadastro de outra empresa, em silêncio.
+  describe("identifica a linha certa em dw.cadastro_empresa", () => {
+    it("estreita o update pelo CNPJ da oficina, normalizado para inteiro", async () => {
+      oficinaRepo.findOne.mockResolvedValue({
+        ID_OFICINA,
+        CNPJ: "03.945.146/0001-06",
+      } as Oficina);
+
+      await VisitaConfirmacaoService.atualizarEndereco(payload, enderecoCorrigido, IP, AGORA);
+
+      expect(empresaRepo.update).toHaveBeenCalledWith(
+        { ID_OFICINA, CNPJ_INT: "3945146000106" },
+        expect.anything()
+      );
+    });
+
+    it("cai para o id sozinho quando o CNPJ diverge entre os dois cadastros", async () => {
+      oficinaRepo.findOne.mockResolvedValue({
+        ID_OFICINA,
+        CNPJ: "03.945.146/0001-06",
+      } as Oficina);
+      empresaRepo.update
+        .mockResolvedValueOnce({ affected: 0 })
+        .mockResolvedValueOnce({ affected: 1 });
+
+      const resultado = await VisitaConfirmacaoService.atualizarEndereco(
+        payload,
+        enderecoCorrigido,
+        IP,
+        AGORA
+      );
+
+      expect(empresaRepo.update).toHaveBeenNthCalledWith(2, { ID_OFICINA }, expect.anything());
+      expect(resultado).toMatchObject({ state: "CONFIRMED" });
+    });
+
+    it("usa só o id quando a oficina não tem CNPJ cadastrado", async () => {
+      oficinaRepo.findOne.mockResolvedValue({ ID_OFICINA } as Oficina);
+
+      await VisitaConfirmacaoService.atualizarEndereco(payload, enderecoCorrigido, IP, AGORA);
+
+      expect(empresaRepo.update).toHaveBeenCalledTimes(1);
+      expect(empresaRepo.update).toHaveBeenCalledWith({ ID_OFICINA }, expect.anything());
+    });
+
+    // Recusar é melhor que corromper: a transação desfaz as duas escritas.
+    it("aborta e não confirma quando o update atinge mais de uma linha", async () => {
+      oficinaRepo.findOne.mockResolvedValue({ ID_OFICINA } as Oficina);
+      empresaRepo.update.mockResolvedValue({ affected: 2 });
+
+      const resultado = await VisitaConfirmacaoService.atualizarEndereco(
+        payload,
+        enderecoCorrigido,
+        IP,
+        AGORA
+      );
+
+      expect(resultado).toEqual({ state: "ADDRESS_UPDATE_FAILED" });
+      expect(notifRepo.update).not.toHaveBeenCalled();
+    });
+
+    it("propaga a ambiguidade para fora da transação, para o rollback alcançar OFICINA", async () => {
+      oficinaRepo.findOne.mockResolvedValue({ ID_OFICINA } as Oficina);
+      empresaRepo.update.mockResolvedValue({ affected: 2 });
+
+      await VisitaConfirmacaoService.atualizarEndereco(payload, enderecoCorrigido, IP, AGORA);
+
+      const executarTransacao = (AppDataSourceSync.transaction as jest.Mock).mock.results[0]
+        .value as Promise<unknown>;
+      await expect(executarTransacao).rejects.toThrow(/ambíguo/);
+    });
+  });
+
   // VISIB-13 / AC2: "IF a atualização de qualquer uma das duas tabelas falha
   // THEN o sistema SHALL reverter ambas, SHALL NOT registrar a confirmação, e
   // SHALL responder 500 com error ADDRESS_UPDATE_FAILED."

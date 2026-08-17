@@ -4,7 +4,7 @@ import { AppDataSourceSync } from "../data-source";
 import NotificacaoVisita, { StatusNotificacaoVisita } from "../entities/NotificacaoVisita";
 import Oficina from "../entities/Oficina";
 import Empresa from "../entities/CadastroEmpresa";
-import { dividirLogradouro } from "../utils/logradouro";
+import { cnpjParaInteiro, dividirLogradouro } from "../utils/logradouro";
 import RotaPromotor from "../entities/RotaPromotor";
 import Community from "../entities/Community";
 import RotaService from "./rotaService";
@@ -235,23 +235,50 @@ export default class VisitaConfirmacaoService {
     // not column names — TypeORM ignores unknown keys without complaining.
     const { logradouro, rua } = dividirLogradouro((endereco.ENDERECO as string | null) ?? null);
 
+    const valoresEmpresa = {
+      LOGRADOURO: logradouro,
+      ENDERECO: rua,
+      NUMERO: endereco.NUMERO,
+      COMPLEMENTO: endereco.COMPLEMENTO,
+      BAIRRO: endereco.BAIRRO,
+      CIDADE: endereco.CIDADE,
+      ESTADO: endereco.ESTADO,
+      CEP: endereco.CEP,
+    } as QueryDeepPartialEntity<Empresa>;
+
+    const cnpjInt = cnpjParaInteiro(oficina.CNPJ ?? null);
+
     try {
       await AppDataSourceSync.transaction(async (manager) => {
         await manager.update(Oficina, { ID_OFICINA: oficina.ID_OFICINA }, endereco);
-        await manager.update(
-          Empresa,
-          { ID_OFICINA: oficina.ID_OFICINA },
-          {
-            LOGRADOURO: logradouro,
-            ENDERECO: rua,
-            NUMERO: endereco.NUMERO,
-            COMPLEMENTO: endereco.COMPLEMENTO,
-            BAIRRO: endereco.BAIRRO,
-            CIDADE: endereco.CIDADE,
-            ESTADO: endereco.ESTADO,
-            CEP: endereco.CEP,
-          } as QueryDeepPartialEntity<Empresa>
-        );
+
+        // `id_oficina` não identifica uma linha em dw.cadastro_empresa: a chave
+        // única é `cnpj_int`, e em PRD 59 ids se repetem sob CNPJs diferentes.
+        // Estreita por CNPJ; cai para o id sozinho nos ~100 pares em que os dois
+        // cadastros divergem de CNPJ, e aborta se ainda assim pegar mais de uma
+        // linha — a transação desfaz tudo e o reparador vê ADDRESS_UPDATE_FAILED.
+        let escrita = cnpjInt
+          ? await manager.update(
+              Empresa,
+              { ID_OFICINA: oficina.ID_OFICINA, CNPJ_INT: cnpjInt },
+              valoresEmpresa
+            )
+          : { affected: 0 };
+
+        if (!escrita.affected) {
+          escrita = await manager.update(
+            Empresa,
+            { ID_OFICINA: oficina.ID_OFICINA },
+            valoresEmpresa
+          );
+        }
+
+        if ((escrita.affected ?? 0) > 1) {
+          throw new Error(
+            `cadastro_empresa ambíguo para ID_OFICINA ${oficina.ID_OFICINA}: ` +
+              `${escrita.affected} linhas atingidas`
+          );
+        }
       });
     } catch (erro) {
       console.error("[visitaConfirmacao] falha ao atualizar endereço da oficina", {
