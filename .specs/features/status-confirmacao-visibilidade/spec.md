@@ -186,7 +186,7 @@ Levantado no código, não presumido:
 | VISIB-08 | P1: Endereço corrigido chega ao promotor | AC7 | T2 | Done |
 | VISIB-09 | P2: Visão gerencial (regressão de schema) | AC4 | T4 | Done |
 | VISIB-10 | P2: Visão gerencial | AC7, AC8 | T11 | Done |
-| VISIB-14 | P2: Tipos de rota nos frontends | AC5 | T5, T10, T13 | Partial - ob-ads done (T5, T10); falta T13 |
+| VISIB-14 | P2: Tipos de rota nos frontends | AC5 | T5, T10, T13 | Done |
 | VISIB-15 | P2: Mapper do `frontend-promotor` preserva o campo | AC6 | Design | Pending |
 | VISIB-11 | P1: Endereço corrigido — split `logradouro`/`rua` | AC3, AC4 | T1 | Done |
 | VISIB-12 | P1: Endereço corrigido — `TRIM` na leitura | AC6 | T3 | Done |

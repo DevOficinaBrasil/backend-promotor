@@ -445,7 +445,7 @@ T13 → T14 → T15 → T16
 
 ---
 
-### T13: Declarar o campo nos dois tipos de rota (frontend-promotor)
+### T13: Declarar o campo nos dois tipos de rota (frontend-promotor) ✅
 
 **What**: `RotaAPI` (forma da API) e `RotaPromotor` (modelo local snake_case) ganham o campo.
 **Where**: `frontend-promotor/lib/types.ts`
@@ -460,9 +460,9 @@ T13 → T14 → T15 → T16
 
 **Done when**:
 
-- [ ] `RotaAPI` ganha `notificacaoVisita?: { STATUS: string; CONFIRMADO_EM?: string | null }`
-- [ ] `RotaPromotor` ganha `notificacao_visita?: { status: string; confirmado_em: string | null }`
-- [ ] Gate check passes: `npm run lint && npm run build`
+- [x] `RotaAPI` ganha `notificacaoVisita?: { STATUS: string; CONFIRMADO_EM?: string | null }`
+- [x] `RotaPromotor` ganha `notificacao_visita?: { status: string; confirmado_em: string | null }`
+- [x] Gate check passes: `npm run build` verde; `npm run lint` segue quebrado por motivo pré-existente (ver nota na seção de gates)
 
 **Tests**: none
 **Gate**: build
