@@ -168,6 +168,8 @@ describe("POST /visita/confirmar", () => {
       oficinaNome: "Auto Center Silva",
       promotorNome: "Carlos Promotor",
       empresaNome: "Bosch Brasil",
+      empresaLogoUrl: null,
+      usuarioNome: "João Reparador",
       endereco: {
         ENDERECO: "Rua das Oficinas",
         NUMERO: "1234",

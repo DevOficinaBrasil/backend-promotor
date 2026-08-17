@@ -1,6 +1,7 @@
 import { Request, Response } from "express";
 import VisitaConfirmacaoService from "../service/visitaConfirmacaoService";
 import { VisitaRequest } from "../middlewares/visitaAuthMiddleware";
+import { ipDoCliente } from "../utils/ipCliente";
 
 export default class VisitaController {
   /**
@@ -26,15 +27,27 @@ export default class VisitaController {
             data: resultado,
           });
         case "EXPIRED":
-          return res.status(410).json({ message: "Este link expirou.", error: "EXPIRED" });
+          // Mantém o envelope de erro (o front decide o estado pelo status), mas
+          // acrescenta quem convidou: a tela de expirado atribui o próximo
+          // contato à empresa, não à Oficina Brasil.
+          return res.status(410).json({
+            message: "Este link expirou.",
+            error: "EXPIRED",
+            data: {
+              empresaNome: resultado.empresaNome,
+              empresaLogoUrl: resultado.empresaLogoUrl,
+            },
+          });
         default:
           return res.status(404).json({ message: "Link inválido.", error: "TOKEN_INVALID" });
       }
     } catch (error) {
       console.error("Erro ao trocar token de visita:", error);
       return res.status(500).json({
+        // A mensagem do erro fica no log, não na resposta: esta rota é pública e
+        // texto de erro de banco carrega nome de coluna, schema e constraint.
         message: "Erro interno ao processar o link de visita.",
-        error: error instanceof Error ? error.message : "Erro desconhecido",
+        error: "INTERNAL_ERROR",
       });
     }
   };
@@ -49,7 +62,7 @@ export default class VisitaController {
   static confirmar = async (req: Request, res: Response) => {
     try {
       const payload = (req as VisitaRequest).visitaJwt!;
-      const resultado = await VisitaConfirmacaoService.confirmar(payload, req.ip ?? "");
+      const resultado = await VisitaConfirmacaoService.confirmar(payload, ipDoCliente(req));
 
       if (resultado.state === "CONFIRMED") {
         return res.status(200).json({
@@ -63,7 +76,7 @@ export default class VisitaController {
       console.error("Erro ao confirmar visita:", error);
       return res.status(500).json({
         message: "Erro interno ao confirmar a visita.",
-        error: error instanceof Error ? error.message : "Erro desconhecido",
+        error: "INTERNAL_ERROR",
       });
     }
   };
@@ -82,7 +95,7 @@ export default class VisitaController {
       const resultado = await VisitaConfirmacaoService.atualizarEndereco(
         payload,
         req.body,
-        req.ip ?? ""
+        ipDoCliente(req)
       );
 
       if (resultado.state === "CONFIRMED") {
@@ -121,7 +134,7 @@ export default class VisitaController {
       console.error("Erro ao atualizar endereço da visita:", error);
       return res.status(500).json({
         message: "Erro interno ao atualizar o endereço.",
-        error: error instanceof Error ? error.message : "Erro desconhecido",
+        error: "INTERNAL_ERROR",
       });
     }
   };

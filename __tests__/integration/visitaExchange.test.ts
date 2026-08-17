@@ -40,8 +40,10 @@ describe("GET /visita/:token", () => {
       state: "PENDING",
       jwt: "jwt-de-teste",
       oficinaNome: "Auto Center Silva",
+      usuarioNome: "João Reparador",
       promotorNome: "Carlos Promotor",
       empresaNome: "Bosch Brasil",
+      empresaLogoUrl: "https://bucket.exemplo/community/bosch/logo.png",
       endereco: enderecoRegistrado,
     });
 
@@ -54,8 +56,10 @@ describe("GET /visita/:token", () => {
         state: "PENDING",
         jwt: "jwt-de-teste",
         oficinaNome: "Auto Center Silva",
+        usuarioNome: "João Reparador",
         promotorNome: "Carlos Promotor",
         empresaNome: "Bosch Brasil",
+        empresaLogoUrl: "https://bucket.exemplo/community/bosch/logo.png",
         endereco: enderecoRegistrado,
       },
     });
@@ -68,8 +72,10 @@ describe("GET /visita/:token", () => {
       state: "PENDING",
       jwt: "jwt-de-teste",
       oficinaNome: "Auto Center Silva",
+      usuarioNome: "João Reparador",
       promotorNome: "Carlos Promotor",
       empresaNome: "Bosch Brasil",
+      empresaLogoUrl: "https://bucket.exemplo/community/bosch/logo.png",
       endereco: enderecoRegistrado,
     });
 
@@ -80,8 +86,10 @@ describe("GET /visita/:token", () => {
       "state",
       "jwt",
       "oficinaNome",
+      "usuarioNome",
       "promotorNome",
       "empresaNome",
+      "empresaLogoUrl",
       "endereco",
     ]);
   });
@@ -102,6 +110,8 @@ describe("GET /visita/:token", () => {
       state: "ALREADY_CONFIRMED",
       oficinaNome: "Auto Center Silva",
       promotorNome: "Carlos Promotor",
+      empresaNome: "Bosch Brasil",
+      empresaLogoUrl: "https://bucket.exemplo/community/bosch/logo.png",
       endereco,
       confirmadoEm,
     });
@@ -130,6 +140,8 @@ describe("GET /visita/:token", () => {
       state: "ALREADY_CONFIRMED",
       oficinaNome: "Auto Center Silva",
       promotorNome: "Carlos Promotor",
+      empresaNome: "Bosch Brasil",
+      empresaLogoUrl: "https://bucket.exemplo/community/bosch/logo.png",
       endereco,
       confirmadoEm: new Date("2026-08-04T10:00:00.000Z"),
     });
@@ -139,10 +151,13 @@ describe("GET /visita/:token", () => {
     expect(resposta.status).toBe(200);
     expect(resposta.body.data.promotorNome).toBe("Carlos Promotor");
     expect(resposta.body.data.endereco).toEqual(endereco);
+    expect(resposta.body.data.empresaNome).toBe("Bosch Brasil");
     expect(Object.keys(resposta.body.data)).toEqual([
       "state",
       "oficinaNome",
       "promotorNome",
+      "empresaNome",
+      "empresaLogoUrl",
       "endereco",
       "confirmadoEm",
     ]);
@@ -150,12 +165,25 @@ describe("GET /visita/:token", () => {
 
   // AC17: expired links get a distinct state and no JWT.
   it("returns 410 EXPIRED for a link past its EXPIRA_EM", async () => {
-    trocarTokenMock.mockResolvedValue({ state: "EXPIRED" });
+    trocarTokenMock.mockResolvedValue({
+      state: "EXPIRED",
+      empresaNome: "Bosch Brasil",
+      empresaLogoUrl: "https://bucket.exemplo/community/bosch/logo.png",
+    });
 
     const resposta = await request(app).get("/visita/token-expirado");
 
     expect(resposta.status).toBe(410);
-    expect(resposta.body).toEqual({ message: "Este link expirou.", error: "EXPIRED" });
+    // A tela de expirado atribui o próximo contato à empresa, então o 410
+    // carrega quem convidou junto do envelope de erro.
+    expect(resposta.body).toEqual({
+      message: "Este link expirou.",
+      error: "EXPIRED",
+      data: {
+        empresaNome: "Bosch Brasil",
+        empresaLogoUrl: "https://bucket.exemplo/community/bosch/logo.png",
+      },
+    });
   });
 
   // AC16: malformed or unrecognized tokens get a distinct state and no JWT.
@@ -174,7 +202,9 @@ describe("GET /visita/:token", () => {
     const resposta = await request(app).get("/visita/token-quebrado");
 
     expect(resposta.status).toBe(500);
-    expect(resposta.body.error).toBe("banco fora do ar");
+    // A mensagem do banco fica no log; a resposta pública só classifica o erro.
+    expect(resposta.body.error).toBe("INTERNAL_ERROR");
+    expect(JSON.stringify(resposta.body)).not.toContain("banco fora do ar");
   });
 
   // AC25: "SHALL reject more than 20 requests per minute targeting the same

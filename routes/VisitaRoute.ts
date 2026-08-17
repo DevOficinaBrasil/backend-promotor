@@ -5,6 +5,7 @@ import { createDocumentedRoute } from "../utils/routeDocumentation";
 import { visitaAuthMiddleware, VisitaRequest } from "../middlewares/visitaAuthMiddleware";
 import {
   ConfirmarResponseSchema,
+  ExchangeExpiredResponseSchema,
   ExchangeResponseSchema,
   UpdateEnderecoResponseSchema,
   UpdateEnderecoSchema,
@@ -124,7 +125,11 @@ createDocumentedRoute(router, {
       "Updates only the seven allowlisted address columns on the workshop's registry row and " +
       "applies the same confirmation transition as POST /visita/confirmar. " +
       "Any key outside the allowlist is rejected and nothing is written. " +
-      "Coordinates are left untouched - there is no geocoding step.",
+      "The correction also lands on dw.cadastro_empresa, the source the campaign " +
+      "queries read. LATITUDE/LONGITUDE are left untouched: a corrected address " +
+      "keeps its old pin. A changed CEP does trigger promoter reassignment, " +
+      "which geocodes the new CEP - the coordinates are used for that decision " +
+      "and not written back to the workshop.",
     security: [{ bearerAuth: [] }],
     responses: {
       200: {
@@ -184,7 +189,9 @@ createDocumentedRoute(router, {
       "Public endpoint opened from the WhatsApp confirmation link. Returns the workshop name, " +
       "its current registered address and a 30-minute visita:confirmar JWT. " +
       "Re-exchangeable while the visit is live - only the confirmation itself is single-use. " +
-      "No visit date is returned.",
+      "No visit date is returned. The pending response also carries the link owner's name, " +
+      "the inviting company and its logo URL, so the public page can greet the reparador and " +
+      "brand itself with the company that sent the invite.",
     responses: {
       200: {
         description: "Visit pending confirmation, or already confirmed (no JWT issued)",
@@ -195,8 +202,8 @@ createDocumentedRoute(router, {
         schema: VisitaErrorResponseSchema,
       },
       410: {
-        description: "Link expired",
-        schema: VisitaErrorResponseSchema,
+        description: "Link expired - carries the inviting company in `data`",
+        schema: ExchangeExpiredResponseSchema,
       },
       429: {
         description: "Too many requests for this visit",

@@ -21,4 +21,12 @@ export default class Community {
 
   @Column({ type: "varchar", nullable: true, name: "EmpresaSlug" })
   EmpresaSlug?: string;
+
+  /**
+   * Logo da marca — chave relativa do bucket (`community/authomix/logo.png`),
+   * não URL. O portal e o app prefixam com a base do S3; aqui isso é feito por
+   * `urlS3()` antes de sair na resposta.
+   */
+  @Column({ type: "varchar", nullable: true, name: "Icon" })
+  Icon?: string;
 }

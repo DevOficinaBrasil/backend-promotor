@@ -6,6 +6,7 @@ import Oficina from "../../entities/Oficina";
 import Empresa from "../../entities/CadastroEmpresa";
 import RotaPromotor from "../../entities/RotaPromotor";
 import Community from "../../entities/Community";
+import Usuario from "../../entities/Usuario";
 import {
   hashToken,
   verificarJwt,
@@ -34,6 +35,7 @@ describe("VisitaConfirmacaoService.trocarToken", () => {
   let rotaRepo: { findOne: jest.Mock };
   let oficinaRepo: { findOne: jest.Mock };
   let communityRepo: { findOne: jest.Mock };
+  let usuarioRepo: { findOne: jest.Mock };
 
   const oficinaPadrao = {
     ID_OFICINA,
@@ -71,13 +73,22 @@ describe("VisitaConfirmacaoService.trocarToken", () => {
       findOne: jest.fn(async () => ({ ID_ROTA_PROMOTOR: ID_ROTA, ID_OFICINA }) as RotaPromotor),
     };
     oficinaRepo = { findOne: jest.fn(async () => oficinaPadrao) };
-    communityRepo = { findOne: jest.fn(async () => ({ CommunityID: 17, Nome: "Authomix" })) };
+    communityRepo = {
+      findOne: jest.fn(async () => ({
+        CommunityID: 17,
+        Nome: "Authomix",
+        Icon: "community/authomix/logo.png",
+      })),
+    };
+    usuarioRepo = { findOne: jest.fn(async () => ({ ID_USUARIO, NOME: "João Reparador" })) };
+    process.env.AWS_S3 = "https://bucket.exemplo";
 
     (AppDataSourceSync.getRepository as jest.Mock).mockImplementation((entidade: unknown) => {
       if (entidade === NotificacaoVisita) return notifRepo;
       if (entidade === RotaPromotor) return rotaRepo;
       if (entidade === Oficina) return oficinaRepo;
       if (entidade === Community) return communityRepo;
+      if (entidade === Usuario) return usuarioRepo;
       throw new Error("repositório inesperado no teste");
     });
   });
@@ -177,7 +188,28 @@ describe("VisitaConfirmacaoService.trocarToken", () => {
       expect(communityRepo.findOne).toHaveBeenCalledWith({
         where: { EmpresaSlug: EMPRESA_SLUG },
       });
-      expect(resultado).toMatchObject({ state: "PENDING", empresaNome: "Authomix" });
+      expect(resultado).toMatchObject({
+        state: "PENDING",
+        empresaNome: "Authomix",
+        // COMMUNITIES.Icon guarda chave relativa; o cliente recebe URL pronta.
+        empresaLogoUrl: "https://bucket.exemplo/community/authomix/logo.png",
+      });
+    });
+
+    it("returns a null logo URL when the community row has no Icon", async () => {
+      rotaRepo.findOne.mockResolvedValue({
+        ID_ROTA_PROMOTOR: ID_ROTA,
+        ID_OFICINA,
+        campanhaPromotor: {
+          promotor: { NOME: "Carlos Promotor" },
+          campanha: { EMPRESA_SLUG },
+        },
+      } as unknown as RotaPromotor);
+      communityRepo.findOne.mockResolvedValue({ CommunityID: 17, Nome: "Authomix", Icon: null });
+
+      const resultado = await VisitaConfirmacaoService.trocarToken(RAW_TOKEN, AGORA);
+
+      expect(resultado).toMatchObject({ empresaNome: "Authomix", empresaLogoUrl: null });
     });
 
     it("returns a null company name when the campaign carries no EMPRESA_SLUG", async () => {
@@ -207,6 +239,24 @@ describe("VisitaConfirmacaoService.trocarToken", () => {
       const resultado = await VisitaConfirmacaoService.trocarToken(RAW_TOKEN, AGORA);
 
       expect(resultado).toMatchObject({ state: "PENDING", empresaNome: null });
+    });
+  });
+
+  // A tela inicial cumprimenta o dono do link pelo nome.
+  describe("link owner", () => {
+    it("returns the notified user's name on PENDING", async () => {
+      const resultado = await VisitaConfirmacaoService.trocarToken(RAW_TOKEN, AGORA);
+
+      expect(usuarioRepo.findOne).toHaveBeenCalledWith({ where: { ID_USUARIO } });
+      expect(resultado).toMatchObject({ state: "PENDING", usuarioNome: "João Reparador" });
+    });
+
+    it("returns a null name instead of failing when the user row is gone", async () => {
+      usuarioRepo.findOne.mockResolvedValue(null);
+
+      const resultado = await VisitaConfirmacaoService.trocarToken(RAW_TOKEN, AGORA);
+
+      expect(resultado).toMatchObject({ state: "PENDING", usuarioNome: null });
     });
   });
 
@@ -270,6 +320,10 @@ describe("VisitaConfirmacaoService.trocarToken", () => {
       state: "ALREADY_CONFIRMED",
       oficinaNome: "Auto Center Silva",
       promotorNome: null,
+      // A tela de "já confirmado" repete o resumo da tela de sucesso, que nomeia
+      // a empresa — por isso este ramo também resolve a community.
+      empresaNome: null,
+      empresaLogoUrl: null,
       endereco: {
         ENDERECO: "Rua das Oficinas",
         NUMERO: "1234",
@@ -348,7 +402,11 @@ describe("VisitaConfirmacaoService.trocarToken", () => {
 
     const resultado = await VisitaConfirmacaoService.trocarToken(RAW_TOKEN, depoisDaExpiracao);
 
-    expect(resultado).toEqual({ state: "EXPIRED" });
+    expect(resultado).toEqual({
+      state: "EXPIRED",
+      empresaNome: null,
+      empresaLogoUrl: null,
+    });
     expect(resultado).not.toHaveProperty("jwt");
   });
 
@@ -542,6 +600,7 @@ describe("VisitaConfirmacaoService.atualizarEndereco", () => {
   let rotaRepo: { findOne: jest.Mock };
   let oficinaRepo: { findOne: jest.Mock; update: jest.Mock };
   let empresaRepo: { update: jest.Mock };
+  let candidatasDoDw: jest.Mock;
   let ordemDeChamadas: string[];
 
   const IP = "203.0.113.7";
@@ -598,6 +657,8 @@ describe("VisitaConfirmacaoService.atualizarEndereco", () => {
         return { affected: 1 };
       }),
     };
+    // Uma linha no dw, com o CNPJ da oficina padrão do teste.
+    candidatasDoDw = jest.fn(async () => [{ CNPJ_INT: "12345678000199" }]);
 
     (AppDataSourceSync.getRepository as jest.Mock).mockImplementation((entidade: unknown) => {
       if (entidade === NotificacaoVisita) return notifRepo;
@@ -616,12 +677,16 @@ describe("VisitaConfirmacaoService.atualizarEndereco", () => {
         const manager = {
           update: (entidade: unknown, criterio: unknown, valores: unknown) =>
             (AppDataSourceSync.getRepository as jest.Mock)(entidade).update(criterio, valores),
+          // A escolha da linha do dw é SQL cru (a PK da entity é mentira nessa
+          // tabela), então o manager do teste responde à consulta de candidatas.
+          query: (...args: unknown[]) => candidatasDoDw(...args),
         };
         return await executar(manager);
       }
     );
 
     jest.spyOn(console, "error").mockImplementation(() => {});
+    jest.spyOn(console, "warn").mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -770,8 +835,11 @@ describe("VisitaConfirmacaoService.atualizarEndereco", () => {
       expect(escrito).not.toHaveProperty("rua");
     });
 
-    // AC4 do split: primeiro token desconhecido -> logradouro nulo, string inteira em rua.
-    it("grava logradouro nulo e a string inteira quando o tipo não é reconhecido", async () => {
+    // AC4 do split: primeiro token desconhecido -> a string inteira vai para rua.
+    // A coluna `logradouro` fica de fora do update: gravar null nela apagaria o
+    // tipo que já estava cadastrado, e o endereço montado por
+    // CONCAT(logradouro, ' ', rua) perderia o "Rua"/"Avenida" na tela do promotor.
+    it("não toca em logradouro e grava a string inteira quando o tipo não é reconhecido", async () => {
       await VisitaConfirmacaoService.atualizarEndereco(
         payload,
         { ...enderecoCorrigido, ENDERECO: "Chacara do Ze" },
@@ -780,8 +848,36 @@ describe("VisitaConfirmacaoService.atualizarEndereco", () => {
       );
 
       const escrito = empresaRepo.update.mock.calls[0][1] as Record<string, unknown>;
-      expect(escrito.LOGRADOURO).toBeNull();
+      expect(escrito).not.toHaveProperty("LOGRADOURO");
       expect(escrito.ENDERECO).toBe("Chacara do Ze");
+    });
+
+    // Abreviação é a forma mais comum do tipo no cadastro e não está na lista
+    // fechada: o caminho tem de preservar o que o dw já tem, não zerar.
+    it("não toca em logradouro quando o tipo vem abreviado", async () => {
+      await VisitaConfirmacaoService.atualizarEndereco(
+        payload,
+        { ...enderecoCorrigido, ENDERECO: "Av. Paulista" },
+        IP,
+        AGORA
+      );
+
+      const escrito = empresaRepo.update.mock.calls[0][1] as Record<string, unknown>;
+      expect(escrito).not.toHaveProperty("LOGRADOURO");
+      expect(escrito.ENDERECO).toBe("Av. Paulista");
+    });
+
+    it("não toca em logradouro quando o endereço vem nulo", async () => {
+      await VisitaConfirmacaoService.atualizarEndereco(
+        payload,
+        { ...enderecoCorrigido, ENDERECO: null },
+        IP,
+        AGORA
+      );
+
+      const escrito = empresaRepo.update.mock.calls[0][1] as Record<string, unknown>;
+      expect(escrito).not.toHaveProperty("LOGRADOURO");
+      expect(escrito.ENDERECO).toBeNull();
     });
 
     // AC7: "SHALL NOT alterar dw.cadastro_empresa.latitude e .longitude".
@@ -822,6 +918,9 @@ describe("VisitaConfirmacaoService.atualizarEndereco", () => {
         ID_OFICINA,
         CNPJ: "03.945.146/0001-06",
       } as Oficina);
+      // Zero à esquerda e máscara somem no bigint da coluna: a linha do dw
+      // guarda "3945146000106".
+      candidatasDoDw.mockResolvedValue([{ CNPJ_INT: "3945146000106" }]);
 
       await VisitaConfirmacaoService.atualizarEndereco(payload, enderecoCorrigido, IP, AGORA);
 
@@ -831,14 +930,13 @@ describe("VisitaConfirmacaoService.atualizarEndereco", () => {
       );
     });
 
-    it("cai para o id sozinho quando o CNPJ diverge entre os dois cadastros", async () => {
+    it("usa o id sozinho quando o CNPJ diverge mas a linha é única", async () => {
       oficinaRepo.findOne.mockResolvedValue({
         ID_OFICINA,
         CNPJ: "03.945.146/0001-06",
       } as Oficina);
-      empresaRepo.update
-        .mockResolvedValueOnce({ affected: 0 })
-        .mockResolvedValueOnce({ affected: 1 });
+      // Um dos ~100 pares em que os dois cadastros discordam de CNPJ.
+      candidatasDoDw.mockResolvedValue([{ CNPJ_INT: "99999999999999" }]);
 
       const resultado = await VisitaConfirmacaoService.atualizarEndereco(
         payload,
@@ -847,12 +945,14 @@ describe("VisitaConfirmacaoService.atualizarEndereco", () => {
         AGORA
       );
 
-      expect(empresaRepo.update).toHaveBeenNthCalledWith(2, { ID_OFICINA }, expect.anything());
+      expect(empresaRepo.update).toHaveBeenCalledTimes(1);
+      expect(empresaRepo.update).toHaveBeenCalledWith({ ID_OFICINA }, expect.anything());
       expect(resultado).toMatchObject({ state: "CONFIRMED" });
     });
 
     it("usa só o id quando a oficina não tem CNPJ cadastrado", async () => {
       oficinaRepo.findOne.mockResolvedValue({ ID_OFICINA } as Oficina);
+      candidatasDoDw.mockResolvedValue([{ CNPJ_INT: "12345678000199" }]);
 
       await VisitaConfirmacaoService.atualizarEndereco(payload, enderecoCorrigido, IP, AGORA);
 
@@ -860,10 +960,16 @@ describe("VisitaConfirmacaoService.atualizarEndereco", () => {
       expect(empresaRepo.update).toHaveBeenCalledWith({ ID_OFICINA }, expect.anything());
     });
 
-    // Recusar é melhor que corromper: a transação desfaz as duas escritas.
-    it("aborta e não confirma quando o update atinge mais de uma linha", async () => {
-      oficinaRepo.findOne.mockResolvedValue({ ID_OFICINA } as Oficina);
-      empresaRepo.update.mockResolvedValue({ affected: 2 });
+    // Antes, o caminho ambíguo escrevia em todas as linhas e derrubava a
+    // transação: a oficina ficava sem confirmar por causa de dado sujo do dw.
+    // Confirmar é o que ela pediu, e MAIN_REGISTER.OFICINA — a fonte que o app
+    // do promotor lê — já foi corrigido.
+    it("confirma sem escrever no dw quando há várias linhas e nenhuma casa o CNPJ", async () => {
+      oficinaRepo.findOne.mockResolvedValue({ ID_OFICINA, CNPJ: "12345678000199" } as Oficina);
+      candidatasDoDw.mockResolvedValue([
+        { CNPJ_INT: "99999999999999" },
+        { CNPJ_INT: "88888888888888" },
+      ]);
 
       const resultado = await VisitaConfirmacaoService.atualizarEndereco(
         payload,
@@ -872,19 +978,52 @@ describe("VisitaConfirmacaoService.atualizarEndereco", () => {
         AGORA
       );
 
-      expect(resultado).toEqual({ state: "ADDRESS_UPDATE_FAILED" });
-      expect(notifRepo.update).not.toHaveBeenCalled();
+      expect(resultado).toMatchObject({ state: "CONFIRMED", enderecoAtualizado: true });
+      expect(empresaRepo.update).not.toHaveBeenCalled();
+      expect(oficinaRepo.update).toHaveBeenCalledWith({ ID_OFICINA }, enderecoCorrigido);
+      expect(console.warn).toHaveBeenCalledWith(
+        "[visitaConfirmacao] dw.cadastro_empresa não atualizado",
+        expect.objectContaining({ ID_OFICINA })
+      );
     });
 
-    it("propaga a ambiguidade para fora da transação, para o rollback alcançar OFICINA", async () => {
-      oficinaRepo.findOne.mockResolvedValue({ ID_OFICINA } as Oficina);
-      empresaRepo.update.mockResolvedValue({ affected: 2 });
+    it("escolhe a linha do CNPJ certo mesmo com várias candidatas", async () => {
+      oficinaRepo.findOne.mockResolvedValue({
+        ID_OFICINA,
+        CNPJ: "03.945.146/0001-06",
+      } as Oficina);
+      candidatasDoDw.mockResolvedValue([
+        { CNPJ_INT: "99999999999999" },
+        { CNPJ_INT: "3945146000106" },
+      ]);
 
-      await VisitaConfirmacaoService.atualizarEndereco(payload, enderecoCorrigido, IP, AGORA);
+      const resultado = await VisitaConfirmacaoService.atualizarEndereco(
+        payload,
+        enderecoCorrigido,
+        IP,
+        AGORA
+      );
 
-      const executarTransacao = (AppDataSourceSync.transaction as jest.Mock).mock.results[0]
-        .value as Promise<unknown>;
-      await expect(executarTransacao).rejects.toThrow(/ambíguo/);
+      expect(empresaRepo.update).toHaveBeenCalledTimes(1);
+      expect(empresaRepo.update).toHaveBeenCalledWith(
+        { ID_OFICINA, CNPJ_INT: "3945146000106" },
+        expect.anything()
+      );
+      expect(resultado).toMatchObject({ state: "CONFIRMED" });
+    });
+
+    it("confirma sem escrever no dw quando a oficina não tem linha lá", async () => {
+      candidatasDoDw.mockResolvedValue([]);
+
+      const resultado = await VisitaConfirmacaoService.atualizarEndereco(
+        payload,
+        enderecoCorrigido,
+        IP,
+        AGORA
+      );
+
+      expect(resultado).toMatchObject({ state: "CONFIRMED" });
+      expect(empresaRepo.update).not.toHaveBeenCalled();
     });
   });
 
@@ -1015,6 +1154,38 @@ describe("VisitaConfirmacaoService.atualizarEndereco", () => {
         "notificacao",
         "reassign",
       ]);
+    });
+
+    // O form do jornal manda o CEP como foi digitado, com ou sem máscara, e o
+    // cadastro guarda os dois formatos. Comparar string crua fazia "13010-000"
+    // contra "13010000" contar como mudança de endereço: reatribuição de rota, e
+    // portanto possível troca de promotor, sem a oficina ter saído do lugar.
+    it("não reatribui quando só a máscara do CEP mudou", async () => {
+      oficinaRepo.findOne.mockResolvedValue({ ID_OFICINA, CEP: "13010-000" } as Oficina);
+
+      const resultado = await VisitaConfirmacaoService.atualizarEndereco(
+        payload,
+        { ...enderecoCorrigido, CEP: "13010000" },
+        IP,
+        AGORA
+      );
+
+      expect(resultado).toMatchObject({ state: "CONFIRMED" });
+      expect(reassign).not.toHaveBeenCalled();
+    });
+
+    it("reatribui quando os dígitos do CEP mudam, mesmo sem máscara nos dois lados", async () => {
+      oficinaRepo.findOne.mockResolvedValue({ ID_OFICINA, CEP: "01001000" } as Oficina);
+
+      const resultado = await VisitaConfirmacaoService.atualizarEndereco(
+        payload,
+        { ...enderecoCorrigido, CEP: "13010-000" },
+        IP,
+        AGORA
+      );
+
+      expect(resultado).toMatchObject({ state: "CONFIRMED" });
+      expect(reassign).toHaveBeenCalledWith("13010-000", ID_OFICINA);
     });
 
     it("does not reassign when the CEP is unchanged", async () => {

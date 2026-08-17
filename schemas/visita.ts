@@ -57,8 +57,12 @@ export const ExchangePendingResponseSchema = z.object({
     state: z.literal('PENDING'),
     jwt: z.string(),
     oficinaNome: z.string().nullable(),
+    // Dono do link, para a saudação da tela inicial. Só nesta resposta.
+    usuarioNome: z.string().nullable(),
     promotorNome: z.string().nullable(),
     empresaNome: z.string().nullable(),
+    // URL absoluta já montada a partir de COMMUNITIES.Icon (chave do bucket).
+    empresaLogoUrl: z.string().nullable(),
     endereco: EnderecoOficinaSchema,
   }),
 });
@@ -67,8 +71,8 @@ export const ExchangePendingResponseSchema = z.object({
  * GET /visita/{token} - already-confirmed response
  *
  * Carries no JWT: there is no remaining action to authorize. It does carry
- * `promotorNome` and `endereco` so the confirmed screen can restate who is
- * coming and which address was confirmed, rather than only the date.
+ * `promotorNome`, a empresa e `endereco` so the confirmed screen can restate
+ * who is coming and which address was confirmed, rather than only the date.
  */
 export const ExchangeAlreadyConfirmedResponseSchema = z.object({
   message: z.string(),
@@ -76,6 +80,8 @@ export const ExchangeAlreadyConfirmedResponseSchema = z.object({
     state: z.literal('ALREADY_CONFIRMED'),
     oficinaNome: z.string().nullable(),
     promotorNome: z.string().nullable(),
+    empresaNome: z.string().nullable(),
+    empresaLogoUrl: z.string().nullable(),
     endereco: EnderecoOficinaSchema,
     confirmadoEm: z.string().datetime().nullable(),
   }),
@@ -85,6 +91,24 @@ export const ExchangeResponseSchema = z.union([
   ExchangePendingResponseSchema,
   ExchangeAlreadyConfirmedResponseSchema,
 ]);
+
+/**
+ * GET /visita/{token} - 410 (link expirado)
+ *
+ * Envelope de erro padrão mais `data` com a empresa do convite: a tela de
+ * expirado diz que a empresa entra em contato de novo, e sem isso a copy
+ * atribuiria o contato à Oficina Brasil. Os 410 das rotas autenticadas
+ * (`/confirmar`, `/endereco`) seguem sem `data` — ali a empresa não foi
+ * resolvida.
+ */
+export const ExchangeExpiredResponseSchema = VisitaErrorResponseSchema.extend({
+  data: z
+    .object({
+      empresaNome: z.string().nullable(),
+      empresaLogoUrl: z.string().nullable(),
+    })
+    .optional(),
+});
 
 /**
  * POST /visita/confirmar - success response

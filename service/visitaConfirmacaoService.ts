@@ -1,4 +1,4 @@
-import { MoreThan } from "typeorm";
+import { EntityManager, MoreThan } from "typeorm";
 import { QueryDeepPartialEntity } from "typeorm/query-builder/QueryPartialEntity";
 import { AppDataSourceSync } from "../data-source";
 import NotificacaoVisita, { StatusNotificacaoVisita } from "../entities/NotificacaoVisita";
@@ -7,8 +7,10 @@ import Empresa from "../entities/CadastroEmpresa";
 import { cnpjParaInteiro, dividirLogradouro } from "../utils/logradouro";
 import RotaPromotor from "../entities/RotaPromotor";
 import Community from "../entities/Community";
+import Usuario from "../entities/Usuario";
 import RotaService from "./rotaService";
 import { statusEfetivo } from "../utils/statusNotificacaoVisita";
+import { urlS3 } from "../utils/urlS3";
 import { emitirJwt, hashToken, VisitaJwtPayload } from "../utils/visitaToken";
 
 /** The seven address columns a link-holder may see and correct. Nothing else. */
@@ -31,18 +33,24 @@ export type ExchangeResult =
       state: "PENDING";
       jwt: string;
       oficinaNome: string | null;
+      usuarioNome: string | null;
       promotorNome: string | null;
       empresaNome: string | null;
+      empresaLogoUrl: string | null;
       endereco: EnderecoOficina;
     }
   | {
       state: "ALREADY_CONFIRMED";
       oficinaNome: string | null;
       promotorNome: string | null;
+      empresaNome: string | null;
+      empresaLogoUrl: string | null;
       endereco: EnderecoOficina;
       confirmadoEm: Date | null;
     }
-  | { state: "EXPIRED" }
+  // A tela de expirado atribui o próximo contato à empresa do convite, então o
+  // estado morto também carrega quem convidou.
+  | { state: "EXPIRED"; empresaNome: string | null; empresaLogoUrl: string | null }
   | { state: "TOKEN_INVALID" };
 
 export type ConfirmResult =
@@ -55,6 +63,51 @@ export type EnderecoResult =
   | ConfirmResult
   | { state: "VALIDATION_ERROR"; campos: string[] }
   | { state: "ADDRESS_UPDATE_FAILED" };
+
+/** CEP comparável: só os dígitos, para máscara não virar mudança de endereço. */
+function apenasDigitos(valor: string | null): string {
+  return valor === null ? "" : valor.replace(/\D/g, "");
+}
+
+/**
+ * Escolhe qual linha de `dw.cadastro_empresa` representa esta oficina, ou `null`
+ * quando não há como saber.
+ *
+ * A consulta é SQL cru de propósito: a entity declara `id_oficina` como
+ * `@PrimaryGeneratedColumn`, o que é mentira nessa tabela, e um `find` faria o
+ * TypeORM colapsar as linhas repetidas em uma só pela PK — exatamente a
+ * duplicidade que precisa ser vista aqui.
+ *
+ * Ordem de decisão:
+ * 1. linha cujo `cnpj_int` é o CNPJ da oficina — a identificação confiável;
+ * 2. linha única sob aquele `id_oficina`, mesmo com CNPJ divergente (os ~100
+ *    pares em que os dois cadastros discordam);
+ * 3. nada: zero linhas, ou várias sem CNPJ correspondente.
+ */
+async function escolherLinhaDoDw(
+  manager: EntityManager,
+  idOficina: number,
+  cnpjInt: string | null
+): Promise<{ ID_OFICINA: number; CNPJ_INT?: string } | null> {
+  const candidatas: { CNPJ_INT: string | null }[] = await manager.query(
+    `SELECT cnpj_int::text AS "CNPJ_INT" FROM dw.cadastro_empresa WHERE id_oficina = $1`,
+    [idOficina]
+  );
+
+  if (candidatas.length === 0) {
+    return null;
+  }
+
+  if (cnpjInt !== null && candidatas.some((linha) => linha.CNPJ_INT === cnpjInt)) {
+    return { ID_OFICINA: idOficina, CNPJ_INT: cnpjInt };
+  }
+
+  if (candidatas.length === 1) {
+    return { ID_OFICINA: idOficina };
+  }
+
+  return null;
+}
 
 /** Projects an Oficina row onto the address allowlist, normalising undefined to null. */
 function extrairEndereco(oficina: Oficina | null): EnderecoOficina {
@@ -97,8 +150,11 @@ export default class VisitaConfirmacaoService {
     const status = statusEfetivo(notificacao, agora);
 
     if (status === StatusNotificacaoVisita.EXPIRADO) {
-      // AC17
-      return { state: "EXPIRED" };
+      // AC17. Só a empresa é resolvida: a tela de expirado não mostra oficina,
+      // promotor nem endereço, e o convite morto não deve pagar por eles.
+      const empresa = await this.carregarEmpresa(notificacao);
+
+      return { state: "EXPIRED", ...empresa };
     }
 
     if (status === StatusNotificacaoVisita.CONFIRMADO) {
@@ -108,14 +164,16 @@ export default class VisitaConfirmacaoService {
       // whether the visit they are looking at is the one they expect. No JWT —
       // there is no further action to authorize.
       //
-      // comEmpresa: false — this branch has no empresaNome to render, so the
-      // client lookup is skipped rather than resolved and discarded.
-      const confirmado = await this.carregarContexto(notificacao, false);
+      // A empresa também vem aqui: a tela de "já confirmado" repete o mesmo
+      // resumo da tela de sucesso, que nomeia quem faz a visita.
+      const confirmado = await this.carregarContexto(notificacao);
 
       return {
         state: "ALREADY_CONFIRMED",
         oficinaNome: confirmado.oficina?.NOME_FANTASIA ?? null,
         promotorNome: confirmado.promotorNome,
+        empresaNome: confirmado.empresaNome,
+        empresaLogoUrl: confirmado.empresaLogoUrl,
         endereco: extrairEndereco(confirmado.oficina),
         confirmadoEm: notificacao.CONFIRMADO_EM ?? null,
       };
@@ -127,11 +185,15 @@ export default class VisitaConfirmacaoService {
       return { state: "TOKEN_INVALID" };
     }
 
-    const { oficina, promotorNome, empresaNome } = await this.carregarContexto(notificacao, true);
+    const { oficina, promotorNome, empresaNome, empresaLogoUrl } =
+      await this.carregarContexto(notificacao);
 
     // AC14: JWT plus the workshop's name, who is visiting (promoter and the
     // client company the campaign runs for) and the current registered address.
     // AC30: no visit date is returned — the schema has no per-visit date.
+    //
+    // `usuarioNome` é o dono do link (a saudação da tela inicial), e sai só
+    // nesta resposta — as outras telas não cumprimentam ninguém.
     return {
       state: "PENDING",
       jwt: emitirJwt({
@@ -140,8 +202,10 @@ export default class VisitaConfirmacaoService {
         ID_ROTA_PROMOTOR: notificacao.ID_ROTA_PROMOTOR!,
       }),
       oficinaNome: oficina?.NOME_FANTASIA ?? null,
+      usuarioNome: await this.carregarUsuarioNome(notificacao.ID_USUARIO),
       promotorNome,
       empresaNome,
+      empresaLogoUrl,
       endereco: extrairEndereco(oficina),
     };
   }
@@ -237,8 +301,14 @@ export default class VisitaConfirmacaoService {
     // not column names — TypeORM ignores unknown keys without complaining.
     const { logradouro, rua } = dividirLogradouro((endereco.ENDERECO as string | null) ?? null);
 
+    // `logradouro` só entra no update quando o split reconheceu o tipo. Sem essa
+    // guarda, todo endereço cuja primeira palavra está fora de TIPOS_LOGRADOURO
+    // — "Av.", "R.", "Rod.", "Via", "Largo", ou um OFICINA.ENDERECO já gravado
+    // sem o tipo — zeraria a coluna, e as queries de campanha, que montam o
+    // endereço com CONCAT(logradouro, ' ', rua), passariam a exibir a rua sem o
+    // tipo. Chave ausente é coluna intocada no TypeORM.
     const valoresEmpresa = {
-      LOGRADOURO: logradouro,
+      ...(logradouro !== null ? { LOGRADOURO: logradouro } : {}),
       ENDERECO: rua,
       NUMERO: endereco.NUMERO,
       COMPLEMENTO: endereco.COMPLEMENTO,
@@ -256,31 +326,28 @@ export default class VisitaConfirmacaoService {
 
         // `id_oficina` não identifica uma linha em dw.cadastro_empresa: a chave
         // única é `cnpj_int`, e em PRD 59 ids se repetem sob CNPJs diferentes.
-        // Estreita por CNPJ; cai para o id sozinho nos ~100 pares em que os dois
-        // cadastros divergem de CNPJ, e aborta se ainda assim pegar mais de uma
-        // linha — a transação desfaz tudo e o reparador vê ADDRESS_UPDATE_FAILED.
-        let escrita = cnpjInt
-          ? await manager.update(
-              Empresa,
-              { ID_OFICINA: oficina.ID_OFICINA, CNPJ_INT: cnpjInt },
-              valoresEmpresa
-            )
-          : { affected: 0 };
+        // Por isso a linha é escolhida antes de escrever, e não descoberta pelo
+        // `affected` de um update às cegas.
+        const alvo = await escolherLinhaDoDw(manager, oficina.ID_OFICINA!, cnpjInt);
 
-        if (!escrita.affected) {
-          escrita = await manager.update(
-            Empresa,
-            { ID_OFICINA: oficina.ID_OFICINA },
-            valoresEmpresa
-          );
+        // Nenhuma linha, ou várias sem CNPJ correspondente: não há como saber
+        // qual cadastro é desta oficina. Antes, o caminho ambíguo escrevia em
+        // todas e depois derrubava a transação — a oficina ficava sem confirmar
+        // por causa de dado sujo do dw, que não é problema dela nem do
+        // reparador. O endereço em MAIN_REGISTER.OFICINA, que é o que o app do
+        // promotor lê, já foi corrigido; o dw fica para trás com log.
+        if (alvo === null) {
+          console.warn("[visitaConfirmacao] dw.cadastro_empresa não atualizado", {
+            ID_NOTIFICACAO_VISITA: payload.ID_NOTIFICACAO_VISITA,
+            ID_OFICINA: oficina.ID_OFICINA,
+            motivo: "linha não identificável por id_oficina + cnpj",
+          });
+          return;
         }
 
-        if ((escrita.affected ?? 0) > 1) {
-          throw new Error(
-            `cadastro_empresa ambíguo para ID_OFICINA ${oficina.ID_OFICINA}: ` +
-              `${escrita.affected} linhas atingidas`
-          );
-        }
+        // Falha de banco aqui (permissão, constraint, deadlock) continua
+        // propagando: essa sim reverte as duas escritas (VISIB-13).
+        await manager.update(Empresa, alvo, valoresEmpresa);
       });
     } catch (erro) {
       console.error("[visitaConfirmacao] falha ao atualizar endereço da oficina", {
@@ -301,7 +368,13 @@ export default class VisitaConfirmacaoService {
     // messaging the reparador again seconds after they confirmed.
     if (resultado.state === "CONFIRMED") {
       const cepNovo = typeof endereco.CEP === "string" ? endereco.CEP : null;
-      if (cepNovo !== null && cepNovo !== (oficina.CEP ?? null)) {
+
+      // Comparação por dígitos: o form do jornal manda o CEP como o reparador
+      // digitou, com ou sem máscara, e o cadastro guarda os dois formatos. Sem
+      // isso, "13010-000" contra "13010000" contava como mudança de endereço e
+      // disparava reatribuição de rota — que pode trocar o promotor da visita —
+      // sem a oficina ter saído do lugar.
+      if (cepNovo !== null && apenasDigitos(cepNovo) !== apenasDigitos(oficina.CEP ?? null)) {
         await this.reatribuirRotas(oficina.ID_OFICINA, cepNovo, payload);
       }
     }
@@ -406,37 +479,77 @@ export default class VisitaConfirmacaoService {
    * their link; the frontend contract already allows every address field to be
    * null, so a gap in the registry degrades to empty inputs instead of a false
    * "link inválido".
-   *
-   * @param comEmpresa - false on the already-confirmed branch, which renders no
-   * company name and would otherwise pay for a lookup it discards
    */
-  protected static async carregarContexto(
-    notificacao: NotificacaoVisita,
-    comEmpresa: boolean
-  ): Promise<{ oficina: Oficina | null; promotorNome: string | null; empresaNome: string | null }> {
-    const rota = await AppDataSourceSync.getRepository(RotaPromotor).findOne({
-      where: { ID_ROTA_PROMOTOR: notificacao.ID_ROTA_PROMOTOR },
-      relations: ["campanhaPromotor", "campanhaPromotor.promotor", "campanhaPromotor.campanha"],
-    });
+  protected static async carregarContexto(notificacao: NotificacaoVisita): Promise<{
+    oficina: Oficina | null;
+    promotorNome: string | null;
+    empresaNome: string | null;
+    empresaLogoUrl: string | null;
+  }> {
+    const rota = await this.carregarRotaComRelacoes(notificacao);
 
     const promotorNome = rota?.campanhaPromotor?.promotor?.NOME ?? null;
     const oficina = await this.carregarOficinaDaRota(rota);
+    const empresa = await this.carregarEmpresaDaRota(rota);
 
-    if (!comEmpresa) {
-      return { oficina, promotorNome, empresaNome: null };
-    }
+    return { oficina, promotorNome, ...empresa };
+  }
 
+  /**
+   * Nome e logo da empresa por trás do convite, sem tocar em oficina nem
+   * promotor — o que a tela de expirado precisa e nada além.
+   */
+  protected static async carregarEmpresa(
+    notificacao: NotificacaoVisita
+  ): Promise<{ empresaNome: string | null; empresaLogoUrl: string | null }> {
+    return await this.carregarEmpresaDaRota(await this.carregarRotaComRelacoes(notificacao));
+  }
+
+  private static async carregarRotaComRelacoes(
+    notificacao: NotificacaoVisita
+  ): Promise<RotaPromotor | null> {
+    return await AppDataSourceSync.getRepository(RotaPromotor).findOne({
+      where: { ID_ROTA_PROMOTOR: notificacao.ID_ROTA_PROMOTOR },
+      relations: ["campanhaPromotor", "campanhaPromotor.promotor", "campanhaPromotor.campanha"],
+    });
+  }
+
+  private static async carregarEmpresaDaRota(
+    rota: RotaPromotor | null
+  ): Promise<{ empresaNome: string | null; empresaLogoUrl: string | null }> {
     const empresaSlug = rota?.campanhaPromotor?.campanha?.EMPRESA_SLUG;
 
     if (empresaSlug == null) {
-      return { oficina, promotorNome, empresaNome: null };
+      return { empresaNome: null, empresaLogoUrl: null };
     }
 
     const community = await AppDataSourceSync.getRepository(Community).findOne({
       where: { EmpresaSlug: empresaSlug },
     });
 
-    return { oficina, promotorNome, empresaNome: community?.Nome ?? null };
+    // `Icon` guarda chave relativa do bucket; quem consome recebe URL pronta,
+    // porque esta página é pública e não compartilha a env de S3 do portal.
+    return {
+      empresaNome: community?.Nome ?? null,
+      empresaLogoUrl: urlS3(community?.Icon ?? null),
+    };
+  }
+
+  /**
+   * Nome do dono do link, para a saudação da tela inicial. Degrada para null —
+   * a headline funciona sem nome, e o usuário pode ter sido apagado depois do
+   * envio.
+   */
+  private static async carregarUsuarioNome(idUsuario?: number | null): Promise<string | null> {
+    if (idUsuario == null) {
+      return null;
+    }
+
+    const usuario = await AppDataSourceSync.getRepository(Usuario).findOne({
+      where: { ID_USUARIO: idUsuario },
+    });
+
+    return usuario?.NOME ?? null;
   }
 
   /**
