@@ -15,15 +15,6 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 
 ---
 
-## Pré-requisitos de deploy (fora do fluxo de tasks)
-
-Duas verificações que nenhuma task resolve e que precisam de resposta antes do deploy:
-
-1. **ETL sobre `dw.cadastro_empresa`** — confirmar com o DBA se a tabela é destino de carga periódica. Se for, a escrita da fase 1 é desfeita no próximo ciclo e a contingência é reintroduzir precedência de fonte na leitura.
-2. **Backfill** — contar `NOTIFICACAO_VISITA` com `ENDERECO_ATUALIZADO = true`. Se houver linhas, elas têm o endereço corrigido só em `MAIN_REGISTER.OFICINA` e precisam de um backfill pontual para o `dw`. O usuário de leitura disponível não tem permissão em `CAMPANHAS_OB`.
-
----
-
 ## Test Coverage Matrix
 
 > Gerada a partir do código, das diretrizes do projeto e da spec — confirmar antes do Execute. Diretrizes encontradas: `jest.config.ts` (backend-promotor), `.specs/codebase/TESTING.md`, `.specs/project/STATE.md`. Nenhum `AGENTS.md` nem `CONTRIBUTING.md`. Sem threshold de cobertura configurado em nenhum dos três repos.
@@ -84,7 +75,7 @@ O tipo da T5 destrava dois ramos: o das telas de rota e o da visão gerencial.
 
 ```
 T5 → T6 → T7 → T8 → T9
-T5 → T10 → T11
+T5 → T10 → T11 → T17
 ```
 
 ### Phase 4: App de campo (frontend-promotor)
@@ -594,7 +585,7 @@ Phase 1 → Phase 2 → Phase 3 → Phase 4
 Phase 1:  T1 → T2
 Phase 2:  T3 → T4
 Phase 3:  T5 → T6 → T7 → T8 → T9
-          T5 → T10 → T11
+          T5 → T10 → T11 → T17
 Phase 4:  T12 → T14
           T13 → T14 → T15 → T16
 ```
@@ -643,6 +634,7 @@ Execução é estritamente sequencial — não há paralelismo dentro da fase.
 | T9 | T8 | T8 → T9 | ✅ Match |
 | T10 | T5 | T5 → T10 | ✅ Match |
 | T11 | T10 | T10 → T11 | ✅ Match |
+| T17 | T11 | T11 → T17 | ✅ Match |
 | T12 | None | início da fase 4 | ✅ Match |
 | T13 | None | início da fase 4 (ramo próprio) | ✅ Match |
 | T14 | T12, T13 | T12 → T14 e T13 → T14 | ✅ Match |
