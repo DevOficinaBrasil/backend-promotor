@@ -56,6 +56,8 @@ Decisão do usuário: componentes ficam no gate de build; o que é testado de ve
 
 **Nota — jest do `ob-ads` está quebrado antes desta feature**: `jest.config.js` usa `babel-jest` para `.js|.jsx|.ts|.tsx`, mas o repo não tem nenhum arquivo de config do babel (`.babelrc`/`babel.config.js` não existem). Os presets estão no `package.json` e nunca são aplicados, então `npm test` morre no parser: `1 failed, 0 total`. Não há `@babel/preset-typescript` e o `moduleNameMapper` não mapeia o alias `@/`. Decisão do usuário: consertar dentro da T6 com `next/jest` (SWC, resolve TS e o alias). O gate Quick (ob-ads) só é confiável a partir da T6.
 
+**Nota — `npm run lint` do `frontend-promotor` está quebrado antes desta feature**: o script é `next lint`, comando removido no Next 16 (repo em 16.1.6), e `eslint` não está instalado. Ele falha com `Invalid project directory provided, no such directory: .../lint`. Constatado na T12 e reportado, não corrigido. O gate Build (frontend-promotor) vale por `npm run build` a partir da T12.
+
 **Baseline conhecido**: backend-promotor tem 432 testes unitários verdes em 29 suites. Três suítes de integração legadas (`rotaService`, `campanhaPromotorService`, `campanhaResultsService`) já falham no teardown por FK — pré-existente, registrado no `STATE.md`. O gate Full compara contra esse baseline, não contra verde absoluto.
 
 ---
@@ -416,7 +418,7 @@ T13 → T14 → T15 → T16
 
 ---
 
-### T12: Configurar o runner de teste (frontend-promotor)
+### T12: Configurar o runner de teste (frontend-promotor) ✅
 
 **What**: Instalar e configurar jest para testar funções puras — sem RTL, sem DOM.
 **Where**: `frontend-promotor/jest.config.js`
@@ -431,10 +433,10 @@ T13 → T14 → T15 → T16
 
 **Done when**:
 
-- [ ] `npm test` roda e encontra zero testes sem falhar
-- [ ] Script `test` adicionado ao `package.json`
-- [ ] Sem RTL nem `testEnvironment: jsdom` — só `node`
-- [ ] Gate check passes: `npm run lint && npm run build`
+- [x] `npm test` roda e encontra zero testes sem falhar (`passWithNoTests: true`)
+- [x] Script `test` adicionado ao `package.json`; `jest` e `@types/jest` instalados como devDependency
+- [x] Sem RTL nem `testEnvironment: jsdom` — só `node`
+- [x] Gate check passes: `npm run build` verde. **`npm run lint` está quebrado antes desta feature e não foi consertado**: o script é `next lint`, removido no Next 16 (o repo está no 16.1.6), e `eslint` nem sequer está instalado. O comando falha com `Invalid project directory provided, no such directory: .../lint`. Reportado, não corrigido — consertar o lint é escopo próprio
 
 **Tests**: none
 **Gate**: build
