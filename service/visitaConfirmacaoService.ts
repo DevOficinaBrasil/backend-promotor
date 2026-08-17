@@ -175,8 +175,10 @@ export default class VisitaConfirmacaoService {
    *    succeed. A rejected write — including a missing UPDATE grant on
    *    MAIN_REGISTER — leaves the notification STATUS untouched and surfaces a
    *    distinct error, never a false confirmation (AC33).
-   * 3. LATITUDE/LONGITUDE are deliberately left alone: no geocoding provider
-   *    exists in this codebase, so a corrected address keeps its old pin.
+   * 3. LATITUDE/LONGITUDE are deliberately left alone. Note this is a scope
+   *    decision, not a technical limit: reatribuirRotas() below geocodes the new
+   *    CEP through geolocationService to pick the nearest promoter, then throws
+   *    the coordinates away. A corrected address keeps its old pin.
    *
    * The correction lands on both address sources in a single transaction
    * (VISIB-07, VISIB-13): MAIN_REGISTER.OFICINA, read by GET /campanha/:id, and

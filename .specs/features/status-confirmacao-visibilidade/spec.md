@@ -35,7 +35,7 @@ Levantado no código, não presumido:
 | Feature | Reason |
 | --- | --- |
 | Status `RECUSADO` e ação de recusa | Não existe no domínio: `StatusNotificacaoVisita` não tem `RECUSADO`, o `CHK_NOTIFICACAO_VISITA_STATUS` não o aceita e não há endpoint de recusa. Decidido com o usuário: fora de escopo, vira task futura junto com o `REAGENDADO` já reservado (NOTIF-26). As interfaces sinalizam apenas confirmado / pendente / expirado / falhou. |
-| Geocodificação do endereço corrigido | Não há provider de geocoding no fluxo de confirmação; `geolocationService` só resolve por CEP e não é chamado ali. Decidido com o usuário: a API devolve as coordenadas do cadastro como estão. |
+| Persistir coordenadas do endereço corrigido | **Correção factual (2026-08-17):** há geocoding neste fluxo. `atualizarEndereco` → `reatribuirRotas` → `RotaService.reassignRotasByAddress` chama `geolocationService.getLatLongByCep` (`visitaConfirmacaoService.ts:297`, `rotaService.ts:484`) sempre que o CEP muda, com Nominatim e fallback Google. As coordenadas novas são calculadas, usadas para escolher o promotor mais próximo e **descartadas**. Persistir ficou fora de escopo por decisão, não por ausência de provider — o custo da chamada externa já é pago. Consequência conhecida: após mudança de CEP, o app mostra endereço novo com pino antigo. |
 | Coluna de "coordenadas confirmadas" | Não existe e não será criada. As coordenadas expostas são as de `dw.cadastro_empresa` (`LATITUDE`/`LONGITUDE`), já devolvidas hoje. |
 | Autenticação de `/campanha/*` | As rotas de campanha não têm middleware de autenticação hoje — `middlewares: []` em `routes/CampanhaRoute.ts:211` e `:251`, e `middlewares/authMiddleware.ts` não é importado por rota nenhuma (risco aberto nº 1 do `STATE.md`). Corrigir isso é mudança de contrato para três frontends e tem escopo próprio; esta feature não piora nem melhora a exposição. |
 | Cálculo dos indicadores agregados no servidor | PERF-01 é risco conhecido do projeto e tem escopo próprio. Esta feature só se obriga a não piorá-lo. |
@@ -49,14 +49,14 @@ Levantado no código, não presumido:
 | Assumption / decision | Chosen default | Rationale | Confirmed? |
 | --- | --- | --- | --- |
 | Significado de "rota recusada" | Não implementar; interfaces exibem confirmado / pendente / expirado / falhou | Valor de domínio inexistente — não se inventa significado de enum | y |
-| "Coordenadas confirmadas" | Devolver `LATITUDE`/`LONGITUDE` do cadastro, sem prometer que refletem endereço corrigido | Não há geocoding no stack para essa rota de código | y |
+| "Coordenadas confirmadas" | Devolver `LATITUDE`/`LONGITUDE` do cadastro, sem prometer que refletem endereço corrigido | Decisão de escopo. A justificativa original ("não há geocoding no stack para essa rota de código") era **falsa** — ver Out of Scope. A decisão de não persistir segue valendo, agora por escolha explícita | y |
 | Endereço corrigido não chega ao app | Corrigir nesta feature | O usuário confirmou incluir; sem isso a correção de endereço é inútil na prática | y |
 | Onde corrigir: leitura ou escrita | Na **escrita** — `PUT /visita/endereco` grava em `MAIN_REGISTER.OFICINA` **e** em `dw.cadastro_empresa`, na mesma transação | O DBA liberou `UPDATE` em `dw`. Corrigir na escrita mantém as três consultas de campanha intocadas e elimina qualquer regra de precedência de fonte na leitura | y |
 | Como quebrar o `ENDERECO` (linha única) nas colunas `logradouro` + `rua` do `dw` | Parse do primeiro token contra uma lista de tipos de logradouro; se casar, vira `logradouro` e o resto vira `rua`; se não casar, `logradouro = NULL` e a string inteira vai para `rua` | Levantado em PRD: `logradouro` é o tipo (`Rua` 92.543, `Avenida` 34.625, `Rodovia` 3.257, `Estrada` 2.385, `Travessa` 1.126, `Alameda` 733, `Praça` 641, `Quadra` 528) e `rua` é o nome. Em 146.581 linhas, **zero** têm `rua` sem `logradouro` — jogar tudo em `rua` criaria uma forma inédita na tabela | y |
 | Leitura passa a usar `TRIM` no `CONCAT` de `logradouro` + `rua` | Sim, nas duas consultas em SQL cru | O caminho de fallback do parse grava `logradouro = NULL`, e `CONCAT(NULL,' ',x)` devolve a string com espaço à esquerda | y |
 | Valores `NP` (2.226 linhas) e `M` (1.071) na coluna `logradouro` | Não interpretar nem tratar como caso especial; o parse só age sobre o que o reparador digita | Significado desconhecido — não se inventa semântica de valor de domínio | y |
 | `GET /campanha/:id` continua lendo de `MAIN_REGISTER.OFICINA` | Sim, pela relação TypeORM, sem mudança | Com a escrita nas duas tabelas, as três consultas convergem sem regra de precedência | y |
-| Correções feitas antes deste deploy ficam só em `MAIN_REGISTER.OFICINA` | Verificar a contagem de `NOTIFICACAO_VISITA` com `ENDERECO_ATUALIZADO = true` antes do deploy; se houver linhas, rodar um backfill pontual para o `dw` | Não consegui contar: o usuário de leitura disponível não tem permissão no schema `CAMPANHAS_OB`. O fluxo de confirmação ainda aguarda a migration em produção, então o esperado é zero — mas isso precisa ser confirmado, não presumido | n |
+| Correções feitas antes deste deploy ficam só em `MAIN_REGISTER.OFICINA` | Contar `NOTIFICACAO_VISITA` com `ENDERECO_ATUALIZADO = true` antes do deploy; se houver linhas, rodar backfill pontual para o `dw` | **Corrigido em 2026-08-17:** a tabela **já está viva em produção com 73 linhas** (lido de `pg_class`; a suposição anterior de que aguardava migration estava errada). A contagem exata de `ENDERECO_ATUALIZADO` continua pendente — `ob_leitura` não tem `SELECT` em `CAMPANHAS_OB`, só acesso ao catálogo | n |
 | Status exposto é o efetivo, não o bruto | `statusEfetivo()` aplicado também na consulta por cliente | É o contrato já estabelecido por NOTIF-19 nas outras duas consultas | y |
 | Rotas vindas do banco legado | Continuam sem `notificacaoVisita` (campo ausente, não nulo) | O banco legado não tem `NOTIFICACAO_VISITA`; a query legada já é join-free por decisão de NOTIF-19 | y |
 | Cor/ícone exatos do indicador | Definidos na implementação seguindo o design system já usado em cada tela; o requisito é distinção visual, não uma paleta específica | Não há mockup para esta task | n |
@@ -75,7 +75,7 @@ Levantado no código, não presumido:
 | Concurrency / ordering | N/A because leitura sem escrita; a ordenação das rotas (`ORDEM ASC NULLS LAST`) não muda. |
 | Data lifecycle / expiry | VISIB-05: o status devolvido é o efetivo — um link vencido e nunca aberto lê como `EXPIRADO`, nunca como ainda vivo. |
 | Observability | N/A because nenhum caminho novo de erro é introduzido; as consultas já logam falhas no handler existente. |
-| External-dependency failure | N/A because nenhuma chamada externa é adicionada (geocoding ficou fora de escopo). |
+| External-dependency failure | Esta feature não adiciona chamada externa, mas o fluxo já tem uma: `getLatLongByCep` (Nominatim, throttle de 1 req/s, fallback Google) dispara quando o CEP muda. Falha ou lentidão são engolidas pelo `catch` de `reatribuirRotas` — a confirmação já está commitada e não depende do remanejamento. |
 | State-transition integrity | VISIB-13: a transição para `CONFIRMADO` continua ocorrendo depois da escrita do endereço e só quando ela inteira tiver sucesso — a garantia atual de "endereço falhou, nada foi confirmado" passa a valer para as duas tabelas. |
 
 ---
@@ -133,7 +133,7 @@ Levantado no código, não presumido:
 4. IF o primeiro token do campo `ENDERECO` não corresponde a nenhum tipo conhecido THEN o sistema SHALL gravar `dw.cadastro_empresa.logradouro = NULL` e a string inteira em `dw.cadastro_empresa.rua`.
 5. The system SHALL gravar os campos `NUMERO`, `COMPLEMENTO`, `BAIRRO`, `CIDADE`, `ESTADO` e `CEP` em `dw.cadastro_empresa` com o mesmo valor gravado em `MAIN_REGISTER.OFICINA`, sem transformação.
 6. The system SHALL montar `ENDERECO` nas duas consultas em SQL cru com `TRIM` sobre a concatenação de `logradouro` e `rua`, de modo que um `logradouro` nulo não produza espaço à esquerda.
-7. The system SHALL NOT alterar `dw.cadastro_empresa.latitude` e `dw.cadastro_empresa.longitude` na correção de endereço — não há geocodificação.
+7. The system SHALL NOT alterar `dw.cadastro_empresa.latitude` e `dw.cadastro_empresa.longitude` na correção de endereço, ainda que o remanejamento de rotas geocodifique o CEP novo e descarte o resultado.
 8. The system SHALL manter as três consultas de campanha sem nenhuma regra de precedência entre fontes de endereço, e sem consulta adicional por rota.
 
 **Independent Test**: corrigir um endereço via `PUT /visita/endereco` e conferir que `GET /campanha/ativa` devolve o endereço novo com as coordenadas antigas, e que `MAIN_REGISTER.OFICINA` e `dw.cadastro_empresa` ficaram consistentes para aquela oficina.
