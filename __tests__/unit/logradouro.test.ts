@@ -78,9 +78,23 @@ describe('dividirLogradouro', () => {
 
     it('casa sem acento e sem diferenciar maiúsculas ("PRACA da Se")', () => {
       expect(dividirLogradouro('PRACA da Se')).toEqual({
-        logradouro: 'PRACA',
+        logradouro: 'Praça',
         rua: 'da Se',
       });
+    });
+
+    // A coluna dw.cadastro_empresa.logradouro usa capitalização de título em
+    // 146k linhas ("Rua" 92.543, "Avenida" 34.625). Gravar o token como o
+    // reparador digitou criaria variantes de caixa num campo que é agrupado.
+    it('grava a forma canônica do tipo, não o token como foi digitado', () => {
+      expect(dividirLogradouro('AVENIDA NOVA').logradouro).toBe('Avenida');
+      expect(dividirLogradouro('avenida nova').logradouro).toBe('Avenida');
+      expect(dividirLogradouro('rUa das Flores').logradouro).toBe('Rua');
+      expect(dividirLogradouro('PRACA da Se').logradouro).toBe('Praça');
+    });
+
+    it('preserva o nome da rua como digitado, sem normalizar caixa', () => {
+      expect(dividirLogradouro('AVENIDA NOVA').rua).toBe('NOVA');
     });
 
     it('aplica trim ao restante quando há espaços extras em volta', () => {
