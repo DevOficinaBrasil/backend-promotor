@@ -69,7 +69,23 @@ createDocumentedRoute(router, {
   documentation: {
     tags: ['Promotor'],
     summary: 'Create a new promoter',
-    description: 'Creates a new promoter with the provided data',
+    description: `Creates a new promoter with the provided data. Accepts optional FILTRO_SEGMENTACAO to apply CRM segmentation on initial route auto-assignment.
+
+**FILTRO_SEGMENTACAO example:**
+\`\`\`json
+{
+  "if": {
+    "behavior": {
+      "section": "LEAD_DATA",
+      "criterion": "LEAD_FIELD",
+      "value": { "fieldKey": "professionalOccupation", "fieldType": "text", "operator": "EQUALS", "value": "Mecânico" }
+    }
+  },
+  "then": { "decision": "include", "reason": "segment_rule_matched" },
+  "default": { "decision": "exclude", "reason": "default_exclude" }
+}
+\`\`\`
+\`fieldKey\` deve ser o nome do campo sem prefixo (ex: \`"gender"\`, não \`"attributeKey.gender"\`). Campos disponíveis via \`GET /segmentacao/getFiltrosSegmentacaoByCampanha/:idCampanha\`.`,
     security: [{ bearerAuth: [] }],
     responses: {
       201: {
@@ -106,7 +122,23 @@ createDocumentedRoute(router, {
   documentation: {
     tags: ['Promotor'],
     summary: 'Update an existing promoter',
-    description: 'Updates a promoter with the provided data',
+    description: `Updates a promoter with the provided data. Accepts optional FILTRO_SEGMENTACAO to update the CRM segmentation filter on all active campanha-promotor links.
+
+**FILTRO_SEGMENTACAO example:**
+\`\`\`json
+{
+  "if": {
+    "behavior": {
+      "section": "LEAD_DATA",
+      "criterion": "LEAD_FIELD",
+      "value": { "fieldKey": "gender", "fieldType": "text", "operator": "EQUALS", "value": "Masculino" }
+    }
+  },
+  "then": { "decision": "include", "reason": "segment_rule_matched" },
+  "default": { "decision": "exclude", "reason": "default_exclude" }
+}
+\`\`\`
+\`fieldKey\` deve ser o nome do campo sem prefixo (ex: \`"gender"\`, não \`"attributeKey.gender"\`). Send \`null\` to remove the filter. If CEP is also changed, routes will be reassigned using the new filter.`,
     security: [{ bearerAuth: [] }],
     responses: {
       200: {
@@ -255,7 +287,23 @@ createDocumentedRoute(router, {
   documentation: {
     tags: ['Promotor'],
     summary: 'Link promoter to campaign(s)',
-    description: 'Creates a relationship between a promoter and one or more campaigns',
+    description: `Creates a relationship between a promoter and one or more campaigns. Accepts optional FILTRO_SEGMENTACAO to apply CRM segmentation during route auto-assignment.
+
+**FILTRO_SEGMENTACAO example:**
+\`\`\`json
+{
+  "if": {
+    "behavior": {
+      "section": "LEAD_DATA",
+      "criterion": "LEAD_FIELD",
+      "value": { "fieldKey": "professionalOccupation", "fieldType": "text", "operator": "EQUALS", "value": "Mecânico" }
+    }
+  },
+  "then": { "decision": "include", "reason": "segment_rule_matched" },
+  "default": { "decision": "exclude", "reason": "default_exclude" }
+}
+\`\`\`
+\`fieldKey\` deve ser o nome do campo sem prefixo (ex: \`"gender"\`, não \`"attributeKey.gender"\`). Campos disponíveis via \`GET /segmentacao/getFiltrosSegmentacaoByCampanha/:idCampanha\`.`,
     security: [{ bearerAuth: [] }],
     responses: {
       201: {

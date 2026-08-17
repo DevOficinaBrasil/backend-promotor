@@ -25,12 +25,18 @@ describe('CampanhaPromotorService', () => {
   describe('linkCampanhaPromotor', () => {
     it('should link single campaign to promotor with default RAIO', async () => {
       mockRepo.find.mockResolvedValue([]);
-      mockRepo.saveMany.mockResolvedValue([{ ID_CAMPANHA_PROMOTOR: 1, ID_CAMPANHA: 10, ID_PROMOTOR: 5, RAIO: 20 }]);
+      mockRepo.saveMany.mockResolvedValue([{ 
+        ID_CAMPANHA_PROMOTOR: 1, 
+        ID_CAMPANHA: 10, 
+        ID_PROMOTOR: 5, 
+        RAIO: 20,
+        FILTRO_SEGMENTACAO: null, 
+      }]);
 
       const result = await CampanhaPromotorService.linkCampanhaPromotor(10, 5);
 
       expect(result).toHaveLength(1);
-      expect(mockRepo.create).toHaveBeenCalledWith({ ID_CAMPANHA: 10, ID_PROMOTOR: 5, RAIO: 20 });
+      expect(mockRepo.create).toHaveBeenCalledWith({ ID_CAMPANHA: 10, ID_PROMOTOR: 5, RAIO: 20, FILTRO_SEGMENTACAO: null });
     });
 
     it('should link multiple campaigns', async () => {
