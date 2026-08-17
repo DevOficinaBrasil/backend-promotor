@@ -388,7 +388,7 @@ T13 → T14 → T15 → T16
 
 ---
 
-### T11: Contar confirmadas e não confirmadas na visão gerencial (ob-ads)
+### T11: Contar confirmadas e não confirmadas na visão gerencial (ob-ads) ✅
 
 **What**: KPI de confirmação derivado do payload já carregado.
 **Where**: `ob-ads/app/(dashboard)/dashboard/campanha-para-promotores/visao/components/GerencialView.tsx`
@@ -403,10 +403,11 @@ T13 → T14 → T15 → T16
 
 **Done when**:
 
-- [ ] Contagem de confirmadas e de não confirmadas exibida
-- [ ] **Não** reusa `allRotas`, que filtra `DONE_AT !== null` — confirmação é sobre visita futura; contar ali devolveria quase zero
-- [ ] Nenhuma chamada de API nova
-- [ ] Gate check passes: `npm run lint && npm run build`
+- [x] Contagem de confirmadas e de não confirmadas exibida em dois `KpiCard`
+- [x] **Não** reusa `allRotas` — `rotasParaConfirmacao` é travessia própria de `campanhasDetail`, sem filtro de `DONE_AT`. Não confirmadas = total de rotas menos confirmadas, então rota sem notificação conta como não confirmada
+- [x] Nenhuma chamada de API nova — deriva de `campanhasDetail`, já carregado por `visao/page.tsx:35`
+- [x] Confirmada é decidida por `mapStatusConfirmacao` (T6), não por comparação de string solta, para as duas telas não divergirem
+- [x] Gate check passes: `npm run lint && npm run build`
 
 **Tests**: none
 **Gate**: build
