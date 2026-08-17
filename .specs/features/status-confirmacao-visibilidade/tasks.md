@@ -471,7 +471,7 @@ T13 → T14 → T15 → T16
 
 ---
 
-### T14: Preservar o campo na normalização da rota (frontend-promotor)
+### T14: Preservar o campo na normalização da rota (frontend-promotor) ✅
 
 **What**: `normalizeRota` copia o status de confirmação da forma da API para o modelo local.
 **Where**: `frontend-promotor/service/campanha.service.ts`
@@ -486,11 +486,11 @@ T13 → T14 → T15 → T16
 
 **Done when**:
 
-- [ ] `notificacao_visita` preenchido a partir de `notificacaoVisita` da API
-- [ ] Campo ausente na API vira ausente no modelo local, não objeto vazio
-- [ ] Teste: rota confirmada preserva `status` e `confirmado_em`; rota sem o campo não ganha o campo
-- [ ] Gate check passes: `npm test`
-- [ ] Test count: novos testes passam
+- [x] `notificacao_visita` preenchido a partir de `notificacaoVisita` da API; `CONFIRMADO_EM` ausente vira `confirmado_em: null`
+- [x] Campo ausente na API vira ausente no modelo local, não objeto vazio — spread condicional, a chave nem existe
+- [x] Teste: rota confirmada preserva `status` e `confirmado_em`; rota sem o campo não ganha o campo (`service/campanha.service.test.ts`). `normalizeRota` passou a ser exportada para o teste chamar a função pura direto
+- [x] Gate check passes: `npm test`
+- [x] Test count: 0 → 3 testes, 3 passam
 
 **Tests**: unit
 **Gate**: quick
