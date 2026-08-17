@@ -526,7 +526,7 @@ T13 → T14 → T15 → T16
 
 ---
 
-### T16: Exibir o indicador no carrossel de rotas (frontend-promotor)
+### T16: Exibir o indicador no carrossel de rotas (frontend-promotor) ✅
 
 **What**: Indicador de confirmação por card de rota.
 **Where**: `frontend-promotor/components/route-carousel.tsx`
@@ -541,10 +541,11 @@ T13 → T14 → T15 → T16
 
 **Done when**:
 
-- [ ] Card de rota mostra confirmada, pendente e não-recebe de forma distinta
-- [ ] Data de confirmação exibida quando existe; ausente não renderiza `null` nem data vazia
-- [ ] Rota sem o campo renderiza normalmente, sem indicador
-- [ ] Gate check passes: `npm run lint && npm run build`
+- [x] Card de rota mostra confirmada, pendente e não-recebe de forma distinta (cor + ícone: success/`CheckCircle2`, warning/`Clock`, destructive/`XCircle`, tokens já usados no `oficina-card.tsx`)
+- [x] Data de confirmação exibida quando existe; ausente ou inválida cai no rótulo sem data
+- [x] Rota sem o campo renderiza normalmente, sem indicador (`mapStatusConfirmacao` devolve `null` e o indicador não renderiza)
+- [x] Nota de implementação: o carrossel delega o card a `components/oficina-card.tsx`, que está fora do `Where` desta task. O indicador é renderizado pelo próprio `route-carousel.tsx`, acima do card, nas duas listagens (carrossel mobile e grid desktop)
+- [x] Gate check passes: `npm run build` verde e `npm test` 13/13; `npm run lint` segue quebrado por motivo pré-existente (ver nota na seção de gates)
 
 **Tests**: none
 **Gate**: build
