@@ -554,6 +554,38 @@ T13 → T14 → T15 → T16
 
 ---
 
+### T17: Extrair e testar a contagem de confirmações (ob-ads) ✅
+
+**What**: Task de correção nascida do Verifier — o mutante 9 sobreviveu porque `VISIB-10` não tinha nenhuma asserção. Extrai a contagem do `useMemo` do `GerencialView` para função pura testável.
+**Where**: `ob-ads/lib/contarConfirmacoes.ts`
+**Depends on**: T11
+**Reuses**: `mapStatusConfirmacao` (T6), para o KPI não divergir dos badges
+**Requirement**: VISIB-10
+
+**Origem**: `validation.md`, gap ranqueado nº 1. Forçar `confirmadasCount = 0` passava `npm test` e `npm run build` sem ruído. Contar rotas é **lógica**, não renderização — a matriz de cobertura deste projeto já exige unit test nessa camada, então a decisão de deixar componente no gate de build nunca cobriu isto.
+
+**Tools**:
+
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+
+- [x] `contarConfirmacoes(campanhas)` devolve `{ confirmadas, naoConfirmadas, total }`
+- [x] Decide por `mapStatusConfirmacao`, não por comparação solta de string
+- [x] Sem filtro de `DONE_AT` — com teste de regressão que falha se alguém reintroduzir o filtro
+- [x] Rota sem `notificacaoVisita` conta como não confirmada
+- [x] `GerencialView.tsx` passa a consumir a função, sem mudança de comportamento visível
+- [x] Gate check passes: `npm test` e `npm run lint && npm run build`
+- [x] Test count: 10 → 19 (9 novos)
+
+**Tests**: unit
+**Gate**: quick
+
+**Commit**: `test(visao): cobrir contagem de confirmacoes com funcao pura`
+
+---
+
 ## Phase Execution Map
 
 ```
