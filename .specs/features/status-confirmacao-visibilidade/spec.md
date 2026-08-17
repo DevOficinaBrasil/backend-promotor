@@ -181,7 +181,7 @@ Levantado no código, não presumido:
 | VISIB-03 | P1: Operador vê o status no dashboard | AC1-AC4, AC6 | T6, T7, T8, T9 | Done |
 | VISIB-04 | P1: Promotor vê o status antes de sair | AC1-AC2 | Design | Pending |
 | VISIB-05 | P1: Promotor vê o status antes de sair | AC4 | T3 | Done |
-| VISIB-06 | P1 dashboard AC5, P1 promotor AC5, Edge cases (legado) | - | T4 (backend), T6 (ob-ads) | Partial - falta UI do frontend-promotor (T15) |
+| VISIB-06 | P1 dashboard AC5, P1 promotor AC5, Edge cases (legado) | - | T4 (backend), T6 (ob-ads), T15 (frontend-promotor) | Done |
 | VISIB-07 | P1: Endereço corrigido chega ao promotor | AC1, AC5, AC8 | T2 | Done |
 | VISIB-08 | P1: Endereço corrigido chega ao promotor | AC7 | T2 | Done |
 | VISIB-09 | P2: Visão gerencial (regressão de schema) | AC4 | T4 | Done |

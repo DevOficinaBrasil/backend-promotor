@@ -499,7 +499,7 @@ T13 → T14 → T15 → T16
 
 ---
 
-### T15: Criar o mapeamento status → indicador (frontend-promotor)
+### T15: Criar o mapeamento status → indicador (frontend-promotor) ✅
 
 **What**: Mesma função pura do `ob-ads`, neste repo.
 **Where**: `frontend-promotor/lib/statusConfirmacao.ts`
@@ -514,10 +514,10 @@ T13 → T14 → T15 → T16
 
 **Done when**:
 
-- [ ] Mesmo mapeamento da T6: `CONFIRMADO` → `confirmada`; `PENDENTE`/`ENVIADO`/`DISPENSADO` → `pendente`; `EXPIRADO`/`FALHOU` → `nao-recebe`; ausente/desconhecido → `null`
-- [ ] Testes cobrem os 7 valores do enum, o ausente e um desconhecido — mesmos casos da T6
-- [ ] Gate check passes: `npm test`
-- [ ] Test count: novos testes passam
+- [x] Mesmo mapeamento da T6: `CONFIRMADO` → `confirmada`; `PENDENTE`/`ENVIADO`/`DISPENSADO` → `pendente`; `EXPIRADO`/`FALHOU` → `nao-recebe`; ausente/desconhecido → `null`
+- [x] Testes cobrem os 7 valores do enum, o ausente e um desconhecido — os mesmos 10 casos da T6
+- [x] Gate check passes: `npm test`
+- [x] Test count: 3 → 13 testes, 13 passam
 
 **Tests**: unit
 **Gate**: quick
