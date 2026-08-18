@@ -146,11 +146,11 @@ Escopo Medium: cobertas as dimensões presentes; as demais `N/A`.
 | FILT-05 | P1: Promotor só vê confirmação resolvida | AC5 + edge case legado | Done |
 | FILT-06 | P1: Promotor só vê confirmação resolvida | AC6, AC7 | Done |
 | FILT-07 | P1: Promotor só vê confirmação resolvida | AC9 | Done |
-| FILT-08 | P1: O dashboard do cliente não muda | AC1, AC2, AC3 | Pending |
+| FILT-08 | P1: O dashboard do cliente não muda | AC1, AC2, AC3 | Done |
 
 **ID format:** `FILT-[NUMBER]`
 
-**Coverage:** 8 total, 0 mapeados a tasks, 8 não mapeados ⚠️ (mapeamento ocorre na execução — tasks formais dispensadas neste escopo)
+**Coverage:** 8 total, 8 implementados, 0 pendentes
 
 ---
 

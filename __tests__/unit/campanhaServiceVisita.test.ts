@@ -306,6 +306,47 @@ describe('CampanhaService', () => {
         );
       });
 
+      // FILT-08 / AC1: o filtro do app nao alcanca esta consulta. Toda rota volta,
+      // em qualquer status de notificacao e de rota.
+      it('devolve toda rota, inclusive as que o app do promotor esconde', async () => {
+        montarCampanhaComRelacoes([
+          {
+            ID_ROTA_PROMOTOR: 1,
+            STATUS: 'BACKLOG',
+            notificacaoVisita: {
+              STATUS: StatusNotificacaoVisita.PENDENTE,
+              EXPIRA_EM: null,
+            },
+          },
+          {
+            ID_ROTA_PROMOTOR: 2,
+            STATUS: 'BACKLOG',
+            notificacaoVisita: {
+              STATUS: StatusNotificacaoVisita.ENVIADO,
+              EXPIRA_EM: EXPIRA_PASSADO,
+            },
+          },
+          {
+            ID_ROTA_PROMOTOR: 3,
+            STATUS: 'BACKLOG',
+            notificacaoVisita: {
+              STATUS: StatusNotificacaoVisita.CONFIRMADO,
+              EXPIRA_EM: EXPIRA_FUTURO,
+            },
+          },
+        ]);
+
+        const campanha = await CampanhaService.getCampanhaByIdWithRelations(1);
+        const rotas = campanha!.campanhaPromotores![0].rotasPromotor!;
+
+        expect(rotas.map((r: any) => r.ID_ROTA_PROMOTOR)).toEqual([1, 2, 3]);
+        expect(rotas.map((r: any) => r.notificacaoVisita!.STATUS)).toEqual([
+          StatusNotificacaoVisita.PENDENTE,
+          StatusNotificacaoVisita.EXPIRADO,
+          StatusNotificacaoVisita.CONFIRMADO,
+        ]);
+      });
+
       it('reports an unopened expired notification as EXPIRADO and a live one as ENVIADO', async () => {
         montarCampanhaComRelacoes([
           {
@@ -467,6 +508,44 @@ describe('CampanhaService', () => {
       });
 
       // AC2: um único LEFT JOIN na consulta de rotas já existente.
+      // FILT-08 / AC2 (spec filtro-rotas-por-confirmacao): o filtro do app nao
+      // alcanca esta consulta. Toda rota volta, em qualquer status, senao a visao
+      // gerencial perderia justamente o pendente que ela passou a exibir.
+      it('devolve toda rota, inclusive as que o app do promotor esconde', async () => {
+        montarConsultaPorCliente([
+          linhaRotaCliente(1, {
+            NOTIFICACAO_STATUS: StatusNotificacaoVisita.PENDENTE,
+            NOTIFICACAO_EXPIRA_EM: null,
+            NOTIFICACAO_CONFIRMADO_EM: null,
+          }),
+          linhaRotaCliente(2, {
+            NOTIFICACAO_STATUS: StatusNotificacaoVisita.ENVIADO,
+            NOTIFICACAO_EXPIRA_EM: EXPIRA_PASSADO,
+            NOTIFICACAO_CONFIRMADO_EM: null,
+          }),
+          linhaRotaCliente(3, {
+            NOTIFICACAO_STATUS: StatusNotificacaoVisita.REAGENDADO,
+            NOTIFICACAO_EXPIRA_EM: EXPIRA_FUTURO,
+            NOTIFICACAO_CONFIRMADO_EM: null,
+          }),
+          linhaRotaCliente(4, {
+            NOTIFICACAO_STATUS: StatusNotificacaoVisita.CONFIRMADO,
+            NOTIFICACAO_EXPIRA_EM: EXPIRA_FUTURO,
+            NOTIFICACAO_CONFIRMADO_EM: CONFIRMADO_EM,
+          }),
+        ]);
+
+        const rotas = rotasDe(await CampanhaService.getCampanhasByClientId(77));
+
+        expect(rotas.map((r: any) => r.ID_ROTA_PROMOTOR)).toEqual([1, 2, 3, 4]);
+        expect(rotas.map((r: any) => r.notificacaoVisita.STATUS)).toEqual([
+          StatusNotificacaoVisita.PENDENTE,
+          StatusNotificacaoVisita.EXPIRADO,
+          StatusNotificacaoVisita.REAGENDADO,
+          StatusNotificacaoVisita.CONFIRMADO,
+        ]);
+      });
+
       it('traz o status no mesmo SELECT das rotas, sem consulta por rota', async () => {
         montarConsultaPorCliente([
           linhaRotaCliente(1, {
