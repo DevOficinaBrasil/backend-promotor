@@ -60,21 +60,23 @@ describe("registrarOutboxCron", () => {
     expect(scheduleMock).not.toHaveBeenCalled();
   });
 
+  // Um tique = um lote. O default de 5 minutos é o que limita o volume por hora
+  // (lote 20 x 12 tiques = 240/hora, contra 1200 quando era de minuto em minuto).
   it("registers on the default expression when enabled", () => {
     process.env.OUTBOX_VISITA_ENABLED = "1";
 
     registrarOutboxCron();
 
-    expect(scheduleMock).toHaveBeenCalledWith("*/1 * * * *", expect.any(Function));
+    expect(scheduleMock).toHaveBeenCalledWith("*/5 * * * *", expect.any(Function));
   });
 
   it("honours OUTBOX_VISITA_CRON_EXPRESSION", () => {
     process.env.OUTBOX_VISITA_ENABLED = "1";
-    process.env.OUTBOX_VISITA_CRON_EXPRESSION = "*/5 * * * *";
+    process.env.OUTBOX_VISITA_CRON_EXPRESSION = "*/10 * * * *";
 
     registrarOutboxCron();
 
-    expect(scheduleMock).toHaveBeenCalledWith("*/5 * * * *", expect.any(Function));
+    expect(scheduleMock).toHaveBeenCalledWith("*/10 * * * *", expect.any(Function));
   });
 
   it("never registers under NODE_ENV=test, whatever else is set", () => {

@@ -12,13 +12,20 @@ const ENV_KEYS = [
   "WHATSAPP_TEMPLATE_NAME_VISITA",
   "WHATSAPP_BASE_URL",
   "WHATSAPP_API_KEY",
+  "WHATSAPP_TEST_PHONE_OVERRIDE",
 ] as const;
 
 const TELEFONE_VALIDO = "5511999998888";
 const VARIAVEIS = ["Auto Center Silva", "https://app.example.com/visita/confirmacao?token=abc"];
 
-/** Full, valid configuration with the test-env lock deliberately lifted. */
+/**
+ * Full, valid configuration with the test-env lock deliberately lifted. The
+ * test-phone override is cleared: it redirects every dispatch, so an ambient
+ * value leaking in from a developer's shell would silently rewrite the
+ * toPhone every other assertion in this file depends on.
+ */
 function configurarEnvioReal() {
+  delete process.env.WHATSAPP_TEST_PHONE_OVERRIDE;
   process.env.NODE_ENV = "production";
   process.env.WHATSAPP_SEND_ENABLED = "true";
   process.env.WHATSAPP_ACCOUNT_ID = "acc-123";
@@ -124,6 +131,195 @@ describe("WhatsAppChannel.send", () => {
     });
   });
 
+  // Diagnostics: ChannelSendResult keeps only reason + providerCode, so without
+  // this log a provider 4xx becomes a FALHOU row with no URL, status or body.
+  describe("failure diagnostics", () => {
+    const logDeFalha = (): string => {
+      const chamada = (console.error as jest.Mock).mock.calls.find((c) =>
+        String(c[0]).includes("FALHA DE ENVIO")
+      );
+      expect(chamada).toBeDefined();
+      return String(chamada![0]);
+    };
+
+    it("logs url, http status, provider code, classification and body on a provider error", async () => {
+      configurarEnvioReal();
+      postMock.mockRejectedValue({
+        response: {
+          status: 401,
+          statusText: "Unauthorized",
+          data: { error: { code: "TEMPLATE_NOT_FOUND" } },
+        },
+      });
+
+      await canal.send({ toPhone: TELEFONE_VALIDO, variables: VARIAVEIS });
+
+      const log = logDeFalha();
+      expect(log).toContain("POST https://wpp.oficinabrasil.com.br/api/v1/messages/send-template");
+      expect(log).toContain("401 Unauthorized");
+      expect(log).toContain("TEMPLATE_NOT_FOUND");
+      expect(log).toContain("channel not configured");
+      expect(log).toContain("visita_confirmacao");
+      expect(log).toContain(TELEFONE_VALIDO);
+    });
+
+    // A 2xx carrying success:false throws nothing — it would vanish unlogged.
+    it("logs a 200 response that does not carry success: true", async () => {
+      configurarEnvioReal();
+      postMock.mockResolvedValue({
+        status: 200,
+        statusText: "OK",
+        data: { success: false, code: "VALIDATION_ERROR", detail: "variables mismatch" },
+      });
+
+      await canal.send({ toPhone: TELEFONE_VALIDO, variables: VARIAVEIS });
+
+      const log = logDeFalha();
+      expect(log).toContain("200 OK");
+      expect(log).toContain("VALIDATION_ERROR");
+      expect(log).toContain("variables mismatch");
+    });
+
+    it("logs the transport error code when the provider never responds", async () => {
+      configurarEnvioReal();
+      postMock.mockRejectedValue({ code: "ECONNREFUSED", message: "connect ECONNREFUSED" });
+
+      await canal.send({ toPhone: TELEFONE_VALIDO, variables: VARIAVEIS });
+
+      const log = logDeFalha();
+      expect(log).toContain("(sem resposta)");
+      expect(log).toContain("ECONNREFUSED");
+      expect(log).toContain("network error");
+    });
+
+    it("never writes the API key into the diagnostics", async () => {
+      configurarEnvioReal();
+      postMock.mockRejectedValue({
+        response: { status: 500, statusText: "Server Error", data: { error: "BOOM" } },
+      });
+
+      await canal.send({ toPhone: TELEFONE_VALIDO, variables: VARIAVEIS });
+
+      expect(logDeFalha()).not.toContain("chave-secreta");
+    });
+
+    it("truncates an oversized response body instead of flooding the log", async () => {
+      configurarEnvioReal();
+      postMock.mockRejectedValue({
+        response: { status: 502, statusText: "Bad Gateway", data: "x".repeat(5_000) },
+      });
+
+      await canal.send({ toPhone: TELEFONE_VALIDO, variables: VARIAVEIS });
+
+      const log = logDeFalha();
+      expect(log).toContain("chars)");
+      expect(log.length).toBeLessThan(3_000);
+    });
+
+    it("stays silent on a successful send", async () => {
+      configurarEnvioReal();
+      postMock.mockResolvedValue({ status: 200, data: { success: true, messageId: "m1" } });
+
+      await canal.send({ toPhone: TELEFONE_VALIDO, variables: VARIAVEIS });
+
+      expect(console.error).not.toHaveBeenCalled();
+    });
+  });
+
+  // WHATSAPP_TEST_PHONE_OVERRIDE: exercises the real provider without any
+  // message reaching an oficina. Every dispatch goes to the single configured
+  // number instead of the recipient's.
+  describe("test phone override", () => {
+    const MEU_NUMERO = "5511987654321";
+
+    it("redirects the dispatch to the override instead of the real recipient", async () => {
+      configurarEnvioReal();
+      process.env.WHATSAPP_TEST_PHONE_OVERRIDE = MEU_NUMERO;
+      postMock.mockResolvedValue({ data: { success: true, messageId: "m1" } });
+
+      await canal.send({ toPhone: TELEFONE_VALIDO, variables: VARIAVEIS });
+
+      expect(postMock).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ toPhone: MEU_NUMERO }),
+        expect.any(Object)
+      );
+    });
+
+    it("normalizes a loosely formatted override before dispatching", async () => {
+      configurarEnvioReal();
+      process.env.WHATSAPP_TEST_PHONE_OVERRIDE = "(11) 98765-4321";
+      postMock.mockResolvedValue({ data: { success: true, messageId: "m1" } });
+
+      await canal.send({ toPhone: TELEFONE_VALIDO, variables: VARIAVEIS });
+
+      expect(postMock).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ toPhone: MEU_NUMERO }),
+        expect.any(Object)
+      );
+    });
+
+    // A half-applied redirect is the dangerous failure: it would send to the
+    // real oficina while the developer believes traffic is captured.
+    it("ignores an override that cannot be normalized and keeps the real recipient", async () => {
+      configurarEnvioReal();
+      process.env.WHATSAPP_TEST_PHONE_OVERRIDE = "nao-e-telefone";
+      postMock.mockResolvedValue({ data: { success: true, messageId: "m1" } });
+
+      await canal.send({ toPhone: TELEFONE_VALIDO, variables: VARIAVEIS });
+
+      expect(postMock).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ toPhone: TELEFONE_VALIDO }),
+        expect.any(Object)
+      );
+    });
+
+    it("still refuses an invalid recipient rather than masking it behind the override", async () => {
+      configurarEnvioReal();
+      process.env.WHATSAPP_TEST_PHONE_OVERRIDE = MEU_NUMERO;
+
+      const resultado = await canal.send({ toPhone: "(00) 1234", variables: VARIAVEIS });
+
+      expect(postMock).not.toHaveBeenCalled();
+      expect(resultado).toEqual({
+        success: false,
+        reason: "invalid phone",
+        providerCode: null,
+      });
+    });
+
+    it("lifts the NODE_ENV=development block, since no real recipient is reachable", async () => {
+      configurarEnvioReal();
+      process.env.NODE_ENV = "development";
+      process.env.WHATSAPP_TEST_PHONE_OVERRIDE = MEU_NUMERO;
+      postMock.mockResolvedValue({ data: { success: true, messageId: "m1" } });
+
+      const resultado = await canal.send({ toPhone: TELEFONE_VALIDO, variables: VARIAVEIS });
+
+      expect(resultado.success).toBe(true);
+      expect(postMock).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ toPhone: MEU_NUMERO }),
+        expect.any(Object)
+      );
+    });
+
+    // The NODE_ENV=test lock outranks the override: no combination of env vars
+    // may produce a real send during a test run.
+    it("does not dispatch under NODE_ENV=test even with the override set", async () => {
+      configurarEnvioReal();
+      process.env.NODE_ENV = "test";
+      process.env.WHATSAPP_TEST_PHONE_OVERRIDE = MEU_NUMERO;
+
+      const resultado = await canal.send({ toPhone: TELEFONE_VALIDO, variables: VARIAVEIS });
+
+      expect(postMock).not.toHaveBeenCalled();
+      expect(resultado.success).toBe(false);
+    });
+  });
+
   // Spec AC4 + edge case "IF CELULAR contains non-numeric characters or an
   // invalid DDD THEN normalization SHALL fail closed (no dispatch)".
   it("refuses to dispatch a phone number that does not normalize", async () => {
@@ -221,6 +417,53 @@ describe("WhatsAppChannel.send", () => {
         providerCode: codigo,
       });
       expect(postMock).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // 131049 é fadiga do DESTINATÁRIO, não do nosso número: a Meta recusou a entrega
+  // porque a pessoa já recebeu mensagens demais. A orientação é esperar 24h, então
+  // classificar como transitório (retentativa em minutos) é o pior desfecho.
+  describe("limite do destinatário (131049)", () => {
+    it("classifica o código como limite do destinatário, não como rate do provider", async () => {
+      configurarEnvioReal();
+      postMock.mockRejectedValue({ response: { status: 400, data: { error: "131049" } } });
+
+      const resultado = await canal.send({ toPhone: TELEFONE_VALIDO, variables: VARIAVEIS });
+
+      expect(resultado).toEqual({
+        success: false,
+        reason: "recipient message limit",
+        providerCode: "131049",
+      });
+      expect(postMock).toHaveBeenCalledTimes(1);
+    });
+
+    // Os códigos da Meta são inteiros; provider que repassa o corpo cru manda
+    // número, e só aceitar string faria o código cair no caso genérico.
+    it("reconhece o código vindo como número em error.code", async () => {
+      configurarEnvioReal();
+      postMock.mockRejectedValue({
+        response: { status: 400, data: { error: { code: 131049, message: "healthy ecosystem" } } },
+      });
+
+      const resultado = await canal.send({ toPhone: TELEFONE_VALIDO, variables: VARIAVEIS });
+
+      expect(resultado).toMatchObject({
+        reason: "recipient message limit",
+        providerCode: "131049",
+      });
+    });
+
+    it("reconhece o código numérico em code, no 200 sem success", async () => {
+      configurarEnvioReal();
+      postMock.mockResolvedValue({ status: 200, data: { success: false, code: 131049 } });
+
+      const resultado = await canal.send({ toPhone: TELEFONE_VALIDO, variables: VARIAVEIS });
+
+      expect(resultado).toMatchObject({
+        reason: "recipient message limit",
+        providerCode: "131049",
+      });
     });
   });
 

@@ -10,6 +10,7 @@ import Oficina from "../entities/Oficina";
 import RotaPromotor from "../entities/RotaPromotor";
 import Usuario from "../entities/Usuario";
 import { getChannel } from "../channels/channelRegistry";
+import { LIMITE_DESTINATARIO } from "../channels/whatsappChannel";
 import { avaliarGuardas, enderecoRecente } from "./envioGuards";
 import { MigrationAwareRepository } from "../utils/migrationRepository";
 import { normalizarTelefone } from "../utils/telefone";
@@ -29,6 +30,22 @@ export const MOTIVO_OFICINA_INEXISTENTE = "oficina not found";
 export const MOTIVO_CAMPANHA_ENCERRADA = "campanha already ended";
 export const MOTIVO_NOTIFICACAO_INEXISTENTE = "notificacao not found";
 export const MOTIVO_ROTA_INEXISTENTE = "rota not found";
+/**
+ * A Meta recusou a entrega para este destinatário porque ele já recebeu mensagens
+ * demais (código 131049). Registrado como `DISPENSADO`, não como falha: não é
+ * problema desta mensagem nem do nosso número, é fadiga da pessoa.
+ *
+ * A orientação da Meta é esperar 24h antes de tentar de novo, e a escada de
+ * retentativa da fila é de minutos — retentar assim pode estender a
+ * indisponibilidade para o mesmo usuário. Como não existe caminho de reenvio
+ * nesta feature, dispensar é o fim de linha: a visita segue sem confirmação, que
+ * é o mesmo desfecho de um endereço recém-atualizado.
+ */
+export const MOTIVO_LIMITE_DESTINATARIO = LIMITE_DESTINATARIO;
+
+// Falha de configuração do mesmo tipo de `channel not configured`: não é problema
+// deste destinatário, e nenhuma tentativa resolve enquanto a env não mudar.
+export const MOTIVO_LINK_NAO_CONFIGURADO = "confirmation link base url not configured";
 
 /**
  * Motivos de falha do canal que uma nova tentativa pode resolver. São
@@ -58,12 +75,24 @@ export type DesfechoDespacho =
  * The spec fixes the link shape but not the env var that holds the frontend
  * host, so the frontend base URL is read from VISITA_CONFIRMACAO_BASE_URL and
  * falls back to API_URL.
+ *
+ * Devolve `null` quando não há base absoluta configurada. Antes, base vazia
+ * gerava `/visita/confirmacao?token=...` — caminho relativo, que dentro de uma
+ * mensagem de WhatsApp não é link nenhum — e a notificação ainda era marcada
+ * ENVIADO. Sem base, não existe envio possível: quem chama trata como falha de
+ * configuração.
  */
-function montarConfirmationUrl(rawToken: string): string {
-  const base = (process.env.VISITA_CONFIRMACAO_BASE_URL ?? process.env.API_URL ?? "").replace(
-    /\/+$/,
-    ""
-  );
+export function montarConfirmationUrl(rawToken: string): string | null {
+  const base = (process.env.VISITA_CONFIRMACAO_BASE_URL ?? process.env.API_URL ?? "")
+    .trim()
+    .replace(/\/+$/, "");
+
+  // http/https explícito: o link vai para fora, então nem caminho relativo nem
+  // um host solto ("app.example.com", que o WhatsApp não linka) servem.
+  if (!/^https?:\/\/.+/i.test(base)) {
+    return null;
+  }
+
   return `${base}/visita/confirmacao?token=${encodeURIComponent(rawToken)}`;
 }
 
@@ -264,6 +293,68 @@ export default class NotificacaoVisitaService {
   }
 
   /**
+   * Enfileira o lote inteiro de rotas criadas numa só ida ao banco (AGND-01).
+   *
+   * `agendarVisita` continua existindo para a rota única, mas uma importação de
+   * centenas de rotas pagava um round trip por rota **dentro do request**. O
+   * insert é um só, e `ON CONFLICT DO NOTHING` sobre `UNIQUE(ID_ROTA_PROMOTOR)`
+   * mantém a regra de uma notificação por rota (AC1) sem transformar uma rota
+   * repetida no lote em erro do lote todo.
+   *
+   * Nunca lança (AGND-03): se o insert em lote falhar, cai para o caminho rota a
+   * rota, que já isola a falha de cada uma. Criação de rota não pode falhar por
+   * causa de notificação.
+   */
+  static async agendarVisitasEmLote(
+    rotas: RotaPromotor[],
+    agora: Date = new Date()
+  ): Promise<void> {
+    const comId = rotas.filter((rota) => rota.ID_ROTA_PROMOTOR != null);
+
+    if (comId.length === 0) {
+      return;
+    }
+
+    if (comId.length === 1) {
+      await this.agendarVisita(comId[0], 0, 1, agora);
+      return;
+    }
+
+    const linhas = comId.map((rota, posicao) => ({
+      ID_ROTA_PROMOTOR: rota.ID_ROTA_PROMOTOR,
+      CANAL: CanalNotificacao.WHATSAPP,
+      STATUS: StatusNotificacaoVisita.PENDENTE,
+      // A posição no lote espalha os envios pela janela configurada.
+      AVAILABLE_AT: proximoHorarioEnvio(agora, posicao, comId.length),
+      ATTEMPTS: 0,
+    }));
+
+    try {
+      await AppDataSourceSync.getRepository(NotificacaoVisita)
+        .createQueryBuilder()
+        .insert()
+        .into(NotificacaoVisita)
+        .values(linhas)
+        .orIgnore()
+        .execute();
+
+      console.log("[notificacaoVisita] lote de notificações agendado", {
+        quantidade: linhas.length,
+        ID_ROTA_PROMOTOR_PRIMEIRA: linhas[0].ID_ROTA_PROMOTOR,
+      });
+    } catch (erro) {
+      console.error("[notificacaoVisita] falha ao agendar lote, caindo para rota a rota", {
+        quantidade: linhas.length,
+        erro: (erro as Error)?.message,
+      });
+
+      for (const [posicao, rota] of comId.entries()) {
+        await this.agendarVisita(rota, posicao, comId.length, agora);
+      }
+    }
+  }
+
+  /**
    * Dispatches one already-queued notification (AGND-09).
    *
    * Runs the flow against state as of *now*, not as of route creation: the
@@ -392,6 +483,16 @@ export default class NotificacaoVisitaService {
         fimCampanha ?? new Date(Date.now() + HORAS_VALIDADE_TOKEN * 60 * 60 * 1000);
       const confirmationUrl = montarConfirmationUrl(raw);
 
+      // Antes de gravar TOKEN_HASH: sem base absoluta não há link para mandar, e
+      // gravar o token aqui queimaria a janela de EXPIRA_EM de uma notificação
+      // que não vai sair. O token gerado acima é descartado sem ter sido
+      // persistido, então nada fica pendurado.
+      if (confirmationUrl === null) {
+        return await this.encerrarTerminal(repo, notificacao, MOTIVO_LINK_NAO_CONFIGURADO, {
+          ID_USUARIO: destinatario.ID_USUARIO,
+        });
+      }
+
       notificacao = await this.finalizar(repo, notificacao, {
         ID_USUARIO: destinatario.ID_USUARIO,
         TELEFONE_NORMALIZADO: telefone,
@@ -431,6 +532,17 @@ export default class NotificacaoVisitaService {
       }
 
       const erro = comporErroEnvio(resultado.reason, resultado.providerCode);
+
+      // Fadiga do destinatário (131049): dispensa, não falha e não retenta. Vem
+      // antes da classificação de transitório/terminal porque o desfecho não é
+      // nenhum dos dois — a mensagem não saiu por decisão da Meta sobre a pessoa.
+      if (resultado.reason === MOTIVO_LIMITE_DESTINATARIO) {
+        const dispensada = await this.encerrarDispensado(repo, notificacao, erro, {
+          ID_USUARIO: destinatario.ID_USUARIO,
+        });
+        NotificacaoVisitaService.log("notificação dispensada por limite do destinatário", notificacao);
+        return dispensada;
+      }
 
       // AC8, AC9: a config or per-recipient problem fails identically on every
       // attempt, so it retires now. Only the provider's non-deterministic

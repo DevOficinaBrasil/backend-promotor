@@ -12,7 +12,20 @@ import OutboxNotificacaoService, { idDoWorker } from "../service/outboxNotificac
  */
 
 const TAG = "[outboxNotificacaoCron]";
-const EXPRESSAO_PADRAO = "*/1 * * * *";
+/**
+ * Um tique a cada 5 minutos, não a cada minuto.
+ *
+ * O tique reivindica **um** lote e para: o volume de WhatsApp por hora é
+ * `lote x (60 / minutos entre tiques)`. Com lote 20, de minuto em minuto isso
+ * dava até 1200 mensagens/hora por cópia do servidor — muito mais do que este
+ * fluxo precisa, e a conta do provider é compartilhada. Espaçar o tique corta o
+ * teto para 240/hora sem mexer no tamanho do lote, que é o que mantém o lote
+ * eficiente (um cache de campanha, uma ida ao banco por linha).
+ *
+ * Latência não é problema aqui: a notificação nasce agendada para a janela do dia
+ * seguinte, então minutos de atraso no despacho não mudam nada para a oficina.
+ */
+const EXPRESSAO_PADRAO = "*/5 * * * *";
 
 export function outboxHabilitado(): boolean {
   return process.env.OUTBOX_VISITA_ENABLED === "1";

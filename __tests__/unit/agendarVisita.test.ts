@@ -131,3 +131,110 @@ describe("NotificacaoVisitaService.agendarVisita", () => {
     );
   });
 });
+
+// Perf: a criação de rota enfileirava uma notificação por rota, um round trip
+// cada, dentro do request. Uma importação de centenas de rotas pagava isso toda
+// vez.
+describe("NotificacaoVisitaService.agendarVisitasEmLote", () => {
+  const AGORA = new Date("2026-08-05T12:00:00.000Z");
+  const rotas = [1, 2, 3].map(
+    (id) => ({ ID_ROTA_PROMOTOR: id, ID_OFICINA: 100 + id }) as RotaPromotor
+  );
+
+  let insertBuilder: {
+    insert: jest.Mock;
+    into: jest.Mock;
+    values: jest.Mock;
+    orIgnore: jest.Mock;
+    execute: jest.Mock;
+  };
+  let notifRepo: { create: jest.Mock; save: jest.Mock; createQueryBuilder: jest.Mock };
+
+  beforeEach(() => {
+    insertBuilder = {
+      insert: jest.fn(() => insertBuilder),
+      into: jest.fn(() => insertBuilder),
+      values: jest.fn(() => insertBuilder),
+      orIgnore: jest.fn(() => insertBuilder),
+      execute: jest.fn(async () => ({ identifiers: [] })),
+    };
+    notifRepo = {
+      create: jest.fn((dados) => dados as NotificacaoVisita),
+      save: jest.fn(async (linha) => ({ ...linha, ID_NOTIFICACAO_VISITA: 1 })),
+      createQueryBuilder: jest.fn(() => insertBuilder),
+    };
+    (AppDataSourceSync.getRepository as jest.Mock) = jest.fn(() => notifRepo);
+
+    jest.spyOn(console, "log").mockImplementation(() => {});
+    jest.spyOn(console, "error").mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it("grava o lote num único insert, sem save por rota", async () => {
+    await NotificacaoVisitaService.agendarVisitasEmLote(rotas, AGORA);
+
+    expect(insertBuilder.execute).toHaveBeenCalledTimes(1);
+    expect(notifRepo.save).not.toHaveBeenCalled();
+
+    const linhas = insertBuilder.values.mock.calls[0][0] as Record<string, unknown>[];
+    expect(linhas).toHaveLength(3);
+    expect(linhas[0]).toMatchObject({
+      ID_ROTA_PROMOTOR: 1,
+      CANAL: CanalNotificacao.WHATSAPP,
+      STATUS: StatusNotificacaoVisita.PENDENTE,
+      ATTEMPTS: 0,
+    });
+  });
+
+  // UNIQUE(ID_ROTA_PROMOTOR) é a regra de uma notificação por rota (AC1): rota
+  // repetida no lote não pode derrubar o insert das outras.
+  it("ignora conflito de rota já enfileirada em vez de falhar o lote", async () => {
+    await NotificacaoVisitaService.agendarVisitasEmLote(rotas, AGORA);
+
+    expect(insertBuilder.orIgnore).toHaveBeenCalled();
+  });
+
+  it("espalha o lote pela janela de envio, cada rota num instante próprio", async () => {
+    process.env.NOTIFICACAO_HORA_ENVIO = "9";
+    process.env.NOTIFICACAO_HORA_ENVIO_FIM = "12";
+    try {
+      await NotificacaoVisitaService.agendarVisitasEmLote(rotas, AGORA);
+
+      const linhas = insertBuilder.values.mock.calls[0][0] as { AVAILABLE_AT: Date }[];
+      const instantes = linhas.map((linha) => linha.AVAILABLE_AT.getTime());
+      expect(new Set(instantes).size).toBe(3);
+      expect(instantes[0]).toBeLessThan(instantes[1]);
+      expect(instantes[1]).toBeLessThan(instantes[2]);
+    } finally {
+      delete process.env.NOTIFICACAO_HORA_ENVIO;
+      delete process.env.NOTIFICACAO_HORA_ENVIO_FIM;
+    }
+  });
+
+  it("cai para o caminho rota a rota quando o insert em lote falha, sem lançar", async () => {
+    insertBuilder.execute.mockRejectedValue(new Error("deadlock detected"));
+
+    await expect(
+      NotificacaoVisitaService.agendarVisitasEmLote(rotas, AGORA)
+    ).resolves.toBeUndefined();
+
+    expect(notifRepo.save).toHaveBeenCalledTimes(3);
+  });
+
+  it("usa o caminho de rota única quando há só uma rota", async () => {
+    await NotificacaoVisitaService.agendarVisitasEmLote([rotas[0]], AGORA);
+
+    expect(insertBuilder.execute).not.toHaveBeenCalled();
+    expect(notifRepo.save).toHaveBeenCalledTimes(1);
+  });
+
+  it("ignora rota sem id, que não teria como ser referenciada", async () => {
+    await NotificacaoVisitaService.agendarVisitasEmLote([{} as RotaPromotor], AGORA);
+
+    expect(insertBuilder.execute).not.toHaveBeenCalled();
+    expect(notifRepo.save).not.toHaveBeenCalled();
+  });
+});

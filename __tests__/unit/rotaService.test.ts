@@ -84,18 +84,13 @@ describe('RotaService', () => {
 
       await RotaService.createRotas(5, [100, 200]);
 
-      expect(NotificacaoVisitaService.agendarVisita).toHaveBeenCalledTimes(2);
-      // Posição e total do lote espalham os envios pela janela (AGND-02).
-      expect(NotificacaoVisitaService.agendarVisita).toHaveBeenCalledWith(
+      // Uma ida ao banco para o lote (AGND-01); a posição de cada rota na janela
+      // de envio (AGND-02) é decidida dentro do lote.
+      expect(NotificacaoVisitaService.agendarVisitasEmLote).toHaveBeenCalledTimes(1);
+      expect(NotificacaoVisitaService.agendarVisitasEmLote).toHaveBeenCalledWith([
         expect.objectContaining({ ID_ROTA_PROMOTOR: 1 }),
-        0,
-        2
-      );
-      expect(NotificacaoVisitaService.agendarVisita).toHaveBeenCalledWith(
         expect.objectContaining({ ID_ROTA_PROMOTOR: 2 }),
-        1,
-        2
-      );
+      ]);
     });
 
     it('never dispatches inline during route creation', async () => {
@@ -108,7 +103,7 @@ describe('RotaService', () => {
 
     it('still returns the created routes when queueing throws', async () => {
       rotaRepo.save.mockResolvedValue({ ID_ROTA_PROMOTOR: 1, ID_OFICINA: 100 });
-      (NotificacaoVisitaService.agendarVisita as jest.Mock).mockRejectedValueOnce(
+      (NotificacaoVisitaService.agendarVisitasEmLote as jest.Mock).mockRejectedValueOnce(
         new Error('fila indisponível')
       );
 
@@ -352,8 +347,8 @@ describe('RotaService', () => {
     // Spec AC1 + AGND-01: a reassignment creates a RotaPromotor like any other
     // path, so it gets exactly one NotificacaoVisita too — queued, not sent.
     it('queues the route created by a reassignment, after the transaction commits', async () => {
-      const agendarVisita = NotificacaoVisitaService.agendarVisita as jest.Mock;
-      agendarVisita.mockResolvedValue({} as never);
+      const agendarVisita = NotificacaoVisitaService.agendarVisitasEmLote as jest.Mock;
+      agendarVisita.mockResolvedValue(undefined as never);
       (criarCacheCampanha as jest.Mock).mockReturnValue({
         dados: new Map(),
         nomeEmpresa: new Map(),
@@ -400,11 +395,11 @@ describe('RotaService', () => {
       await RotaService.reassignRotasByAddress('80010-000', 123);
 
       expect(agendarVisita).toHaveBeenCalledTimes(1);
-      expect(agendarVisita).toHaveBeenCalledWith(rotaCriada, 0, 1);
+      expect(agendarVisita).toHaveBeenCalledWith([rotaCriada]);
     });
 
     it('still completes the reassignment when the notification rejects', async () => {
-      const agendarVisita = NotificacaoVisitaService.agendarVisita as jest.Mock;
+      const agendarVisita = NotificacaoVisitaService.agendarVisitasEmLote as jest.Mock;
       agendarVisita.mockRejectedValue(new Error('fila indisponível'));
       jest.spyOn(console, 'error').mockImplementation(() => {});
 

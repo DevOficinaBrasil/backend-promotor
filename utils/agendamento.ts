@@ -68,6 +68,35 @@ function janela(): { inicio: number; fim: number } {
  * Com `OUTBOX_VISITA_ENVIO_IMEDIATO="1"` devolve `agora` sem alteração
  * (AGND-16) — a chave de teste local, que faz a notificação nascer vencida.
  */
+/**
+ * A janela vale também na hora de **despachar**, não só na de agendar.
+ *
+ * `AVAILABLE_AT` é decidido na criação da rota, e nada garante que a fila dê conta
+ * do dia dentro da janela: lote limitado, tique espaçado, provider lento ou uma
+ * importação grande deixam linhas vencidas para trás. Sem esta guarda, essas
+ * linhas saem no primeiro tique seguinte — inclusive às 3h da manhã, que é o tipo
+ * de mensagem que o destinatário bloqueia e denuncia, e é bloqueio e denúncia que
+ * derruba a qualidade do número na Meta.
+ *
+ * Fora da janela o tique não reivindica nada: a linha fica intacta, sem queimar
+ * tentativa, e sai no primeiro tique da janela seguinte.
+ *
+ * Sem `NOTIFICACAO_HORA_ENVIO_FIM` a janela de agendamento colapsa num ponto
+ * (todos na hora cheia); para o despacho isso viraria uma janela de largura zero,
+ * então o fim efetivo é uma hora depois do início.
+ */
+export function dentroDaJanelaDeEnvio(agora: Date): boolean {
+  if (process.env.OUTBOX_VISITA_ENVIO_IMEDIATO === "1") {
+    return true;
+  }
+
+  const { inicio, fim } = janela();
+  const fimEfetivo = fim > inicio ? fim : inicio + 1;
+  const hora = toZonedTime(agora, FUSO).getHours();
+
+  return hora >= inicio && hora < fimEfetivo;
+}
+
 export function proximoHorarioEnvio(agora: Date, posicao = 0, total = 1): Date {
   if (process.env.OUTBOX_VISITA_ENVIO_IMEDIATO === "1") {
     return agora;

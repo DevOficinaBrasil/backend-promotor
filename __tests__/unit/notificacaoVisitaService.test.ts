@@ -83,6 +83,10 @@ describe("NotificacaoVisitaService.notificarVisita", () => {
   } as Usuario;
 
   beforeEach(() => {
+    // Sem base absoluta configurada não existe link para mandar, e o despacho
+    // encerra em FALHOU_TERMINAL antes do canal — então todo teste de envio
+    // precisa da env, como produção precisa.
+    process.env.VISITA_CONFIRMACAO_BASE_URL = "https://app.example.com";
     persistidos = [];
     rotaAtual = rota;
     let ultimaLinha: NotificacaoVisita | null = null;
@@ -144,6 +148,7 @@ describe("NotificacaoVisitaService.notificarVisita", () => {
   });
 
   afterEach(() => {
+    delete process.env.VISITA_CONFIRMACAO_BASE_URL;
     jest.restoreAllMocks();
   });
 

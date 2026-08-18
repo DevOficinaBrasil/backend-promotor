@@ -12,6 +12,7 @@ import NotificacaoVisitaService, {
   MOTIVO_OFICINA_INEXISTENTE,
   MOTIVO_SEM_TELEFONE,
   MOTIVO_TELEFONE_INVALIDO,
+  MOTIVO_LINK_NAO_CONFIGURADO,
 } from "../../service/notificacaoVisitaService";
 import { getChannel } from "../../channels/channelRegistry";
 import { avaliarGuardas, enderecoRecente } from "../../service/envioGuards";
@@ -292,5 +293,111 @@ describe("NotificacaoVisitaService.despacharNotificacao", () => {
       expect(chamada[0].ATTEMPTS).toBe(1);
       expect(chamada[0].AVAILABLE_AT).toBeUndefined();
     }
+  });
+  // A base do link vinha de VISITA_CONFIRMACAO_BASE_URL com fallback para
+  // API_URL e, faltando as duas, montava "/visita/confirmacao?token=..." — um
+  // caminho relativo, que numa mensagem de WhatsApp não é link. A notificação
+  // ainda era marcada ENVIADO, então ninguém descobria pelo status.
+  describe("base do link de confirmação ausente ou relativa", () => {
+    let apiUrlOriginal: string | undefined;
+
+    beforeEach(() => {
+      apiUrlOriginal = process.env.API_URL;
+      delete process.env.API_URL;
+      delete process.env.VISITA_CONFIRMACAO_BASE_URL;
+    });
+
+    afterEach(() => {
+      if (apiUrlOriginal === undefined) delete process.env.API_URL;
+      else process.env.API_URL = apiUrlOriginal;
+    });
+
+    it("reporta falha de configuração sem chamar o canal quando não há base", async () => {
+      const desfecho = await NotificacaoVisitaService.despacharNotificacao(ID_NOTIFICACAO);
+
+      expect(desfecho).toEqual({
+        desfecho: "FALHOU_TERMINAL",
+        erro: MOTIVO_LINK_NAO_CONFIGURADO,
+      });
+      expect(sendMock).not.toHaveBeenCalled();
+    });
+
+    it("não grava TOKEN_HASH nem EXPIRA_EM: a janela do token não é queimada", async () => {
+      await NotificacaoVisitaService.despacharNotificacao(ID_NOTIFICACAO);
+
+      for (const chamada of notifRepo.save.mock.calls) {
+        expect(chamada[0].TOKEN_HASH).toBeUndefined();
+        expect(chamada[0].EXPIRA_EM).toBeUndefined();
+      }
+      // A linha fica FALHOU com o motivo, para o painel mostrar o que houve.
+      const chamadas = notifRepo.save.mock.calls;
+      const ultimaEscrita = chamadas[chamadas.length - 1][0];
+      expect(ultimaEscrita.STATUS).toBe(StatusNotificacaoVisita.FALHOU);
+      expect(ultimaEscrita.ERRO_ENVIO).toBe(MOTIVO_LINK_NAO_CONFIGURADO);
+    });
+
+    it("recusa base sem esquema, que o WhatsApp não transforma em link", async () => {
+      process.env.VISITA_CONFIRMACAO_BASE_URL = "app.example.com";
+
+      const desfecho = await NotificacaoVisitaService.despacharNotificacao(ID_NOTIFICACAO);
+
+      expect(desfecho).toEqual({
+        desfecho: "FALHOU_TERMINAL",
+        erro: MOTIVO_LINK_NAO_CONFIGURADO,
+      });
+      expect(sendMock).not.toHaveBeenCalled();
+    });
+
+    it("aceita a base vinda de API_URL quando ela é absoluta", async () => {
+      process.env.API_URL = "https://api.example.com/";
+
+      const desfecho = await NotificacaoVisitaService.despacharNotificacao(ID_NOTIFICACAO);
+
+      expect(desfecho).toMatchObject({ desfecho: "ENVIADO" });
+      const [{ variables }] = sendMock.mock.calls[0];
+      expect(variables[2]).toMatch(
+        /^https:\/\/api\.example\.com\/visita\/confirmacao\?token=/
+      );
+    });
+  });
+  // 131049: a Meta recusou a entrega para esta pessoa por fadiga dela, não por
+  // problema nosso. Vira DISPENSADO — supressão deliberada — em vez de falha
+  // transitória, cuja escada de retentativa é de minutos contra a orientação de
+  // esperar 24h.
+  describe("limite do destinatário (131049)", () => {
+    beforeEach(() => {
+      sendMock.mockResolvedValue({
+        success: false,
+        reason: "recipient message limit",
+        providerCode: "131049",
+      });
+    });
+
+    it("reporta DISPENSADO, não falha nem retentativa", async () => {
+      const desfecho = await NotificacaoVisitaService.despacharNotificacao(ID_NOTIFICACAO);
+
+      expect(desfecho).toEqual({
+        desfecho: "DISPENSADO",
+        motivo: "recipient message limit: 131049",
+      });
+    });
+
+    it("persiste DISPENSADO com o código do provider e o destinatário resolvido", async () => {
+      await NotificacaoVisitaService.despacharNotificacao(ID_NOTIFICACAO);
+
+      const chamadas = notifRepo.save.mock.calls;
+      const gravado = chamadas[chamadas.length - 1][0];
+      expect(gravado.STATUS).toBe(StatusNotificacaoVisita.DISPENSADO);
+      expect(gravado.ERRO_ENVIO).toBe("recipient message limit: 131049");
+      expect(gravado.ID_USUARIO).toBe(ID_USUARIO);
+    });
+
+    it("não marca FALHOU: o número e o template continuam saudáveis", async () => {
+      await NotificacaoVisitaService.despacharNotificacao(ID_NOTIFICACAO);
+
+      for (const chamada of notifRepo.save.mock.calls) {
+        expect(chamada[0].STATUS).not.toBe(StatusNotificacaoVisita.FALHOU);
+      }
+    });
   });
 });

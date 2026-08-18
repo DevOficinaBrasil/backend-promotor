@@ -1,6 +1,12 @@
 import { AppDataSourceSync } from "../data-source";
 import NotificacaoVisita, { StatusNotificacaoVisita } from "../entities/NotificacaoVisita";
-import NotificacaoVisitaService, { DesfechoDespacho } from "./notificacaoVisitaService";
+import NotificacaoVisitaService, {
+  CacheCampanha,
+  criarCacheCampanha,
+  DesfechoDespacho,
+} from "./notificacaoVisitaService";
+import { TIMEOUT_ENVIO_MS } from "../channels/whatsappChannel";
+import { dentroDaJanelaDeEnvio } from "../utils/agendamento";
 
 /**
  * Fila de envio das notificações de visita.
@@ -20,6 +26,7 @@ import NotificacaoVisitaService, { DesfechoDespacho } from "./notificacaoVisitaS
 const TAMANHO_LOTE_PADRAO = 20;
 const LEASE_MINUTOS_PADRAO = 5;
 const MAX_TENTATIVAS_PADRAO = 3;
+const CONCORRENCIA_PADRAO = 4;
 
 function inteiroDeEnv(chave: string, padrao: number): number {
   const bruto = process.env[chave];
@@ -40,6 +47,76 @@ export function leaseMinutos(): number {
 
 export function maxTentativas(): number {
   return inteiroDeEnv("OUTBOX_VISITA_MAX_ATTEMPTS", MAX_TENTATIVAS_PADRAO);
+}
+
+/**
+ * Quantas linhas do lote são despachadas ao mesmo tempo.
+ *
+ * O despacho era estritamente serial, então um provider lento derrubava a vazão
+ * do worker inteiro: com timeout de 10s por envio, 20 linhas levavam até 200s e
+ * o tique seguinte era pulado. Quatro em paralelo é conservador — o gargalo real
+ * é o provider, não este processo — e continua sendo um número, não "todas",
+ * porque o lote também respeita o lease (ver `tamanhoLoteSeguro`).
+ */
+export function concorrencia(): number {
+  return inteiroDeEnv("OUTBOX_VISITA_CONCURRENCY", CONCORRENCIA_PADRAO);
+}
+
+// Custo de banco por linha despachada (releitura da linha, rota, oficina,
+// usuários, campanha, escrita do desfecho). Estimativa folgada de propósito: ela
+// só serve para dimensionar o lote, e errar para cima aqui é conservador.
+const CUSTO_QUERIES_POR_LINHA_MS = 2_000;
+
+// O lote usa no máximo esta fração do lease. Os 20% restantes cobrem o claim, o
+// próprio atraso do cron e a variação do custo por linha.
+const FRACAO_SEGURA_DO_LEASE = 0.8;
+
+/** Pior caso de tempo de uma linha: timeout do canal mais o custo de banco. */
+export function piorCasoPorLinhaMs(): number {
+  return TIMEOUT_ENVIO_MS + CUSTO_QUERIES_POR_LINHA_MS;
+}
+
+/**
+ * Tamanho de lote que cabe no lease.
+ *
+ * `tick` despacha as linhas **em série**, e cada envio pode levar até o timeout
+ * do canal. Se o lote inteiro demorar mais que `OUTBOX_VISITA_LOCK_LEASE_MINUTES`,
+ * o lease das linhas ainda não despachadas vence enquanto o worker trabalha,
+ * outro worker as reivindica e a mesma oficina recebe duas mensagens — o
+ * problema que `FOR UPDATE SKIP LOCKED` foi posto ali para impedir.
+ *
+ * Os três valores (lote, timeout, lease) eram independentes e nada os
+ * relacionava: subir `OUTBOX_VISITA_BATCH_SIZE` de 20 para 60 era suficiente
+ * para duplicar mensagem, sem nenhum sinal. Aqui o lote é capado pelo lease e o
+ * corte é logado — quem configurou precisa saber que o número dele não valeu.
+ *
+ * Nos valores padrão (lote 20, lease 5min, timeout 10s) o teto é exatamente 20,
+ * então nada muda até alguém mexer numa das pontas.
+ */
+export function tamanhoLoteSeguro(): number {
+  const configurado = tamanhoLote();
+  // Com N linhas em paralelo, o pior caso do lote é ceil(lote / N) ondas, então o
+  // teto acompanha a concorrência.
+  const teto = Math.max(
+    1,
+    Math.floor(
+      (leaseMinutos() * 60_000 * FRACAO_SEGURA_DO_LEASE * concorrencia()) / piorCasoPorLinhaMs()
+    )
+  );
+
+  if (configurado <= teto) {
+    return configurado;
+  }
+
+  console.warn("[outboxNotificacao] lote reduzido para caber no lease", {
+    OUTBOX_VISITA_BATCH_SIZE: configurado,
+    OUTBOX_VISITA_LOCK_LEASE_MINUTES: leaseMinutos(),
+    OUTBOX_VISITA_CONCURRENCY: concorrencia(),
+    piorCasoPorLinhaMs: piorCasoPorLinhaMs(),
+    loteUsado: teto,
+  });
+
+  return teto;
 }
 
 /**
@@ -102,6 +179,17 @@ export function acaoDaFila(desfecho: DesfechoDespacho, tentativas: number): Acao
   return { acao: "RETENTAR", erro: desfecho.erro, backoffMs: computeBackoffMs(tentativas) };
 }
 
+/**
+ * O que o claim devolve por linha. `tentativas` e `ID_ROTA_PROMOTOR` vêm do
+ * próprio `RETURNING`: antes, o processamento relia a linha só para pegar esses
+ * dois campos, e `despacharNotificacao` a lia de novo em seguida.
+ */
+export interface LinhaReivindicada {
+  id: number;
+  tentativas: number;
+  idRota: number | null;
+}
+
 /** Identifica qual cópia do servidor está com a linha na mão. */
 export function idDoWorker(sufixo = ""): string {
   return `outbox-visita${sufixo}-${process.pid}`;
@@ -125,12 +213,21 @@ export default class OutboxNotificacaoService {
    * ATTEMPTS é que aposenta a linha, e ele já foi incrementado no claim, então
    * nem uma linha que derruba o worker toda vez repete para sempre.
    */
-  static async tick(sufixoWorker = ""): Promise<void> {
+  static async tick(sufixoWorker = "", agora: Date = new Date()): Promise<void> {
     const workerId = idDoWorker(sufixoWorker);
-    let ids: number[] = [];
+
+    // Fora do horário comercial não se despacha nada, mesmo com linha vencida na
+    // fila: mensagem de madrugada é o que gera bloqueio e denúncia, e é isso que
+    // derruba a qualidade do número na Meta. Nada é reivindicado, então nenhuma
+    // linha queima tentativa por causa da hora.
+    if (!dentroDaJanelaDeEnvio(agora)) {
+      return;
+    }
+
+    let linhas: LinhaReivindicada[] = [];
 
     try {
-      ids = await OutboxNotificacaoService.claimBatch(tamanhoLote(), workerId);
+      linhas = await OutboxNotificacaoService.claimBatch(tamanhoLoteSeguro(), workerId);
     } catch (erro) {
       console.error("[outboxNotificacao] falha no tick ao reivindicar lote", {
         workerId,
@@ -139,39 +236,60 @@ export default class OutboxNotificacaoService {
       return;
     }
 
-    if (ids.length === 0) {
+    if (linhas.length === 0) {
       return;
     }
 
     console.log("[outboxNotificacao] notificações reivindicadas", {
       workerId,
-      quantidade: ids.length,
-      ids,
+      quantidade: linhas.length,
+      ids: linhas.map((linha) => linha.id),
     });
 
-    for (const id of ids) {
-      try {
-        await OutboxNotificacaoService.processarLinha(id);
-      } catch (erro) {
-        // O catch de dentro já cobre o despacho; este pega falha do próprio
-        // registro do desfecho, que não pode interromper o resto do lote.
-        console.error("[outboxNotificacao] falha ao processar notificação", {
-          ID_NOTIFICACAO_VISITA: id,
-          erro: (erro as Error)?.message,
-        });
+    // Um cache por lote: as linhas de uma mesma campanha resolviam
+    // CampanhaPromotor, Campanha e Community de novo a cada despacho. É de vida
+    // curta de propósito — um cache mais longo envelheceria contra o END_TIME da
+    // campanha.
+    const cache = criarCacheCampanha();
+
+    // Trabalhadores puxando da mesma fila: cada um pega a próxima linha quando
+    // termina a sua, então uma oficina lenta não segura as outras. Serial era o
+    // que limitava a vazão a uma linha por timeout do provider.
+    const fila = [...linhas];
+    const trabalhador = async (): Promise<void> => {
+      for (;;) {
+        const linha = fila.shift();
+        if (linha === undefined) {
+          return;
+        }
+
+        try {
+          await OutboxNotificacaoService.processarLinha(linha, cache);
+        } catch (erro) {
+          // O catch de dentro já cobre o despacho; este pega falha do próprio
+          // registro do desfecho, que não pode interromper o resto do lote.
+          console.error("[outboxNotificacao] falha ao processar notificação", {
+            ID_NOTIFICACAO_VISITA: linha.id,
+            erro: (erro as Error)?.message,
+          });
+        }
       }
-    }
+    };
+
+    const trabalhadores = Math.min(concorrencia(), fila.length);
+    await Promise.all(Array.from({ length: trabalhadores }, () => trabalhador()));
   }
 
   /** Despacha uma linha reivindicada e grava o desfecho. */
-  private static async processarLinha(id: number): Promise<void> {
-    const linha = await this.repo().findOne({ where: { ID_NOTIFICACAO_VISITA: id } });
-    const tentativas = linha?.ATTEMPTS ?? 1;
-    const idRota = linha?.ID_ROTA_PROMOTOR ?? null;
+  private static async processarLinha(
+    linha: LinhaReivindicada,
+    cache?: CacheCampanha
+  ): Promise<void> {
+    const { id, tentativas, idRota } = linha;
 
     let desfecho: DesfechoDespacho;
     try {
-      desfecho = await NotificacaoVisitaService.despacharNotificacao(id);
+      desfecho = await NotificacaoVisitaService.despacharNotificacao(id, cache);
     } catch (erro) {
       // despacharNotificacao já promete não lançar; se lançar mesmo assim, a
       // falha é desconhecida e portanto transitória — aposentar em silêncio
@@ -289,16 +407,17 @@ export default class OutboxNotificacaoService {
    * 1. `ATTEMPTS` é incrementado **aqui**, no claim, e não ao fim do despacho.
    *    Processo morto no meio ainda queima tentativa, então uma linha que
    *    derruba o worker se aposenta no teto em vez de repetir para sempre.
-   * 2. Devolve só o id. O alvo devolve todas as colunas e gasta ~90 linhas
+   * 2. Devolve o id, ATTEMPTS e ID_ROTA_PROMOTOR — só o que a fila usa para
+   *    decidir e para logar. O alvo devolve todas as colunas e gasta ~90 linhas
    *    (`normalizeLockedRow`, `toText`) se defendendo de driver que responde
-   *    array posicional; uma coluna inteira não precisa disso, e quem despacha
-   *    relê a linha pelo repositório de sempre.
+   *    array posicional; três colunas não precisam disso, e quem despacha relê a
+   *    linha inteira pelo repositório de sempre.
    *
    * `AVAILABLE_AT IS NOT NULL` exclui as linhas anteriores ao outbox, que já
    * foram despachadas inline pelo fluxo antigo. Sem esse predicado, o primeiro
    * deploy do worker reenviaria todo o histórico de uma vez.
    */
-  static async claimBatch(tamanho: number, workerId: string): Promise<number[]> {
+  static async claimBatch(tamanho: number, workerId: string): Promise<LinhaReivindicada[]> {
     if (tamanho <= 0) {
       return [];
     }
@@ -323,7 +442,7 @@ export default class OutboxNotificacaoService {
              "UPDATED_AT" = now()
         FROM picked
        WHERE n."ID_NOTIFICACAO_VISITA" = picked."ID_NOTIFICACAO_VISITA"
-      RETURNING n."ID_NOTIFICACAO_VISITA"
+      RETURNING n."ID_NOTIFICACAO_VISITA", n."ATTEMPTS", n."ID_ROTA_PROMOTOR"
       `,
       [tamanho, leaseMinutos(), workerId]
     );
@@ -337,9 +456,20 @@ export default class OutboxNotificacaoService {
     }
 
     return registros
-      .map((linha: { ID_NOTIFICACAO_VISITA?: number | string }) =>
-        Number(linha?.ID_NOTIFICACAO_VISITA)
-      )
-      .filter((id: number) => Number.isInteger(id));
+      .map((linha: {
+        ID_NOTIFICACAO_VISITA?: number | string;
+        ATTEMPTS?: number | string;
+        ID_ROTA_PROMOTOR?: number | string | null;
+      }) => ({
+        id: Number(linha?.ID_NOTIFICACAO_VISITA),
+        // ATTEMPTS já foi incrementado pelo próprio claim, então este é o número
+        // da tentativa em curso — o mesmo que a releitura devolvia.
+        tentativas: Number.isFinite(Number(linha?.ATTEMPTS)) ? Number(linha?.ATTEMPTS) : 1,
+        idRota:
+          linha?.ID_ROTA_PROMOTOR == null || linha.ID_ROTA_PROMOTOR === ""
+            ? null
+            : Number(linha.ID_ROTA_PROMOTOR),
+      }))
+      .filter((linha: LinhaReivindicada) => Number.isInteger(linha.id));
   }
 }

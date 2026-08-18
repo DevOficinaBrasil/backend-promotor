@@ -110,8 +110,8 @@ describe("OutboxNotificacaoService.claimBatch (integração)", () => {
     ]);
 
     const meus = new Set(ids);
-    const doPrimeiro = primeiro.filter((id) => meus.has(id));
-    const doSegundo = segundo.filter((id) => meus.has(id));
+    const doPrimeiro = primeiro.map((linha) => linha.id).filter((id) => meus.has(id));
+    const doSegundo = segundo.map((linha) => linha.id).filter((id) => meus.has(id));
     const intersecao = doPrimeiro.filter((id) => doSegundo.includes(id));
 
     expect(intersecao).toEqual([]);

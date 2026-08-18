@@ -53,17 +53,16 @@ export default class RotaService {
    * top of agendarVisita's own internal handling.
    */
   private static async notificarRotasCriadas(rotas: RotaPromotor[]): Promise<void> {
-    for (const [posicao, rota] of rotas.entries()) {
-      try {
-        // A posição no lote espalha os envios pela janela configurada: sem ela,
-        // uma importação de centenas de rotas vence toda no mesmo instante.
-        await NotificacaoVisitaService.agendarVisita(rota, posicao, rotas.length);
-      } catch (erro) {
-        console.error("[rotaService] falha ao agendar notificação de visita", {
-          ID_ROTA_PROMOTOR: rota?.ID_ROTA_PROMOTOR,
-          erro: (erro as Error)?.message,
-        });
-      }
+    try {
+      await NotificacaoVisitaService.agendarVisitasEmLote(rotas);
+    } catch (erro) {
+      // agendarVisitasEmLote já promete não lançar e tem seu próprio fallback
+      // rota a rota; este catch é cinto e suspensório para a promessa do AC10:
+      // criação de rota nunca falha por causa de notificação.
+      console.error("[rotaService] falha ao agendar notificações de visita", {
+        quantidade: rotas.length,
+        erro: (erro as Error)?.message,
+      });
     }
   }
 
