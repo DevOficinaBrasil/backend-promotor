@@ -10,10 +10,10 @@ A confirmação de visita já é coletada e exibida, mas o app de campo lista **
 
 ## Goals
 
-- [ ] `GET /campanha/ativa` devolve, entre as rotas ainda não trabalhadas, apenas as de confirmação resolvida (`CONFIRMADO`, `DISPENSADO`, `FALHOU`) e as que nunca tiveram pedido de confirmação.
-- [ ] Rota já trabalhada (check-in feito, finalizada ou cancelada) continua na resposta, qualquer que seja o status de notificação.
-- [ ] As consultas que alimentam o `ob-ads` seguem devolvendo todas as rotas, sem nenhuma mudança.
-- [ ] Nenhuma consulta adicional por rota; a contagem de queries de `GET /campanha/ativa` não muda.
+- [x] `GET /campanha/ativa` devolve, entre as rotas ainda não trabalhadas, apenas as de confirmação resolvida (`CONFIRMADO`, `DISPENSADO`, `FALHOU`) e as que nunca tiveram pedido de confirmação.
+- [x] Rota já trabalhada (check-in feito, finalizada ou cancelada) continua na resposta, qualquer que seja o status de notificação.
+- [x] As consultas que alimentam o `ob-ads` seguem devolvendo todas as rotas, sem nenhuma mudança.
+- [x] Nenhuma consulta adicional por rota; a contagem de queries de `GET /campanha/ativa` não muda.
 
 ## Estado atual verificado
 
@@ -139,24 +139,24 @@ Escopo Medium: cobertas as dimensões presentes; as demais `N/A`.
 
 | Requirement ID | Story | AC | Status |
 | --- | --- | --- | --- |
-| FILT-01 | P1: Promotor só vê confirmação resolvida | AC1 | Done |
-| FILT-02 | P1: Promotor só vê confirmação resolvida | AC2, AC8 | Done |
-| FILT-03 | P1: Promotor só vê confirmação resolvida | AC3 | Done |
-| FILT-04 | P1: Promotor só vê confirmação resolvida | AC4 | Done |
-| FILT-05 | P1: Promotor só vê confirmação resolvida | AC5 + edge case legado | Done |
-| FILT-06 | P1: Promotor só vê confirmação resolvida | AC6, AC7 | Done |
-| FILT-07 | P1: Promotor só vê confirmação resolvida | AC9 | Done |
-| FILT-08 | P1: O dashboard do cliente não muda | AC1, AC2, AC3 | Done |
+| FILT-01 | P1: Promotor só vê confirmação resolvida | AC1 | Verified |
+| FILT-02 | P1: Promotor só vê confirmação resolvida | AC2, AC8 | Verified |
+| FILT-03 | P1: Promotor só vê confirmação resolvida | AC3 | Verified |
+| FILT-04 | P1: Promotor só vê confirmação resolvida | AC4 | Verified |
+| FILT-05 | P1: Promotor só vê confirmação resolvida | AC5 + edge case legado | Verified |
+| FILT-06 | P1: Promotor só vê confirmação resolvida | AC6, AC7 | Verified |
+| FILT-07 | P1: Promotor só vê confirmação resolvida | AC9 | Verified |
+| FILT-08 | P1: O dashboard do cliente não muda | AC1, AC2, AC3 | Verified |
 
 **ID format:** `FILT-[NUMBER]`
 
-**Coverage:** 8 total, 8 implementados, 0 pendentes
+**Coverage:** 8 total, 8 verificados, 0 pendentes
 
 ---
 
 ## Success Criteria
 
-- [ ] Um promotor com rotas em todos os estados recebe, de `GET /campanha/ativa`, só as `CONFIRMADO` / `DISPENSADO` / `FALHOU`, as sem notificação e as já trabalhadas.
-- [ ] A mesma campanha lida por `GET /campanha/:id` e `GET /campanha/client/:clientId` continua devolvendo a contagem completa de rotas.
-- [ ] Um mutante que troque a lista de estados listáveis, ou que aplique o filtro fora do `BACKLOG`, é morto pela suíte.
-- [ ] A contagem de consultas de `GET /campanha/ativa` é a mesma de antes.
+- [x] Um promotor com rotas em todos os estados recebe, de `GET /campanha/ativa`, só as `CONFIRMADO` / `DISPENSADO` / `FALHOU`, as sem notificação e as já trabalhadas.
+- [x] A mesma campanha lida por `GET /campanha/:id` e `GET /campanha/client/:clientId` continua devolvendo a contagem completa de rotas.
+- [x] Um mutante que troque a lista de estados listáveis, ou que aplique o filtro fora do `BACKLOG`, é morto pela suíte.
+- [x] A contagem de consultas de `GET /campanha/ativa` é a mesma de antes.
