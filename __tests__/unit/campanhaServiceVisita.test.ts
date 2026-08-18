@@ -86,7 +86,12 @@ describe('CampanhaService', () => {
     });
 
     describe('getActiveCampanhaByPromotor (promoter app route list)', () => {
-      it('reports an unopened expired notification as EXPIRADO and a live one as ENVIADO', async () => {
+      // FILT-02 / AC2 + AC8: rota BACKLOG aguardando resposta sai da lista, e a
+      // decisao usa o status efetivo — ENVIADO vencido conta como EXPIRADO, nao
+      // como enviado-vivo. Substitui a asserção anterior, que afirmava o
+      // contrato antigo (as duas rotas voltavam com seu status). A cobertura de
+      // status efetivo por rota vive agora nas consultas do dashboard.
+      it('omits a BACKLOG route awaiting a reply, expired or still live', async () => {
         montarRotaList([
           linhaRota(1, {
             NOTIFICACAO_STATUS: StatusNotificacaoVisita.ENVIADO,
@@ -102,12 +107,99 @@ describe('CampanhaService', () => {
 
         const resultado = await CampanhaService.getActiveCampanhaByPromotor(10, AGORA);
 
-        expect((resultado!.rotas[0] as any).notificacaoVisita.STATUS).toBe(
-          StatusNotificacaoVisita.EXPIRADO
-        );
-        expect((resultado!.rotas[1] as any).notificacaoVisita.STATUS).toBe(
-          StatusNotificacaoVisita.ENVIADO
-        );
+        expect(resultado!.rotas).toEqual([]);
+      });
+
+      // FILT-01 / AC1: os tres estados resolvidos entram na lista.
+      it('lists BACKLOG routes whose confirmation is settled', async () => {
+        montarRotaList([
+          linhaRota(1, {
+            NOTIFICACAO_STATUS: StatusNotificacaoVisita.CONFIRMADO,
+            NOTIFICACAO_EXPIRA_EM: EXPIRA_FUTURO,
+            NOTIFICACAO_CONFIRMADO_EM: CONFIRMADO_EM,
+          }),
+          linhaRota(2, {
+            NOTIFICACAO_STATUS: StatusNotificacaoVisita.DISPENSADO,
+            NOTIFICACAO_EXPIRA_EM: EXPIRA_FUTURO,
+            NOTIFICACAO_CONFIRMADO_EM: null,
+          }),
+          linhaRota(3, {
+            NOTIFICACAO_STATUS: StatusNotificacaoVisita.FALHOU,
+            NOTIFICACAO_EXPIRA_EM: EXPIRA_FUTURO,
+            NOTIFICACAO_CONFIRMADO_EM: null,
+          }),
+        ]);
+
+        const resultado = await CampanhaService.getActiveCampanhaByPromotor(10, AGORA);
+
+        expect(resultado!.rotas.map((r: any) => r.ID_ROTA_PROMOTOR)).toEqual([1, 2, 3]);
+        expect(resultado!.rotas.map((r: any) => r.notificacaoVisita.STATUS)).toEqual([
+          StatusNotificacaoVisita.CONFIRMADO,
+          StatusNotificacaoVisita.DISPENSADO,
+          StatusNotificacaoVisita.FALHOU,
+        ]);
+      });
+
+      // FILT-03 / AC3: REAGENDADO e valor fora do enum ficam fora.
+      it('omits a BACKLOG route with REAGENDADO or an unknown status', async () => {
+        montarRotaList([
+          linhaRota(1, {
+            NOTIFICACAO_STATUS: StatusNotificacaoVisita.REAGENDADO,
+            NOTIFICACAO_EXPIRA_EM: EXPIRA_FUTURO,
+            NOTIFICACAO_CONFIRMADO_EM: null,
+          }),
+          linhaRota(2, {
+            NOTIFICACAO_STATUS: 'INVENTADO',
+            NOTIFICACAO_EXPIRA_EM: EXPIRA_FUTURO,
+            NOTIFICACAO_CONFIRMADO_EM: null,
+          }),
+        ]);
+
+        const resultado = await CampanhaService.getActiveCampanhaByPromotor(10, AGORA);
+
+        expect(resultado!.rotas).toEqual([]);
+      });
+
+      // FILT-04 / AC4: rota ja trabalhada aparece com qualquer status de notificacao.
+      it('keeps a route already worked on, whatever the notification status', async () => {
+        montarRotaList([
+          { ...linhaRota(1, {
+            NOTIFICACAO_STATUS: StatusNotificacaoVisita.ENVIADO,
+            NOTIFICACAO_EXPIRA_EM: EXPIRA_FUTURO,
+            NOTIFICACAO_CONFIRMADO_EM: null,
+          }), STATUS: 'EM ANDAMENTO' },
+          { ...linhaRota(2, {
+            NOTIFICACAO_STATUS: StatusNotificacaoVisita.PENDENTE,
+            NOTIFICACAO_EXPIRA_EM: null,
+            NOTIFICACAO_CONFIRMADO_EM: null,
+          }), STATUS: 'FINALIZADO' },
+          { ...linhaRota(3, {
+            NOTIFICACAO_STATUS: StatusNotificacaoVisita.ENVIADO,
+            NOTIFICACAO_EXPIRA_EM: EXPIRA_PASSADO,
+            NOTIFICACAO_CONFIRMADO_EM: null,
+          }), STATUS: 'CANCELADO' },
+        ]);
+
+        const resultado = await CampanhaService.getActiveCampanhaByPromotor(10, AGORA);
+
+        expect(resultado!.rotas.map((r: any) => r.ID_ROTA_PROMOTOR)).toEqual([1, 2, 3]);
+      });
+
+      // FILT-06 / AC7: tudo filtrado devolve a campanha com rotas vazias, nao null.
+      it('returns the active campanha with an empty route list when everything is filtered out', async () => {
+        montarRotaList([
+          linhaRota(1, {
+            NOTIFICACAO_STATUS: StatusNotificacaoVisita.PENDENTE,
+            NOTIFICACAO_EXPIRA_EM: null,
+            NOTIFICACAO_CONFIRMADO_EM: null,
+          }),
+        ]);
+
+        const resultado = await CampanhaService.getActiveCampanhaByPromotor(10, AGORA);
+
+        expect(resultado).not.toBeNull();
+        expect(resultado!.ID_CAMPANHA).toBe(1);
+        expect(resultado!.rotas).toEqual([]);
       });
 
       it('includes CONFIRMADO_EM for a confirmed route', async () => {
@@ -127,7 +219,10 @@ describe('CampanhaService', () => {
         });
       });
 
-      it('degrades gracefully for a route with no notification row', async () => {
+      // FILT-05 / AC5 (rota sem notificacao aparece, sem o campo) + FILT-02 / AC2
+      // (a PENDENTE ao lado dela sai). A asserção anterior afirmava o contrato
+      // antigo, em que a PENDENTE voltava com seu status.
+      it('lists a route with no notification row and drops the PENDENTE next to it', async () => {
         montarRotaList([linhaRota(1), linhaRota(2, {
           NOTIFICACAO_STATUS: StatusNotificacaoVisita.PENDENTE,
           NOTIFICACAO_EXPIRA_EM: null,
@@ -136,29 +231,39 @@ describe('CampanhaService', () => {
 
         const resultado = await CampanhaService.getActiveCampanhaByPromotor(10, AGORA);
 
+        expect(resultado!.rotas.map((r: any) => r.ID_ROTA_PROMOTOR)).toEqual([1]);
         expect((resultado!.rotas[0] as any).notificacaoVisita).toBeUndefined();
-        expect((resultado!.rotas[1] as any).notificacaoVisita.STATUS).toBe(
-          StatusNotificacaoVisita.PENDENTE
-        );
       });
 
+      // FILT-07 / AC9: uma consulta para a lista inteira, sem consulta por rota.
+      // O fixture usa os estados listaveis porque ENVIADO nao chega mais ao app.
       it('loads every route status in the list query, without a per-route query', async () => {
-        montarRotaList([1, 2, 3].map((id) =>
-          linhaRota(id, {
-            NOTIFICACAO_STATUS: StatusNotificacaoVisita.ENVIADO,
+        montarRotaList([
+          linhaRota(1, {
+            NOTIFICACAO_STATUS: StatusNotificacaoVisita.CONFIRMADO,
+            NOTIFICACAO_EXPIRA_EM: EXPIRA_FUTURO,
+            NOTIFICACAO_CONFIRMADO_EM: CONFIRMADO_EM,
+          }),
+          linhaRota(2, {
+            NOTIFICACAO_STATUS: StatusNotificacaoVisita.DISPENSADO,
             NOTIFICACAO_EXPIRA_EM: EXPIRA_FUTURO,
             NOTIFICACAO_CONFIRMADO_EM: null,
-          })
-        ));
+          }),
+          linhaRota(3, {
+            NOTIFICACAO_STATUS: StatusNotificacaoVisita.FALHOU,
+            NOTIFICACAO_EXPIRA_EM: EXPIRA_FUTURO,
+            NOTIFICACAO_CONFIRMADO_EM: null,
+          }),
+        ]);
 
         const resultado = await CampanhaService.getActiveCampanhaByPromotor(10, AGORA);
 
         expect(
           resultado!.rotas.map((r: any) => r.notificacaoVisita.STATUS)
         ).toEqual([
-          StatusNotificacaoVisita.ENVIADO,
-          StatusNotificacaoVisita.ENVIADO,
-          StatusNotificacaoVisita.ENVIADO,
+          StatusNotificacaoVisita.CONFIRMADO,
+          StatusNotificacaoVisita.DISPENSADO,
+          StatusNotificacaoVisita.FALHOU,
         ]);
         expect(AppDataSourceSync.query as jest.Mock).toHaveBeenCalledTimes(1);
       });
@@ -387,6 +492,143 @@ describe('CampanhaService', () => {
           'LEFT JOIN "CAMPANHAS_OB"."NOTIFICACAO_VISITA" nv'
         );
       });
+    });
+  });
+
+  // `id_oficina` não é chave em dw.cadastro_empresa (59 ids repetidos cobrindo
+  // 128 linhas em PRD — ver entities/CadastroEmpresa.ts). O join por igualdade
+  // multiplicava a rota por quantas linhas o dw tivesse, e nada deduplicava
+  // depois: queryBothAndMerge só remove repetição vinda do banco legado. Rota
+  // duplicada aparecia como card repetido no carrossel e contagem dobrada nos
+  // KPIs de confirmação.
+  //
+  // Estes testes olham o SQL emitido, não o resultado: o fan-out é do banco, e
+  // só um teste de integração contra o dw exercitaria as linhas repetidas de
+  // verdade. O que se protege aqui é a forma da query contra uma volta ao join
+  // por igualdade.
+  describe('junção com dw.cadastro_empresa (uma linha por rota)', () => {
+    const sqlEmitido = () =>
+      (AppDataSourceSync.query as jest.Mock).mock.calls.map(([sql]: [string]) => sql);
+
+    const sqlDeRotas = () =>
+      sqlEmitido().filter((sql) => sql.includes('"CAMPANHAS_OB"."ROTA_PROMOTOR" rp'));
+
+    const esperarUmaLinhaPorRota = (sql: string) => {
+      // A subquery entrega no máximo uma linha por oficina, então o join externo
+      // por igualdade não multiplica mais a rota.
+      expect(sql).toContain('DISTINCT ON (ce_dedup.id_oficina)');
+      expect(sql).toContain('FROM dw.cadastro_empresa ce_dedup');
+      // O que multiplicava a rota era juntar direto na tabela.
+      expect(sql).not.toMatch(/JOIN dw\.cadastro_empresa ce\b/);
+    };
+
+    it('estreita para uma linha na lista de rotas do app do promotor', async () => {
+      (AppDataSourceSync.getRepository as jest.Mock).mockImplementation((entity) => {
+        if (entity === CampanhaPromotor) {
+          return {
+            find: jest.fn().mockResolvedValue([
+              {
+                ID_CAMPANHA_PROMOTOR: 1,
+                ID_PROMOTOR: 10,
+                ID_CAMPANHA: 1,
+                DELETED_AT: null,
+                campanha: {
+                  ID_CAMPANHA: 1,
+                  START_TIME: new Date('2026-01-01'),
+                  END_TIME: new Date('2026-12-31'),
+                },
+              },
+            ]),
+          };
+        }
+        return { find: jest.fn(), findOne: jest.fn() };
+      });
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([
+        { ID_ROTA_PROMOTOR: 1, ID_CAMPANHA_PROMOTOR: 1, ID_OFICINA: 395444, NOME_FANTASIA: 'A' },
+      ]);
+
+      await CampanhaService.getActiveCampanhaByPromotor(10, new Date('2026-08-05T12:00:00.000Z'));
+
+      const consultas = sqlDeRotas();
+      expect(consultas).toHaveLength(1);
+      esperarUmaLinhaPorRota(consultas[0]);
+    });
+
+    it('estreita para uma linha na consulta de campanhas por cliente', async () => {
+      (AppDataSourceSync.getRepository as jest.Mock).mockImplementation(() => ({
+        find: jest.fn(),
+        findOne: jest.fn(),
+      }));
+      (AppDataSourceSync.query as jest.Mock).mockImplementation(async (sql: string) => {
+        if (sql.includes('"CAMPANHAS_OB"."CAMPANHA" c')) {
+          return [{ ID_CAMPANHA: 1, ID_CLIENT: 77 }];
+        }
+        if (sql.includes('"CAMPANHAS_OB"."CAMPANHA_PROMOTOR" cp')) {
+          return [{ ID_CAMPANHA_PROMOTOR: 1, ID_CAMPANHA: 1, ID_PROMOTOR: 10 }];
+        }
+        if (sql.includes('"CAMPANHAS_OB"."ROTA_PROMOTOR" rp')) {
+          return [
+            {
+              ID_ROTA_PROMOTOR: 1,
+              ID_CAMPANHA_PROMOTOR: 1,
+              ID_OFICINA: 395444,
+              oficina_NOME_FANTASIA: 'A',
+            },
+          ];
+        }
+        return [];
+      });
+
+      await CampanhaService.getCampanhasByClientId(77);
+
+      const consultas = sqlDeRotas();
+      expect(consultas).toHaveLength(1);
+      esperarUmaLinhaPorRota(consultas[0]);
+    });
+
+    // A consulta de enriquecimento lê o dw direto por lista de ids e joga o
+    // resultado num Map: sem DISTINCT ON, a linha que sobrevive é a última que
+    // o Map recebe — arbitrária, e podendo discordar da que o LATERAL escolheu.
+    it('deduplica a consulta de enriquecimento das rotas legadas', async () => {
+      (AppDataSourceSync.getRepository as jest.Mock).mockImplementation((entity) => {
+        if (entity === CampanhaPromotor) {
+          return {
+            find: jest.fn().mockResolvedValue([
+              {
+                ID_CAMPANHA_PROMOTOR: 1,
+                ID_PROMOTOR: 10,
+                ID_CAMPANHA: 1,
+                DELETED_AT: null,
+                campanha: {
+                  ID_CAMPANHA: 1,
+                  START_TIME: new Date('2026-01-01'),
+                  END_TIME: new Date('2026-12-31'),
+                },
+              },
+            ]),
+          };
+        }
+        return { find: jest.fn(), findOne: jest.fn() };
+      });
+      (AppDataSourceSync.query as jest.Mock).mockImplementation(async (sql: string) => {
+        // Rota sem NOME_FANTASIA: é o que dispara o enriquecimento.
+        if (sql.includes('"CAMPANHAS_OB"."ROTA_PROMOTOR" rp')) {
+          return [{ ID_ROTA_PROMOTOR: 1, ID_CAMPANHA_PROMOTOR: 1, ID_OFICINA: 395444 }];
+        }
+        return [];
+      });
+
+      await CampanhaService.getActiveCampanhaByPromotor(10, new Date('2026-08-05T12:00:00.000Z'));
+
+      const enriquecimento = sqlEmitido().filter(
+        (sql) =>
+          sql.includes('FROM dw.cadastro_empresa ce') &&
+          !sql.includes('"CAMPANHAS_OB"."ROTA_PROMOTOR" rp')
+      );
+
+      expect(enriquecimento).toHaveLength(1);
+      expect(enriquecimento[0]).toContain('DISTINCT ON (ce.id_oficina)');
+      expect(enriquecimento[0]).toContain('ORDER BY ce.id_oficina');
     });
   });
 });

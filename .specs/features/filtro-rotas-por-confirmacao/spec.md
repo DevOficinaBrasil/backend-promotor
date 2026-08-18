@@ -139,13 +139,13 @@ Escopo Medium: cobertas as dimensões presentes; as demais `N/A`.
 
 | Requirement ID | Story | AC | Status |
 | --- | --- | --- | --- |
-| FILT-01 | P1: Promotor só vê confirmação resolvida | AC1 | Implementing (predicado puro pronto) |
-| FILT-02 | P1: Promotor só vê confirmação resolvida | AC2, AC8 | Implementing (predicado puro pronto) |
-| FILT-03 | P1: Promotor só vê confirmação resolvida | AC3 | Implementing (predicado puro pronto) |
-| FILT-04 | P1: Promotor só vê confirmação resolvida | AC4 | Implementing (predicado puro pronto) |
-| FILT-05 | P1: Promotor só vê confirmação resolvida | AC5 + edge case legado | Implementing (predicado puro pronto) |
-| FILT-06 | P1: Promotor só vê confirmação resolvida | AC6, AC7 | Pending |
-| FILT-07 | P1: Promotor só vê confirmação resolvida | AC9 | Pending |
+| FILT-01 | P1: Promotor só vê confirmação resolvida | AC1 | Done |
+| FILT-02 | P1: Promotor só vê confirmação resolvida | AC2, AC8 | Done |
+| FILT-03 | P1: Promotor só vê confirmação resolvida | AC3 | Done |
+| FILT-04 | P1: Promotor só vê confirmação resolvida | AC4 | Done |
+| FILT-05 | P1: Promotor só vê confirmação resolvida | AC5 + edge case legado | Done |
+| FILT-06 | P1: Promotor só vê confirmação resolvida | AC6, AC7 | Done |
+| FILT-07 | P1: Promotor só vê confirmação resolvida | AC9 | Done |
 | FILT-08 | P1: O dashboard do cliente não muda | AC1, AC2, AC3 | Pending |
 
 **ID format:** `FILT-[NUMBER]`

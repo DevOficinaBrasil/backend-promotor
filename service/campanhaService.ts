@@ -6,7 +6,12 @@ import Oficina from "../entities/Oficina";
 import { IsNull } from "typeorm";
 import { MigrationAwareRepository, queryBothAndMerge } from "../utils/migrationRepository";
 import { StatusNotificacaoVisita } from "../entities/NotificacaoVisita";
-import { statusEfetivo } from "../utils/statusNotificacaoVisita";
+import { statusEfetivo, rotaListavelParaPromotor } from "../utils/statusNotificacaoVisita";
+import {
+  DISTINCT_CADASTRO_EMPRESA_POR_OFICINA,
+  JOIN_CADASTRO_EMPRESA_POR_ROTA,
+  ORDEM_CADASTRO_EMPRESA_POR_OFICINA,
+} from "../utils/sqlCadastroEmpresa";
 
 export interface PromotorOficinaData {
   ID_PROMOTOR: number;
@@ -226,9 +231,7 @@ export default class CampanhaService {
         nv."CONFIRMADO_EM" as "NOTIFICACAO_CONFIRMADO_EM"
       FROM "CAMPANHAS_OB"."ROTA_PROMOTOR" rp
       LEFT JOIN "MAIN_REGISTER"."OFICINA" o
-      ON rp."ID_OFICINA" = o."ID_OFICINA"
-      LEFT JOIN dw.cadastro_empresa ce
-      ON rp."ID_OFICINA" = ce."id_oficina"
+      ON rp."ID_OFICINA" = o."ID_OFICINA"${JOIN_CADASTRO_EMPRESA_POR_ROTA}
       LEFT JOIN "CAMPANHAS_OB"."NOTIFICACAO_VISITA" nv
       ON rp."ID_ROTA_PROMOTOR" = nv."ID_ROTA_PROMOTOR"
       WHERE rp."ID_CAMPANHA_PROMOTOR" = $1
@@ -252,12 +255,31 @@ export default class CampanhaService {
       [activeCampanha.ID_CAMPANHA_PROMOTOR]
     );
 
+    // FILT-01 a FILT-05: a lista do app traz só rota cuja confirmação está
+    // resolvida, rota sem pedido de confirmação e rota já trabalhada. Filtra
+    // antes do enriquecimento para não pagar consulta por rota que não vai sair.
+    // Só esta consulta filtra — as duas do dashboard devolvem tudo (FILT-08).
+    const rotasVisiveis = rotasPromotor.filter((r: any) =>
+      rotaListavelParaPromotor(
+        {
+          STATUS: r.STATUS,
+          notificacao: r.NOTIFICACAO_STATUS
+            ? {
+                STATUS: r.NOTIFICACAO_STATUS,
+                EXPIRA_EM: r.NOTIFICACAO_EXPIRA_EM ? new Date(r.NOTIFICACAO_EXPIRA_EM) : null,
+              }
+            : null,
+        },
+        currentDatetime
+      )
+    );
+
     // Enrich legacy rotas (without oficina data) from new DB
-    const rotasSemOficina = rotasPromotor.filter((r: any) => r.ID_OFICINA && !r.NOME_FANTASIA);
+    const rotasSemOficina = rotasVisiveis.filter((r: any) => r.ID_OFICINA && !r.NOME_FANTASIA);
     if (rotasSemOficina.length > 0) {
       const oficinaIds = [...new Set(rotasSemOficina.map((r: any) => r.ID_OFICINA))];
       const oficinas = await AppDataSourceSync.query(`
-        SELECT 
+        SELECT ${DISTINCT_CADASTRO_EMPRESA_POR_OFICINA}
           ce.id_oficina as "ID_OFICINA",
           ce.latitude as "LATITUDE",
           ce.longitude as "LONGITUDE",
@@ -273,6 +295,7 @@ export default class CampanhaService {
         FROM dw.cadastro_empresa ce
         LEFT JOIN "MAIN_REGISTER"."OFICINA" o ON ce.id_oficina = o."ID_OFICINA"
         WHERE ce.id_oficina = ANY($1)
+        ${ORDEM_CADASTRO_EMPRESA_POR_OFICINA}
       `, [oficinaIds]);
       const oficinaMap = new Map(oficinas.map((o: any) => [o.ID_OFICINA, o]));
       for (const rota of rotasSemOficina) {
@@ -284,7 +307,7 @@ export default class CampanhaService {
     }
 
     // Merge DuckDB data with oficina objects in rotas
-    const rotasWithDuckDBData = rotasPromotor.map((rota : any) => {
+    const rotasWithDuckDBData = rotasVisiveis.map((rota : any) => {
       // P2 AC2: every route in the list carries its confirmation status.
       const notificacaoVisita = this.montarNotificacaoVisita({
         STATUS: rota.NOTIFICACAO_STATUS,
@@ -457,8 +480,7 @@ export default class CampanhaService {
           nv."EXPIRA_EM" as "NOTIFICACAO_EXPIRA_EM",
           nv."CONFIRMADO_EM" as "NOTIFICACAO_CONFIRMADO_EM"
         FROM "CAMPANHAS_OB"."ROTA_PROMOTOR" rp
-        LEFT JOIN "MAIN_REGISTER"."OFICINA" o ON rp."ID_OFICINA" = o."ID_OFICINA"
-        LEFT JOIN dw.cadastro_empresa ce ON rp."ID_OFICINA" = ce.id_oficina
+        LEFT JOIN "MAIN_REGISTER"."OFICINA" o ON rp."ID_OFICINA" = o."ID_OFICINA"${JOIN_CADASTRO_EMPRESA_POR_ROTA}
         LEFT JOIN "CAMPANHAS_OB"."NOTIFICACAO_VISITA" nv
           ON rp."ID_ROTA_PROMOTOR" = nv."ID_ROTA_PROMOTOR"
         WHERE rp."ID_CAMPANHA_PROMOTOR" = ANY($1)
@@ -486,7 +508,7 @@ export default class CampanhaService {
       if (rotasSemOficina.length > 0) {
         const oficinaIds = [...new Set(rotasSemOficina.map(r => r.ID_OFICINA))];
         const oficinas = await AppDataSourceSync.query(`
-          SELECT 
+          SELECT ${DISTINCT_CADASTRO_EMPRESA_POR_OFICINA}
             ce.id_oficina as "ID_OFICINA",
             ce.latitude as "oficina_LATITUDE",
             ce.longitude as "oficina_LONGITUDE",
@@ -502,6 +524,7 @@ export default class CampanhaService {
           FROM dw.cadastro_empresa ce
           LEFT JOIN "MAIN_REGISTER"."OFICINA" o ON ce.id_oficina = o."ID_OFICINA"
           WHERE ce.id_oficina = ANY($1)
+          ${ORDEM_CADASTRO_EMPRESA_POR_OFICINA}
         `, [oficinaIds]);
 
         const oficinaMap = new Map(oficinas.map((o: any) => [o.ID_OFICINA, o]));
