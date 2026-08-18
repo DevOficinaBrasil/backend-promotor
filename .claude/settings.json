@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__atlassian__atlassianUserInfo",
+      "mcp__atlassian__getAccessibleAtlassianResources",
+      "mcp__atlassian__searchJiraIssuesUsingJql",
+      "mcp__atlassian__getVisibleJiraProjects",
+      "Bash(python3 .claude/skills/tlc-spec-driven/scripts/lessons.py list --status confirmed)",
+      "Bash(python3 *)",
+      "Bash(grep -n \"^\\\\.env$\\\\|^\\\\.env\\\\b\" .gitignore)",
+      "Bash(npx jest *)",
+      "Bash(git checkout *)",
+      "Bash(git add *)",
+      "Bash(git status *)"
+    ]
+  },
+   "attribution": {
+    "commit": "",
+    "pr": ""
+  }
+}
