@@ -56,6 +56,24 @@ Seen once or not yet corroborated. Tracked, not trusted.
 - evidence: AGND-17, AGND-18 (scripts)
 - last seen: 2026-08-13T23:55:01Z
 
+### L-008 - Quando uma AC de UI exige uma contagem ou um agregado, extraia o cálculo para uma função pura e teste-a: deixá-lo dentro do componente o coloca na camada isenta de teste e a AC fica sem nenhuma asserção.
+- signal: `ac_gap` · recurrence: 1 feature(s) · scope: `frontend/components` · harmful: 0
+- features: status-confirmacao-visibilidade
+- evidence: P2 AC7 / VISIB-10 — GerencialView.tsx:72-78 (frontend/components)
+- last seen: 2026-08-17T03:18:55Z
+
+### L-009 - Isentar componentes React do teste deixa o gate cego a 'o indicador sumiu': registre isso como risco declarado na spec, porque build e lint passam com o render neutralizado.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `frontend/components` · harmful: 0
+- features: status-confirmacao-visibilidade
+- evidence: mutantes 9 e 10 — StatusConfirmacaoBadge.tsx:44, route-carousel.tsx:50 (frontend/components)
+- last seen: 2026-08-17T03:18:55Z
+
+### L-010 - AC que manda 'exibir a data' sem fixar o formato não é verificável: defina o formato esperado na spec ou marque a AC como não asserível.
+- signal: `spec_precision_gap` · recurrence: 1 feature(s) · scope: `spec` · harmful: 0
+- features: status-confirmacao-visibilidade
+- evidence: P1 promotor AC2 — route-carousel.tsx:38 (spec)
+- last seen: 2026-08-17T03:18:55Z
+
 ## Quarantined (failed when applied - ignore)
 
 A confirmed lesson that recurred alongside failure. Kept for the maintainer to review.

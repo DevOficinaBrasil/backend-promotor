@@ -3,7 +3,7 @@
   "promote_threshold": 2,
   "window_days": 45,
   "quarantine_threshold": 2,
-  "next_id": 8,
+  "next_id": 11,
   "lessons": [
     {
       "id": "L-001",
@@ -130,6 +130,60 @@
       ],
       "created": "2026-08-13T23:55:01Z",
       "last_seen": "2026-08-13T23:55:01Z"
+    },
+    {
+      "id": "L-008",
+      "key": "ac_gap::quando uma ac de ui exige uma contagem ou um agregado extraia o calculo para uma funcao pura e teste a deixa lo dentro do componente o coloca na camada isenta de teste e a ac fica sem nenhuma assercao",
+      "text": "Quando uma AC de UI exige uma contagem ou um agregado, extraia o cálculo para uma função pura e teste-a: deixá-lo dentro do componente o coloca na camada isenta de teste e a AC fica sem nenhuma asserção.",
+      "signal": "ac_gap",
+      "scope": "frontend/components",
+      "status": "candidate",
+      "features": [
+        "status-confirmacao-visibilidade"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "P2 AC7 / VISIB-10 — GerencialView.tsx:72-78 (frontend/components)"
+      ],
+      "created": "2026-08-17T03:18:55Z",
+      "last_seen": "2026-08-17T03:18:55Z"
+    },
+    {
+      "id": "L-009",
+      "key": "surviving_mutant::isentar componentes react do teste deixa o gate cego a o indicador sumiu registre isso como risco declarado na spec porque build e lint passam com o render neutralizado",
+      "text": "Isentar componentes React do teste deixa o gate cego a 'o indicador sumiu': registre isso como risco declarado na spec, porque build e lint passam com o render neutralizado.",
+      "signal": "surviving_mutant",
+      "scope": "frontend/components",
+      "status": "candidate",
+      "features": [
+        "status-confirmacao-visibilidade"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "mutantes 9 e 10 — StatusConfirmacaoBadge.tsx:44, route-carousel.tsx:50 (frontend/components)"
+      ],
+      "created": "2026-08-17T03:18:55Z",
+      "last_seen": "2026-08-17T03:18:55Z"
+    },
+    {
+      "id": "L-010",
+      "key": "spec_precision_gap::ac que manda exibir a data sem fixar o formato nao e verificavel defina o formato esperado na spec ou marque a ac como nao asserivel",
+      "text": "AC que manda 'exibir a data' sem fixar o formato não é verificável: defina o formato esperado na spec ou marque a AC como não asserível.",
+      "signal": "spec_precision_gap",
+      "scope": "spec",
+      "status": "candidate",
+      "features": [
+        "status-confirmacao-visibilidade"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "P1 promotor AC2 — route-carousel.tsx:38 (spec)"
+      ],
+      "created": "2026-08-17T03:18:55Z",
+      "last_seen": "2026-08-17T03:18:55Z"
     }
   ]
 }

@@ -1,123 +1,109 @@
 # Testing Infrastructure
 
-**Analyzed:** 2026-08-04
-**Status at time of analysis:** ❌ **31 of 41 tests failing** (5 of 6 suites red). Single root cause, documented below.
+**Analyzed:** 2026-08-14 (supersedes 2026-08-04)
+**Status:** ✅ **Unit suite green — 29 suites / 432 tests passing** (`npx jest --testMatch "**/__tests__/unit/**/*.test.ts"`, 7.8s, exit 0).
+
+This reverses the previous mapping's headline finding. On 2026-08-04 the suite was red (31 of 41 tests failing) because `__mocks__/data-source.ts` was stale. That mock has been repaired and the suite has grown roughly tenfold.
 
 ## Test Frameworks
 
-**Unit/Integration:** Jest `^30.0.5` with `ts-jest` `^29.4.1` preset, `testEnvironment: node`
-**E2E:** none. `supertest` `^7.1.4` is installed but never imported; no HTTP-level tests exist.
-**Coverage:** Jest built-in. `coveragePathIgnorePatterns` excludes `entities`, `data-source.ts`, and `utils` — note this excludes `utils/migrationRepository.ts`, `utils/encryption.ts`, and `utils/routeOptimizer.ts`, which hold real logic.
+**Unit/Integration:** Jest with `ts-jest` `^29.4.1` preset, `testEnvironment: node`
+**HTTP-level:** `supertest` — now genuinely used, by the three `/visita` integration suites
+**Coverage:** Jest built-in. `coveragePathIgnorePatterns` is now `["entities", "data-source.ts"]`. The blanket `"utils"` exclusion was **removed**, so `migrationRepository`, `encryption`, `routeOptimizer`, `agendamento`, `visitaToken` and `telefone` now appear in coverage reports.
 
-Configuration lives in `jest.config.ts`: `clearMocks: true`, `verbose: true`, `@/*` → `<rootDir>/$1` module mapping.
+`jest.config.ts`: `clearMocks: true`, `verbose: true`, `@/*` → `<rootDir>/$1`, and `diagnostics.ignoreDiagnostics: [5103]` on the ts-jest transform.
+
+**Version note:** `package.json` and `package-lock.json` pin `jest@29.7.0`, but the local `node_modules` resolves `30.1.3`. The working tree is out of sync with the lockfile; reinstall before treating a local-only run as authoritative.
 
 ## Test Organization
 
-**Location:** `__tests__/`, split into `unit/` and `integration/`
-**Naming:** `<subject>.test.ts` matching the module under test
-**Discovery:** `testMatch: ["**/__tests__/**/*.test.ts"]` for the default `npm test`; the `test:unit` / `test:integration` scripts narrow this with explicit `--testMatch` globs.
+**Location:** `__tests__/`, split into `unit/`, `integration/`, and `helpers/`
+**Naming:** `<subject>.test.ts`
+**Discovery:** `testMatch: ["**/__tests__/**/*.test.ts"]` for `npm test`; the `test:unit` / `test:integration` scripts narrow it with explicit globs.
 
 ```
 __tests__/
-├── unit/
-│   ├── campanhaService.test.ts
-│   ├── campanhaPerguntasService.test.ts
-│   ├── campanhaResultsService.test.ts
-│   ├── promotorService.test.ts
-│   └── rotaService.test.ts
-└── integration/
-    └── duckdb.test.ts
+├── helpers/
+│   └── mockMigrationRepo.ts        # shared fake for MigrationAwareRepository
+├── unit/                           # 30 files
+│   ├── campanhaService · campanhaServiceVisita · campanhaPerguntasService
+│   ├── campanhaPromotorService · campanhaResultsService
+│   ├── promotorService · usuarioService · oficinaService
+│   ├── rotaService · rotaServiceVisita · geolocationService
+│   ├── notificacaoVisitaService · agendarVisita · despacharNotificacao
+│   ├── envioGuards · statusNotificacaoVisita · visitaConfirmacaoService
+│   ├── outboxTick · outboxClaim(int) · outboxRetentativa · outboxMarcadores
+│   ├── outboxCron · outboxConsole
+│   ├── channelRegistry · whatsappChannel
+│   ├── visitaToken · visitaAuthMiddleware
+│   └── agendamento · haversine · telefone
+└── integration/                    # 10 files
+    ├── setup.ts                    # shared beforeAll/afterAll on the real DataSource
+    ├── visitaExchange · visitaConfirmar · visitaEndereco   (supertest, HTTP-level)
+    ├── outboxClaim                 # exercises FOR UPDATE SKIP LOCKED for real
+    ├── campanhaService · campanhaPerguntasService · campanhaPromotorService
+    ├── campanhaResultsService · oficinaService · promotorService · rotaService
 ```
 
-Coverage is service-layer only. There are **no tests** for controllers, routes, middleware (including `validation.ts` and `authMiddleware.ts`), entities, `utils/encryption.ts`, `utils/routeOptimizer.ts`, or `utils/migrationRepository.ts`.
+Coverage has broadened well past the service layer: middleware (`visitaAuthMiddleware`), the channel adapter and registry, pure utilities (`telefone`, `haversine`, `agendamento`, `visitaToken`), and the CLI console are all tested. Still untested: **controllers**, entities, `utils/encryption.ts`, `utils/routeOptimizer.ts`, `utils/migrationRepository.ts`, `middlewares/authMiddleware.ts`, `middlewares/validation.ts`.
 
-Note: `tsconfig.json` excludes `__tests__` from compilation, so `tsc` will not type-check test files. Type errors in tests surface only when Jest runs them.
+`tsconfig.json` still excludes `__tests__` from compilation, so `tsc` does not type-check test files — type errors surface only when Jest runs.
 
 ## Testing Patterns
 
 ### Unit tests
 
-**Approach:** Mock the data source entirely, assert on service behaviour and on how the persistence layer was called.
+**Approach:** mock the data source entirely, assert on service behaviour and on how the persistence layer was called.
 
-`jest.mock('../../data-source')` at module scope resolves to the manual mock in `__mocks__/data-source.ts`. Individual tests then attach behaviour to the mocked members:
+`jest.mock('../../data-source')` resolves to the manual mock in `__mocks__/data-source.ts`, which is now complete:
 
 ```typescript
-jest.mock('../../data-source');
-
-(AppDataSourceSync.transaction as jest.Mock) = jest.fn(async (callback) => {
-  return await callback(mockTransactionalEntityManager);
-});
+export const AppDataSourceSync = {
+  getRepository: jest.fn(),
+  query: jest.fn(),
+  transaction: jest.fn((cb) => cb({ create, save, softDelete, find, findOne })),
+};
+export const LegacyDataSource = { isInitialized: false, getRepository: jest.fn(), query: jest.fn() };
+export const isLegacyEnabled = jest.fn().mockReturnValue(false);
 ```
 
-Structure is `describe(ServiceName)` → `describe(methodName)` → `it('should ...')`, with `jest.clearAllMocks()` in `beforeEach`. Assertions check both the returned value and the interaction (`expect(AppDataSourceSync.transaction).toHaveBeenCalled()`).
+`isLegacyEnabled` returning `false` degrades `MigrationAwareRepository` to new-DB-only, matching what most assertions expect; the merge path is opted into per-test. `__tests__/helpers/mockMigrationRepo.ts` factors out the repeated wrapper fake.
 
-Transaction-based service methods are exercised by hand-rolling a fake transactional entity manager with `create`/`save` jest.fn()s — see `__tests__/unit/rotaService.test.ts:42-55`.
+Structure is `describe(Subject)` → `describe(method)` → `it('should ...')`, with `clearMocks: true` handling reset.
+
+### Pure-function tests
+
+The outbox and scheduling logic was deliberately written as exported pure functions so it could be tested without a database or a clock: `computeBackoffMs`, `shouldMarkFailed`, `acaoDaFila`, `proximoHorarioEnvio` (which takes `agora` as an injected parameter, never reading the system clock — this is what makes the send-window rules testable regardless of when the suite runs), `statusEfetivo`, `normalizarTelefone`, `haversine`.
 
 ### Integration tests
 
-**Approach:** Exercise the real module against the real on-disk data file. `__tests__/integration/duckdb.test.ts` calls `DuckDBClient.getOficinaDataByIds()` for real and asserts on shape, ID filtering, lowercase normalization, and empty-input handling. `afterAll` calls `DuckDBClient.close()`.
+Two distinct kinds now live under `integration/`:
 
-No database, container, or network is involved — "integration" here means "reads the real JSON file". This is the only suite currently passing.
+1. **Real-database suites** — `setup.ts` initializes `AppDataSourceSync` in `beforeAll` and destroys it in `afterAll`. `outboxClaim.test.ts` is the important one: `FOR UPDATE SKIP LOCKED` cannot be verified against a mock, so it runs against a real Postgres. **These require live DB credentials and write to the database.** Do not run them casually.
+2. **HTTP-level suites** — `visitaExchange`, `visitaConfirmar`, `visitaEndereco` drive the Express app through `supertest`, covering token exchange, the scoped-JWT middleware, and the confirmation endpoints.
 
-One test in this file is tautological: `'should provide default values when data is missing'` (`__tests__/integration/duckdb.test.ts:71-85`) constructs a local literal and asserts its own properties, exercising no production code. Its own comment admits it is documentation-only.
+The previous `integration/duckdb.test.ts` (which read the on-disk JSON and contained one tautological test) is gone.
+
+### Send safety in tests
+
+`whatsappChannel` returns without sending whenever `NODE_ENV === "test"`, unconditionally, and `registrarOutboxCron()` returns early on the same check. No suite can reach the real provider or start a worker — this is a hard guarantee, not a configuration convention.
 
 ## Test Execution
 
 ```bash
-npm test                    # all suites
-npm run test:watch
-npm run test:coverage
-npm run test:unit           # __tests__/unit/**/*.test.ts
-npm run test:integration    # __tests__/integration/**/*.test.ts
-npm run test:unit:watch
-npm run test:integration:watch
-npm run test:unit:coverage
-npm run test:integration:coverage
+npm test                    # all suites (integration included — needs a live DB)
+npm run test:unit           # __tests__/unit/**/*.test.ts — no DB required
+npm run test:integration    # __tests__/integration/**/*.test.ts — needs a live DB
+npm run test:watch · test:coverage · test:unit:watch · test:integration:watch
+npm run test:unit:coverage · test:integration:coverage
 ```
 
-`npm run test:e2e`, referenced in `README.md`, does not exist.
+Prefer `npm run test:unit` for a fast, side-effect-free check.
 
-## Current Failure — root cause and fix
+## Known Failures
 
-Every failing test dies the same way:
-
-```
-TypeError: (0 , data_source_1.isLegacyEnabled) is not a function
-  at MigrationAwareRepository.getLegacyRepo (utils/migrationRepository.ts:25:25)
-  at new MigrationAwareRepository (utils/migrationRepository.ts:20:28)
-```
-
-The manual mock is stale. `__mocks__/data-source.ts` is, in full:
-
-```typescript
-export const AppDataSourceSync = {
-  getRepository: jest.fn()
-}
-```
-
-PR #39 added `LegacyDataSource` and `isLegacyEnabled` to `data-source.ts` and routed the services through `MigrationAwareRepository`, whose constructor calls `isLegacyEnabled()`. The mock was never extended, so any service method that builds a `MigrationAwareRepository` throws before reaching its own logic.
-
-**Fix:** extend the manual mock to cover the module's current exports:
-
-```typescript
-export const AppDataSourceSync = {
-  getRepository: jest.fn(),
-  transaction: jest.fn(),
-  query: jest.fn(),
-};
-
-export const LegacyDataSource = {
-  getRepository: jest.fn(),
-  isInitialized: false,
-};
-
-export const isLegacyEnabled = jest.fn(() => false);
-```
-
-With `isLegacyEnabled` returning `false`, `MigrationAwareRepository` degrades to new-DB-only behaviour, which matches what the existing assertions expect. Tests that need to exercise the merge path can override it per-test.
-
-**Note:** this makes the failures a mock-maintenance problem, not evidence of broken production code — but it means the suite has been red since PR #39 merged (2026-07-13) and is currently providing no regression protection.
+Per `.specs/project/STATE.md`, three **legacy** integration suites fail at teardown on a foreign-key error: `rotaService`, `campanhaPromotorService`, `campanhaResultsService`. Common, pre-existing cause — the `PROMOTOR → CAMPANHA_PROMOTOR → ROTA_PROMOTOR` chain has inherited FKs without `ON DELETE`, and the test cleanup deletes top-down. Not a regression from the visit feature. (Not re-verified in this mapping pass; verifying it requires writing to a real database.)
 
 ## Coverage Targets
 
-None documented, none enforced. No CI workflow runs tests (`.github/` contains only skill definitions — there are no GitHub Actions workflows in this repository), so nothing blocks a merge on a red suite. This is how the suite stayed broken across a merge to `main`.
+None documented, none enforced. **There is still no CI** — `.github/` contains only skill definitions, no workflows. Nothing blocks a merge on a red suite, which is exactly how the suite stayed broken across a merge to `main` for three weeks in July. Adding a workflow that runs `npm run test:unit` on pull requests is the single highest-value testing change available.
