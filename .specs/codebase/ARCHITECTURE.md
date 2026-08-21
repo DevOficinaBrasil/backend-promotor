@@ -26,8 +26,7 @@ controllers/*Controller.ts   HTTP concerns               ▼
     ▼                                            channels/channelRegistry → whatsappChannel
 service/*Service.ts          business logic              │  axios POST, 10s timeout
     │                                                    ▼
-    ├── MigrationAwareRepository ──┬── AppDataSourceSync (PRD, read+write)
-    │                              └── LegacyDataSource  (legacy, read-only)
+    ├── AppDataSourceSync.getRepository()  TypeORM repositories (banco único)
     ├── AppDataSourceSync.query()  raw SQL for cross-schema joins and the claim
     └── utils/routeOptimizer.ts    pure geo/TSP functions
     ▼
@@ -50,48 +49,22 @@ PostgreSQL: CAMPANHAS_OB (owned) · MAIN_REGISTER (read) · dw (read) · OFICINA
 ### Static-class service layer
 
 **Location:** all files in `service/`
-**Implementation:** Classes with only `static` members, default-exported. No DI, no instantiation, no interfaces.
-**Exception:** `service/usuarioService.ts` exports a lowercase object instance.
+**Purpose:** Business logic isolated from HTTP.
+**Implementation:** Classes with only `static` methods, default-exported. No DI, no instantiation, no interfaces. Services are called directly by controllers.
+**Example:** `service/promotorService.ts:10` — `export default class PromotorService { static async createPromotor(...) }`
 
-The newer services keep the class but also export free functions alongside it — `envioGuards.ts` is functions only (`avaliarGuardas`, `enderecoRecente`), and `outboxNotificacaoService.ts` exports both the class and its pure decision helpers (`computeBackoffMs`, `shouldMarkFailed`, `acaoDaFila`, `tamanhoLote`). This is deliberate: the pure functions are the parts under unit test.
-
-### Port + adapter for outbound channels *(new)*
-
-**Location:** `channels/`
-**Purpose:** Keep provider specifics out of the dispatch logic, and make the channel swappable per `NotificacaoVisita.CANAL`.
-**Implementation:** `ChannelSender` is the port — one `send(params): Promise<ChannelSendResult>` where the result is a discriminated union (`{success:true, messageId, providerMessageId}` | `{success:false, reason, providerCode}`). `channelRegistry.ts` holds a `Map<CanalNotificacao, ChannelSender>` and throws only on an unregistered enum value, which is a programmer error rather than a runtime condition. `whatsappChannel.ts` is the sole adapter.
-**Classification lives in the adapter, not the queue:** the channel maps provider error codes into `reason` buckets (`TOKEN_INVALID`/`TEMPLATE_NOT_FOUND`/… → configuration; `RATE_LIMITED`/`QUOTA_EXCEEDED` → rate; network/5xx → transient). The queue reads only the verdict.
-
-### Outbox on Postgres *(new)*
-
-**Location:** `service/outboxNotificacaoService.ts`, `schedule/outboxNotificacaoCron.ts`, `utils/agendamento.ts`
-**Purpose:** Move the send out of the request cycle and make duplicate delivery impossible when the server is copied.
-
-`NOTIFICACAO_VISITA` is both the audit record and the queue row — one table, no second store. The outbox columns are `AVAILABLE_AT`, `LOCKED_AT`, `LOCKED_BY`, `ATTEMPTS`.
-
-**Claim** (`claimBatch`): CTE `picked` selecting `STATUS='PENDENTE' AND AVAILABLE_AT IS NOT NULL AND AVAILABLE_AT <= now()` with an expired-lease escape, `ORDER BY AVAILABLE_AT`, `LIMIT $1`, `FOR UPDATE SKIP LOCKED`; then `UPDATE … FROM picked` stamping `LOCKED_AT`/`LOCKED_BY` and incrementing `ATTEMPTS`, `RETURNING` the id.
-
-Three details carry the design:
-- **`SKIP LOCKED` is what makes a copied server safe** — two workers get disjoint sets and neither blocks the other. No leader election, no per-machine config.
-- **`ATTEMPTS` increments at claim time, not after dispatch.** A process killed mid-send still burns an attempt, so a row that crashes the worker retires at the ceiling instead of looping forever.
-- **`AVAILABLE_AT IS NOT NULL` excludes pre-outbox rows.** Without it, the worker's first deploy would re-send the entire history at once.
-
-**Decide** (`acaoDaFila`): pure function mapping a dispatch verdict to a queue action — `ENVIADO`, `CONCLUIDO` (dispensado/terminal, already persisted by the dispatcher), `RETENTAR`, `FALHOU`. Backoff ladder copied verbatim from `backend-communities`' `OutboxService`: `0 → 15s → 60s → 5min → 15min`.
-
-**Tick** (`tick`): never throws. Per-row `try/catch` so one bad workshop does not cost the batch, and a claim failure returns quietly rather than killing the process that also serves requests. The cron wrapper holds a closure re-entrancy flag so a slow batch cannot stack ticks on itself.
-
-**Schedule** (`proximoHorarioEnvio`): a route created today always sends in **tomorrow's** window (`America/Sao_Paulo`), never "whenever ops imported". With `NOTIFICACAO_HORA_ENVIO_FIM` set above the start hour, a batch of n is spread as `inicio + (fim-inicio)*i/n` — `i/n` and not `i/(n-1)`, so the last item lands strictly inside the window. `OUTBOX_VISITA_ENVIO_IMEDIATO="1"` returns `agora` unchanged, for local testing only.
-
-### Send-time evaluation *(new)*
-
-Guards, recipient resolution and token issuance run in `despacharNotificacao`, at send time — not when the route is created. All three are time-dependent (address freshness, campaign already ended, per-recipient anti-spam), so evaluating them at 09:00 is *more* correct than evaluating them at import. The accepted side effect: a route created today can legitimately become `DISPENSADO` tomorrow. It also keeps `EXPIRA_EM` from burning part of its window sitting in the queue.
+Exception: `service/usuarioService.ts` exports a lowercase object/instance (`usuarioService`) rather than a static class — the sole deviation, consumed by `middlewares/authMiddleware.ts`.
 
 ### Dual-datasource repository wrapper
 
-**Location:** `utils/migrationRepository.ts` — unchanged since the last mapping.
-`MigrationAwareRepository<T>` wraps two TypeORM repositories: `find()` queries both and dedupes by PK with the new DB winning; `findOne()` tries new first, falls back to legacy on miss; every write goes to the new DB only. Legacy failures degrade to a `console.warn` and new-DB-only results. Raw-SQL equivalents: `queryBothAndMerge()`, `findOneFromBoth()`.
+**Location:** `data-source.ts`
+**Implementation:** um único `AppDataSourceSync`. Os services obtêm repositórios TypeORM por
+`AppDataSourceSync.getRepository(Entidade)`, normalmente através de um getter privado estático
+(`private static getPromotorRepo()`), e usam `AppDataSourceSync.query()` para SQL cru.
 
-**Adoption is still partial** — within one service some methods use the wrapper and others call `AppDataSourceSync.getRepository()` directly (see CONCERNS.md). Note the outbox deliberately uses the raw `AppDataSourceSync` throughout: the queue is a write path on the owned schema, and a merged read of queue state would be meaningless.
+> Histórico: até 2026-08 existiu um wrapper `MigrationAwareRepository` sobre dois DataSources
+> (PRD + legado read-only), com merge de leituras em memória. O fluxo dual foi removido e o
+> padrão passou a ser um único banco. Contexto em `.specs/features/database-migration/`.
 
 ### Raw SQL for cross-schema work
 

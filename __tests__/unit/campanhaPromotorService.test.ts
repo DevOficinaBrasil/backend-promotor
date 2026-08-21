@@ -1,31 +1,22 @@
 import CampanhaPromotorService from '../../service/campanhaPromotorService';
-import { MigrationAwareRepository } from '../../utils/migrationRepository';
 import { AppDataSourceSync } from '../../data-source';
-import { createMockRepo } from '../helpers/mockMigrationRepo';
+import { createMockRepo } from '../helpers/mockRepo';
 import CampanhaPromotor from '../../entities/CampanhaPromotor';
 
 jest.mock('../../data-source');
-jest.mock('../../utils/migrationRepository');
 
 describe('CampanhaPromotorService', () => {
   const mockRepo = createMockRepo();
-  const mockDirectRepo = {
-    findOne: jest.fn(),
-    find: jest.fn(),
-    save: jest.fn(),
-    remove: jest.fn(),
-  };
 
   beforeEach(() => {
     jest.clearAllMocks();
-    (MigrationAwareRepository as jest.Mock).mockImplementation(() => mockRepo);
-    (AppDataSourceSync.getRepository as jest.Mock).mockReturnValue(mockDirectRepo);
+    (AppDataSourceSync.getRepository as jest.Mock).mockReturnValue(mockRepo);
   });
 
   describe('linkCampanhaPromotor', () => {
     it('should link single campaign to promotor with default RAIO', async () => {
       mockRepo.find.mockResolvedValue([]);
-      mockRepo.saveMany.mockResolvedValue([{ 
+      mockRepo.save.mockResolvedValue([{ 
         ID_CAMPANHA_PROMOTOR: 1, 
         ID_CAMPANHA: 10, 
         ID_PROMOTOR: 5, 
@@ -41,7 +32,7 @@ describe('CampanhaPromotorService', () => {
 
     it('should link multiple campaigns', async () => {
       mockRepo.find.mockResolvedValue([]);
-      mockRepo.saveMany.mockResolvedValue([
+      mockRepo.save.mockResolvedValue([
         { ID_CAMPANHA: 10, ID_PROMOTOR: 5 },
         { ID_CAMPANHA: 20, ID_PROMOTOR: 5 },
       ]);
@@ -58,12 +49,12 @@ describe('CampanhaPromotorService', () => {
       const result = await CampanhaPromotorService.linkCampanhaPromotor(10, 5);
 
       expect(result).toEqual([]);
-      expect(mockRepo.saveMany).not.toHaveBeenCalled();
+      expect(mockRepo.save).not.toHaveBeenCalled();
     });
 
     it('should use provided RAIO', async () => {
       mockRepo.find.mockResolvedValue([]);
-      mockRepo.saveMany.mockResolvedValue([{ RAIO: 50 }]);
+      mockRepo.save.mockResolvedValue([{ RAIO: 50 }]);
 
       await CampanhaPromotorService.linkCampanhaPromotor(10, 5, 50);
 
@@ -82,17 +73,17 @@ describe('CampanhaPromotorService', () => {
   describe('updateRaio', () => {
     it('should update RAIO when relationship exists', async () => {
       const existing = { ID_CAMPANHA_PROMOTOR: 1, RAIO: 20 };
-      mockDirectRepo.findOne.mockResolvedValue(existing);
-      mockDirectRepo.save.mockResolvedValue({ ...existing, RAIO: 50 });
+      mockRepo.findOne.mockResolvedValue(existing);
+      mockRepo.save.mockResolvedValue({ ...existing, RAIO: 50 });
 
       const result = await CampanhaPromotorService.updateRaio(1, 50);
 
       expect(result).toBeTruthy();
-      expect(mockDirectRepo.save).toHaveBeenCalled();
+      expect(mockRepo.save).toHaveBeenCalled();
     });
 
     it('should return null when relationship not found', async () => {
-      mockDirectRepo.findOne.mockResolvedValue(null);
+      mockRepo.findOne.mockResolvedValue(null);
 
       const result = await CampanhaPromotorService.updateRaio(999, 50);
 
@@ -103,17 +94,17 @@ describe('CampanhaPromotorService', () => {
   describe('unlinkCampanhaPromotor', () => {
     it('should remove relationship', async () => {
       const existing = { ID_CAMPANHA_PROMOTOR: 1 };
-      mockDirectRepo.findOne.mockResolvedValue(existing);
-      mockDirectRepo.remove.mockResolvedValue(existing);
+      mockRepo.findOne.mockResolvedValue(existing);
+      mockRepo.remove.mockResolvedValue(existing);
 
       const result = await CampanhaPromotorService.unlinkCampanhaPromotor(1);
 
       expect(result).toHaveLength(1);
-      expect(mockDirectRepo.remove).toHaveBeenCalledWith(existing);
+      expect(mockRepo.remove).toHaveBeenCalledWith(existing);
     });
 
     it('should return empty array when not found', async () => {
-      mockDirectRepo.findOne.mockResolvedValue(null);
+      mockRepo.findOne.mockResolvedValue(null);
 
       const result = await CampanhaPromotorService.unlinkCampanhaPromotor(999);
 
@@ -123,7 +114,7 @@ describe('CampanhaPromotorService', () => {
 
   describe('getCampanhasByPromotor', () => {
     it('should return campaign IDs', async () => {
-      mockDirectRepo.find.mockResolvedValue([
+      mockRepo.find.mockResolvedValue([
         { ID_CAMPANHA: 10 },
         { ID_CAMPANHA: 20 },
       ]);
@@ -134,7 +125,7 @@ describe('CampanhaPromotorService', () => {
     });
 
     it('should return empty array when no campaigns', async () => {
-      mockDirectRepo.find.mockResolvedValue([]);
+      mockRepo.find.mockResolvedValue([]);
 
       const result = await CampanhaPromotorService.getCampanhasByPromotor(999);
 

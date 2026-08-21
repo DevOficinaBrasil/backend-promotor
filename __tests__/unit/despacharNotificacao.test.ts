@@ -16,12 +16,10 @@ import NotificacaoVisitaService, {
 } from "../../service/notificacaoVisitaService";
 import { getChannel } from "../../channels/channelRegistry";
 import { avaliarGuardas, enderecoRecente } from "../../service/envioGuards";
-import { MigrationAwareRepository } from "../../utils/migrationRepository";
 
 jest.mock("../../data-source");
 jest.mock("../../channels/channelRegistry");
 jest.mock("../../service/envioGuards");
-jest.mock("../../utils/migrationRepository");
 
 // AGND-09: dispatch runs the existing flow against state as of the send, and
 // returns a verdict instead of deciding retry policy. The queue owns retries.
@@ -76,10 +74,6 @@ describe("NotificacaoVisitaService.despacharNotificacao", () => {
       if (entidade === Oficina) return oficinaRepo;
       if (entidade === Usuario) return usuarioRepo;
       if (entidade === Community) return communityRepo;
-      return { findOne: jest.fn(), find: jest.fn(), save: jest.fn() };
-    });
-
-    (MigrationAwareRepository as jest.Mock).mockImplementation((entidade: unknown) => {
       if (entidade === RotaPromotor) return rotaRepo;
       if (entidade === CampanhaPromotor) {
         return { findOne: jest.fn(async () => ({ ID_CAMPANHA: 1 })) };

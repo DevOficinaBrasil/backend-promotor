@@ -16,9 +16,9 @@
 - API style: REST, JSON over HTTP. Seven routers mounted per domain in `api.ts`.
 - Database: PostgreSQL via TypeORM `^0.3.26` + `pg` `^8.16.3`
   - Entities auto-loaded by glob: `entities/*.{ts,js}` (`data-source.ts`)
-  - **Two DataSources** during migration: `AppDataSourceSync` (PRD, read-write) and `LegacyDataSource` (legacy, read-only, feature-flagged by `LEGACY_DB_ENABLED="true"`)
-  - No TypeORM migrations configured; no `synchronize`. Schema changes are hand-written SQL in `scripts/*.sql`, applied manually.
-- Schemas touched: `CAMPANHAS_OB` (owned), `MAIN_REGISTER` (read), `dw` (read), `OFICINA_PORTAL` (read — added 2026-08-12 for `COMMUNITIES`)
+  - **DataSource único:** `AppDataSourceSync` (read-write). O fluxo dual (legacy read-only) foi removido em 2026-08-14.
+  - No TypeORM migrations configured; no `synchronize`. Schema changes are applied via hand-written SQL in `scripts/*.sql`.
+- Schemas touched: `CAMPANHAS_OB` (owned), `MAIN_REGISTER` (read), `dw` (read)
 - Validation: Zod `^3.23.8` via `middlewares/validation.ts`
 - API docs: `@asteasolutions/zod-to-openapi` `^7.1.1` generates OpenAPI 3.0 from the same Zod schemas; served at `/openapi.json`, rendered at `/docs` by Scalar loaded from jsDelivr inline in `app.ts` (**not** via the `@scalar/express-api-reference` devDependency)
 - Authentication: `jsonwebtoken` `^9.0.2` (HS256). Two separate token systems now exist:

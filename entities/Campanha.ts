@@ -10,10 +10,25 @@ import {
 import CampanhaPromotor from "./CampanhaPromotor";
 import CampanhaPerguntas from "./CampanhaPerguntas";
 
+/**
+ * A campanha nasce RASCUNHO e só fica visível para o promotor
+ * (GET /campanha/ativa) depois de publicada pelo wizard do ob-ads.
+ */
+export type CampanhaStatus = "RASCUNHO" | "PUBLICADA";
+
 @Entity({ schema: "CAMPANHAS_OB", name: "CAMPANHA" })
 export default class Campanha {
   @PrimaryGeneratedColumn({ type: "int", name: "ID_CAMPANHA" })
   ID_CAMPANHA?: number;
+
+  @Column({
+    type: "varchar",
+    length: 20,
+    nullable: false,
+    default: "RASCUNHO",
+    name: "STATUS",
+  })
+  STATUS?: CampanhaStatus;
 
   @Column({ type: "varchar", length: 255, nullable: false, name: "NOME" })
   NOME: string;
@@ -28,6 +43,14 @@ export default class Campanha {
 
   @Column({ type: "varchar", length: 100, nullable: true, name: "EMPRESA_SLUG" })
   EMPRESA_SLUG?: string;
+
+  /**
+   * Segmentação definida uma vez para a campanha (DSL @obcrm/segmentation).
+   * Recorta as oficinas elegíveis da comunidade e é herdada pelos vínculos
+   * criados depois; filtro próprio do vínculo prevalece. NULL = sem filtro.
+   */
+  @Column({ type: "jsonb", nullable: true, name: "FILTRO_SEGMENTACAO" })
+  FILTRO_SEGMENTACAO?: Record<string, unknown> | null;
 
   @Column({ type: "timestamp", nullable: true, name: "START_TIME" })
   START_TIME?: Date;

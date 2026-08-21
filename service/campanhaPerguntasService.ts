@@ -2,19 +2,18 @@ import { AppDataSourceSync } from "../data-source";
 import CampanhaPerguntas from "../entities/CampanhaPerguntas";
 import CampanhaPerguntaOpcao from "../entities/CampanhaPerguntaOpcao";
 import Campanha from "../entities/Campanha";
-import { MigrationAwareRepository } from "../utils/migrationRepository";
 
 export default class CampanhaPerguntasService {
   private static getPerguntaRepo() {
-    return new MigrationAwareRepository<CampanhaPerguntas>(CampanhaPerguntas, "ID_PERGUNTAS");
+    return AppDataSourceSync.getRepository(CampanhaPerguntas);
   }
 
   private static getOpcaoRepo() {
-    return new MigrationAwareRepository<CampanhaPerguntaOpcao>(CampanhaPerguntaOpcao, "ID_OPCAO");
+    return AppDataSourceSync.getRepository(CampanhaPerguntaOpcao);
   }
 
   private static getCampanhaRepo() {
-    return new MigrationAwareRepository<Campanha>(Campanha, "ID_CAMPANHA");
+    return AppDataSourceSync.getRepository(Campanha);
   }
 
   /**
@@ -51,7 +50,7 @@ export default class CampanhaPerguntasService {
           ORDEM: o.ORDEM,
         })
       );
-      perguntaSalva.opcoes = await opcaoRepo.saveMany(opcaoEntities);
+      perguntaSalva.opcoes = await opcaoRepo.save(opcaoEntities);
     }
 
     return perguntaSalva;
@@ -111,7 +110,7 @@ export default class CampanhaPerguntasService {
             ORDEM: o.ORDEM,
           })
         );
-        perguntaAtualizada.opcoes = await opcaoRepo.saveMany(opcaoEntities);
+        perguntaAtualizada.opcoes = await opcaoRepo.save(opcaoEntities);
       } else {
         perguntaAtualizada.opcoes = [];
       }

@@ -4,9 +4,9 @@ import CampanhaPromotor from '../../entities/CampanhaPromotor';
 import NotificacaoVisitaService from '../../service/notificacaoVisitaService';
 import { StatusNotificacaoVisita } from '../../entities/NotificacaoVisita';
 
-// Deliberately does NOT mock utils/migrationRepository: these tests exercise the
-// real MigrationAwareRepository delegating to a mocked AppDataSourceSync, which
-// is what proves the notification hook fires on the actual persistence path.
+// Os repositórios não são stubados por entidade aqui: os testes exercitam o
+// caminho real de persistência sobre um AppDataSourceSync mockado, que é o que
+// prova que o hook de notificação dispara junto com a criação da rota.
 jest.mock('../../data-source');
 jest.mock('../../service/notificacaoVisitaService');
 

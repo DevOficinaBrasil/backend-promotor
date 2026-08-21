@@ -63,6 +63,70 @@ export default class SegmentacaoService {
     };
   }
 
+  /** Teto de contatos por página aceito pela API de preview do CRM. */
+  static readonly PREVIEW_PAGE_SIZE = 100;
+
+  /**
+   * Percorre TODAS as páginas do preview e devolve os external_user_ids.
+   *
+   * O `previewContacts` faz uma chamada só, e a API do CRM rejeita `limit > 100`
+   * — então recortar a comunidade inteira exige paginar pelo cursor
+   * `afterContactId`. Sem isto o filtro parecia atingir no máximo 100 contatos.
+   *
+   * @param maxContatos teto de segurança; ao ser atingido devolve
+   *        `truncado: true` para a tela avisar que a contagem está incompleta.
+   */
+  static async previewContactsAll(
+    dsl: Record<string, unknown>,
+    tenantId: number,
+    maxContatos: number
+  ): Promise<{
+    externalUserIds: number[];
+    estimatedCount: number;
+    truncado: boolean;
+    paginas: number;
+  }> {
+    const externalUserIds: number[] = [];
+    const maxPaginas = Math.max(1, Math.ceil(maxContatos / this.PREVIEW_PAGE_SIZE));
+
+    let afterContactId: string | undefined;
+    let estimatedCount = 0;
+    let hasMore = false;
+    let paginas = 0;
+
+    while (paginas < maxPaginas) {
+      const result = await previewSegmentDefinition(dsl as any, {
+        tenantId,
+        limit: this.PREVIEW_PAGE_SIZE,
+        afterContactId,
+        // A contagem total não muda entre páginas; pedir uma vez evita o custo.
+        includeEstimatedCount: paginas === 0,
+        accessToken: process.env.CRM_API_TOKEN!,
+      });
+
+      paginas += 1;
+      if (paginas === 1) {
+        estimatedCount = result.estimatedCount ?? 0;
+      }
+
+      for (const contato of result.sampleArray as Array<Record<string, unknown>>) {
+        const id = parseInt(String(contato.external_user_id), 10);
+        if (!isNaN(id)) externalUserIds.push(id);
+      }
+
+      hasMore = result.hasMore;
+      const ultimo = result.sampleArray[result.sampleArray.length - 1] as
+        | Record<string, unknown>
+        | undefined;
+
+      // Sem cursor não há como avançar; parar evita repetir a mesma página.
+      if (!hasMore || !ultimo?.id) break;
+      afterContactId = String(ultimo.id);
+    }
+
+    return { externalUserIds, estimatedCount, truncado: hasMore, paginas };
+  }
+
   static async listFilterOptions(tenantId: number): Promise<Record<string, unknown>> {
     return listSegmentFilterOptions({
       tenantId,

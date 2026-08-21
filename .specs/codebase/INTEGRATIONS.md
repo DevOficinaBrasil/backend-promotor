@@ -20,18 +20,12 @@ The 2026-08-04 mapping recorded "no outbound HTTP, no background jobs". Both sta
 - `dw` — read-only; `cadastro_empresa` (workshop registry with geocoordinates), `temp_cnpj_sqlserver` (CNPJ allowlist filter)
 - `OFICINA_PORTAL` — read-only; `COMMUNITIES` (47 rows), resolves the company name from `CAMPANHA.EMPRESA_SLUG`. Added 2026-08-12. The lowercase `oficinaportal.communities` copy (9 rows) exists on the same instance and is **stale — do not use it**; it lacks `authomix`, the slug of the only active campaign.
 
-### Legacy — PostgreSQL (DEV), read-only
+### Banco legado — removido (2026-08-14)
 
-**Purpose:** Serve reads for `CAMPANHAS_OB` rows not yet migrated to PRD. Transitional.
-**Implementation:** `LegacyDataSource` in `data-source.ts`; initialized conditionally in `app.ts`
-**Configuration:** `LEGACY_DB_ENABLED` (must be exactly `"true"`), plus `LEGACY_DB_HOST`/`_PORT`/`_USERNAME`/`_PASSWORD`/`_DATABASE`, each falling back to its `DB_*` counterpart
-**Host:** AWS RDS, `sa-east-1` — cross-region from primary, which is why merging happens in application memory rather than via a database link
-**Enforcement of read-only:** by convention in `utils/migrationRepository.ts`, not by database grants
-**Failure behaviour:** initialization failure is caught and logged; the app continues without merge. Per-query failures degrade to new-DB-only results with a `console.warn`.
+O segundo DataSource (`LegacyDataSource`, read-only, ativado por `LEGACY_DB_ENABLED`) e o wrapper
+`utils/migrationRepository.ts` foram removidos. Só existe `AppDataSourceSync`; não há mais merge de
+leituras entre bancos nem variáveis `LEGACY_DB_*`. Contexto em `.specs/features/database-migration/`.
 
-**Access pattern:** never queried directly by services — all access goes through `utils/migrationRepository.ts`. The **outbox is a deliberate exception**: `claimBatch` and the mark helpers use `AppDataSourceSync` directly, because the queue is a write path on the owned schema and a merged read of queue state would be meaningless.
-
-## Outbound HTTP
 
 ### WhatsApp message provider *(new since 2026-08-04)*
 

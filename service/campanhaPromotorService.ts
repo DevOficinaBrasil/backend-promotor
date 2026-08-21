@@ -1,10 +1,9 @@
 import { AppDataSourceSync } from "../data-source";
 import CampanhaPromotor from "../entities/CampanhaPromotor";
-import { MigrationAwareRepository } from "../utils/migrationRepository";
 
 export default class CampanhaPromotorService {
   private static getRepo() {
-    return new MigrationAwareRepository<CampanhaPromotor>(CampanhaPromotor, "ID_CAMPANHA_PROMOTOR");
+    return AppDataSourceSync.getRepository(CampanhaPromotor);
   }
 
   static async linkCampanhaPromotor(
@@ -42,7 +41,7 @@ export default class CampanhaPromotorService {
     }
     
     if (newRelationships.length > 0) {
-      const savedRelationships = await repo.saveMany(newRelationships);
+      const savedRelationships = await repo.save(newRelationships);
       return savedRelationships;
     }
     

@@ -19,19 +19,15 @@ import Usuario from "../../entities/Usuario";
 import RotaPromotor from "../../entities/RotaPromotor";
 import { avaliarGuardas, enderecoRecente } from "../../service/envioGuards";
 import { getChannel } from "../../channels/channelRegistry";
-import { MigrationAwareRepository } from "../../utils/migrationRepository";
 import { hashToken } from "../../utils/visitaToken";
 
 jest.mock("../../data-source");
 jest.mock("../../service/envioGuards");
 jest.mock("../../channels/channelRegistry");
-jest.mock("../../utils/migrationRepository");
 
 const enderecoRecenteMock = enderecoRecente as jest.MockedFunction<typeof enderecoRecente>;
 const avaliarGuardasMock = avaliarGuardas as jest.MockedFunction<typeof avaliarGuardas>;
 const getChannelMock = getChannel as jest.MockedFunction<typeof getChannel>;
-const MigrationAwareRepositoryMock =
-  MigrationAwareRepository as jest.MockedClass<typeof MigrationAwareRepository>;
 
 const ID_ROTA = 42;
 const ID_OFICINA = 900;
@@ -107,14 +103,6 @@ describe("NotificacaoVisitaService.notificarVisita", () => {
     usuarioRepo = { find: jest.fn(async () => [usuarioPadrao]) };
     communityRepo = { findOne: jest.fn(async () => ({ CommunityID: 17, Nome: "Authomix" })) };
 
-    (AppDataSourceSync.getRepository as jest.Mock).mockImplementation((entidade: unknown) => {
-      if (entidade === NotificacaoVisita) return notifRepo;
-      if (entidade === Oficina) return oficinaRepo;
-      if (entidade === Usuario) return usuarioRepo;
-      if (entidade === Community) return communityRepo;
-      throw new Error("repositório inesperado no teste");
-    });
-
     campanhaPromotorRepo = {
       findOne: jest.fn(async () => ({ ID_CAMPANHA_PROMOTOR, ID_CAMPANHA })),
     };
@@ -126,11 +114,15 @@ describe("NotificacaoVisitaService.notificarVisita", () => {
     // rotaAtual quando precisa de uma rota diferente da padrão.
     rotaRepo = { findOne: jest.fn(async () => rotaAtual) };
 
-    MigrationAwareRepositoryMock.mockImplementation((entidade: unknown) => {
-      if (entidade === CampanhaPromotor) return campanhaPromotorRepo as never;
-      if (entidade === Campanha) return campanhaRepo as never;
-      if (entidade === RotaPromotor) return rotaRepo as never;
-      throw new Error("repositório de migração inesperado no teste");
+    (AppDataSourceSync.getRepository as jest.Mock).mockImplementation((entidade: unknown) => {
+      if (entidade === NotificacaoVisita) return notifRepo;
+      if (entidade === Oficina) return oficinaRepo;
+      if (entidade === Usuario) return usuarioRepo;
+      if (entidade === Community) return communityRepo;
+      if (entidade === CampanhaPromotor) return campanhaPromotorRepo;
+      if (entidade === Campanha) return campanhaRepo;
+      if (entidade === RotaPromotor) return rotaRepo;
+      throw new Error("repositório inesperado no teste");
     });
 
     enderecoRecenteMock.mockReturnValue(false);
@@ -382,7 +374,7 @@ describe("NotificacaoVisitaService.notificarVisita", () => {
       expect(campanhaRepo.findOne).toHaveBeenCalledWith({ where: { ID_CAMPANHA } });
     });
 
-    it("accepts an END_TIME handed back as a string by the legacy merge path", async () => {
+    it("accepts an END_TIME handed back as a string by the driver", async () => {
       campanhaRepo.findOne.mockResolvedValue({
         ID_CAMPANHA,
         END_TIME: "2026-09-30T23:59:59.000Z",

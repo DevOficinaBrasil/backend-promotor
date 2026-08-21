@@ -1,7 +1,7 @@
 import RotaService from '../../service/rotaService';
-import { MigrationAwareRepository } from '../../utils/migrationRepository';
+
 import { AppDataSourceSync } from '../../data-source';
-import { createMockRepo } from '../helpers/mockMigrationRepo';
+import { createMockRepo } from '../helpers/mockRepo';
 import RotaPromotor, { StatusRota } from '../../entities/RotaPromotor';
 import CampanhaPromotor, { EstrategiaOrdenacao } from '../../entities/CampanhaPromotor';
 import NotificacaoVisitaService, { criarCacheCampanha } from '../../service/notificacaoVisitaService';
@@ -9,7 +9,6 @@ import GeolocationService from '../../service/geolocationService';
 import { fetchOSRMRoute } from '../../utils/routeOptimizer';
 
 jest.mock('../../data-source');
-jest.mock('../../utils/migrationRepository');
 jest.mock('../../utils/routeOptimizer', () => ({
   optimizeRoute: jest.fn().mockReturnValue({
     order: [{ id: 1, ordem: 1, id_oficina: 100 }],
@@ -44,7 +43,7 @@ describe('RotaService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    (MigrationAwareRepository as jest.Mock).mockImplementation((entity: any) => {
+    (AppDataSourceSync.getRepository as jest.Mock).mockImplementation((entity: any) => {
       if (entity === RotaPromotor) return rotaRepo;
       if (entity === CampanhaPromotor) return cpRepo;
       return createMockRepo();
@@ -62,7 +61,7 @@ describe('RotaService', () => {
     });
 
     it('should create batch routes', async () => {
-      rotaRepo.saveMany.mockResolvedValue([
+      rotaRepo.save.mockResolvedValue([
         { ID_ROTA_PROMOTOR: 1, ID_OFICINA: 100 },
         { ID_ROTA_PROMOTOR: 2, ID_OFICINA: 200 },
       ]);
@@ -77,7 +76,7 @@ describe('RotaService', () => {
     // inline-send regression this feature removes would show up here as
     // notificarVisita being called instead of agendarVisita.
     it('enqueues one notification per created route', async () => {
-      rotaRepo.saveMany.mockResolvedValue([
+      rotaRepo.save.mockResolvedValue([
         { ID_ROTA_PROMOTOR: 1, ID_OFICINA: 100 },
         { ID_ROTA_PROMOTOR: 2, ID_OFICINA: 200 },
       ]);
@@ -137,7 +136,7 @@ describe('RotaService', () => {
         { ID_ROTA_PROMOTOR: 1, ID_OFICINA: 100, DELETED_AT: null },
         { ID_ROTA_PROMOTOR: 2, ID_OFICINA: 200, DELETED_AT: null },
       ]);
-      rotaRepo.saveMany.mockResolvedValue([{ ID_ROTA_PROMOTOR: 3, ID_OFICINA: 300 }]);
+      rotaRepo.save.mockResolvedValue([{ ID_ROTA_PROMOTOR: 3, ID_OFICINA: 300 }]);
 
       const result = await RotaService.updateRotaWorkshops(1, [100, 300]);
 

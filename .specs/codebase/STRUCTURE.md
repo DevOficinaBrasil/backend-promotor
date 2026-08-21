@@ -11,9 +11,9 @@ Growth since the 2026-08-04 mapping is almost entirely one feature: the **visit-
 
 ```
 backend-promotor/
-├── app.ts                      # entrypoint: express, cors, /docs, /openapi.json, /ping, listen, registrarOutboxCron()
+├── app.ts                      # entrypoint: express, cors, /docs, /openapi.json, /ping, listen, registrarOutboxCron() 
 ├── api.ts                      # mounts the 7 domain routers
-├── data-source.ts              # AppDataSourceSync (PRD) + LegacyDataSource (legacy, read-only)
+├── data-source.ts              # AppDataSourceSync (único DataSource da aplicação)
 ├── package.json                # name: "backend-hijack"
 ├── tsconfig.json · jest.config.ts
 ├── Dockerfile                  # node:20-alpine, EXPOSE 3008, runs ts-node
@@ -84,7 +84,7 @@ Agent skill definitions are duplicated across `.claude/`, `.agents/`, `.cline/`,
 **Purpose:** Move work out of the request cycle and out to a provider. This is the first code in the repo that runs on a clock rather than on a request.
 
 ### Data layer
-**Location:** `entities/`, `data-source.ts`, `utils/migrationRepository.ts`
+**Location:** `entities/`, `data-source.ts`
 **Key files:** `RotaPromotor.ts` (the visit record), `CampanhaPromotor.ts` (N:N join carrying ordering strategy), `NotificacaoVisita.ts` (notification + outbox row in one table), `Community.ts` (`OFICINA_PORTAL.COMMUNITIES`, resolves the company name by `EMPRESA_SLUG`), `CadastroEmpresa.ts` (`dw`)
 
 ### Contract layer

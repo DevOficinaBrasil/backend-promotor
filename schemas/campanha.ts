@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { NotificacaoVisitaStatusInfoSchema } from './rota';
+import { FiltroSegmentacaoSchema } from './segmentacao';
 
 /**
  * Campanha entity schema
@@ -7,6 +8,8 @@ import { NotificacaoVisitaStatusInfoSchema } from './rota';
 export const CampanhaSchema = z.object({
   ID: z.number(),
   NOME: z.string(),
+  STATUS: z.enum(['RASCUNHO', 'PUBLICADA']).optional(),
+  FILTRO_SEGMENTACAO: z.record(z.unknown()).nullable().optional(),
   OBJETIVO: z.string().optional(),
   ID_CLIENT: z.number().optional(),
   EMPRESA_SLUG: z.string().optional(),
@@ -36,6 +39,7 @@ export const CreateCampanhaSchema = z.object({
   START_TIME: z.string().datetime().optional().or(z.date().optional()),
   END_TIME: z.string().datetime().optional().or(z.date().optional()),
   CREATED_BY: z.string().optional(),
+  FILTRO_SEGMENTACAO: FiltroSegmentacaoSchema.nullable().optional(),
   promotores: z.array(PromotorOficinasSchema).optional(),
 });
 
@@ -50,6 +54,7 @@ export const UpdateCampanhaSchema = z.object({
   START_TIME: z.string().datetime().optional().or(z.date().optional()),
   END_TIME: z.string().datetime().optional().or(z.date().optional()),
   CREATED_BY: z.string().optional(),
+  FILTRO_SEGMENTACAO: FiltroSegmentacaoSchema.nullable().optional(),
   promotores: z.array(PromotorOficinasSchema).optional(),
 });
 
@@ -87,6 +92,14 @@ export const UpdateCampanhaResponseSchema = z.object({
  * Delete campanha response schema
  */
 export const DeleteCampanhaResponseSchema = z.object({
+  message: z.string(),
+  data: CampanhaSchema,
+});
+
+/**
+ * Publicar campanha response schema
+ */
+export const PublicarCampanhaResponseSchema = z.object({
   message: z.string(),
   data: CampanhaSchema,
 });

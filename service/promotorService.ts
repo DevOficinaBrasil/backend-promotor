@@ -5,7 +5,6 @@ import { In } from "typeorm";
 import Promotor from "../entities/Promotor";
 import CampanhaPromotor from "../entities/CampanhaPromotor";
 import { encrypt, decrypt } from "../utils/encryption";
-import { MigrationAwareRepository } from "../utils/migrationRepository";
 import GeolocationService from "./geolocationService";
 import CampanhaPromotorService from "./campanhaPromotorService";
 import OficinaService from "./oficinaService";
@@ -13,15 +12,12 @@ import RotaService from "./rotaService";
 import SegmentacaoService from "./segmentacaoService";
 import { haversineDistanceKm } from "../utils/haversine";
 import Oficina from "../entities/Oficina";
+import RotaPromotor from "../entities/RotaPromotor";
 
 export default class PromotorService {
   private static getPromotorRepo() {
-    return new MigrationAwareRepository<Promotor>(Promotor, "ID_PROMOTOR");
+    return AppDataSourceSync.getRepository(Promotor);
   }
-
-  // private static getCampanhaPromotorRepo() {
-  //   return new MigrationAwareRepository<CampanhaPromotor>(CampanhaPromotor, "ID_CAMPANHA_PROMOTOR");
-  // }
 
   private static async includeLatLongToPromotor(promotor: Promotor): Promise<Promotor> 
   {
@@ -142,13 +138,16 @@ export default class PromotorService {
     const tenantId = await SegmentacaoService.resolveTenantId(empresaSlug);
     if (!tenantId) throw new Error(`TenantId não encontrado para slug: ${empresaSlug}`);
 
-    const PREVIEW_LIMIT = 100;
-    const preview = await SegmentacaoService.previewContacts(dsl, tenantId, PREVIEW_LIMIT);
+    // A API do CRM devolve no máximo 100 contatos por página. Com uma chamada só,
+    // a atribuição de rotas via segmentação usava uma AMOSTRA de 100 contatos —
+    // divergindo do preview que o wizard mostra. Paginar alinha os dois.
+    const MAX_CONTATOS = 5000;
+    const preview = await SegmentacaoService.previewContactsAll(dsl, tenantId, MAX_CONTATOS);
 
-    if (preview.hasMore) {
+    if (preview.truncado) {
       console.warn(
-        `Preview CRM retornou hasMore=true para slug ${empresaSlug}. ` +
-        `Processando apenas ${preview.externalUserIds.length} de ~${preview.estimatedCount} contatos.`
+        `Preview CRM excedeu ${MAX_CONTATOS} contatos para slug ${empresaSlug}. ` +
+        `Processando ${preview.externalUserIds.length} de ~${preview.estimatedCount} contatos.`
       );
     }
 
@@ -524,6 +523,93 @@ export default class PromotorService {
     raio: number
   ): Promise<CampanhaPromotor | null> {
     return CampanhaPromotorService.updateRaio(idCampanhaPromotor, raio);
+  }
+
+  /**
+   * Updates the RAIO of a campanha-promotor link and recalculates its routes:
+   * - adds BACKLOG rotas for community oficinas now inside the radius that have
+   *   no active rota in the campaign (campaign exclusivity, same rule as auto-assign);
+   * - soft-deletes this link's BACKLOG rotas whose oficina fell outside the new radius;
+   * - rotas in any other status are never touched.
+   * @returns Recalc summary, or null when the link does not exist
+   */
+  static async updateCampanhaPromotorRaioRecalc(
+    idCampanhaPromotor: number,
+    raio: number,
+    empresaSlug?: string
+  ): Promise<{
+    ID_CAMPANHA_PROMOTOR: number;
+    RAIO: number;
+    adicionadas: number;
+    removidas: number;
+    total: number;
+  } | null> {
+    const campanhaPromotorRepo = AppDataSourceSync.getRepository(CampanhaPromotor);
+    const cp = await campanhaPromotorRepo.findOne({
+      where: { ID_CAMPANHA_PROMOTOR: idCampanhaPromotor },
+    });
+    if (!cp) return null;
+
+    const promotor = await this.findPromotorById(cp.ID_PROMOTOR!);
+    if (!promotor?.LATITUDE || !promotor?.LONGITUDE) {
+      throw new Error(
+        "Promotor sem coordenadas (CEP não geocodificado) — não é possível recalcular rotas."
+      );
+    }
+
+    const slug = empresaSlug ?? (await this.resolveEmpresaSlugFromCampanha(cp.ID_CAMPANHA!));
+    if (!slug) {
+      throw new Error(
+        "EMPRESA_SLUG não informado e não foi possível resolver a comunidade da campanha."
+      );
+    }
+
+    await CampanhaPromotorService.updateRaio(idCampanhaPromotor, raio);
+
+    const dentro = await OficinaService.getComunityNearbyOficinas(
+      promotor.LATITUDE,
+      promotor.LONGITUDE,
+      raio,
+      slug
+    );
+    const dentroSet = new Set(dentro.map((o: any) => Number(o.ID_OFICINA)));
+
+    const rotasAtivas: Array<{ ID_ROTA_PROMOTOR: number; ID_OFICINA: number; STATUS: string }> =
+      await AppDataSourceSync.query(
+        `SELECT "ID_ROTA_PROMOTOR", "ID_OFICINA", "STATUS"
+         FROM "CAMPANHAS_OB"."ROTA_PROMOTOR"
+         WHERE "ID_CAMPANHA_PROMOTOR" = $1 AND "DELETED_AT" IS NULL`,
+        [idCampanhaPromotor]
+      );
+
+    const paraRemover = rotasAtivas
+      .filter((r) => r.STATUS === "BACKLOG" && !dentroSet.has(Number(r.ID_OFICINA)))
+      .map((r) => r.ID_ROTA_PROMOTOR);
+    if (paraRemover.length > 0) {
+      await AppDataSourceSync.getRepository(RotaPromotor).softDelete(paraRemover);
+    }
+
+    const assigned = await RotaService.getOficinasAssignedInCampanha(cp.ID_CAMPANHA!);
+    const assignedSet = new Set(assigned);
+    const paraAdicionar = [...dentroSet].filter((id) => !assignedSet.has(id));
+    if (paraAdicionar.length > 0) {
+      await RotaService.createRotas(idCampanhaPromotor, paraAdicionar);
+    }
+
+    const totalRows = await AppDataSourceSync.query(
+      `SELECT COUNT(*)::int AS total
+       FROM "CAMPANHAS_OB"."ROTA_PROMOTOR"
+       WHERE "ID_CAMPANHA_PROMOTOR" = $1 AND "DELETED_AT" IS NULL`,
+      [idCampanhaPromotor]
+    );
+
+    return {
+      ID_CAMPANHA_PROMOTOR: idCampanhaPromotor,
+      RAIO: raio,
+      adicionadas: paraAdicionar.length,
+      removidas: paraRemover.length,
+      total: totalRows[0]?.total ?? 0,
+    };
   }
 
   static async unlinkCampanhaPromotor(

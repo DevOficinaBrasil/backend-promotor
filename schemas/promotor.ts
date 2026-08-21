@@ -149,6 +149,35 @@ export const LinkCampanhaPromotorResponseSchema = z.object({
 });
 
 /**
+ * Update campanha-promotor RAIO (with route recalculation) request schema
+ */
+export const UpdateCampanhaPromotorRaioSchema = z.object({
+  RAIO: z.number().int().positive().max(200),
+  EMPRESA_SLUG: z.string().min(1).optional(),
+});
+
+/**
+ * Campanha-promotor ID params schema
+ */
+export const CampanhaPromotorIdParamsSchema = z.object({
+  id: z.coerce.number().int().positive(),
+});
+
+/**
+ * Update campanha-promotor RAIO response schema
+ */
+export const UpdateCampanhaPromotorRaioResponseSchema = z.object({
+  message: z.string(),
+  data: z.object({
+    ID_CAMPANHA_PROMOTOR: z.number(),
+    RAIO: z.number(),
+    adicionadas: z.number(),
+    removidas: z.number(),
+    total: z.number(),
+  }),
+});
+
+/**
  * Unlink campanha-promotor request schema
  */
 export const UnlinkCampanhaPromotorSchema = z.object({

@@ -10,6 +10,7 @@ import {
   CreateCampanhaResponseSchema,
   UpdateCampanhaResponseSchema,
   DeleteCampanhaResponseSchema,
+  PublicarCampanhaResponseSchema,
   GetCampanhaAtivaQuerySchema,
   GetCampanhaAtivaResponseSchema,
   GetAllCampanhasResponseSchema,
@@ -46,6 +47,44 @@ createDocumentedRoute(router, {
       },
       401: {
         description: 'Unauthorized - token missing or invalid',
+        schema: ErrorResponseSchema,
+      },
+      500: {
+        description: 'Internal server error',
+        schema: ErrorResponseSchema,
+      },
+    },
+  },
+});
+
+// Publish a campaign (makes it visible to promoters)
+createDocumentedRoute(router, {
+  method: 'post',
+  path: '/:id/publicar',
+  handler: CampanhaController.publicarCampanha,
+  basePath: '/campanha',
+  middlewares: [],
+  schemas: {
+    params: CampanhaIdParamsSchema,
+  },
+  documentation: {
+    tags: ['Campanha'],
+    summary: 'Publish a campaign',
+    description:
+      'Muda o STATUS da campanha para PUBLICADA. Enquanto RASCUNHO, a campanha ' +
+      'existe com vínculos e rotas, mas não aparece em GET /campanha/ativa.',
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: {
+        description: 'Campaign published successfully',
+        schema: PublicarCampanhaResponseSchema,
+      },
+      400: {
+        description: 'Campaign has no start/end date',
+        schema: ErrorResponseSchema,
+      },
+      404: {
+        description: 'Campaign not found',
         schema: ErrorResponseSchema,
       },
       500: {

@@ -315,6 +315,45 @@ export default class PromotorController {
     }
   };
 
+  /**
+   * Updates the RAIO of a campanha-promotor link and recalculates its routes
+   * PUT /promotor/campanha-promotor/:id/raio
+   */
+  static updateCampanhaPromotorRaio = async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { RAIO, EMPRESA_SLUG } = req.body;
+
+      const result = await PromotorService.updateCampanhaPromotorRaioRecalc(
+        Number(id),
+        RAIO,
+        EMPRESA_SLUG
+      );
+
+      if (!result) {
+        return res.status(404).json({
+          message: "Vínculo campanha-promotor não encontrado.",
+        });
+      }
+
+      return res.status(200).json({
+        message: "Raio atualizado e rotas recalculadas com sucesso.",
+        data: result,
+      });
+    } catch (error) {
+      console.error("Erro ao atualizar raio do vínculo:", error);
+      const message = error instanceof Error ? error.message : "Erro desconhecido";
+      const isClientError =
+        message.includes("coordenadas") || message.includes("EMPRESA_SLUG");
+      return res.status(isClientError ? 400 : 500).json({
+        message: isClientError
+          ? message
+          : "Erro interno ao atualizar raio do vínculo.",
+        error: message,
+      });
+    }
+  };
+
     /**
    * Unlinks a promoter from one or more campaigns
    * DELETE /promotor/unlink-campanha

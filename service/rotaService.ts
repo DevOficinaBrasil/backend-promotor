@@ -3,7 +3,6 @@ import RotaPromotor, { StatusRota } from "../entities/RotaPromotor";
 import CampanhaPromotor, { EstrategiaOrdenacao } from "../entities/CampanhaPromotor";
 import { In, IsNull } from "typeorm";
 import { optimizeRoute, fetchOSRMRoute } from "../utils/routeOptimizer";
-import { MigrationAwareRepository } from "../utils/migrationRepository";
 import NotificacaoVisitaService from "./notificacaoVisitaService";
 import { statusEfetivo } from "../utils/statusNotificacaoVisita";
 import { haversineDistanceKm } from "../utils/haversine";
@@ -32,11 +31,11 @@ interface ReassignResult {
 
 export default class RotaService {
   private static getRotaRepo() {
-    return new MigrationAwareRepository<RotaPromotor>(RotaPromotor, "ID_ROTA_PROMOTOR");
+    return AppDataSourceSync.getRepository(RotaPromotor);
   }
 
   private static getCampanhaPromotorRepo() {
-    return new MigrationAwareRepository<CampanhaPromotor>(CampanhaPromotor, "ID_CAMPANHA_PROMOTOR");
+    return AppDataSourceSync.getRepository(CampanhaPromotor);
   }
 
   /**
@@ -98,7 +97,7 @@ export default class RotaService {
         CREATED_BY,
       })
     );
-    const rotasSalvas = await repo.saveMany(novasRotas);
+    const rotasSalvas = await repo.save(novasRotas);
 
     await this.notificarRotasCriadas(rotasSalvas);
 
@@ -227,7 +226,7 @@ export default class RotaService {
           ID_OFICINA: oficinaId,
         })
       );
-      const savedRotas = await repo.saveMany(novasRotas);
+      const savedRotas = await repo.save(novasRotas);
       createdRotas.push(...savedRotas);
 
       await this.notificarRotasCriadas(savedRotas);      

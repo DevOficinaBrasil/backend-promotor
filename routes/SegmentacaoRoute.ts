@@ -5,6 +5,7 @@ import {
   UpdateFiltroSegmentacaoSchema,
   PreviewSegmentacaoSchema,
   PreviewOficinasSegmentadasSchema,
+  PreviewOficinasComunidadeSchema,
   DebugPreviewCrmSchema,
   CampanhaIdParamsSchema,
   CampanhaPromotorIdParamsSchema,
@@ -199,6 +200,70 @@ Ou com CEP (será geocodificado):
         description: 'Erro interno',
         schema: ErrorResponseSchema,
       },
+    },
+  },
+});
+
+// Preview de oficinas da comunidade que atendem à segmentação (sem raio)
+createDocumentedRoute(router, {
+  method: 'post',
+  path: '/previewOficinasComunidade',
+  handler: SegmentacaoController.previewOficinasComunidade,
+  basePath: '/segmentacao',
+  middlewares: [],
+  schemas: {
+    body: PreviewOficinasComunidadeSchema,
+  },
+  documentation: {
+    tags: ['Segmentação'],
+    summary: 'Preview de oficinas segmentadas da comunidade',
+    description:
+      'Retorna as oficinas ATIVAS da comunidade da campanha que atendem ao filtro de ' +
+      'segmentação, sem recorte de raio. Usado no passo de segmentação do wizard, em que ' +
+      'o filtro é definido antes de existir promotor.',
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: {
+        description: 'Preview gerado — totalOficinasEncontradas, contatosCrmTotal, oficinas[]',
+      },
+      400: {
+        description: 'Filtro de segmentação inválido',
+        schema: ErrorResponseSchema,
+      },
+      404: {
+        description: 'Campanha sem EMPRESA_SLUG ou comunidade não encontrada',
+        schema: ErrorResponseSchema,
+      },
+      500: {
+        description: 'Erro interno',
+        schema: ErrorResponseSchema,
+      },
+    },
+  },
+});
+
+// Valores existentes de um atributo, para a tela oferecer select em vez de texto livre
+createDocumentedRoute(router, {
+  method: 'get',
+  path: '/valoresDeCampo/:idCampanha',
+  handler: SegmentacaoController.valoresDeCampo,
+  basePath: '/segmentacao',
+  middlewares: [],
+  schemas: {
+    params: CampanhaIdParamsSchema,
+  },
+  documentation: {
+    tags: ['Segmentação'],
+    summary: 'Valores existentes de um atributo de contato',
+    description:
+      'Query `path` no formato `contactAttributes.<chave>`. Retorna os valores distintos ' +
+      'já presentes nos contatos daquele tenant, com contagem, para popular um select. ' +
+      'Paths core/tag retornam lista vazia (não têm domínio enumerável).',
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: { description: 'Lista de { valor, contatos }' },
+      404: { description: 'Campanha sem EMPRESA_SLUG ou comunidade não encontrada', schema: ErrorResponseSchema },
+      500: { description: 'Erro interno', schema: ErrorResponseSchema },
     },
   },
 });

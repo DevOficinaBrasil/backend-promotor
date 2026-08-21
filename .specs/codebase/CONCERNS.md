@@ -149,13 +149,11 @@ The outbox worker is well-guarded against duplicate delivery. The residual risks
 - **Safe modification:** Do not add cascades or eager loading to either relation. When adding a query that joins workshops, state explicitly which of the two tables is authoritative for that use case. Prefer the raw-SQL approach already used in `findNearestOficinas` over entity relations for cross-schema reads.
 - **Test coverage:** None. No entity or relation-loading tests exist.
 
-### `MigrationAwareRepository` is adopted inconsistently
+### ~~`MigrationAwareRepository` is adopted inconsistently~~ (resolvido)
 
-- **Files:** `utils/migrationRepository.ts`; mixed usage visible in `service/promotorService.ts` — wrapper at lines 12-16, 29, 54, 84, 107, 124, 174; raw `AppDataSourceSync.getRepository()` at lines 244, 267, 281
-- **Why fragile:** Whether a read sees legacy data depends on which call site you land in. `getCampanhasByPromotor()` (line 267) and `getPromotoresByClientId()` (line 281) are reads that bypass the merge entirely, so they return incomplete results for any promoter still living only in the legacy database. `unlinkCampanhaPromotor()` (line 244) is a write, so bypassing is correct there — but the three read/write cases are visually indistinguishable, which is what makes this easy to get wrong again.
-- **Common failures:** Silent under-reporting rather than errors. A promoter appears to have no campaigns, or a client appears to have fewer promoters than it does.
-- **Safe modification:** Audit every `AppDataSourceSync.getRepository` call in `service/` and classify it read vs. write. Convert reads to the wrapper. Consider making the wrapper the only permitted entry point in services so the distinction is structural rather than remembered.
-- **Test coverage:** None — `utils` is in `coveragePathIgnorePatterns`, and no test exercises the merge or the legacy-failure fallback.
+A inconsistência vinha de dois caminhos de acesso a dados coexistindo (wrapper vs. repositório
+direto), com semânticas de leitura diferentes. Com a remoção do fluxo dual em 2026-08-14 existe um
+único caminho — `AppDataSourceSync.getRepository()` — e a distinção deixou de existir.
 
 ### The `STATUS` CHECK constraint and the TypeScript enum must be changed together
 
@@ -184,12 +182,11 @@ The outbox worker is well-guarded against duplicate delivery. The residual risks
 
 No production measurements were available. Each item below states the mechanism and where to measure.
 
-### Cross-region merge reads fetch full result sets from both databases
+### ~~Cross-region merge reads fetch full result sets from both databases~~ (resolvido)
 
-- **Problem:** `MigrationAwareRepository.find()` runs the same query against `us-east-1` and `sa-east-1`, awaits both, and merges in application memory. Latency is the slower of the two — a cross-region round trip, typically ~110-130 ms between those regions before query time. `find()` also passes the caller's `options` verbatim to both, so any `take`/`skip` is applied per database and the merged result can exceed the requested page size while still missing rows.
-- **Files:** `utils/migrationRepository.ts:35-49`, `queryBothAndMerge` at `:165-198`
-- **Cause:** Deliberate — cross-region prevents database links, and the design assumed low volume (`.specs/project/STATE.md` records "<5k registros").
-- **Improvement path:** This is transitional and disappears when the migration completes, which is the real fix. Until then: measure `LegacyDataSource` query time separately; do not introduce pagination through this wrapper without handling the per-database `take` problem; and complete the migration rather than optimizing around it.
+O merge em memória entre `us-east-1` e `sa-east-1` (e o problema de `take`/`skip` aplicado por
+banco) desapareceu com a remoção do fluxo dual em 2026-08-14. Toda leitura agora bate num único
+banco, e paginação via `find()` volta a se comportar como o TypeORM documenta.
 
 ### Route optimization runs synchronously inside the request
 
@@ -280,12 +277,12 @@ Coverage has improved substantially — 432 unit tests across 29 suites, plus HT
 
 | Area | Risk | Priority |
 |---|---|---|
-| Controllers (6 of 7) | HTTP status codes, error envelopes, 404 paths. `visitaController` is covered indirectly by the `/visita` integration suites; the other six have no test at all | High |
-| `middlewares/authMiddleware.ts` | Auth is the largest open risk and has zero tests; the token-shape mismatch would have been caught by one. Contrast `visitaAuthMiddleware`, which is tested | High |
-| `utils/encryption.ts` | Password round-trip and malformed-input handling; guards against silent breakage during the bcrypt migration | High |
 | `utils/migrationRepository.ts` | Merge correctness, dedup by PK, legacy-failure fallback — the core of the active migration | High |
 | `middlewares/validation.ts` / Zod schemas | No test asserts that a malformed body is rejected with 400 | Medium |
 | `utils/routeOptimizer.ts` | Pure functions, trivial to test, zero coverage; endpoint pinning and 2-opt correctness. (`haversine` was extracted and **is** tested) | Medium |
+| Controllers (all 6) | HTTP status codes, error envelopes, 404 paths — no controller has any test | High |
+| Routes / Zod schemas | No test asserts that a malformed body is rejected with 400 | Medium |
+| `utils/routeOptimizer.ts` | Pure functions, trivial to test, currently zero coverage; endpoint pinning and 2-opt correctness | Medium |
 | `service/oficinaService.ts` | Raw SQL and distance ordering; the hardcoded-flags bug would have been caught | Medium |
 
 **What changed:** `coveragePathIgnorePatterns` no longer excludes `utils`, so these holes now show up in a coverage report instead of being hidden. `supertest` is wired up, so the HTTP harness the previous audit asked for exists — it is simply only pointed at `/visita`.

@@ -12,7 +12,6 @@ import Usuario from "../entities/Usuario";
 import { getChannel } from "../channels/channelRegistry";
 import { LIMITE_DESTINATARIO } from "../channels/whatsappChannel";
 import { avaliarGuardas, enderecoRecente } from "./envioGuards";
-import { MigrationAwareRepository } from "../utils/migrationRepository";
 import { normalizarTelefone } from "../utils/telefone";
 import { gerarLinkToken } from "../utils/visitaToken";
 import { proximoHorarioEnvio } from "../utils/agendamento";
@@ -132,10 +131,6 @@ export function criarCacheCampanha(): CacheCampanha {
  * chain is missing; the caller reads a null `fim` as "use the 168h fallback"
  * rather than as a failure — a campaign data gap must not cost a send.
  *
- * Both entities live in CAMPANHAS_OB, the schema still mid-migration, so reads
- * go through MigrationAwareRepository like every other campaign read
- * (campanhaService, rotaService) instead of a plain repository.
- *
  * Note: Campanha.END_TIME is a plain `timestamp` while EXPIRA_EM is
  * `timestamptz`. The value is carried across as-is, so it lands as the
  * campaign's end instant in the writing session's timezone.
@@ -164,9 +159,8 @@ async function lerDadosCampanha(
   idCampanhaPromotor: number,
   vazio: DadosCampanha
 ): Promise<DadosCampanha> {
-  const campanhaPromotor = await new MigrationAwareRepository<CampanhaPromotor>(
-    CampanhaPromotor,
-    "ID_CAMPANHA_PROMOTOR"
+  const campanhaPromotor = await AppDataSourceSync.getRepository(
+    CampanhaPromotor
   ).findOne({ where: { ID_CAMPANHA_PROMOTOR: idCampanhaPromotor } });
 
   const idCampanha = campanhaPromotor?.ID_CAMPANHA;
@@ -174,10 +168,9 @@ async function lerDadosCampanha(
     return vazio;
   }
 
-  const campanha = await new MigrationAwareRepository<Campanha>(
-    Campanha,
-    "ID_CAMPANHA"
-  ).findOne({ where: { ID_CAMPANHA: idCampanha } });
+  const campanha = await AppDataSourceSync.getRepository(Campanha).findOne({
+    where: { ID_CAMPANHA: idCampanha },
+  });
 
   return {
     fim: normalizarFimCampanha(campanha?.END_TIME),
@@ -186,9 +179,10 @@ async function lerDadosCampanha(
 }
 
 /**
- * TypeORM hands back a Date for a timestamp column, but a raw string can reach
- * here through the legacy merge path, so normalize before any comparison or
- * persistence. An unparseable value degrades to null (168h fallback).
+ * TypeORM hands back a Date for a timestamp column, but a raw string can still
+ * reach here (o driver devolve string em consultas cruas), so normalize before
+ * any comparison or persistence. An unparseable value degrades to null (168h
+ * fallback).
  */
 function normalizarFimCampanha(fim: Date | string | null | undefined): Date | null {
   if (fim == null) {
@@ -390,10 +384,9 @@ export default class NotificacaoVisitaService {
 
       // A rota vem do banco, não do chamador: quem despacha é o worker, que só
       // conhece o id da linha.
-      const rota = await new MigrationAwareRepository<RotaPromotor>(
-        RotaPromotor,
-        "ID_ROTA_PROMOTOR"
-      ).findOne({ where: { ID_ROTA_PROMOTOR: notificacao.ID_ROTA_PROMOTOR } });
+      const rota = await AppDataSourceSync.getRepository(RotaPromotor).findOne({
+        where: { ID_ROTA_PROMOTOR: notificacao.ID_ROTA_PROMOTOR },
+      });
 
       if (rota == null) {
         await this.finalizar(repo, notificacao, {

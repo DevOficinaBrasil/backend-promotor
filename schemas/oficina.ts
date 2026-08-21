@@ -60,3 +60,16 @@ export const GetCommunityNearbyResponseSchema = z.object({
   data: z.array(OficinaSchema),
   count: z.number(),
 });
+
+/**
+ * Query schema for listing ALL community oficinas (no radius filter)
+ */
+export const GetCommunityAllQuerySchema = z.object({
+  empresaSlug: z.string().min(1),
+});
+
+export const GetCommunityAllResponseSchema = z.object({
+  message: z.string(),
+  data: z.array(OficinaSchema),
+  count: z.number(),
+});

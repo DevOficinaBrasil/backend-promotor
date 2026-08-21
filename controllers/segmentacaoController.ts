@@ -1,4 +1,5 @@
 import { Request, Response } from "express";
+import { AppDataSourceSync } from "../data-source";
 import CampanhaPromotorService from "../service/campanhaPromotorService";
 import SegmentacaoService from "../service/segmentacaoService";
 import OficinaService from "../service/oficinaService";
@@ -134,6 +135,131 @@ export default class SegmentacaoController {
       return res.status(500).json({
         message: "Erro interno ao gerar preview de oficinas segmentadas.",
         error: error instanceof Error ? error.message : "Erro desconhecido"
+      });
+    }
+  };
+
+  /**
+   * Oficinas da comunidade que atendem à segmentação — sem raio.
+   * POST /segmentacao/previewOficinasComunidade
+   *
+   * Usado pelo passo de segmentação do wizard: a segmentação é definida antes
+   * de existir promotor, então aqui não há centro nem raio. O recorte por raio
+   * continua em previewOficinasSegmentadas / auto-assign.
+   *
+   * @body idCampanha — resolve EMPRESA_SLUG e tenantId internamente
+   * @body filtroSegmentacao — DSL de segmentação do CRM
+   */
+  static previewOficinasComunidade = async (req: Request, res: Response) => {
+    try {
+      const { idCampanha, filtroSegmentacao } = req.body;
+
+      const validation = SegmentacaoService.validateDsl(filtroSegmentacao);
+      if (!validation.valid) {
+        return res.status(400).json({
+          message: "Filtro de segmentação inválido.",
+          details: validation.errors,
+        });
+      }
+
+      const rows = await AppDataSourceSync.query(
+        `SELECT "EMPRESA_SLUG" FROM "CAMPANHAS_OB"."CAMPANHA" WHERE "ID_CAMPANHA" = $1 LIMIT 1`,
+        [idCampanha]
+      );
+      const empresaSlug = rows[0]?.EMPRESA_SLUG;
+      if (!empresaSlug) {
+        return res
+          .status(404)
+          .json({ message: "Campanha não possui EMPRESA_SLUG." });
+      }
+
+      const tenantId = await SegmentacaoService.resolveTenantIdByCampanha(idCampanha);
+      if (!tenantId) {
+        return res
+          .status(404)
+          .json({ message: "Comunidade não encontrada para a campanha." });
+      }
+
+      // Aqui o objetivo é recortar a comunidade inteira, não amostrar. A API do
+      // CRM devolve no máximo 100 contatos por página, então isto pagina até o
+      // teto; `truncado` avisa a tela quando não deu para varrer tudo.
+      const MAX_CONTATOS = 5000;
+      const preview = await SegmentacaoService.previewContactsAll(
+        filtroSegmentacao,
+        tenantId,
+        MAX_CONTATOS
+      );
+
+      const oficinas = await OficinaService.getCommunityOficinasSegmentadas(
+        empresaSlug,
+        preview.externalUserIds
+      );
+
+      return res.json({
+        totalOficinasEncontradas: oficinas.length,
+        contatosCrmTotal: preview.estimatedCount,
+        contatosCrmAvaliados: preview.externalUserIds.length,
+        contatosCrmHasMore: preview.truncado,
+        oficinas,
+      });
+    } catch (error) {
+      console.error("Erro ao gerar preview de oficinas da comunidade:", error);
+      return res.status(500).json({
+        message: "Erro interno ao gerar preview de oficinas da comunidade.",
+        error: error instanceof Error ? error.message : "Erro desconhecido",
+      });
+    }
+  };
+
+  /**
+   * Valores existentes de um atributo de contato, para a tela oferecer um
+   * select em vez de texto livre.
+   * GET /segmentacao/valoresDeCampo/:idCampanha?path=contactAttributes.gender
+   *
+   * Lê `CRM.contact_attribute` direto: o CRM não expõe endpoint de valores —
+   * `criteria-options` só reorganiza os mesmos campos de `filter-options`.
+   * Digitar o valor à mão erra fácil, porque a base tem variações reais como
+   * "Médio"/"Medio" e "Masculino"/"M".
+   */
+  static valoresDeCampo = async (req: Request, res: Response) => {
+    try {
+      const idCampanha = parseInt(req.params.idCampanha, 10);
+      const path = String(req.query.path ?? "");
+
+      const prefixo = "contactAttributes.";
+      if (!path.startsWith(prefixo)) {
+        // Core e tag não têm domínio de valores: tag é booleana e os campos
+        // core não são enumeráveis.
+        return res.status(200).json({ valores: [] });
+      }
+
+      const attributeKey = path.slice(prefixo.length);
+      const tenantId = await SegmentacaoService.resolveTenantIdByCampanha(idCampanha);
+      if (!tenantId) {
+        return res
+          .status(404)
+          .json({ message: "Campanha sem EMPRESA_SLUG ou comunidade não encontrada." });
+      }
+
+      const linhas = await AppDataSourceSync.query(
+        `SELECT ca."attribute_value_json" #>> '{}' AS valor, COUNT(*)::int AS contatos
+         FROM "CRM"."contact_attribute" ca
+         INNER JOIN "CRM"."contact" ct ON ct."id" = ca."contact_id"
+         WHERE ct."tenant_id" = $1 AND ca."attribute_key" = $2
+           AND ca."attribute_value_json" #>> '{}' IS NOT NULL
+           AND ca."attribute_value_json" #>> '{}' <> ''
+         GROUP BY 1
+         ORDER BY contatos DESC, valor ASC
+         LIMIT 50`,
+        [tenantId, attributeKey]
+      );
+
+      return res.status(200).json({ valores: linhas });
+    } catch (error) {
+      console.error("Erro ao listar valores do campo:", error);
+      return res.status(500).json({
+        message: "Erro interno ao listar valores do campo.",
+        error: error instanceof Error ? error.message : "Erro desconhecido",
       });
     }
   };

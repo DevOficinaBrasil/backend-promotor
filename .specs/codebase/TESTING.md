@@ -100,9 +100,23 @@ npm run test:unit:coverage · test:integration:coverage
 
 Prefer `npm run test:unit` for a fast, side-effect-free check.
 
-## Known Failures
+## Mock manual do data-source
 
-Per `.specs/project/STATE.md`, three **legacy** integration suites fail at teardown on a foreign-key error: `rotaService`, `campanhaPromotorService`, `campanhaResultsService`. Common, pre-existing cause — the `PROMOTOR → CAMPANHA_PROMOTOR → ROTA_PROMOTOR` chain has inherited FKs without `ON DELETE`, and the test cleanup deletes top-down. Not a regression from the visit feature. (Not re-verified in this mapping pass; verifying it requires writing to a real database.)
+`__mocks__/data-source.ts` cobre os membros usados pelos services:
+
+```typescript
+export const AppDataSourceSync = {
+  getRepository: jest.fn(),
+  query: jest.fn(),
+  transaction: jest.fn(/* ... */),
+};
+```
+
+Cada suíte liga as entidades aos seus repositórios mockados via
+`(AppDataSourceSync.getRepository as jest.Mock).mockImplementation(...)`, usando o helper
+`__tests__/helpers/mockRepo.ts`. Antes de 2026-08-14 os services passavam por um wrapper
+`MigrationAwareRepository` (dois bancos); esse fluxo foi removido e os testes mockam apenas
+`data-source`.
 
 ## Coverage Targets
 

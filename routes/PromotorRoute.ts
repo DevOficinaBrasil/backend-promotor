@@ -18,6 +18,9 @@ import {
   LinkCampanhaPromotorResponseSchema,
   UnlinkCampanhaPromotorSchema,
   UnlinkCampanhaPromotorResponseSchema,
+  UpdateCampanhaPromotorRaioSchema,
+  CampanhaPromotorIdParamsSchema,
+  UpdateCampanhaPromotorRaioResponseSchema,
   GetPromotorCampanhasResponseSchema,
   ClientIdParamsSchema,
   GetPromotoresByClientIdResponseSchema,
@@ -360,6 +363,51 @@ createDocumentedRoute(router, {
       },
       404: {
         description: 'Promoter or campaign not found',
+        schema: ErrorResponseSchema,
+      },
+      500: {
+        description: 'Internal server error',
+        schema: ErrorResponseSchema,
+      },
+    },
+  },
+});
+
+// Update campanha-promotor RAIO and recalculate routes
+createDocumentedRoute(router, {
+  method: 'put',
+  path: '/campanha-promotor/:id/raio',
+  handler: PromotorController.updateCampanhaPromotorRaio,
+  basePath: '/promotor',
+  middlewares: [],
+  schemas: {
+    params: CampanhaPromotorIdParamsSchema,
+    body: UpdateCampanhaPromotorRaioSchema,
+  },
+  documentation: {
+    tags: ['Promotor'],
+    summary: 'Update link radius and recalculate routes',
+    description:
+      'Updates CAMPANHA_PROMOTOR.RAIO and recalculates this link\'s routes: ' +
+      'adds BACKLOG routes for community oficinas now inside the radius (respecting ' +
+      'campaign exclusivity) and soft-deletes BACKLOG routes that fell outside. ' +
+      'Routes in any other status are never touched.',
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: {
+        description: 'Radius updated and routes recalculated',
+        schema: UpdateCampanhaPromotorRaioResponseSchema,
+      },
+      400: {
+        description: 'Bad request - validation error or promoter without coordinates',
+        schema: ErrorResponseSchema,
+      },
+      401: {
+        description: 'Unauthorized - token missing or invalid',
+        schema: ErrorResponseSchema,
+      },
+      404: {
+        description: 'Campanha-promotor link not found',
         schema: ErrorResponseSchema,
       },
       500: {

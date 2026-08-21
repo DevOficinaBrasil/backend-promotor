@@ -1,7 +1,6 @@
 import PromotorService from '../../service/promotorService';
-import { MigrationAwareRepository } from '../../utils/migrationRepository';
 import { AppDataSourceSync } from '../../data-source';
-import { createMockRepo } from '../helpers/mockMigrationRepo';
+import { createMockRepo } from '../helpers/mockRepo';
 import Promotor from '../../entities/Promotor';
 import CampanhaPromotor from '../../entities/CampanhaPromotor';
 import CampanhaPromotorService from '../../service/campanhaPromotorService';
@@ -10,7 +9,6 @@ import RotaService from '../../service/rotaService';
 import Oficina from '../../entities/Oficina';
 
 jest.mock('../../data-source');
-jest.mock('../../utils/migrationRepository');
 jest.mock('../../utils/encryption', () => ({
   encrypt: jest.fn((pw: string) => `enc_${pw}`),
   decrypt: jest.fn((pw: string) => pw.replace('enc_', '')),
@@ -51,19 +49,14 @@ const campanhaAtiva = () => ({
 describe('PromotorService', () => {
   const promotorRepo = createMockRepo();
   const cpRepo = createMockRepo();
-  const mockDirectRepo = {
-    find: jest.fn(),
-    findOne: jest.fn(),
-  };
 
   beforeEach(() => {
     jest.clearAllMocks();
-    (MigrationAwareRepository as jest.Mock).mockImplementation((entity: any) => {
+    (AppDataSourceSync.getRepository as jest.Mock).mockImplementation((entity: any) => {
       if (entity === Promotor) return promotorRepo;
       if (entity === CampanhaPromotor) return cpRepo;
       return createMockRepo();
     });
-    (AppDataSourceSync.getRepository as jest.Mock).mockReturnValue(mockDirectRepo);
   });
 
   describe('createPromotor', () => {
@@ -198,7 +191,7 @@ describe('PromotorService', () => {
       (AppDataSourceSync.getRepository as jest.Mock).mockImplementation((entity: any) => {
         if (entity === CampanhaPromotor) return mockCpRepo;
         if (entity === Oficina) return mockOficinaRepo;
-        return mockDirectRepo;
+        return promotorRepo;
       });
       mockCpRepo.find.mockResolvedValue([
         { ID_CAMPANHA_PROMOTOR: 10, ID_CAMPANHA: 5, ID_PROMOTOR: 1, RAIO: 15, campanha: campanhaAtiva() },
@@ -230,7 +223,7 @@ describe('PromotorService', () => {
       const mockCpRepo = { find: jest.fn().mockResolvedValue([]) };
       (AppDataSourceSync.getRepository as jest.Mock).mockImplementation((entity: any) => {
         if (entity === CampanhaPromotor) return mockCpRepo;
-        return mockDirectRepo;
+        return promotorRepo;
       });
 
       const result = await PromotorService.updatePromotor(1, { CEP: '02002-000' }, 'empresa-x');
@@ -252,7 +245,7 @@ describe('PromotorService', () => {
       (AppDataSourceSync.getRepository as jest.Mock).mockImplementation((entity: any) => {
         if (entity === CampanhaPromotor) return mockCpRepo;
         if (entity === Oficina) return mockOficinaRepo;
-        return mockDirectRepo;
+        return promotorRepo;
       });
       mockCpRepo.find.mockResolvedValue([
         { ID_CAMPANHA_PROMOTOR: 10, ID_CAMPANHA: 5, ID_PROMOTOR: 1, RAIO: 20, campanha: campanhaAtiva() },
@@ -294,7 +287,7 @@ describe('PromotorService', () => {
       (AppDataSourceSync.getRepository as jest.Mock).mockImplementation((entity: any) => {
         if (entity === CampanhaPromotor) return mockCpRepo;
         if (entity === Oficina) return mockOficinaRepo;
-        return mockDirectRepo;
+        return promotorRepo;
       });
       // Promotor 1 has one campaign association
       mockCpRepo.find
@@ -431,7 +424,7 @@ describe('PromotorService', () => {
 
   describe('getPromotoresByClientId', () => {
     it('should return promotores by client', async () => {
-      mockDirectRepo.find.mockResolvedValue([{ ID_PROMOTOR: 1, ID_CLIENT: 100 }]);
+      promotorRepo.find.mockResolvedValue([{ ID_PROMOTOR: 1, ID_CLIENT: 100 }]);
 
       const result = await PromotorService.getPromotoresByClientId(100);
 
@@ -439,7 +432,7 @@ describe('PromotorService', () => {
     });
 
     it('should return empty when none found', async () => {
-      mockDirectRepo.find.mockResolvedValue([]);
+      promotorRepo.find.mockResolvedValue([]);
       expect(await PromotorService.getPromotoresByClientId(999)).toEqual([]);
     });
   });

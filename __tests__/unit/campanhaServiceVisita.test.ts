@@ -5,9 +5,9 @@ import CampanhaPromotor from '../../entities/CampanhaPromotor';
 import RotaPromotor from '../../entities/RotaPromotor';
 import { StatusNotificacaoVisita } from '../../entities/NotificacaoVisita';
 
-// Deliberately does NOT mock utils/migrationRepository: these tests drive the
-// real repository against a mocked AppDataSourceSync so the route-list query
-// and its statusEfetivo() mapping are exercised for real (P2 AC1/AC2).
+// Os repositórios não são stubados por entidade aqui: os testes rodam o caminho
+// real contra um AppDataSourceSync mockado, para exercitar de verdade a query da
+// lista de rotas e seu mapeamento por statusEfetivo() (P2 AC1/AC2).
 jest.mock('../../data-source');
 jest.mock('../../utils/duckdbClient');
 

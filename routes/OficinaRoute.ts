@@ -7,6 +7,8 @@ import {
   GetOficinasByLocationResponseSchema,
   GetCommunityNearbyQuerySchema,
   GetCommunityNearbyResponseSchema,
+  GetCommunityAllQuerySchema,
+  GetCommunityAllResponseSchema,
 } from "../schemas/oficina";
 import { ErrorResponseSchema } from "../schemas/common";
 
@@ -73,6 +75,44 @@ createDocumentedRoute(router, {
       200: {
         description: "Community oficinas found successfully",
         schema: GetCommunityNearbyResponseSchema,
+      },
+      400: {
+        description: "Bad request - validation error",
+        schema: ErrorResponseSchema,
+      },
+      401: {
+        description: "Unauthorized - token missing or invalid",
+        schema: ErrorResponseSchema,
+      },
+      500: {
+        description: "Internal server error",
+        schema: ErrorResponseSchema,
+      },
+    },
+  },
+});
+
+// List ALL active community oficinas (no radius filter)
+createDocumentedRoute(router, {
+  method: "get",
+  path: "/community-all",
+  handler: OficinaController.getCommunityOficinas,
+  basePath: "/oficina",
+  middlewares: [],
+  schemas: {
+    query: GetCommunityAllQuerySchema,
+  },
+  documentation: {
+    tags: ["Oficina"],
+    summary: "List all active community oficinas",
+    description:
+      "Returns every active oficina from community members of the given EmpresaSlug, " +
+      "with coordinates. Used by the campaign wizard map to plot uncovered oficinas.",
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: {
+        description: "Community oficinas listed successfully",
+        schema: GetCommunityAllResponseSchema,
       },
       400: {
         description: "Bad request - validation error",

@@ -4,7 +4,6 @@ import CampanhaPromotor, { EstrategiaOrdenacao } from "../entities/CampanhaPromo
 import RotaPromotor from "../entities/RotaPromotor";
 import Oficina from "../entities/Oficina";
 import { IsNull } from "typeorm";
-import { MigrationAwareRepository, queryBothAndMerge } from "../utils/migrationRepository";
 import { StatusNotificacaoVisita } from "../entities/NotificacaoVisita";
 import { statusEfetivo, rotaListavelParaPromotor } from "../utils/statusNotificacaoVisita";
 import {
@@ -20,16 +19,12 @@ export interface PromotorOficinaData {
 
 export default class CampanhaService {
   private static getCampanhaRepo() {
-    return new MigrationAwareRepository<Campanha>(Campanha, "ID_CAMPANHA");
+    return AppDataSourceSync.getRepository(Campanha);
   }
 
   private static getCampanhaPromotorRepo() {
-    return new MigrationAwareRepository<CampanhaPromotor>(CampanhaPromotor, "ID_CAMPANHA_PROMOTOR");
+    return AppDataSourceSync.getRepository(CampanhaPromotor);
   }
-
-  // private static getRotaPromotorRepo() {
-  //   return new MigrationAwareRepository<RotaPromotor>(RotaPromotor, "ID_ROTA_PROMOTOR");
-  // }
 
   /**
    * Builds the nested visit-confirmation status object for one route row of a
@@ -145,6 +140,39 @@ export default class CampanhaService {
   }
 
   /**
+   * Publica a campanha: é o que a torna visível para o promotor em
+   * GET /campanha/ativa. Até aqui ela existe (com vínculos e rotas já
+   * distribuídas), mas só o cliente enxerga, montando-a no wizard.
+   *
+   * @param id - ID da campanha
+   * @returns a campanha publicada, ou null se não existir
+   * @throws se a campanha não tiver período definido — sem START_TIME/END_TIME
+   *         ela nunca seria considerada ativa, então publicar seria um no-op
+   *         silencioso.
+   */
+  static async publicarCampanha(id: number): Promise<Campanha | null> {
+    const repo = this.getCampanhaRepo();
+
+    const campanha = await repo.findOne({ where: { ID_CAMPANHA: id } });
+    if (!campanha) {
+      return null;
+    }
+
+    if (!campanha.START_TIME || !campanha.END_TIME) {
+      throw new Error(
+        'A campanha precisa de data de início e fim para ser publicada.'
+      );
+    }
+
+    if (campanha.STATUS === 'PUBLICADA') {
+      return campanha;
+    }
+
+    campanha.STATUS = 'PUBLICADA';
+    return repo.save(campanha);
+  }
+
+  /**
    * Finds a campaign by ID
    * @param id - The campaign ID to find
    * @returns The campaign or null if not found
@@ -191,6 +219,12 @@ export default class CampanhaService {
         return false;
       }
 
+      // Campanha em rascunho ainda está sendo montada no wizard do ob-ads: os
+      // vínculos e rotas já existem, mas o promotor não pode enxergá-la.
+      if (campanha.STATUS !== 'PUBLICADA') {
+        return false;
+      }
+
       // Check if current datetime is within the campaign period
       return currentDatetime >= campanha.START_TIME && currentDatetime <= campanha.END_TIME;
     });
@@ -211,7 +245,7 @@ export default class CampanhaService {
     //   order: { ORDEM: { direction: 'ASC', nulls: 'LAST' } },
     // });
 
-    // Get the rotas for this campaign promoter with oficina data (from both DBs)
+    // Get the rotas for this campaign promoter with oficina data
     const fullRotasQuery = `
       SELECT 
         rp.*,
@@ -238,22 +272,9 @@ export default class CampanhaService {
       AND rp."DELETED_AT" IS NULL
       ORDER BY rp."ORDEM" ASC NULLS LAST, rp."ID_ROTA_PROMOTOR" ASC`;
 
-    // The legacy DB predates NOTIFICACAO_VISITA, so it keeps its join-free
-    // query: a legacy-only route simply carries no confirmation status.
-    const legacyRotasQuery = `
-      SELECT rp.*
-      FROM "CAMPANHAS_OB"."ROTA_PROMOTOR" rp
-      WHERE rp."ID_CAMPANHA_PROMOTOR" = $1
-      AND rp."DELETED_AT" IS NULL
-      ORDER BY rp."ORDEM" ASC NULLS LAST, rp."ID_ROTA_PROMOTOR" ASC`;
-
-    const rotasPromotor = await queryBothAndMerge(
-      fullRotasQuery,
-      [activeCampanha.ID_CAMPANHA_PROMOTOR],
-      "ID_ROTA_PROMOTOR",
-      legacyRotasQuery,
-      [activeCampanha.ID_CAMPANHA_PROMOTOR]
-    );
+    const rotasPromotor = await AppDataSourceSync.query(fullRotasQuery, [
+      activeCampanha.ID_CAMPANHA_PROMOTOR,
+    ]);
 
     // FILT-01 a FILT-05: a lista do app traz só rota cuja confirmação está
     // resolvida, rota sem pedido de confirmação e rota já trabalhada. Filtra
@@ -420,23 +441,22 @@ export default class CampanhaService {
    */
   static async getCampanhasByClientId(clientId: number): Promise<Campanha[]> {
     // 1. Get campanhas (from both DBs)
-    const campanhas = await queryBothAndMerge(
+    const campanhas = await AppDataSourceSync.query(
       `SELECT c.*
       FROM "CAMPANHAS_OB"."CAMPANHA" c
       WHERE c."ID_CLIENT" = $1
         AND c."DELETED_AT" IS NULL
       ORDER BY c."CREATED_AT" DESC`,
-      [clientId],
-      "ID_CAMPANHA"
+      [clientId]
     );
 
     if (!campanhas.length) return [];
 
     const campanhaIds = campanhas.map((c: any) => c.ID_CAMPANHA);
 
-    // 2. Get campanhaPromotores with promotor (from both DBs)
-    const campanhaPromotores = await queryBothAndMerge(
-      `SELECT 
+    // 2. Get campanhaPromotores with promotor
+    const campanhaPromotores = await AppDataSourceSync.query(
+      `SELECT
         cp.*,
         p."ID_PROMOTOR" as "promotor_ID_PROMOTOR",
         p."NOME" as "promotor_NOME",
@@ -451,15 +471,14 @@ export default class CampanhaService {
       LEFT JOIN "CAMPANHAS_OB"."PROMOTOR" p ON cp."ID_PROMOTOR" = p."ID_PROMOTOR"
       WHERE cp."ID_CAMPANHA" = ANY($1)
         AND cp."DELETED_AT" IS NULL`,
-      [campanhaIds],
-      "ID_CAMPANHA_PROMOTOR"
+      [campanhaIds]
     );
 
     const campanhaPromotorIds = campanhaPromotores
       .filter((cp: any) => cp.ID_CAMPANHA_PROMOTOR)
       .map((cp: any) => cp.ID_CAMPANHA_PROMOTOR);
 
-    // 3. Get rotasPromotor with oficina data from cadastro_empresa + OFICINA (from both DBs)
+    // 3. Get rotasPromotor with oficina data from cadastro_empresa + OFICINA
     let rotasPromotor: any[] = [];
     if (campanhaPromotorIds.length > 0) {
       const fullQuery = `
@@ -487,21 +506,7 @@ export default class CampanhaService {
           AND rp."DELETED_AT" IS NULL
         ORDER BY rp."ORDEM" ASC NULLS LAST`;
 
-      // Legacy query without cross-schema JOINs (MAIN_REGISTER/dw don't exist there)
-      const legacyQuery = `
-        SELECT rp.*
-        FROM "CAMPANHAS_OB"."ROTA_PROMOTOR" rp
-        WHERE rp."ID_CAMPANHA_PROMOTOR" = ANY($1)
-          AND rp."DELETED_AT" IS NULL
-        ORDER BY rp."ORDEM" ASC NULLS LAST`;
-
-      rotasPromotor = await queryBothAndMerge(
-        fullQuery,
-        [campanhaPromotorIds],
-        "ID_ROTA_PROMOTOR",
-        legacyQuery,
-        [campanhaPromotorIds]
-      );
+      rotasPromotor = await AppDataSourceSync.query(fullQuery, [campanhaPromotorIds]);
 
       // Enrich legacy rotas (those without oficina data) with oficina info from new DB
       const rotasSemOficina = rotasPromotor.filter(r => r.ID_OFICINA && !r.oficina_NOME_FANTASIA);
@@ -538,29 +543,27 @@ export default class CampanhaService {
     }
 
     // 4. Get campanhaPerguntas (from both DBs)
-    const perguntas = await queryBothAndMerge(
+    const perguntas = await AppDataSourceSync.query(
       `SELECT cp.*
       FROM "CAMPANHAS_OB"."CAMPANHA_PERGUNTAS" cp
       WHERE cp."ID_CAMPANHA" = ANY($1)
         AND cp."DELETED_AT" IS NULL`,
-      [campanhaIds],
-      "ID_PERGUNTAS"
+      [campanhaIds]
     );
 
     const perguntaIds = perguntas
       .filter((p: any) => p.ID_PERGUNTAS)
       .map((p: any) => p.ID_PERGUNTAS);
 
-    // 5. Get opcoes (from both DBs)
+    // 5. Get opcoes
     let opcoes: any[] = [];
     if (perguntaIds.length > 0) {
-      opcoes = await queryBothAndMerge(
+      opcoes = await AppDataSourceSync.query(
         `SELECT o.*
         FROM "CAMPANHAS_OB"."CAMPANHA_PERGUNTA_OPCOES" o
         WHERE o."ID_PERGUNTAS" = ANY($1)
           AND o."DELETED_AT" IS NULL`,
-        [perguntaIds],
-        "ID_OPCAO"
+        [perguntaIds]
       );
     }
 

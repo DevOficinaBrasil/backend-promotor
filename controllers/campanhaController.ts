@@ -149,6 +149,41 @@ export default class CampanhaController {
   };
 
   /**
+   * Publica a campanha, tornando-a visível para os promotores
+   * POST /campanha/:id/publicar
+   */
+  static publicarCampanha = async (req: Request, res: Response) => {
+    try {
+      const campanhaId = parseInt(req.params.id, 10);
+
+      const campanha = await CampanhaService.publicarCampanha(campanhaId);
+
+      if (!campanha) {
+        return res.status(404).json({ message: "Campanha não encontrada." });
+      }
+
+      return res.status(200).json({
+        message: "Campanha publicada com sucesso.",
+        data: campanha,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Erro desconhecido";
+
+      // Falta de período é erro do usuário (campanha incompleta), não do servidor.
+      if (message.includes("data de início e fim")) {
+        return res.status(400).json({ message });
+      }
+
+      console.error("Erro ao publicar campanha:", error);
+      return res.status(500).json({
+        message: "Erro interno ao publicar campanha.",
+        error: message,
+      });
+    }
+  };
+
+  /**
    * Gets the active campaign for a promoter
    * GET /campanha/ativa?ID_PROMOTOR=X&datetime=Y
    */

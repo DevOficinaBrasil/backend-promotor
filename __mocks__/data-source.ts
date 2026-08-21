@@ -9,11 +9,3 @@ export const AppDataSourceSync = {
     findOne: jest.fn(),
   })),
 };
-
-export const LegacyDataSource = {
-  isInitialized: false,
-  getRepository: jest.fn(),
-  query: jest.fn(),
-};
-
-export const isLegacyEnabled = jest.fn().mockReturnValue(false);

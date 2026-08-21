@@ -1,12 +1,11 @@
 import CampanhaResultsService from '../../service/campanhaResultsService';
-import { MigrationAwareRepository } from '../../utils/migrationRepository';
-import { createMockRepo } from '../helpers/mockMigrationRepo';
+import { AppDataSourceSync } from '../../data-source';
+import { createMockRepo } from '../helpers/mockRepo';
 import CampanhaResults from '../../entities/CampanhaResults';
 import RotaPromotor from '../../entities/RotaPromotor';
 import CampanhaPerguntas from '../../entities/CampanhaPerguntas';
 
 jest.mock('../../data-source');
-jest.mock('../../utils/migrationRepository');
 
 describe('CampanhaResultsService', () => {
   const resultRepo = createMockRepo();
@@ -15,7 +14,7 @@ describe('CampanhaResultsService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    (MigrationAwareRepository as jest.Mock).mockImplementation((entity: any) => {
+    (AppDataSourceSync.getRepository as jest.Mock).mockImplementation((entity: any) => {
       if (entity === CampanhaResults) return resultRepo;
       if (entity === RotaPromotor) return rotaRepo;
       if (entity === CampanhaPerguntas) return perguntaRepo;

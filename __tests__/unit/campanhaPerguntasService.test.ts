@@ -1,12 +1,11 @@
 import CampanhaPerguntasService from '../../service/campanhaPerguntasService';
-import { MigrationAwareRepository } from '../../utils/migrationRepository';
-import { createMockRepo } from '../helpers/mockMigrationRepo';
+import { AppDataSourceSync } from '../../data-source';
+import { createMockRepo } from '../helpers/mockRepo';
 import CampanhaPerguntas from '../../entities/CampanhaPerguntas';
 import CampanhaPerguntaOpcao from '../../entities/CampanhaPerguntaOpcao';
 import Campanha from '../../entities/Campanha';
 
 jest.mock('../../data-source');
-jest.mock('../../utils/migrationRepository');
 
 describe('CampanhaPerguntasService', () => {
   const perguntaRepo = createMockRepo();
@@ -15,7 +14,7 @@ describe('CampanhaPerguntasService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    (MigrationAwareRepository as jest.Mock).mockImplementation((entity: any) => {
+    (AppDataSourceSync.getRepository as jest.Mock).mockImplementation((entity: any) => {
       if (entity === CampanhaPerguntas) return perguntaRepo;
       if (entity === CampanhaPerguntaOpcao) return opcaoRepo;
       if (entity === Campanha) return campanhaRepo;
@@ -40,7 +39,7 @@ describe('CampanhaPerguntasService', () => {
     it('should create pergunta with opcoes', async () => {
       campanhaRepo.findOne.mockResolvedValue({ ID_CAMPANHA: 1 });
       perguntaRepo.save.mockResolvedValue({ ID_PERGUNTAS: 1, PERGUNTA: 'Pick one', ID_CAMPANHA: 1 });
-      opcaoRepo.saveMany.mockResolvedValue([
+      opcaoRepo.save.mockResolvedValue([
         { ID_OPCAO: 1, LABEL: 'A', ORDEM: 1 },
         { ID_OPCAO: 2, LABEL: 'B', ORDEM: 2 },
       ]);
@@ -88,7 +87,7 @@ describe('CampanhaPerguntasService', () => {
     it('should replace opcoes', async () => {
       perguntaRepo.findOne.mockResolvedValue({ ID_PERGUNTAS: 1 });
       perguntaRepo.save.mockResolvedValue({ ID_PERGUNTAS: 1 });
-      opcaoRepo.saveMany.mockResolvedValue([{ LABEL: 'New', ORDEM: 1 }]);
+      opcaoRepo.save.mockResolvedValue([{ LABEL: 'New', ORDEM: 1 }]);
 
       const result = await CampanhaPerguntasService.updateCampanhaPergunta(
         1, {}, [{ LABEL: 'New', ORDEM: 1 }]

@@ -49,7 +49,7 @@ export enum StatusRota {
 ```typescript
 export default class PromotorService {
   private static getPromotorRepo() {
-    return new MigrationAwareRepository<Promotor>(Promotor, "ID_PROMOTOR");
+    return AppDataSourceSync.getRepository(Promotor);
   }
   static async createPromotor(...) { }
   static async updatePromotor(...) { }
@@ -94,7 +94,7 @@ error instanceof Error ? error.message : "Erro desconhecido"
 
 Note this leaks internal exception messages to the client. Two handlers deviate and return 400 with the raw message for business-rule failures: `optimizeRoute` and `reorderRotas` (`controllers/rotaController.ts:230,256`).
 
-**Services** — generally let errors propagate. `findNearestOficinas` logs with full parameter context and re-throws. `MigrationAwareRepository` is the exception: legacy-database failures are swallowed to a `console.warn` prefixed with `⚠️` and degrade to new-DB-only results, by design.
+**Services** — generally let errors propagate. `findNearestOficinas` logs with full parameter context and re-throws.
 
 **Validation** — centralized in `middlewares/validation.ts`. `ZodError` → 400 with a `details[]` array of `{ field, message, code }`; anything else → generic 500.
 

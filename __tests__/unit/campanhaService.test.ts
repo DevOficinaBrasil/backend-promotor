@@ -1,37 +1,27 @@
 import CampanhaService from '../../service/campanhaService';
-import { MigrationAwareRepository, queryBothAndMerge } from '../../utils/migrationRepository';
 import { AppDataSourceSync } from '../../data-source';
-import { createMockRepo } from '../helpers/mockMigrationRepo';
+import { createMockRepo } from '../helpers/mockRepo';
 import Campanha from '../../entities/Campanha';
 import CampanhaPromotor from '../../entities/CampanhaPromotor';
 import RotaPromotor from '../../entities/RotaPromotor';
 import { StatusNotificacaoVisita } from '../../entities/NotificacaoVisita';
 
 jest.mock('../../data-source');
-jest.mock('../../utils/migrationRepository');
 jest.mock('../../utils/duckdbClient');
 
 describe('CampanhaService', () => {
   const campanhaRepo = createMockRepo();
   const cpRepo = createMockRepo();
   const rotaRepo = createMockRepo();
-  const mockDirectRepo = {
-    create: jest.fn((data: any) => data),
-    save: jest.fn((data: any) => Promise.resolve(data)),
-    find: jest.fn(),
-    findOne: jest.fn(),
-    softDelete: jest.fn(),
-  };
 
   beforeEach(() => {
     jest.clearAllMocks();
-    (MigrationAwareRepository as jest.Mock).mockImplementation((entity: any) => {
+    (AppDataSourceSync.getRepository as jest.Mock).mockImplementation((entity: any) => {
       if (entity === Campanha) return campanhaRepo;
       if (entity === CampanhaPromotor) return cpRepo;
       if (entity === RotaPromotor) return rotaRepo;
       return createMockRepo();
     });
-    (AppDataSourceSync.getRepository as jest.Mock).mockReturnValue(mockDirectRepo);
   });
 
   describe('createCampanha', () => {
@@ -46,14 +36,14 @@ describe('CampanhaService', () => {
 
     it('should create campaign with promotores and oficinas', async () => {
       campanhaRepo.save.mockResolvedValue({ ID_CAMPANHA: 1, NOME: 'Test' });
-      mockDirectRepo.save.mockResolvedValue({ ID_CAMPANHA_PROMOTOR: 10 });
+      cpRepo.save.mockResolvedValue({ ID_CAMPANHA_PROMOTOR: 10 });
 
       await CampanhaService.createCampanha(
         { NOME: 'Test' },
         [{ ID_PROMOTOR: 5, ID_OFICINAS: [100, 200] }]
       );
 
-      expect(mockDirectRepo.save).toHaveBeenCalled();
+      expect(cpRepo.save).toHaveBeenCalled();
     });
   });
 
@@ -79,9 +69,9 @@ describe('CampanhaService', () => {
       campanhaRepo.findOne.mockResolvedValue({ ID_CAMPANHA: 1, NOME: 'Test' });
       campanhaRepo.save.mockResolvedValue({ ID_CAMPANHA: 1, NOME: 'Test' });
       // removePromotoresFromCampanha
-      mockDirectRepo.find.mockResolvedValue([]);
+      cpRepo.find.mockResolvedValue([]);
       // linkPromotoresToCampanha
-      mockDirectRepo.save.mockResolvedValue({ ID_CAMPANHA_PROMOTOR: 10 });
+      cpRepo.save.mockResolvedValue({ ID_CAMPANHA_PROMOTOR: 10 });
 
       await CampanhaService.updateCampanha(
         1, { NOME: 'Test' }, [{ ID_PROMOTOR: 5, ID_OFICINAS: [100] }]
@@ -168,7 +158,7 @@ describe('CampanhaService', () => {
           END_TIME: new Date('2026-12-31'),
         },
       }]);
-      (queryBothAndMerge as jest.Mock).mockResolvedValue([
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([
         { ID_ROTA_PROMOTOR: 1, ID_OFICINA: 100, ID_CAMPANHA_PROMOTOR: 1, STATUS: 'BACKLOG', NOME_FANTASIA: 'Ofc A' },
       ]);
 
@@ -182,7 +172,7 @@ describe('CampanhaService', () => {
 
   describe('getCampanhasByClientId', () => {
     it('should return empty when no campaigns', async () => {
-      (queryBothAndMerge as jest.Mock).mockResolvedValue([]);
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([]);
 
       const result = await CampanhaService.getCampanhasByClientId(100);
 
@@ -190,7 +180,7 @@ describe('CampanhaService', () => {
     });
 
     it('should return assembled nested structure', async () => {
-      (queryBothAndMerge as jest.Mock)
+      (AppDataSourceSync.query as jest.Mock)
         .mockResolvedValueOnce([{ ID_CAMPANHA: 1, NOME: 'Test', ID_CLIENT: 100 }]) // campanhas
         .mockResolvedValueOnce([]) // campanhaPromotores
         .mockResolvedValueOnce([]); // perguntas
