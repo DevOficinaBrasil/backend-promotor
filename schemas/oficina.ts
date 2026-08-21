@@ -47,3 +47,29 @@ export const GetOficinasByLocationResponseSchema = z.object({
   data: z.array(OficinaSchema),
   count: z.number(),
 });
+
+export const GetCommunityNearbyQuerySchema = z.object({
+  latitude: z.coerce.number().min(-90).max(90),
+  longitude: z.coerce.number().min(-180).max(180),
+  radiusKm: z.coerce.number().positive().max(200).default(20),
+  empresaSlug: z.string().min(1),
+});
+
+export const GetCommunityNearbyResponseSchema = z.object({
+  message: z.string(),
+  data: z.array(OficinaSchema),
+  count: z.number(),
+});
+
+/**
+ * Query schema for listing ALL community oficinas (no radius filter)
+ */
+export const GetCommunityAllQuerySchema = z.object({
+  empresaSlug: z.string().min(1),
+});
+
+export const GetCommunityAllResponseSchema = z.object({
+  message: z.string(),
+  data: z.array(OficinaSchema),
+  count: z.number(),
+});

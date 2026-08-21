@@ -21,7 +21,7 @@
       "source": "local",
       "contentHash": "7a2ca1d3f443357b96f22ffce9fb6d5e19134bb5d723ea55ca939873b3777c12",
       "installedAt": "2026-04-07T13:32:12.726Z",
-      "updatedAt": "2026-04-07T13:32:17.603Z",
+      "updatedAt": "2026-08-04T13:16:47.791Z",
       "agents": [
         "claude-code",
         "github-copilot",
@@ -36,7 +36,7 @@
       "source": "local",
       "contentHash": "642a42cf94b8061aad642d84363bb4f60712af858c093bed6f2ec6135a3e7937",
       "installedAt": "2026-04-07T13:32:12.761Z",
-      "updatedAt": "2026-04-07T13:32:17.612Z",
+      "updatedAt": "2026-08-04T13:16:47.793Z",
       "agents": [
         "claude-code",
         "github-copilot",
@@ -51,7 +51,7 @@
       "source": "local",
       "contentHash": "3f36a4b65cb1fc97722341b9fb1849fcecf320be8a1d8892028fa45663719786",
       "installedAt": "2026-04-07T13:32:12.773Z",
-      "updatedAt": "2026-04-07T13:32:17.619Z",
+      "updatedAt": "2026-08-04T13:16:47.795Z",
       "agents": [
         "claude-code",
         "github-copilot",
@@ -66,7 +66,7 @@
       "source": "local",
       "contentHash": "8ff9c7d6181c37c92fb225a8559d50ee5413c20e6a7ae240e05bb6a532d64f9b",
       "installedAt": "2026-04-07T13:32:12.779Z",
-      "updatedAt": "2026-04-07T13:32:17.648Z",
+      "updatedAt": "2026-08-04T13:16:47.796Z",
       "agents": [
         "claude-code",
         "github-copilot",
@@ -81,7 +81,7 @@
       "source": "local",
       "contentHash": "92f981122d6add656bd10cae4404fa94a79db93f3cad2cd978ef12a4eea51b83",
       "installedAt": "2026-04-07T13:32:12.809Z",
-      "updatedAt": "2026-04-07T13:32:17.657Z",
+      "updatedAt": "2026-08-04T13:16:47.798Z",
       "agents": [
         "claude-code",
         "github-copilot",
@@ -141,7 +141,7 @@
       "source": "local",
       "contentHash": "f51f33e059b64bfb145de75c5b85da8d4fdd91dd2f846557183a98f51b0f87ea",
       "installedAt": "2026-04-07T13:32:13.242Z",
-      "updatedAt": "2026-04-07T13:32:18.164Z",
+      "updatedAt": "2026-08-04T13:16:47.934Z",
       "agents": [
         "claude-code",
         "github-copilot",
@@ -246,7 +246,7 @@
       "source": "local",
       "contentHash": "925f769a4c601ea7fac8cab4d3ee00f799921eb0600427d18f458eb35db2e2ed",
       "installedAt": "2026-04-07T13:32:13.336Z",
-      "updatedAt": "2026-04-07T13:32:18.246Z",
+      "updatedAt": "2026-08-04T13:16:47.937Z",
       "agents": [
         "claude-code",
         "github-copilot",
@@ -411,7 +411,7 @@
       "source": "local",
       "contentHash": "e5420a123058969e8e5014d74120daf7a1c598e1fb44e6d152c6b60a71a81e95",
       "installedAt": "2026-04-07T13:32:13.547Z",
-      "updatedAt": "2026-04-07T13:32:18.418Z",
+      "updatedAt": "2026-08-04T13:16:47.938Z",
       "agents": [
         "claude-code",
         "github-copilot",
@@ -516,7 +516,7 @@
       "source": "local",
       "contentHash": "b2cfbea2da9f2a52527f6c41f128df2dba76c33df90692357a5533c06b78223f",
       "installedAt": "2026-04-07T13:32:13.652Z",
-      "updatedAt": "2026-04-07T13:32:18.530Z",
+      "updatedAt": "2026-08-04T13:16:47.941Z",
       "agents": [
         "claude-code",
         "github-copilot",
@@ -531,7 +531,7 @@
       "source": "local",
       "contentHash": "9f2afa96826b0456cf79f05b43ab4470fd6802990e301bb898c2cbaa6f01cf5c",
       "installedAt": "2026-04-07T13:32:13.660Z",
-      "updatedAt": "2026-04-07T13:32:18.538Z",
+      "updatedAt": "2026-08-04T13:16:47.942Z",
       "agents": [
         "claude-code",
         "github-copilot",
@@ -561,7 +561,7 @@
       "source": "local",
       "contentHash": "c062dadf96d7a1500457c222b95baff7f5aade66486044be360a13268b251940",
       "installedAt": "2026-04-07T13:32:13.699Z",
-      "updatedAt": "2026-04-07T13:32:18.557Z",
+      "updatedAt": "2026-08-04T13:16:47.944Z",
       "agents": [
         "claude-code",
         "github-copilot",
@@ -621,7 +621,7 @@
       "source": "local",
       "contentHash": "22552e0a3fde93c57715295f52b31d0695ad78d10512e5793ea93c7b138c79ee",
       "installedAt": "2026-04-07T13:32:13.781Z",
-      "updatedAt": "2026-04-07T13:32:18.618Z",
+      "updatedAt": "2026-08-04T13:16:47.945Z",
       "agents": [
         "claude-code",
         "github-copilot",
@@ -634,9 +634,9 @@
     "nestjs-modular-monolith": {
       "name": "nestjs-modular-monolith",
       "source": "local",
-      "contentHash": "0bf9fee4b6a151866c38204557b13452feefb315b7d982a36c79125bcc3d076a",
+      "contentHash": "a4e6b084d0cb6ed7a06abc6786cea67292440c5b7e63ed33baed9ecb7525bbeb",
       "installedAt": "2026-04-07T13:32:13.793Z",
-      "updatedAt": "2026-04-07T13:32:18.632Z",
+      "updatedAt": "2026-08-04T13:16:47.949Z",
       "agents": [
         "claude-code",
         "github-copilot",
@@ -651,7 +651,7 @@
       "source": "local",
       "contentHash": "a85452537b4a35077d259ed06661d16fb026d252e4b952b2fe82f2a006f39a15",
       "installedAt": "2026-04-07T13:32:13.803Z",
-      "updatedAt": "2026-04-07T13:32:18.642Z",
+      "updatedAt": "2026-08-04T13:16:47.951Z",
       "agents": [
         "claude-code",
         "github-copilot",
@@ -726,7 +726,7 @@
       "source": "local",
       "contentHash": "89328ab72ff4336917031a217f43bd19b133a7d17202bf70d8d8d7f59d69ce29",
       "installedAt": "2026-04-07T13:32:13.877Z",
-      "updatedAt": "2026-04-07T13:32:18.723Z",
+      "updatedAt": "2026-08-04T13:16:47.953Z",
       "agents": [
         "claude-code",
         "github-copilot",
@@ -741,7 +741,7 @@
       "source": "local",
       "contentHash": "3ff5e89d89da30e46eef1d6fa4379aa1b41c30be16e2ca761a5581267c41561e",
       "installedAt": "2026-04-07T13:32:13.886Z",
-      "updatedAt": "2026-04-07T13:32:18.733Z",
+      "updatedAt": "2026-08-04T13:16:47.955Z",
       "agents": [
         "claude-code",
         "github-copilot",
@@ -816,7 +816,7 @@
       "source": "local",
       "contentHash": "3b940bcd8ad2035177bffb04e34d52fe038f669a2d466e8d67e73135044373a5",
       "installedAt": "2026-04-07T13:32:13.965Z",
-      "updatedAt": "2026-04-07T13:32:18.807Z",
+      "updatedAt": "2026-08-04T13:16:47.956Z",
       "agents": [
         "claude-code",
         "github-copilot",
@@ -876,7 +876,7 @@
       "source": "local",
       "contentHash": "b2d22a5612b4b1871c4d33765f8ee875ffc7eb3604cc9f2faabb1ff3c0c527ea",
       "installedAt": "2026-04-07T13:32:14.150Z",
-      "updatedAt": "2026-04-07T13:32:18.948Z",
+      "updatedAt": "2026-08-04T13:16:47.960Z",
       "agents": [
         "claude-code",
         "github-copilot",
@@ -891,7 +891,7 @@
       "source": "local",
       "contentHash": "8f9829a2107c994a3a4d2fcaec73def4bcc1a7fac20c64b452093a4e7018e93f",
       "installedAt": "2026-04-07T13:32:14.178Z",
-      "updatedAt": "2026-04-07T13:32:18.956Z",
+      "updatedAt": "2026-08-04T13:16:47.961Z",
       "agents": [
         "claude-code",
         "github-copilot",
@@ -1011,7 +1011,7 @@
       "source": "local",
       "contentHash": "7cc6fba77aff372c64d8e2b97b2b645ef641ef78a266b602e5e6fdd74231460e",
       "installedAt": "2026-04-07T13:32:14.424Z",
-      "updatedAt": "2026-04-07T13:32:19.098Z",
+      "updatedAt": "2026-08-04T13:16:47.962Z",
       "agents": [
         "claude-code",
         "github-copilot",
@@ -1026,7 +1026,7 @@
       "source": "local",
       "contentHash": "95d71f10ea8a48767cb871ad72c09745cb6ecd822ed71be659cbd960b6503445",
       "installedAt": "2026-04-07T13:32:14.431Z",
-      "updatedAt": "2026-04-07T13:32:19.107Z",
+      "updatedAt": "2026-08-04T13:16:47.964Z",
       "agents": [
         "claude-code",
         "github-copilot",
@@ -1069,9 +1069,9 @@
     "the-fool": {
       "name": "the-fool",
       "source": "local",
-      "contentHash": "b761f983e21e00173ac42760f478095a3e8c733862c20d9f711d10d962f407cc",
+      "contentHash": "4468f89ea05bfdea7a9346bebae5358bcf80ff4a51e6f59195b7312186fe0718",
       "installedAt": "2026-04-07T13:32:14.469Z",
-      "updatedAt": "2026-04-07T13:32:19.136Z",
+      "updatedAt": "2026-08-04T13:16:47.973Z",
       "agents": [
         "claude-code",
         "github-copilot",
@@ -1084,9 +1084,9 @@
     "tlc-spec-driven": {
       "name": "tlc-spec-driven",
       "source": "local",
-      "contentHash": "79d0e1b750dfc70820ac0152d9ca78927c398f669397e9cdb8bb812ceca2fbc6",
+      "contentHash": "9f4c793556001f3210a2d9fe3b41bf24e82e581c522d8dd50f65addfee169a29",
       "installedAt": "2026-04-07T13:32:14.515Z",
-      "updatedAt": "2026-04-07T13:32:19.177Z",
+      "updatedAt": "2026-08-04T13:16:47.979Z",
       "agents": [
         "claude-code",
         "github-copilot",
@@ -1101,7 +1101,7 @@
       "source": "local",
       "contentHash": "53985dad8a6cf5571b8eb796668502f2e82f0574ab15d31609486de8317f0ec5",
       "installedAt": "2026-04-07T13:32:14.523Z",
-      "updatedAt": "2026-04-07T13:32:19.185Z",
+      "updatedAt": "2026-08-04T13:16:47.981Z",
       "agents": [
         "claude-code",
         "github-copilot",
@@ -1116,7 +1116,7 @@
       "source": "local",
       "contentHash": "b918e2c62adf317b82ac43e4731e300ff4f163383aebe7ae8532f7ea69c24c29",
       "installedAt": "2026-04-07T13:32:14.530Z",
-      "updatedAt": "2026-04-07T13:32:19.193Z",
+      "updatedAt": "2026-08-04T13:16:47.982Z",
       "agents": [
         "claude-code",
         "github-copilot",

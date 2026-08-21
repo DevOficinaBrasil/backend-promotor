@@ -52,6 +52,14 @@ export default class Empresa {
   @Column({ type: "varchar", length: 150, nullable: true, name: "complemento" })
   COMPLEMENTO?: string;
 
+  // A identidade real da linha. `id_oficina` NÃO é chave aqui: os índices únicos
+  // da tabela são sobre `cnpj_int` e sobre `(cnpj_int, id_oficina)`, e em PRD há
+  // 59 valores de `id_oficina` repetidos cobrindo 128 linhas — até 5 CNPJs
+  // distintos sob o mesmo id. Escrita que filtre só por `id_oficina` atinge
+  // cadastro de outra empresa. bigint chega como string no TypeORM.
+  @Column({ type: "bigint", nullable: true, name: "cnpj_int" })
+  CNPJ_INT?: string;
+
 
   @Column({ type: "varchar", length: 20, nullable: true, name: "longitude" })
   LONGITUDE?: string;

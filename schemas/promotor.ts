@@ -12,6 +12,9 @@ export const PromotorSchema = z.object({
   SENHA: z.string().optional(),
   ID_CLIENT: z.number().optional(),
   CREATED_BY: z.number().optional(),
+  CEP: z.string().optional(),
+  LONGITUDE: z.string().optional(),
+  LATITUDE: z.string().optional(),
   CREATED_AT: z.date().optional(),
   UPDATED_AT: z.date().optional(),
 });
@@ -26,7 +29,11 @@ export const CreatePromotorSchema = z.object({
   SENHA: z.string().min(6, 'SENHA deve ter pelo menos 6 caracteres').optional(),
   ID_CLIENT: z.number().optional(),
   CREATED_BY: z.number().optional(),
+  CEP: z.string().max(30, 'CEP deve ter no máximo 30 caracteres').optional(),
   ID_CAMPANHA: z.union([z.number(), z.array(z.number())]).optional(),
+  RAIO: z.number().int().positive().optional(),
+  EMPRESA_SLUG: z.string().min(1).optional(),
+  FILTRO_SEGMENTACAO: z.record(z.unknown()).nullable().optional(),
 });
 
 /**
@@ -39,6 +46,10 @@ export const UpdatePromotorSchema = z.object({
   SENHA: z.string().min(6, 'SENHA deve ter pelo menos 6 caracteres').optional(),
   ID_CLIENT: z.number().optional(),
   CREATED_BY: z.number().optional(),
+  CEP: z.string().max(30, 'CEP deve ter no máximo 30 caracteres').optional(),
+  RAIO: z.number().int().positive().optional(),
+  EMPRESA_SLUG: z.string().min(1).optional(),
+  FILTRO_SEGMENTACAO: z.record(z.unknown()).nullable().optional(),
 });
 
 /**
@@ -116,6 +127,9 @@ export const GetPromotorByIdResponseSchema = z.object({
 export const LinkCampanhaPromotorSchema = z.object({
   ID_CAMPANHA: z.union([z.number(), z.array(z.number())]),
   ID_PROMOTOR: z.number(),
+  RAIO: z.number().int().positive().optional(),
+  EMPRESA_SLUG: z.string().min(1).optional(),
+  FILTRO_SEGMENTACAO: z.record(z.unknown()).nullable().optional(),
 });
 
 /**
@@ -129,7 +143,37 @@ export const LinkCampanhaPromotorResponseSchema = z.object({
       ID_CAMPANHA_PROMOTOR: z.number().optional(),
       ID_CAMPANHA: z.number().optional(),
       ID_PROMOTOR: z.number().optional(),
+      RAIO: z.number().optional(),
     })),
+  }),
+});
+
+/**
+ * Update campanha-promotor RAIO (with route recalculation) request schema
+ */
+export const UpdateCampanhaPromotorRaioSchema = z.object({
+  RAIO: z.number().int().positive().max(200),
+  EMPRESA_SLUG: z.string().min(1).optional(),
+});
+
+/**
+ * Campanha-promotor ID params schema
+ */
+export const CampanhaPromotorIdParamsSchema = z.object({
+  id: z.coerce.number().int().positive(),
+});
+
+/**
+ * Update campanha-promotor RAIO response schema
+ */
+export const UpdateCampanhaPromotorRaioResponseSchema = z.object({
+  message: z.string(),
+  data: z.object({
+    ID_CAMPANHA_PROMOTOR: z.number(),
+    RAIO: z.number(),
+    adicionadas: z.number(),
+    removidas: z.number(),
+    total: z.number(),
   }),
 });
 
@@ -137,8 +181,7 @@ export const LinkCampanhaPromotorResponseSchema = z.object({
  * Unlink campanha-promotor request schema
  */
 export const UnlinkCampanhaPromotorSchema = z.object({
-  ID_CAMPANHA: z.union([z.number(), z.array(z.number())]),
-  ID_PROMOTOR: z.number(),
+  id_campanha_promotor: z.coerce.number().int().positive(),
 });
 
 /**

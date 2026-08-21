@@ -12,6 +12,7 @@ export default class CampanhaController {
         NOME,
         OBJETIVO,
         ID_CLIENT,
+        EMPRESA_SLUG,
         START_TIME,
         END_TIME,
         CREATED_BY,
@@ -30,6 +31,7 @@ export default class CampanhaController {
         NOME,
         OBJETIVO,
         ID_CLIENT,
+        EMPRESA_SLUG,
         START_TIME: START_TIME ? new Date(START_TIME) : undefined,
         END_TIME: END_TIME ? new Date(END_TIME) : undefined,
         CREATED_BY
@@ -70,6 +72,7 @@ export default class CampanhaController {
         NOME,
         OBJETIVO,
         ID_CLIENT,
+        EMPRESA_SLUG,
         START_TIME,
         END_TIME,
         CREATED_BY,
@@ -90,6 +93,7 @@ export default class CampanhaController {
       if (NOME !== undefined) updateData.NOME = NOME;
       if (OBJETIVO !== undefined) updateData.OBJETIVO = OBJETIVO;
       if (ID_CLIENT !== undefined) updateData.ID_CLIENT = ID_CLIENT;
+      if (EMPRESA_SLUG !== undefined) updateData.EMPRESA_SLUG = EMPRESA_SLUG;
       if (START_TIME !== undefined) updateData.START_TIME = new Date(START_TIME);
       if (END_TIME !== undefined) updateData.END_TIME = new Date(END_TIME);
       if (CREATED_BY !== undefined) updateData.CREATED_BY = CREATED_BY;
@@ -140,6 +144,41 @@ export default class CampanhaController {
       return res.status(500).json({
         message: "Erro interno ao deletar campanha.",
         error: error instanceof Error ? error.message : "Erro desconhecido"
+      });
+    }
+  };
+
+  /**
+   * Publica a campanha, tornando-a visível para os promotores
+   * POST /campanha/:id/publicar
+   */
+  static publicarCampanha = async (req: Request, res: Response) => {
+    try {
+      const campanhaId = parseInt(req.params.id, 10);
+
+      const campanha = await CampanhaService.publicarCampanha(campanhaId);
+
+      if (!campanha) {
+        return res.status(404).json({ message: "Campanha não encontrada." });
+      }
+
+      return res.status(200).json({
+        message: "Campanha publicada com sucesso.",
+        data: campanha,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Erro desconhecido";
+
+      // Falta de período é erro do usuário (campanha incompleta), não do servidor.
+      if (message.includes("data de início e fim")) {
+        return res.status(400).json({ message });
+      }
+
+      console.error("Erro ao publicar campanha:", error);
+      return res.status(500).json({
+        message: "Erro interno ao publicar campanha.",
+        error: message,
       });
     }
   };

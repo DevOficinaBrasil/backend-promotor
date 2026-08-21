@@ -258,4 +258,74 @@ export default class RotaController {
       });
     }
   };
+
+  /**
+   * Reatribui rotas após mudança de endereço de oficina
+   * POST /rota/reassign-by-address
+   */
+  static reassignByAddress = async (req: Request, res: Response) => {
+    try {
+      const { CEP, ID_OFICINA } = req.body;
+
+      const result = await RotaService.reassignRotasByAddress(CEP, ID_OFICINA);
+
+      return res.status(200).json({
+        message: "Reatribuição de rotas concluída.",
+        data: result,
+      });
+    } catch (error: any) {
+      if (error.message === "NOT_FOUND") {
+        return res.status(404).json({
+          message: "Nenhuma rota ativa encontrada para a oficina informada.",
+        });
+      }
+      if (error.message?.includes("geocodificar")) {
+        return res.status(400).json({
+          message: error.message,
+        });
+      }
+      console.error("Erro na reatribuição de rotas:", error);
+      return res.status(500).json({
+        message: "Erro interno ao processar reatribuição de rotas.",
+      });
+    }
+  };
+
+  /**
+   * Atribui oficina ao promotor mais próximo na inscrição em comunidade
+   * POST /rota/assign-oficina-community
+   */
+  static assignOficinaCommunity = async (req: Request, res: Response) => {
+    try {
+      const { ID_OFICINA, empresaSlug } = req.body;
+
+      const result = await RotaService.assignOficinaFromCommunitySignup(
+        ID_OFICINA,
+        empresaSlug
+      );
+
+      return res.status(200).json({
+        success: true,
+        ...result,
+      });
+    } catch (error: any) {
+      if (error.message === "NOT_FOUND") {
+        return res.status(404).json({
+          success: false,
+          error: "Oficina não encontrada.",
+        });
+      }
+      if (error.message === "UNPROCESSABLE") {
+        return res.status(422).json({
+          success: false,
+          error: "Não foi possível geocodificar o CEP da oficina.",
+        });
+      }
+      console.error("Erro ao atribuir oficina por comunidade:", error);
+      return res.status(500).json({
+        success: false,
+        error: "Erro interno ao processar atribuição.",
+      });
+    }
+  };
 }

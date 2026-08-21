@@ -2,19 +2,18 @@ import { AppDataSourceSync } from "../data-source";
 import CampanhaResults from "../entities/CampanhaResults";
 import RotaPromotor from "../entities/RotaPromotor";
 import CampanhaPerguntas from "../entities/CampanhaPerguntas";
-import { MigrationAwareRepository } from "../utils/migrationRepository";
 
 export default class CampanhaResultsService {
   private static getResultRepo() {
-    return new MigrationAwareRepository<CampanhaResults>(CampanhaResults, "ID_CAMPANHA_RESULTS");
+    return AppDataSourceSync.getRepository(CampanhaResults);
   }
 
   private static getRotaRepo() {
-    return new MigrationAwareRepository<RotaPromotor>(RotaPromotor, "ID_ROTA_PROMOTOR");
+    return AppDataSourceSync.getRepository(RotaPromotor);
   }
 
   private static getPerguntaRepo() {
-    return new MigrationAwareRepository<CampanhaPerguntas>(CampanhaPerguntas, "ID_PERGUNTAS");
+    return AppDataSourceSync.getRepository(CampanhaPerguntas);
   }
 
   /**
@@ -155,7 +154,6 @@ export default class CampanhaResultsService {
   static async getResultsByCampanhaId(campanhaId: number): Promise<CampanhaResults[]> {
     const resultRepo = this.getResultRepo();
     
-    // Use QueryBuilder on new DB, then merge with legacy simple query
     const results = await resultRepo.createQueryBuilder('result')
       .leftJoinAndSelect('result.rota', 'rota')
       .leftJoinAndSelect('result.pergunta', 'pergunta')
@@ -165,29 +163,6 @@ export default class CampanhaResultsService {
       .where('campanhaPromotor.ID_CAMPANHA = :campanhaId', { campanhaId })
       .orderBy('result.CREATED_AT', 'DESC')
       .getMany();
-
-    // Also check legacy for results
-    const legacyRepo = resultRepo.getLegacyRepoInstance();
-    if (legacyRepo) {
-      try {
-        const legacyResults = await legacyRepo.createQueryBuilder('result')
-          .leftJoinAndSelect('result.rota', 'rota')
-          .leftJoinAndSelect('result.pergunta', 'pergunta')
-          .leftJoinAndSelect('pergunta.opcoes', 'opcoes')
-          .leftJoinAndSelect('rota.campanhaPromotor', 'campanhaPromotor')
-          .leftJoinAndSelect('campanhaPromotor.promotor', 'promotor')
-          .where('campanhaPromotor.ID_CAMPANHA = :campanhaId', { campanhaId })
-          .orderBy('result.CREATED_AT', 'DESC')
-          .getMany();
-
-        // Merge: new DB results take priority
-        const existingIds = new Set(results.map(r => r.ID_CAMPANHA_RESULTS));
-        const uniqueLegacy = legacyResults.filter(r => !existingIds.has(r.ID_CAMPANHA_RESULTS));
-        return [...results, ...uniqueLegacy];
-      } catch (err) {
-        console.warn("⚠️ Legacy getResultsByCampanhaId failed:", (err as Error).message);
-      }
-    }
 
     return results;
   }

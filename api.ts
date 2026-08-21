@@ -5,6 +5,8 @@ import campanhaResultsRoutes from "./routes/CampanhaResultsRoute";
 import promotorRoutes from "./routes/PromotorRoute";
 import rotaRoutes from "./routes/RotaRoute";
 import oficinaRoutes from "./routes/OficinaRoute";
+import visitaRoutes from "./routes/VisitaRoute";
+import segmentacaoRoutes from "./routes/SegmentacaoRoute";
 
 const routes = (app: express.Application) => {
   app.use("/campanha", campanhaRoutes);
@@ -13,6 +15,8 @@ const routes = (app: express.Application) => {
   app.use("/promotor", promotorRoutes);
   app.use("/rota", rotaRoutes);
   app.use("/oficina", oficinaRoutes);
+  app.use("/visita", visitaRoutes);
+  app.use("/segmentacao", segmentacaoRoutes);
 };
 
 export default routes;

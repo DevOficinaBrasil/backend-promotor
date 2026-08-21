@@ -1,7 +1,8 @@
 import express from "express";
 import * as dotenv from "dotenv";
 import routes from "./api";
-import { AppDataSourceSync, LegacyDataSource, isLegacyEnabled } from "./data-source";
+import { AppDataSourceSync } from "./data-source";
+import { registrarOutboxCron } from "./schedule/outboxNotificacaoCron";
 import cors from "cors";
 import { openAPIGenerator } from "./config/openapi";
 
@@ -43,19 +44,13 @@ routes(app);
 
 AppDataSourceSync.initialize()
   .then(async () => {
-    console.log("Data Source (PRD) has been initialized!");
+    console.log("Data Source has been initialized!");
 
-    // Inicializar LegacyDataSource se habilitado
-    if (isLegacyEnabled()) {
-      try {
-        await LegacyDataSource.initialize();
-        console.log("Legacy Data Source (DEV) has been initialized! (READ-ONLY)");
-      } catch (err) {
-        console.warn("⚠️ Legacy Data Source failed to initialize (app continues without merge):", (err as Error).message);
-      }
-    } else {
-      console.log("Legacy Data Source is disabled (LEGACY_DB_ENABLED != true)");
-    }
+    // Depois do data source: o worker consulta o banco no primeiro tique, e
+    // registrar antes só adiantaria um erro de conexão. Não faz nada a menos
+    // que OUTBOX_VISITA_ENABLED seja "1" — toda cópia deste servidor que subir
+    // com a flag vira mais um worker, o que é seguro porque o claim é atômico.
+    registrarOutboxCron();
 
     console.log(`Local: http://localhost:${process.env.PORT || 8185}`);
   })

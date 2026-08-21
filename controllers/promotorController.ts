@@ -2,6 +2,7 @@
 
 import { Request, Response } from "express";
 import PromotorService from "../service/promotorService";
+import CampanhaPromotorService from "../service/campanhaPromotorService";
 import Promotor from "../entities/Promotor";
 import jwt from "jsonwebtoken";
 
@@ -21,7 +22,11 @@ export default class PromotorController {
         SENHA,
         ID_CLIENT,
         CREATED_BY,
-        ID_CAMPANHA
+        CEP,
+        ID_CAMPANHA,
+        RAIO,
+        EMPRESA_SLUG,
+        FILTRO_SEGMENTACAO
       } = req.body;
 
       // Create promoter data object
@@ -31,15 +36,19 @@ export default class PromotorController {
         CPF,
         SENHA,
         ID_CLIENT,
-        CREATED_BY
+        CREATED_BY,
+        CEP,
       };
 
       // Call the service to create the promoter with optional campaign associations
-      const novoPromotor = await PromotorService.createPromotor(promotorData, ID_CAMPANHA);
+      const { promotor, autoAssignResult } = await PromotorService.createPromotor(promotorData, ID_CAMPANHA, RAIO, EMPRESA_SLUG, FILTRO_SEGMENTACAO);
 
       return res.status(201).json({
-        message: "Promotor criado com sucesso.",
-        data: novoPromotor
+        message: autoAssignResult?.error
+          ? "Promotor criado, porém houve erro na auto-atribuição de rotas."
+          : "Promotor criado com sucesso.",
+        data: promotor,
+        ...(autoAssignResult && { rotasCriadas: autoAssignResult.rotasCriadas }),
       });
     } catch (error) {
       console.error("Erro ao criar promotor:", error);
@@ -65,7 +74,11 @@ export default class PromotorController {
         CPF,
         SENHA,
         ID_CLIENT,
-        CREATED_BY
+        CREATED_BY,
+        CEP,
+        RAIO,
+        EMPRESA_SLUG,
+        FILTRO_SEGMENTACAO
       } = req.body;
 
       // Check if promoter exists
@@ -85,13 +98,23 @@ export default class PromotorController {
       if (SENHA !== undefined) updateData.SENHA = SENHA;
       if (ID_CLIENT !== undefined) updateData.ID_CLIENT = ID_CLIENT;
       if (CREATED_BY !== undefined) updateData.CREATED_BY = CREATED_BY;
+      if (CEP !== undefined) updateData.CEP = CEP;
 
       // Call the service to update the promoter
-      const promotorAtualizado = await PromotorService.updatePromotor(promotorId, updateData);
+      const result = await PromotorService.updatePromotor(promotorId, updateData, EMPRESA_SLUG, FILTRO_SEGMENTACAO, RAIO);
+
+      if (!result) {
+        return res.status(404).json({
+          message: "Promotor não encontrado."
+        });
+      }
 
       return res.status(200).json({
-        message: "Promotor atualizado com sucesso.",
-        data: promotorAtualizado
+        message: result.autoAssignResult?.error
+          ? "Promotor atualizado, porém houve erro na auto-atribuição de rotas."
+          : "Promotor atualizado com sucesso.",
+        data: result.promotor,
+        ...(result.autoAssignResult && { rotasCriadas: result.autoAssignResult.rotasCriadas }),
       });
     } catch (error) {
       console.error("Erro ao atualizar promotor:", error);
@@ -260,7 +283,7 @@ export default class PromotorController {
    */
   static linkCampanhaPromotor = async (req: Request, res: Response) => {
     try {
-      const { ID_CAMPANHA, ID_PROMOTOR } = req.body;
+      const { ID_CAMPANHA, ID_PROMOTOR, RAIO, EMPRESA_SLUG, FILTRO_SEGMENTACAO } = req.body;
 
       // Validate that promoter exists
       const promotor = await PromotorService.findPromotorById(ID_PROMOTOR);
@@ -270,15 +293,18 @@ export default class PromotorController {
         });
       }
 
-      // Call the service to link the promoter with campaigns
-      const newRelationships = await PromotorService.linkCampanhaPromotor(ID_CAMPANHA, ID_PROMOTOR);
+      // Call the service to link the promoter with campaigns and auto-assign rotas
+      const { campanhaPromotores, autoAssignResult } = await PromotorService.linkCampanhaPromotor(ID_CAMPANHA, ID_PROMOTOR, RAIO, EMPRESA_SLUG, FILTRO_SEGMENTACAO);
 
       return res.status(201).json({
-        message: "Vínculo entre campanha(s) e promotor criado com sucesso.",
+        message: autoAssignResult?.error
+          ? "Vínculo criado, porém houve erro na auto-atribuição de rotas."
+          : "Vínculo entre campanha(s) e promotor criado com sucesso.",
         data: {
-          created: newRelationships.length,
-          relationships: newRelationships
-        }
+          created: campanhaPromotores.length,
+          relationships: campanhaPromotores
+        },
+        ...(autoAssignResult && { rotasCriadas: autoAssignResult.rotasCriadas }),
       });
     } catch (error) {
       console.error("Erro ao vincular campanha e promotor:", error);
@@ -289,24 +315,57 @@ export default class PromotorController {
     }
   };
 
+  /**
+   * Updates the RAIO of a campanha-promotor link and recalculates its routes
+   * PUT /promotor/campanha-promotor/:id/raio
+   */
+  static updateCampanhaPromotorRaio = async (req: Request, res: Response) => {
+    try {
+      const { id } = req.params;
+      const { RAIO, EMPRESA_SLUG } = req.body;
+
+      const result = await PromotorService.updateCampanhaPromotorRaioRecalc(
+        Number(id),
+        RAIO,
+        EMPRESA_SLUG
+      );
+
+      if (!result) {
+        return res.status(404).json({
+          message: "Vínculo campanha-promotor não encontrado.",
+        });
+      }
+
+      return res.status(200).json({
+        message: "Raio atualizado e rotas recalculadas com sucesso.",
+        data: result,
+      });
+    } catch (error) {
+      console.error("Erro ao atualizar raio do vínculo:", error);
+      const message = error instanceof Error ? error.message : "Erro desconhecido";
+      const isClientError =
+        message.includes("coordenadas") || message.includes("EMPRESA_SLUG");
+      return res.status(isClientError ? 400 : 500).json({
+        message: isClientError
+          ? message
+          : "Erro interno ao atualizar raio do vínculo.",
+        error: message,
+      });
+    }
+  };
+
     /**
    * Unlinks a promoter from one or more campaigns
    * DELETE /promotor/unlink-campanha
    */
-  static unlinkCampanhaPromotor = async (req: Request, res: Response) => {
-    try {
-      const { ID_CAMPANHA, ID_PROMOTOR } = req.body;
-
-      // Validate that promoter exists
-      const promotor = await PromotorService.findPromotorById(ID_PROMOTOR);
-      if (!promotor) {
-        return res.status(404).json({
-          message: "Promotor não encontrado."
-        });
-      }
+  static unlinkCampanhaPromotor = async (req: Request, res: Response) => 
+  {
+    try 
+    {
+      const { id_campanha_promotor } = req.params;
 
       // Call the service to unlink the promoter from campaigns
-      const removedRelationships = await PromotorService.unlinkCampanhaPromotor(ID_CAMPANHA, ID_PROMOTOR);
+      const removedRelationships = await PromotorService.unlinkCampanhaPromotor(Number(id_campanha_promotor));
 
       return res.status(200).json({
         message: "Vínculo entre campanha(s) e promotor removido com sucesso.",
@@ -315,7 +374,9 @@ export default class PromotorController {
           relationships: removedRelationships
         }
       });
-    } catch (error) {
+    } 
+    catch (error) 
+    {
       console.error("Erro ao remover vínculo campanha e promotor:", error);
       return res.status(500).json({
         message: "Erro interno ao remover vínculo campanha e promotor.",
@@ -337,7 +398,7 @@ export default class PromotorController {
           message: "ID do promotor inválido."
         });
       }
-      const campanhas = await PromotorService.getCampanhasByPromotor(promotorId);
+      const campanhas = await CampanhaPromotorService.getCampanhasByPromotor(promotorId);
       return res.status(200).json({
         message: "Campanhas vinculadas ao promotor.",
         data: campanhas

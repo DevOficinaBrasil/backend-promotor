@@ -18,6 +18,9 @@ import {
   LinkCampanhaPromotorResponseSchema,
   UnlinkCampanhaPromotorSchema,
   UnlinkCampanhaPromotorResponseSchema,
+  UpdateCampanhaPromotorRaioSchema,
+  CampanhaPromotorIdParamsSchema,
+  UpdateCampanhaPromotorRaioResponseSchema,
   GetPromotorCampanhasResponseSchema,
   ClientIdParamsSchema,
   GetPromotoresByClientIdResponseSchema,
@@ -69,7 +72,23 @@ createDocumentedRoute(router, {
   documentation: {
     tags: ['Promotor'],
     summary: 'Create a new promoter',
-    description: 'Creates a new promoter with the provided data',
+    description: `Creates a new promoter with the provided data. Accepts optional FILTRO_SEGMENTACAO to apply CRM segmentation on initial route auto-assignment.
+
+**FILTRO_SEGMENTACAO example:**
+\`\`\`json
+{
+  "if": {
+    "behavior": {
+      "section": "LEAD_DATA",
+      "criterion": "LEAD_FIELD",
+      "value": { "fieldKey": "professionalOccupation", "fieldType": "text", "operator": "EQUALS", "value": "Mecânico" }
+    }
+  },
+  "then": { "decision": "include", "reason": "segment_rule_matched" },
+  "default": { "decision": "exclude", "reason": "default_exclude" }
+}
+\`\`\`
+\`fieldKey\` deve ser o nome do campo sem prefixo (ex: \`"gender"\`, não \`"attributeKey.gender"\`). Campos disponíveis via \`GET /segmentacao/getFiltrosSegmentacaoByCampanha/:idCampanha\`.`,
     security: [{ bearerAuth: [] }],
     responses: {
       201: {
@@ -106,7 +125,23 @@ createDocumentedRoute(router, {
   documentation: {
     tags: ['Promotor'],
     summary: 'Update an existing promoter',
-    description: 'Updates a promoter with the provided data',
+    description: `Updates a promoter with the provided data. Accepts optional FILTRO_SEGMENTACAO to update the CRM segmentation filter on all active campanha-promotor links.
+
+**FILTRO_SEGMENTACAO example:**
+\`\`\`json
+{
+  "if": {
+    "behavior": {
+      "section": "LEAD_DATA",
+      "criterion": "LEAD_FIELD",
+      "value": { "fieldKey": "gender", "fieldType": "text", "operator": "EQUALS", "value": "Masculino" }
+    }
+  },
+  "then": { "decision": "include", "reason": "segment_rule_matched" },
+  "default": { "decision": "exclude", "reason": "default_exclude" }
+}
+\`\`\`
+\`fieldKey\` deve ser o nome do campo sem prefixo (ex: \`"gender"\`, não \`"attributeKey.gender"\`). Send \`null\` to remove the filter. If CEP is also changed, routes will be reassigned using the new filter.`,
     security: [{ bearerAuth: [] }],
     responses: {
       200: {
@@ -255,7 +290,23 @@ createDocumentedRoute(router, {
   documentation: {
     tags: ['Promotor'],
     summary: 'Link promoter to campaign(s)',
-    description: 'Creates a relationship between a promoter and one or more campaigns',
+    description: `Creates a relationship between a promoter and one or more campaigns. Accepts optional FILTRO_SEGMENTACAO to apply CRM segmentation during route auto-assignment.
+
+**FILTRO_SEGMENTACAO example:**
+\`\`\`json
+{
+  "if": {
+    "behavior": {
+      "section": "LEAD_DATA",
+      "criterion": "LEAD_FIELD",
+      "value": { "fieldKey": "professionalOccupation", "fieldType": "text", "operator": "EQUALS", "value": "Mecânico" }
+    }
+  },
+  "then": { "decision": "include", "reason": "segment_rule_matched" },
+  "default": { "decision": "exclude", "reason": "default_exclude" }
+}
+\`\`\`
+\`fieldKey\` deve ser o nome do campo sem prefixo (ex: \`"gender"\`, não \`"attributeKey.gender"\`). Campos disponíveis via \`GET /segmentacao/getFiltrosSegmentacaoByCampanha/:idCampanha\`.`,
     security: [{ bearerAuth: [] }],
     responses: {
       201: {
@@ -285,12 +336,12 @@ createDocumentedRoute(router, {
 // Unlink promoter from campaign(s)
 createDocumentedRoute(router, {
   method: 'delete',
-  path: '/unlink-campanha',
+  path: '/unlink-campanha-promotor/:id_campanha_promotor',
   handler: PromotorController.unlinkCampanhaPromotor,
   basePath: '/promotor',
   middlewares: [],
   schemas: {
-    body: UnlinkCampanhaPromotorSchema,
+    params: UnlinkCampanhaPromotorSchema,
   },
   documentation: {
     tags: ['Promotor'],
@@ -312,6 +363,51 @@ createDocumentedRoute(router, {
       },
       404: {
         description: 'Promoter or campaign not found',
+        schema: ErrorResponseSchema,
+      },
+      500: {
+        description: 'Internal server error',
+        schema: ErrorResponseSchema,
+      },
+    },
+  },
+});
+
+// Update campanha-promotor RAIO and recalculate routes
+createDocumentedRoute(router, {
+  method: 'put',
+  path: '/campanha-promotor/:id/raio',
+  handler: PromotorController.updateCampanhaPromotorRaio,
+  basePath: '/promotor',
+  middlewares: [],
+  schemas: {
+    params: CampanhaPromotorIdParamsSchema,
+    body: UpdateCampanhaPromotorRaioSchema,
+  },
+  documentation: {
+    tags: ['Promotor'],
+    summary: 'Update link radius and recalculate routes',
+    description:
+      'Updates CAMPANHA_PROMOTOR.RAIO and recalculates this link\'s routes: ' +
+      'adds BACKLOG routes for community oficinas now inside the radius (respecting ' +
+      'campaign exclusivity) and soft-deletes BACKLOG routes that fell outside. ' +
+      'Routes in any other status are never touched.',
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: {
+        description: 'Radius updated and routes recalculated',
+        schema: UpdateCampanhaPromotorRaioResponseSchema,
+      },
+      400: {
+        description: 'Bad request - validation error or promoter without coordinates',
+        schema: ErrorResponseSchema,
+      },
+      401: {
+        description: 'Unauthorized - token missing or invalid',
+        schema: ErrorResponseSchema,
+      },
+      404: {
+        description: 'Campanha-promotor link not found',
         schema: ErrorResponseSchema,
       },
       500: {

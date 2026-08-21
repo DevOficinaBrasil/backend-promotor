@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { NotificacaoVisitaStatusInfoSchema } from './rota';
+import { FiltroSegmentacaoSchema } from './segmentacao';
 
 /**
  * Campanha entity schema
@@ -6,8 +8,11 @@ import { z } from 'zod';
 export const CampanhaSchema = z.object({
   ID: z.number(),
   NOME: z.string(),
+  STATUS: z.enum(['RASCUNHO', 'PUBLICADA']).optional(),
+  FILTRO_SEGMENTACAO: z.record(z.unknown()).nullable().optional(),
   OBJETIVO: z.string().optional(),
   ID_CLIENT: z.number().optional(),
+  EMPRESA_SLUG: z.string().optional(),
   START_TIME: z.date().optional(),
   END_TIME: z.date().optional(),
   CREATED_BY: z.string().optional(),
@@ -30,9 +35,11 @@ export const CreateCampanhaSchema = z.object({
   NOME: z.string().min(1, 'NOME é obrigatório'),
   OBJETIVO: z.string().optional(),
   ID_CLIENT: z.number().optional(),
+  EMPRESA_SLUG: z.string().max(100).optional(),
   START_TIME: z.string().datetime().optional().or(z.date().optional()),
   END_TIME: z.string().datetime().optional().or(z.date().optional()),
   CREATED_BY: z.string().optional(),
+  FILTRO_SEGMENTACAO: FiltroSegmentacaoSchema.nullable().optional(),
   promotores: z.array(PromotorOficinasSchema).optional(),
 });
 
@@ -43,9 +50,11 @@ export const UpdateCampanhaSchema = z.object({
   NOME: z.string().min(1).optional(),
   OBJETIVO: z.string().optional(),
   ID_CLIENT: z.number().optional(),
+  EMPRESA_SLUG: z.string().max(100).optional(),
   START_TIME: z.string().datetime().optional().or(z.date().optional()),
   END_TIME: z.string().datetime().optional().or(z.date().optional()),
   CREATED_BY: z.string().optional(),
+  FILTRO_SEGMENTACAO: FiltroSegmentacaoSchema.nullable().optional(),
   promotores: z.array(PromotorOficinasSchema).optional(),
 });
 
@@ -83,6 +92,14 @@ export const UpdateCampanhaResponseSchema = z.object({
  * Delete campanha response schema
  */
 export const DeleteCampanhaResponseSchema = z.object({
+  message: z.string(),
+  data: CampanhaSchema,
+});
+
+/**
+ * Publicar campanha response schema
+ */
+export const PublicarCampanhaResponseSchema = z.object({
   message: z.string(),
   data: CampanhaSchema,
 });
@@ -135,6 +152,10 @@ export const RotaPromotorSchema = z.object({
   UPDATED_AT: z.string().optional(),
   DELETED_AT: z.string().optional(),
   oficina: OficinaSchema.optional(),
+  // NOTIF-19 / P2 AC2: the route's visit-confirmation status, effective
+  // (statusEfetivo()) rather than the raw stored column. Absent when the
+  // route has no notification row.
+  notificacaoVisita: NotificacaoVisitaStatusInfoSchema.optional(),
 });
 
 /**

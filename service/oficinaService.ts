@@ -86,4 +86,318 @@ export default class OficinaService {
       throw error;
     }
   }
+
+  public static async getComunityNearbyOficinas(
+    latitude: number,
+    longitude: number,
+    radiusKm: number,
+    empresaSlug: string
+  ): Promise<Array<{
+    ID_OFICINA: number;
+    LATITUDE: number;
+    LONGITUDE: number;
+    NOME_FANTASIA: string;
+    ENDERECO: string;
+    BAIRRO: string;
+    CIDADE: string;
+    ESTADO: string;
+    NUMERO: string;
+    CEP: string;
+    CNPJ: string;
+    TELEFONE: string;
+    distance: number;
+  }>> {
+    const query = `
+      SELECT DISTINCT ON (ce."id_oficina")
+        ce."id_oficina" AS "ID_OFICINA",
+        ce."latitude" AS "LATITUDE",
+        ce."longitude" AS "LONGITUDE",
+        ce."razao_social" AS "NOME_FANTASIA",
+        CONCAT(ce."logradouro", ' ', ce."rua") AS "ENDERECO",
+        ce."bairro" AS "BAIRRO",
+        ce."cidade" AS "CIDADE",
+        ce."estado" AS "ESTADO",
+        ce."numero" AS "NUMERO",
+        ce."cep" AS "CEP",
+        ce."cnpj" AS "CNPJ",
+        ce."telefone" AS "TELEFONE",
+        (
+          ${EARTH_RADIUS_KM} * acos(
+            cos(radians($2)) * cos(radians(ce."latitude")) *
+            cos(radians(ce."longitude") - radians($3)) +
+            sin(radians($2)) * sin(radians(ce."latitude"))
+          )
+        ) AS distance
+      FROM "OFICINA_PORTAL"."COMMUNITIES" cm
+      INNER JOIN "MAIN_REGISTER"."USUARIO_COMMUNITY" uc
+        ON cm."CommunityID" = uc."id_community"
+      INNER JOIN "MAIN_REGISTER"."USUARIO" us
+        ON us."ID_USUARIO" = uc."id_usuario"
+      INNER JOIN "dw"."cadastro_empresa" ce
+        ON ce."id_oficina" = us."ID_OFICINA"
+      WHERE cm."EmpresaSlug" = $1
+        AND ce."longitude" IS NOT NULL
+        AND ce."latitude" IS NOT NULL
+        AND ce."status_receita" = 'ATIVA'
+        AND (
+          ${EARTH_RADIUS_KM} * acos(
+            cos(radians($2)) * cos(radians(ce."latitude")) *
+            cos(radians(ce."longitude") - radians($3)) +
+            sin(radians($2)) * sin(radians(ce."latitude"))
+          )
+        ) <= $4
+      ORDER BY ce."id_oficina", distance ASC
+    `;
+
+    try {
+      const results = await AppDataSourceSync.query(query, [
+        empresaSlug,
+        latitude,
+        longitude,
+        radiusKm,
+      ]);
+
+      return results;
+    } catch (error) {
+      console.error(
+        `Error finding community nearby oficinas (lat: ${latitude}, lon: ${longitude}, radius: ${radiusKm}km, slug: ${empresaSlug}):`,
+        error
+      );
+      throw error;
+    }
+  }
+
+  public static async getSegmentedNearbyOficinas(
+    latitude: number,
+    longitude: number,
+    radiusKm: number,
+    externalUserIds: number[]
+  ): Promise<Array<{
+    ID_OFICINA: number;
+    LATITUDE: number;
+    LONGITUDE: number;
+    NOME_FANTASIA: string;
+    ENDERECO: string;
+    BAIRRO: string;
+    CIDADE: string;
+    ESTADO: string;
+    NUMERO: string;
+    CEP: string;
+    CNPJ: string;
+    TELEFONE: string;
+    distance: number;
+  }>> {
+    if (externalUserIds.length === 0) return [];
+
+    const BATCH_SIZE = 1000;
+    const allResults: any[] = [];
+
+    for (let i = 0; i < externalUserIds.length; i += BATCH_SIZE) {
+      const batch = externalUserIds.slice(i, i + BATCH_SIZE);
+      const placeholders = batch.map((_, idx) => `$${idx + 4}`).join(", ");
+
+      const query = `
+        SELECT DISTINCT ON (ce."id_oficina")
+          ce."id_oficina" AS "ID_OFICINA",
+          ce."latitude" AS "LATITUDE",
+          ce."longitude" AS "LONGITUDE",
+          ce."razao_social" AS "NOME_FANTASIA",
+          CONCAT(ce."logradouro", ' ', ce."rua") AS "ENDERECO",
+          ce."bairro" AS "BAIRRO",
+          ce."cidade" AS "CIDADE",
+          ce."estado" AS "ESTADO",
+          ce."numero" AS "NUMERO",
+          ce."cep" AS "CEP",
+          ce."cnpj" AS "CNPJ",
+          ce."telefone" AS "TELEFONE",
+          (
+            ${EARTH_RADIUS_KM} * acos(
+              cos(radians($1)) * cos(radians(ce."latitude")) *
+              cos(radians(ce."longitude") - radians($2)) +
+              sin(radians($1)) * sin(radians(ce."latitude"))
+            )
+          ) AS distance
+        FROM "MAIN_REGISTER"."USUARIO" us
+        INNER JOIN "dw"."cadastro_empresa" ce
+          ON ce."id_oficina" = us."ID_OFICINA"
+        WHERE us."ID_USUARIO" IN (${placeholders})
+          AND ce."longitude" IS NOT NULL
+          AND ce."latitude" IS NOT NULL
+          AND ce."status_receita" = 'ATIVA'
+          AND (
+            ${EARTH_RADIUS_KM} * acos(
+              cos(radians($1)) * cos(radians(ce."latitude")) *
+              cos(radians(ce."longitude") - radians($2)) +
+              sin(radians($1)) * sin(radians(ce."latitude"))
+            )
+          ) <= $3
+        ORDER BY ce."id_oficina", distance ASC
+      `;
+
+      try {
+        const results = await AppDataSourceSync.query(query, [
+          latitude, longitude, radiusKm, ...batch
+        ]);
+        allResults.push(...results);
+      } catch (error) {
+        console.error(
+          `Error finding segmented nearby oficinas (lat: ${latitude}, lon: ${longitude}, radius: ${radiusKm}km, batch ${i / BATCH_SIZE + 1}):`,
+          error
+        );
+        throw error;
+      }
+    }
+
+    // Deduplica por ID_OFICINA (batches podem ter overlap)
+    const seen = new Set<number>();
+    return allResults.filter((r: any) => {
+      if (seen.has(r.ID_OFICINA)) return false;
+      seen.add(r.ID_OFICINA);
+      return true;
+    });
+  }
+
+  /**
+   * Lists ALL active oficinas from a client's community (no radius filter).
+   * Same source/columns as getComunityNearbyOficinas, without the Haversine clause.
+   * Used by the campaign wizard map to plot uncovered ("sem promotor") oficinas.
+   * @param empresaSlug - Community EmpresaSlug
+   */
+  public static async getCommunityOficinas(empresaSlug: string): Promise<Array<{
+    ID_OFICINA: number;
+    LATITUDE: number;
+    LONGITUDE: number;
+    NOME_FANTASIA: string;
+    ENDERECO: string;
+    BAIRRO: string;
+    CIDADE: string;
+    ESTADO: string;
+    NUMERO: string;
+    CEP: string;
+    CNPJ: string;
+    TELEFONE: string;
+  }>> {
+    const query = `
+      SELECT DISTINCT ON (ce."id_oficina")
+        ce."id_oficina" AS "ID_OFICINA",
+        ce."latitude" AS "LATITUDE",
+        ce."longitude" AS "LONGITUDE",
+        ce."razao_social" AS "NOME_FANTASIA",
+        CONCAT(ce."logradouro", ' ', ce."rua") AS "ENDERECO",
+        ce."bairro" AS "BAIRRO",
+        ce."cidade" AS "CIDADE",
+        ce."estado" AS "ESTADO",
+        ce."numero" AS "NUMERO",
+        ce."cep" AS "CEP",
+        ce."cnpj" AS "CNPJ",
+        ce."telefone" AS "TELEFONE"
+      FROM "OFICINA_PORTAL"."COMMUNITIES" cm
+      INNER JOIN "MAIN_REGISTER"."USUARIO_COMMUNITY" uc
+        ON cm."CommunityID" = uc."id_community"
+      INNER JOIN "MAIN_REGISTER"."USUARIO" us
+        ON us."ID_USUARIO" = uc."id_usuario"
+      INNER JOIN "dw"."cadastro_empresa" ce
+        ON ce."id_oficina" = us."ID_OFICINA"
+      WHERE cm."EmpresaSlug" = $1
+        AND ce."longitude" IS NOT NULL
+        AND ce."latitude" IS NOT NULL
+        AND ce."status_receita" = 'ATIVA'
+      ORDER BY ce."id_oficina"
+    `;
+
+    try {
+      return await AppDataSourceSync.query(query, [empresaSlug]);
+    } catch (error) {
+      console.error(
+        `Error listing community oficinas (slug: ${empresaSlug}):`,
+        error
+      );
+      throw error;
+    }
+  }
+
+  /**
+   * Oficinas ATIVAS da comunidade que também atendem à segmentação do CRM.
+   *
+   * É o `getCommunityOficinas` cruzado com os contatos que o filtro retornou —
+   * sem raio nem centro, porque no wizard a segmentação é definida antes de
+   * existir promotor. Serve à camada de oficinas do mapa; a atribuição de rotas
+   * continua passando por `getSegmentedNearbyOficinas`, que aplica o raio.
+   */
+  public static async getCommunityOficinasSegmentadas(
+    empresaSlug: string,
+    externalUserIds: number[]
+  ): Promise<Array<{
+    ID_OFICINA: number;
+    LATITUDE: number;
+    LONGITUDE: number;
+    NOME_FANTASIA: string;
+    ENDERECO: string;
+    BAIRRO: string;
+    CIDADE: string;
+    ESTADO: string;
+    NUMERO: string;
+    CEP: string;
+    CNPJ: string;
+    TELEFONE: string;
+  }>> {
+    if (externalUserIds.length === 0) return [];
+
+    const BATCH_SIZE = 1000;
+    const agregado: any[] = [];
+    const vistos = new Set<number>();
+
+    for (let i = 0; i < externalUserIds.length; i += BATCH_SIZE) {
+      const lote = externalUserIds.slice(i, i + BATCH_SIZE);
+      const placeholders = lote.map((_, idx) => `$${idx + 2}`).join(", ");
+
+      const query = `
+        SELECT DISTINCT ON (ce."id_oficina")
+          ce."id_oficina" AS "ID_OFICINA",
+          ce."latitude" AS "LATITUDE",
+          ce."longitude" AS "LONGITUDE",
+          ce."razao_social" AS "NOME_FANTASIA",
+          CONCAT(ce."logradouro", ' ', ce."rua") AS "ENDERECO",
+          ce."bairro" AS "BAIRRO",
+          ce."cidade" AS "CIDADE",
+          ce."estado" AS "ESTADO",
+          ce."numero" AS "NUMERO",
+          ce."cep" AS "CEP",
+          ce."cnpj" AS "CNPJ",
+          ce."telefone" AS "TELEFONE"
+        FROM "OFICINA_PORTAL"."COMMUNITIES" cm
+        INNER JOIN "MAIN_REGISTER"."USUARIO_COMMUNITY" uc
+          ON cm."CommunityID" = uc."id_community"
+        INNER JOIN "MAIN_REGISTER"."USUARIO" us
+          ON us."ID_USUARIO" = uc."id_usuario"
+        INNER JOIN "dw"."cadastro_empresa" ce
+          ON ce."id_oficina" = us."ID_OFICINA"
+        WHERE cm."EmpresaSlug" = $1
+          AND us."ID_USUARIO" IN (${placeholders})
+          AND ce."longitude" IS NOT NULL
+          AND ce."latitude" IS NOT NULL
+          AND ce."status_receita" = 'ATIVA'
+        ORDER BY ce."id_oficina"
+      `;
+
+      try {
+        const linhas = await AppDataSourceSync.query(query, [empresaSlug, ...lote]);
+        // Lotes diferentes podem trazer a mesma oficina (vários usuários por
+        // oficina), então o DISTINCT ON de cada lote não basta.
+        for (const linha of linhas) {
+          if (vistos.has(linha.ID_OFICINA)) continue;
+          vistos.add(linha.ID_OFICINA);
+          agregado.push(linha);
+        }
+      } catch (error) {
+        console.error(
+          `Error listing segmented community oficinas (slug: ${empresaSlug}):`,
+          error
+        );
+        throw error;
+      }
+    }
+
+    return agregado;
+  }
 }

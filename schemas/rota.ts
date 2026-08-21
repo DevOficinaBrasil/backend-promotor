@@ -149,6 +149,7 @@ export const CampanhaSimplifiedSchema = z.object({
   NOME: z.string(),
   OBJETIVO: z.string().optional(),
   ID_CLIENT: z.number().optional(),
+  EMPRESA_SLUG: z.string().optional(),
   START_TIME: z.date().optional(),
   END_TIME: z.date().optional(),
   CREATED_BY: z.number().optional(),
@@ -196,6 +197,33 @@ export const CampanhaResultsSimplifiedSchema = z.object({
 });
 
 /**
+ * Effective visit-confirmation status enum schema (NOTIF-19 / P2 AC1-2).
+ * Mirrors entities/NotificacaoVisita.ts's StatusNotificacaoVisita — kept as
+ * its own string enum here, matching this file's existing convention of not
+ * importing entity enums directly (see StatusRotaSchema/RedirectRotaSchema).
+ */
+export const NotificacaoVisitaStatusSchema = z.enum([
+  'PENDENTE',
+  'ENVIADO',
+  'FALHOU',
+  'DISPENSADO',
+  'CONFIRMADO',
+  'EXPIRADO',
+  'REAGENDADO',
+]);
+
+/**
+ * Nested visit-confirmation status object surfaced on route reads
+ * (NOTIF-19 / P2 AC1: dashboard/app SHALL include STATUS and CONFIRMADO_EM).
+ * STATUS here is always the *effective* status (statusEfetivo()), not the
+ * raw stored column.
+ */
+export const NotificacaoVisitaStatusInfoSchema = z.object({
+  STATUS: NotificacaoVisitaStatusSchema,
+  CONFIRMADO_EM: z.date().nullable().optional(),
+});
+
+/**
  * Rota with relationships schema
  */
 export const RotaWithRelationsSchema = z.object({
@@ -214,6 +242,7 @@ export const RotaWithRelationsSchema = z.object({
   DELETED_AT: z.date().optional(),
   campanhaPromotor: CampanhaPromotorSimplifiedSchema.optional(),
   campanhaResults: z.array(CampanhaResultsSimplifiedSchema).optional(),
+  notificacaoVisita: NotificacaoVisitaStatusInfoSchema.optional(),
 });
 
 /**
@@ -308,5 +337,94 @@ export const ReorderRotasResponseSchema = z.object({
       ORDEM: z.number().nullable(),
       ID_OFICINA: z.number(),
     })),
+  }),
+});
+
+/**
+ * POST /rota/reassign-by-address — reatribuir rotas após mudança de endereço
+ */
+export const ReassignByAddressSchema = z.object({
+  CEP: z.string().min(8).max(10),
+  ID_OFICINA: z.coerce.number().int().positive(),
+});
+
+const ReatribuicaoStatusSchema = z.enum([
+  "reatribuida",
+  "mantida_dentro_do_raio",
+  "sem_promotor_disponivel",
+]);
+
+export const ReassignByAddressResponseSchema = z.object({
+  message: z.string(),
+  data: z.object({
+    oficina: z.object({
+      ID_OFICINA: z.number(),
+      novo_cep: z.string(),
+      nova_latitude: z.number(),
+      nova_longitude: z.number(),
+    }),
+    campanhas_processadas: z.number(),
+    reatribuicoes: z.array(z.object({
+      ID_CAMPANHA: z.number(),
+      promotor_anterior: z.object({
+        ID_PROMOTOR: z.number(),
+        NOME: z.string(),
+        distancia_km: z.number(),
+      }),
+      promotor_novo: z.object({
+        ID_PROMOTOR: z.number(),
+        NOME: z.string(),
+        distancia_km: z.number(),
+      }).nullable(),
+      rota_removida: z.number().nullable(),
+      rota_criada: z.number().nullable(),
+      status: ReatribuicaoStatusSchema,
+    })),
+    resumo: z.object({
+      mantidas: z.number(),
+      reatribuidas: z.number(),
+      sem_promotor_disponivel: z.number(),
+    }),
+  }),
+});
+
+/**
+ * POST /rota/assign-oficina-community
+ */
+export const AssignOficinaCommunitySchema = z.object({
+  ID_OFICINA: z.coerce.number().int().positive(),
+  empresaSlug: z.string().min(1).max(100),
+});
+
+const AtribuicaoStatusSchema = z.enum([
+  "atribuida",
+  "sem_promotor_disponivel",
+  "ja_atribuida",
+]);
+
+export const AssignOficinaCommunityResponseSchema = z.object({
+  success: z.boolean(),
+  oficina: z.object({
+    ID_OFICINA: z.number(),
+    CEP: z.string().nullable(),
+    latitude: z.number(),
+    longitude: z.number(),
+  }),
+  campanhas_processadas: z.number(),
+  atribuicoes: z.array(z.object({
+    ID_CAMPANHA: z.number(),
+    NOME_CAMPANHA: z.string(),
+    status: AtribuicaoStatusSchema,
+    promotor: z.object({
+      ID_PROMOTOR: z.number(),
+      NOME: z.string(),
+      distancia_km: z.number(),
+    }).nullable(),
+    ID_ROTA_PROMOTOR: z.number().nullable(),
+  })),
+  resumo: z.object({
+    atribuidas: z.number(),
+    sem_promotor_disponivel: z.number(),
+    ja_atribuida: z.number(),
   }),
 });

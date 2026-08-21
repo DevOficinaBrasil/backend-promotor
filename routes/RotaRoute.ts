@@ -18,6 +18,10 @@ import {
   ReorderRotasSchema,
   OptimizeRotaResponseSchema,
   ReorderRotasResponseSchema,
+  ReassignByAddressSchema,
+  ReassignByAddressResponseSchema,
+  AssignOficinaCommunitySchema,
+  AssignOficinaCommunityResponseSchema,
 } from "../schemas/rota";
 import { ErrorResponseSchema } from "../schemas/common";
 
@@ -326,6 +330,73 @@ createDocumentedRoute(router, {
         description: "Internal server error",
         schema: ErrorResponseSchema,
       },
+    },
+  },
+});
+
+// Reassign routes after oficina address change
+createDocumentedRoute(router, {
+  method: "post",
+  path: "/reassign-by-address",
+  handler: RotaController.reassignByAddress,
+  basePath: "/rota",
+  middlewares: [],
+  schemas: {
+    body: ReassignByAddressSchema,
+  },
+  documentation: {
+    tags: ["Rota"],
+    summary: "Reassign routes after oficina address change",
+    description:
+      "Receives a new CEP and ID_OFICINA. Geocodes the CEP, checks if the oficina is still within " +
+      "each assigned promotor's radius, and reassigns to the nearest eligible promotor if not.",
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: {
+        description: "Reassignment completed",
+        schema: ReassignByAddressResponseSchema,
+      },
+      400: {
+        description: "Invalid CEP or geocoding failure",
+        schema: ErrorResponseSchema,
+      },
+      404: {
+        description: "No active routes found for the oficina",
+        schema: ErrorResponseSchema,
+      },
+      500: {
+        description: "Internal server error",
+        schema: ErrorResponseSchema,
+      },
+    },
+  },
+});
+
+// Assign oficina to nearest promotor on community signup
+createDocumentedRoute(router, {
+  method: "post",
+  path: "/assign-oficina-community",
+  handler: RotaController.assignOficinaCommunity,
+  basePath: "/rota",
+  middlewares: [],
+  schemas: {
+    body: AssignOficinaCommunitySchema,
+  },
+  documentation: {
+    tags: ["Rota"],
+    summary: "Atribui oficina ao promotor mais próximo na inscrição em comunidade",
+    description:
+      "Recebe ID_OFICINA e empresaSlug. Busca campanhas ativas do cliente, " +
+      "calcula distância para cada promotor e atribui ao mais próximo dentro do raio.",
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: {
+        description: "Atribuição processada (pode conter atribuições, skips ou sem promotor)",
+        schema: AssignOficinaCommunityResponseSchema,
+      },
+      404: { description: "Oficina não encontrada", schema: ErrorResponseSchema },
+      422: { description: "CEP sem coordenadas", schema: ErrorResponseSchema },
+      500: { description: "Erro interno", schema: ErrorResponseSchema },
     },
   },
 });

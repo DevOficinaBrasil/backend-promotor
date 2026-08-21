@@ -21,7 +21,8 @@ Entidade principal que representa uma campanha de marketing/promoção.
 - `ID_CAMPANHA` (PK): Identificador único da campanha
 - `NOME`: Nome da campanha (obrigatório)
 - `OBJETIVO`: Objetivo da campanha
-- `ID_CLIENT`: ID do cliente externo
+- `ID_CLIENT`: ID do cliente no SQL Server. **Não use para resolver a empresa** — não existe tabela correspondente alcançável a partir deste banco
+- `EMPRESA_SLUG`: Slug da comunidade (`OFICINA_PORTAL.COMMUNITIES.EmpresaSlug`). É este o elo com a empresa/marca da campanha
 - `START_TIME`: Data/hora de início
 - `END_TIME`: Data/hora de término
 - `CREATED_BY`: ID do usuário que criou
