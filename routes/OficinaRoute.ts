@@ -7,8 +7,10 @@ import {
   GetOficinasByLocationResponseSchema,
   GetCommunityNearbyQuerySchema,
   GetCommunityNearbyResponseSchema,
-  GetCommunityAllQuerySchema,
+  GetCommunityAllBodySchema,
   GetCommunityAllResponseSchema,
+  GetCommunityCountQuerySchema,
+  GetCommunityCountResponseSchema,
 } from "../schemas/oficina";
 import { ErrorResponseSchema } from "../schemas/common";
 
@@ -92,27 +94,102 @@ createDocumentedRoute(router, {
   },
 });
 
-// List ALL active community oficinas (no radius filter)
+// List ALL active community oficinas, optionally matching a segmentação filter (no radius filter)
 createDocumentedRoute(router, {
-  method: "get",
+  method: "post",
   path: "/community-all",
   handler: OficinaController.getCommunityOficinas,
   basePath: "/oficina",
   middlewares: [],
   schemas: {
-    query: GetCommunityAllQuerySchema,
+    body: GetCommunityAllBodySchema,
   },
   documentation: {
     tags: ["Oficina"],
-    summary: "List all active community oficinas",
-    description:
-      "Returns every active oficina from community members of the given EmpresaSlug, " +
-      "with coordinates. Used by the campaign wizard map to plot uncovered oficinas.",
+    summary: "List all active community oficinas, optionally matching a segmentação filter",
+    description: `Retorna toda oficina ATIVA da comunidade do \`empresaSlug\` informado, sem recorte de raio. Usado pelo mapa do wizard de campanha, no passo exibido logo após a segmentação, para plotar as oficinas elegíveis.
+
+\`filtroSegmentacao\` é opcional: quando omitido ou \`null\`, retorna todas as oficinas ativas da comunidade, sem filtro do CRM. Quando informado, retorna apenas as oficinas que atendem à DSL.
+
+**Estrutura do body:**
+\`\`\`json
+{
+  "empresaSlug": "oficina-exemplo",
+  "filtroSegmentacao": {
+    "if": {
+      "behavior": {
+        "section": "LEAD_DATA",
+        "criterion": "LEAD_FIELD",
+        "value": {
+          "fieldKey": "professionalOccupation",
+          "fieldType": "text",
+          "operator": "EQUALS",
+          "value": "Mecânico"
+        }
+      }
+    },
+    "then": { "decision": "include", "reason": "segment_rule_matched" },
+    "default": { "decision": "exclude", "reason": "default_exclude" }
+  }
+}
+\`\`\`
+
+**Estrutura do behavior:**
+- \`section\`: \`"LEAD_DATA"\`
+- \`criterion\`: \`"LEAD_FIELD"\`
+- \`value.fieldKey\`: nome do campo (ex: \`"gender"\`, \`"professionalOccupation"\`). Usar apenas o nome do campo, sem prefixo.
+- \`value.fieldType\`: \`"text"\`, \`"number"\`, etc.
+- \`value.operator\`: \`"EQUALS"\`, \`"EXISTS"\`, \`"IN"\`, \`"GT"\`, \`"GTE"\`, \`"LT"\`, \`"LTE"\`
+- \`value.value\`: valor para comparação (\`true\` para EXISTS)
+
+Combine condições com \`and\`, \`or\`, \`not\`. Campos disponíveis via \`GET /segmentacao/getFiltrosSegmentacaoByCampanha/:idCampanha\`.`,
     security: [{ bearerAuth: [] }],
     responses: {
       200: {
         description: "Community oficinas listed successfully",
         schema: GetCommunityAllResponseSchema,
+      },
+      400: {
+        description: "Bad request - validation error, or invalid filtroSegmentacao DSL",
+        schema: ErrorResponseSchema,
+      },
+      401: {
+        description: "Unauthorized - token missing or invalid",
+        schema: ErrorResponseSchema,
+      },
+      404: {
+        description: "Comunidade não encontrada para o empresaSlug informado",
+        schema: ErrorResponseSchema,
+      },
+      500: {
+        description: "Internal server error",
+        schema: ErrorResponseSchema,
+      },
+    },
+  },
+});
+
+// Count ALL active community oficinas (no radius/segmentation filter)
+createDocumentedRoute(router, {
+  method: "get",
+  path: "/community-count",
+  handler: OficinaController.getCommunityOficinasCount,
+  basePath: "/oficina",
+  middlewares: [],
+  schemas: {
+    query: GetCommunityCountQuerySchema,
+  },
+  documentation: {
+    tags: ["Oficina"],
+    summary: "Count all active community oficinas",
+    description:
+      "Retorna o total de oficinas ATIVAS da comunidade do EmpresaSlug informado, " +
+      "sem recorte de raio nem filtro de segmentação.",
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: {
+        description: "Contagem obtida com sucesso",
+        schema: GetCommunityCountResponseSchema,
       },
       400: {
         description: "Bad request - validation error",
