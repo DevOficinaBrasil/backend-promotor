@@ -73,6 +73,7 @@ export default class CampanhaController {
         OBJETIVO,
         ID_CLIENT,
         EMPRESA_SLUG,
+        FILTRO_SEGMENTACAO,
         START_TIME,
         END_TIME,
         CREATED_BY,
@@ -97,6 +98,7 @@ export default class CampanhaController {
       if (START_TIME !== undefined) updateData.START_TIME = new Date(START_TIME);
       if (END_TIME !== undefined) updateData.END_TIME = new Date(END_TIME);
       if (CREATED_BY !== undefined) updateData.CREATED_BY = CREATED_BY;
+      if (FILTRO_SEGMENTACAO !== undefined) updateData.FILTRO_SEGMENTACAO = FILTRO_SEGMENTACAO;
 
       // Call the service to update the campaign with optional promotores
       const campanhaAtualizada = await CampanhaService.updateCampanha(campanhaId, updateData, promotores);

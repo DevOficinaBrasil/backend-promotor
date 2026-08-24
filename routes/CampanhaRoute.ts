@@ -34,7 +34,23 @@ createDocumentedRoute(router, {
   documentation: {
     tags: ['Campanha'],
     summary: 'Create a new campaign',
-    description: 'Creates a new campaign with the provided data',
+    description: `Creates a new campaign with the provided data. Accepts optional FILTRO_SEGMENTACAO with the CRM segmentation DSL (@obcrm/segmentation).
+
+**FILTRO_SEGMENTACAO example:**
+\`\`\`json
+{
+  "if": {
+    "behavior": {
+      "section": "LEAD_DATA",
+      "criterion": "LEAD_FIELD",
+      "value": { "fieldKey": "professionalOccupation", "fieldType": "text", "operator": "EQUALS", "value": "Mecânico" }
+    }
+  },
+  "then": { "decision": "include", "reason": "segment_rule_matched" },
+  "default": { "decision": "exclude", "reason": "default_exclude" }
+}
+\`\`\`
+\`fieldKey\` deve ser o nome do campo sem prefixo (ex: \`"gender"\`, não \`"attributeKey.gender"\`). Campos disponíveis via \`GET /segmentacao/getFiltrosSegmentacaoByCampanha/:idCampanha\`.`,
     security: [{ bearerAuth: [] }],
     responses: {
       201: {
@@ -109,7 +125,23 @@ createDocumentedRoute(router, {
   documentation: {
     tags: ['Campanha'],
     summary: 'Update an existing campaign',
-    description: 'Updates a campaign with the provided data',
+    description: `Updates a campaign with the provided data. Accepts optional FILTRO_SEGMENTACAO with the CRM segmentation DSL (@obcrm/segmentation). Send \`null\` to remove the filter.
+
+**FILTRO_SEGMENTACAO example:**
+\`\`\`json
+{
+  "if": {
+    "behavior": {
+      "section": "LEAD_DATA",
+      "criterion": "LEAD_FIELD",
+      "value": { "fieldKey": "gender", "fieldType": "text", "operator": "EQUALS", "value": "Masculino" }
+    }
+  },
+  "then": { "decision": "include", "reason": "segment_rule_matched" },
+  "default": { "decision": "exclude", "reason": "default_exclude" }
+}
+\`\`\`
+\`fieldKey\` deve ser o nome do campo sem prefixo (ex: \`"gender"\`, não \`"attributeKey.gender"\`).`,
     security: [{ bearerAuth: [] }],
     responses: {
       200: {

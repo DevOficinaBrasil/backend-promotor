@@ -317,6 +317,39 @@ export default class OficinaService {
   }
 
   /**
+   * Counts ALL active oficinas from a client's community (no radius filter).
+   * Same source/joins as getCommunityOficinas, aggregated instead of listed.
+   * @param empresaSlug - Community EmpresaSlug
+   */
+  public static async countCommunityOficinas(empresaSlug: string): Promise<number> {
+    const query = `
+      SELECT COUNT(DISTINCT ce."id_oficina")::int AS "total"
+      FROM "OFICINA_PORTAL"."COMMUNITIES" cm
+      INNER JOIN "MAIN_REGISTER"."USUARIO_COMMUNITY" uc
+        ON cm."CommunityID" = uc."id_community"
+      INNER JOIN "MAIN_REGISTER"."USUARIO" us
+        ON us."ID_USUARIO" = uc."id_usuario"
+      INNER JOIN "dw"."cadastro_empresa" ce
+        ON ce."id_oficina" = us."ID_OFICINA"
+      WHERE cm."EmpresaSlug" = $1
+        AND ce."longitude" IS NOT NULL
+        AND ce."latitude" IS NOT NULL
+        AND ce."status_receita" = 'ATIVA'
+    `;
+
+    try {
+      const rows = await AppDataSourceSync.query(query, [empresaSlug]);
+      return rows[0]?.total ?? 0;
+    } catch (error) {
+      console.error(
+        `Error counting community oficinas (slug: ${empresaSlug}):`,
+        error
+      );
+      throw error;
+    }
+  }
+
+  /**
    * Oficinas ATIVAS da comunidade que também atendem à segmentação do CRM.
    *
    * É o `getCommunityOficinas` cruzado com os contatos que o filtro retornou —

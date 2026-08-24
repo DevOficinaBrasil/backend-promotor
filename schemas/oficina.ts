@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { FiltroSegmentacaoSchema } from './segmentacao';
 
 /**
  * Query schema for getting oficinas by geolocation
@@ -62,14 +63,32 @@ export const GetCommunityNearbyResponseSchema = z.object({
 });
 
 /**
- * Query schema for listing ALL community oficinas (no radius filter)
+ * Body schema for listing ALL community oficinas, optionally matching a
+ * segmentation filter (no radius filter). Mirrors the filtroSegmentacao
+ * contract used by the other segmentação endpoints (see schemas/segmentacao.ts).
+ * When omitted (or null), every active community oficina is returned.
  */
-export const GetCommunityAllQuerySchema = z.object({
+export const GetCommunityAllBodySchema = z.object({
   empresaSlug: z.string().min(1),
+  filtroSegmentacao: FiltroSegmentacaoSchema.nullable().optional(),
 });
 
 export const GetCommunityAllResponseSchema = z.object({
   message: z.string(),
   data: z.array(OficinaSchema),
+  count: z.number(),
+});
+
+/**
+ * Query schema for counting ALL active community oficinas (no radius filter,
+ * no segmentation filter — just the total for the community).
+ */
+export const GetCommunityCountQuerySchema = z.object({
+  empresaSlug: z.string().min(1),
+});
+
+export const GetCommunityCountResponseSchema = z.object({
+  message: z.string(),
+  empresaSlug: z.string(),
   count: z.number(),
 });
