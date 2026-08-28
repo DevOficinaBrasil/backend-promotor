@@ -7,10 +7,21 @@ import { IsNull } from "typeorm";
 import { StatusNotificacaoVisita } from "../entities/NotificacaoVisita";
 import { statusEfetivo, rotaListavelParaPromotor } from "../utils/statusNotificacaoVisita";
 import {
-  DISTINCT_CADASTRO_EMPRESA_POR_OFICINA,
   JOIN_CADASTRO_EMPRESA_POR_ROTA,
-  ORDEM_CADASTRO_EMPRESA_POR_OFICINA,
+  ligacaoCadastroEmpresa,
 } from "../utils/sqlCadastroEmpresa";
+
+/**
+ * Enriquecimento das rotas legadas: lê o dw por lista de ids de oficina. A
+ * ligação passa pela OFICINA (por CNPJ ou por `id_oficina`), então a projeção
+ * usa o id pedido — `ce.id_oficina` pode ser nulo ou de outra oficina que
+ * compartilha o CNPJ. Ver `utils/sqlCadastroEmpresa.ts`.
+ */
+const FROM_CADASTRO_EMPRESA_POR_IDS = `
+        FROM unnest($1::int[]) AS alvo("ID_OFICINA")
+        LEFT JOIN "MAIN_REGISTER"."OFICINA" o
+          ON o."ID_OFICINA" = alvo."ID_OFICINA"${ligacaoCadastroEmpresa("o", 'alvo."ID_OFICINA"')}
+        WHERE ce.cnpj_int IS NOT NULL`;
 
 export interface PromotorOficinaData {
   ID_PROMOTOR: number;
@@ -300,8 +311,8 @@ export default class CampanhaService {
     if (rotasSemOficina.length > 0) {
       const oficinaIds = [...new Set(rotasSemOficina.map((r: any) => r.ID_OFICINA))];
       const oficinas = await AppDataSourceSync.query(`
-        SELECT ${DISTINCT_CADASTRO_EMPRESA_POR_OFICINA}
-          ce.id_oficina as "ID_OFICINA",
+        SELECT
+          alvo."ID_OFICINA" as "ID_OFICINA",
           ce.latitude as "LATITUDE",
           ce.longitude as "LONGITUDE",
           COALESCE(o."NOME_FANTASIA", ce.razao_social) as "NOME_FANTASIA",
@@ -312,11 +323,7 @@ export default class CampanhaService {
           ce.numero as "NUMERO",
           ce.cep as "CEP",
           ce.cnpj as "CNPJ",
-          ce.telefone as "TELEFONE"
-        FROM dw.cadastro_empresa ce
-        LEFT JOIN "MAIN_REGISTER"."OFICINA" o ON ce.id_oficina = o."ID_OFICINA"
-        WHERE ce.id_oficina = ANY($1)
-        ${ORDEM_CADASTRO_EMPRESA_POR_OFICINA}
+          ce.telefone as "TELEFONE"${FROM_CADASTRO_EMPRESA_POR_IDS}
       `, [oficinaIds]);
       const oficinaMap = new Map(oficinas.map((o: any) => [o.ID_OFICINA, o]));
       for (const rota of rotasSemOficina) {
@@ -513,8 +520,8 @@ export default class CampanhaService {
       if (rotasSemOficina.length > 0) {
         const oficinaIds = [...new Set(rotasSemOficina.map(r => r.ID_OFICINA))];
         const oficinas = await AppDataSourceSync.query(`
-          SELECT ${DISTINCT_CADASTRO_EMPRESA_POR_OFICINA}
-            ce.id_oficina as "ID_OFICINA",
+          SELECT
+            alvo."ID_OFICINA" as "ID_OFICINA",
             ce.latitude as "oficina_LATITUDE",
             ce.longitude as "oficina_LONGITUDE",
             COALESCE(o."NOME_FANTASIA", ce.razao_social) as "oficina_NOME_FANTASIA",
@@ -525,11 +532,7 @@ export default class CampanhaService {
             ce.numero as "oficina_NUMERO",
             ce.cep as "oficina_CEP",
             ce.cnpj as "oficina_CNPJ",
-            ce.telefone as "oficina_TELEFONE"
-          FROM dw.cadastro_empresa ce
-          LEFT JOIN "MAIN_REGISTER"."OFICINA" o ON ce.id_oficina = o."ID_OFICINA"
-          WHERE ce.id_oficina = ANY($1)
-          ${ORDEM_CADASTRO_EMPRESA_POR_OFICINA}
+            ce.telefone as "oficina_TELEFONE"${FROM_CADASTRO_EMPRESA_POR_IDS}
         `, [oficinaIds]);
 
         const oficinaMap = new Map(oficinas.map((o: any) => [o.ID_OFICINA, o]));

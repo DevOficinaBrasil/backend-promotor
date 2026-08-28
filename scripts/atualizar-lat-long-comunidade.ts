@@ -11,10 +11,17 @@
 // comunidade inteira, já que são só leitura. Use para validar a lógica antes
 // do disparo geral.
 //
+// A oficina é ligada a "dw"."cadastro_empresa" por CNPJ (só dígitos, exatamente
+// 14) OU por "id_oficina" — a mesma regra que as queries de rota usam, em
+// utils/sqlCadastroEmpresa.ts. Olhar só o "id_oficina" deixava de fora ~2,2 mil
+// oficinas de comunidade que só casam pelo CNPJ, mais as 2.487 linhas do dw com
+// "id_oficina" nulo.
+//
 // Uma oficina só é atualizada se NÃO cair em nenhuma das situações problemáticas
 // abaixo (elas são reportadas, não corrigidas por este script):
 //   1) usuário sem "ID_OFICINA";
-//   2) oficina sem nenhuma linha em "dw"."cadastro_empresa";
+//   2) oficina sem nenhuma linha em "dw"."cadastro_empresa" — nem por
+//      "id_oficina", nem por CNPJ;
 //   3) oficina sem CEP em "MAIN_REGISTER"."OFICINA" e em nenhuma linha de
 //      "dw"."cadastro_empresa" associada a ela.
 //
@@ -25,6 +32,7 @@
 import "dotenv/config";
 import { AppDataSourceSync } from "../data-source";
 import GeolocationService from "../service/geolocationService";
+import { cnpjIntParaLigacao } from "../utils/sqlCadastroEmpresa";
 
 const geolocationService = new GeolocationService();
 
@@ -35,13 +43,14 @@ interface UsuarioComunidade {
 
 interface OficinaRow {
   ID_OFICINA: number;
+  CNPJ: string | null;
   CEP: string | null;
   LATITUDE: string | null;
   LONGITUDE: string | null;
 }
 
 interface CadastroEmpresaRow {
-  id_oficina: number;
+  id_oficina: number | null;
   cnpj_int: string;
   cep: string | null;
   latitude: string | null;
@@ -96,7 +105,7 @@ async function buscarOficinas(idsOficina: number[]): Promise<Map<number, Oficina
   if (idsOficina.length === 0) return new Map();
 
   const rows: OficinaRow[] = await AppDataSourceSync.query(
-    `SELECT "ID_OFICINA", "CEP", "LATITUDE", "LONGITUDE"
+    `SELECT "ID_OFICINA", "CNPJ", "CEP", "LATITUDE", "LONGITUDE"
        FROM "MAIN_REGISTER"."OFICINA"
       WHERE "ID_OFICINA" = ANY($1::int[])`,
     [idsOficina]
@@ -105,22 +114,60 @@ async function buscarOficinas(idsOficina: number[]): Promise<Map<number, Oficina
   return new Map(rows.map((row) => [row.ID_OFICINA, row]));
 }
 
-async function buscarCadastrosEmpresa(idsOficina: number[]): Promise<Map<number, CadastroEmpresaRow[]>> {
-  if (idsOficina.length === 0) return new Map();
+/**
+ * Linhas do dw das oficinas informadas, agrupadas pelo id da oficina
+ * **consultada** — não por `ce.id_oficina`, que pode ser nulo ou pertencer a
+ * outra oficina que compartilha o CNPJ.
+ *
+ * A ordem dentro de cada lista põe primeiro a linha casada por CNPJ, a
+ * identificação confiável, e depois as casadas por `id_oficina`. Todas são
+ * atualizadas: o objetivo do script é preencher lat/long onde estiver faltando,
+ * e a linha certa é a que o app vai ler depois.
+ */
+async function buscarCadastrosEmpresa(
+  oficinas: Map<number, OficinaRow>
+): Promise<Map<number, CadastroEmpresaRow[]>> {
+  if (oficinas.size === 0) return new Map();
+
+  const idsOficina = [...oficinas.keys()];
+  const cnpjsInt = [...oficinas.values()]
+    .map((ofi) => cnpjIntParaLigacao(ofi.CNPJ))
+    .filter((cnpj): cnpj is string => cnpj !== null);
 
   const rows: CadastroEmpresaRow[] = await AppDataSourceSync.query(
-    `SELECT id_oficina, cnpj_int, cep, latitude, longitude
+    `SELECT id_oficina, cnpj_int::text AS cnpj_int, cep, latitude, longitude
        FROM "dw"."cadastro_empresa"
-      WHERE id_oficina = ANY($1::int[])`,
-    [idsOficina]
+      WHERE id_oficina = ANY($1::int[])
+         OR cnpj_int = ANY($2::bigint[])`,
+    [idsOficina, cnpjsInt]
   );
 
-  const porOficina = new Map<number, CadastroEmpresaRow[]>();
+  const porId = new Map<number, CadastroEmpresaRow[]>();
+  const porCnpj = new Map<string, CadastroEmpresaRow>();
   for (const row of rows) {
-    const lista = porOficina.get(row.id_oficina) ?? [];
-    lista.push(row);
-    porOficina.set(row.id_oficina, lista);
+    if (row.id_oficina !== null) {
+      const lista = porId.get(row.id_oficina) ?? [];
+      lista.push(row);
+      porId.set(row.id_oficina, lista);
+    }
+    // cnpj_int tem índice único: no máximo uma linha por CNPJ.
+    porCnpj.set(row.cnpj_int, row);
   }
+
+  const porOficina = new Map<number, CadastroEmpresaRow[]>();
+  for (const [idOficina, ofi] of oficinas) {
+    const cnpjInt = cnpjIntParaLigacao(ofi.CNPJ);
+    const porCnpjDaOficina = cnpjInt !== null ? porCnpj.get(cnpjInt) : undefined;
+
+    const lista = [
+      ...(porCnpjDaOficina ? [porCnpjDaOficina] : []),
+      // A mesma linha pode chegar pelas duas chaves.
+      ...(porId.get(idOficina) ?? []).filter((row) => row.cnpj_int !== porCnpjDaOficina?.cnpj_int),
+    ];
+
+    if (lista.length > 0) porOficina.set(idOficina, lista);
+  }
+
   return porOficina;
 }
 
@@ -187,15 +234,16 @@ async function processarOficina(
 
     console.log(`Oficina ${idOficina} (CNPJ ${cadastro.cnpj_int}): CEP ${cadastro.cep} geocodificado para`, coords);
 
-    // filtra por cnpj_int (não só id_oficina): pode haver mais de um CNPJ
-    // sob o mesmo id_oficina em dw.cadastro_empresa, e escrever só por
-    // id_oficina atingiria o cadastro de outra empresa.
+    // Filtra só por cnpj_int, a única chave única da tabela: id_oficina pode se
+    // repetir sob CNPJs diferentes (escrever por ele atingiria o cadastro de
+    // outra empresa) e pode ser nulo justamente nas linhas que só a ligação por
+    // CNPJ alcança.
     await AppDataSourceSync.query(
       `UPDATE "dw"."cadastro_empresa"
           SET latitude = $1, longitude = $2
-        WHERE id_oficina = $3 AND cnpj_int = $4
+        WHERE cnpj_int = $3
           AND latitude IS NULL AND longitude IS NULL`,
-      [String(coords.lat), String(coords.long), idOficina, cadastro.cnpj_int]
+      [String(coords.lat), String(coords.long), cadastro.cnpj_int]
     );
     algumaAtualizacao = true;
 
@@ -254,10 +302,10 @@ async function main(): Promise<void> {
 
     console.log(`Encontradas ${idsOficina.length} oficinas distintas para geocodificação...`);
 
-    const [oficinas, cadastrosEmpresa] = await Promise.all([
-      buscarOficinas(idsOficina),
-      buscarCadastrosEmpresa(idsOficina),
-    ]);
+    // Sequencial, e não Promise.all: a ligação com o dw precisa dos CNPJs que
+    // vêm de MAIN_REGISTER.OFICINA.
+    const oficinas = await buscarOficinas(idsOficina);
+    const cadastrosEmpresa = await buscarCadastrosEmpresa(oficinas);
 
     report.usuariosComOficinaSemCadastroEmpresa = usuarios.filter(
       (u) => u.id_oficina !== null && (cadastrosEmpresa.get(u.id_oficina)?.length ?? 0) === 0
