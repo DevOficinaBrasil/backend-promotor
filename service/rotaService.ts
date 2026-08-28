@@ -7,6 +7,7 @@ import NotificacaoVisitaService from "./notificacaoVisitaService";
 import { statusEfetivo } from "../utils/statusNotificacaoVisita";
 import { haversineDistanceKm } from "../utils/haversine";
 import GeolocationService from "./geolocationService";
+import { ligacaoCadastroEmpresa } from "../utils/sqlCadastroEmpresa";
 
 interface ReatribuicaoResult {
   ID_CAMPANHA: number;
@@ -712,10 +713,16 @@ export default class RotaService {
   private static async getOficinaCoordinates(
     idOficina: number
   ): Promise<{ lat: number; lon: number; cep: string | null }> {
+    // A oficina é ligada ao dw por CNPJ ou por id_oficina — ver
+    // utils/sqlCadastroEmpresa.ts. A âncora `alvo` mantém o comportamento de
+    // antes para oficina ausente de MAIN_REGISTER.OFICINA: sem CNPJ para
+    // comparar, a ligação cai no id_oficina, como fazia o join direto no dw.
     const ceResult = await AppDataSourceSync.query(
       `SELECT ce."latitude", ce."longitude", ce."cep"
-       FROM "dw"."cadastro_empresa" ce
-       WHERE ce."id_oficina" = $1
+       FROM (SELECT $1::int AS "ID_OFICINA") alvo
+       LEFT JOIN "MAIN_REGISTER"."OFICINA" o
+         ON o."ID_OFICINA" = alvo."ID_OFICINA"${ligacaoCadastroEmpresa("o", 'alvo."ID_OFICINA"')}
+       WHERE ce.cnpj_int IS NOT NULL
        LIMIT 1`,
       [idOficina]
     );

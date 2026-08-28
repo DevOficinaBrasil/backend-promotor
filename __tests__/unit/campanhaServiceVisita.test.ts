@@ -706,8 +706,12 @@ describe('CampanhaService', () => {
       );
 
       expect(enriquecimento).toHaveLength(1);
-      expect(enriquecimento[0]).toContain('DISTINCT ON (ce.id_oficina)');
-      expect(enriquecimento[0]).toContain('ORDER BY ce.id_oficina');
+      // Uma linha por oficina pedida: a dedup por id_oficina virou subquery da
+      // ligação, e a identidade projetada é o id pedido, não ce.id_oficina —
+      // que pode ser nulo ou de outra oficina com o mesmo CNPJ.
+      expect(enriquecimento[0]).toContain('DISTINCT ON (ce_dedup.id_oficina)');
+      expect(enriquecimento[0]).toContain('alvo."ID_OFICINA" as "ID_OFICINA"');
+      expect(enriquecimento[0]).not.toMatch(/JOIN dw\.cadastro_empresa ce\b/);
     });
   });
 });

@@ -1,6 +1,7 @@
 import { AppDataSourceSync } from "../data-source";
 import Oficina from "../entities/Oficina";
 import { DuckDBClient } from "../utils/duckdbClient";
+import { ligacaoCadastroEmpresa } from "../utils/sqlCadastroEmpresa";
 
 // Earth's radius in kilometers (used for Haversine formula)
 const EARTH_RADIUS_KM = 6371;
@@ -108,8 +109,8 @@ export default class OficinaService {
     distance: number;
   }>> {
     const query = `
-      SELECT DISTINCT ON (ce."id_oficina")
-        ce."id_oficina" AS "ID_OFICINA",
+      SELECT DISTINCT ON (us."ID_OFICINA")
+        us."ID_OFICINA" AS "ID_OFICINA",
         ce."latitude" AS "LATITUDE",
         ce."longitude" AS "LONGITUDE",
         ce."razao_social" AS "NOME_FANTASIA",
@@ -133,11 +134,12 @@ export default class OficinaService {
         ON cm."CommunityID" = uc."id_community"
       INNER JOIN "MAIN_REGISTER"."USUARIO" us
         ON us."ID_USUARIO" = uc."id_usuario"
-      INNER JOIN "dw"."cadastro_empresa" ce
-        ON ce."id_oficina" = us."ID_OFICINA"
+      LEFT JOIN "MAIN_REGISTER"."OFICINA" o
+        ON o."ID_OFICINA" = us."ID_OFICINA"${ligacaoCadastroEmpresa('o', 'us."ID_OFICINA"')}
       WHERE cm."EmpresaSlug" = $1
         AND ce."longitude" IS NOT NULL
         AND ce."latitude" IS NOT NULL
+        AND ce.cnpj_int IS NOT NULL
         AND ce."status_receita" = 'ATIVA'
         AND (
           ${EARTH_RADIUS_KM} * acos(
@@ -146,7 +148,7 @@ export default class OficinaService {
             sin(radians($2)) * sin(radians(ce."latitude"))
           )
         ) <= $4
-      ORDER BY ce."id_oficina", distance ASC
+      ORDER BY us."ID_OFICINA", distance ASC
     `;
 
     try {
@@ -197,8 +199,8 @@ export default class OficinaService {
       const placeholders = batch.map((_, idx) => `$${idx + 4}`).join(", ");
 
       const query = `
-        SELECT DISTINCT ON (ce."id_oficina")
-          ce."id_oficina" AS "ID_OFICINA",
+        SELECT DISTINCT ON (us."ID_OFICINA")
+          us."ID_OFICINA" AS "ID_OFICINA",
           ce."latitude" AS "LATITUDE",
           ce."longitude" AS "LONGITUDE",
           ce."razao_social" AS "NOME_FANTASIA",
@@ -218,11 +220,12 @@ export default class OficinaService {
             )
           ) AS distance
         FROM "MAIN_REGISTER"."USUARIO" us
-        INNER JOIN "dw"."cadastro_empresa" ce
-          ON ce."id_oficina" = us."ID_OFICINA"
+        LEFT JOIN "MAIN_REGISTER"."OFICINA" o
+          ON o."ID_OFICINA" = us."ID_OFICINA"${ligacaoCadastroEmpresa('o', 'us."ID_OFICINA"')}
         WHERE us."ID_USUARIO" IN (${placeholders})
           AND ce."longitude" IS NOT NULL
           AND ce."latitude" IS NOT NULL
+          AND ce.cnpj_int IS NOT NULL
           AND ce."status_receita" = 'ATIVA'
           AND (
             ${EARTH_RADIUS_KM} * acos(
@@ -231,7 +234,7 @@ export default class OficinaService {
               sin(radians($1)) * sin(radians(ce."latitude"))
             )
           ) <= $3
-        ORDER BY ce."id_oficina", distance ASC
+        ORDER BY us."ID_OFICINA", distance ASC
       `;
 
       try {
@@ -278,8 +281,8 @@ export default class OficinaService {
     TELEFONE: string;
   }>> {
     const query = `
-      SELECT DISTINCT ON (ce."id_oficina")
-        ce."id_oficina" AS "ID_OFICINA",
+      SELECT DISTINCT ON (us."ID_OFICINA")
+        us."ID_OFICINA" AS "ID_OFICINA",
         ce."latitude" AS "LATITUDE",
         ce."longitude" AS "LONGITUDE",
         ce."razao_social" AS "NOME_FANTASIA",
@@ -296,13 +299,14 @@ export default class OficinaService {
         ON cm."CommunityID" = uc."id_community"
       INNER JOIN "MAIN_REGISTER"."USUARIO" us
         ON us."ID_USUARIO" = uc."id_usuario"
-      INNER JOIN "dw"."cadastro_empresa" ce
-        ON ce."id_oficina" = us."ID_OFICINA"
+      LEFT JOIN "MAIN_REGISTER"."OFICINA" o
+        ON o."ID_OFICINA" = us."ID_OFICINA"${ligacaoCadastroEmpresa('o', 'us."ID_OFICINA"')}
       WHERE cm."EmpresaSlug" = $1
         AND ce."longitude" IS NOT NULL
         AND ce."latitude" IS NOT NULL
+        AND ce.cnpj_int IS NOT NULL
         AND ce."status_receita" = 'ATIVA'
-      ORDER BY ce."id_oficina"
+      ORDER BY us."ID_OFICINA"
     `;
 
     try {
@@ -323,17 +327,18 @@ export default class OficinaService {
    */
   public static async countCommunityOficinas(empresaSlug: string): Promise<number> {
     const query = `
-      SELECT COUNT(DISTINCT ce."id_oficina")::int AS "total"
+      SELECT COUNT(DISTINCT us."ID_OFICINA")::int AS "total"
       FROM "OFICINA_PORTAL"."COMMUNITIES" cm
       INNER JOIN "MAIN_REGISTER"."USUARIO_COMMUNITY" uc
         ON cm."CommunityID" = uc."id_community"
       INNER JOIN "MAIN_REGISTER"."USUARIO" us
         ON us."ID_USUARIO" = uc."id_usuario"
-      INNER JOIN "dw"."cadastro_empresa" ce
-        ON ce."id_oficina" = us."ID_OFICINA"
+      LEFT JOIN "MAIN_REGISTER"."OFICINA" o
+        ON o."ID_OFICINA" = us."ID_OFICINA"${ligacaoCadastroEmpresa('o', 'us."ID_OFICINA"')}
       WHERE cm."EmpresaSlug" = $1
         AND ce."longitude" IS NOT NULL
         AND ce."latitude" IS NOT NULL
+        AND ce.cnpj_int IS NOT NULL
         AND ce."status_receita" = 'ATIVA'
     `;
 
@@ -385,8 +390,8 @@ export default class OficinaService {
       const placeholders = lote.map((_, idx) => `$${idx + 2}`).join(", ");
 
       const query = `
-        SELECT DISTINCT ON (ce."id_oficina")
-          ce."id_oficina" AS "ID_OFICINA",
+        SELECT DISTINCT ON (us."ID_OFICINA")
+          us."ID_OFICINA" AS "ID_OFICINA",
           ce."latitude" AS "LATITUDE",
           ce."longitude" AS "LONGITUDE",
           ce."razao_social" AS "NOME_FANTASIA",
@@ -403,14 +408,15 @@ export default class OficinaService {
           ON cm."CommunityID" = uc."id_community"
         INNER JOIN "MAIN_REGISTER"."USUARIO" us
           ON us."ID_USUARIO" = uc."id_usuario"
-        INNER JOIN "dw"."cadastro_empresa" ce
-          ON ce."id_oficina" = us."ID_OFICINA"
+        LEFT JOIN "MAIN_REGISTER"."OFICINA" o
+          ON o."ID_OFICINA" = us."ID_OFICINA"${ligacaoCadastroEmpresa('o', 'us."ID_OFICINA"')}
         WHERE cm."EmpresaSlug" = $1
           AND us."ID_USUARIO" IN (${placeholders})
           AND ce."longitude" IS NOT NULL
           AND ce."latitude" IS NOT NULL
+          AND ce.cnpj_int IS NOT NULL
           AND ce."status_receita" = 'ATIVA'
-        ORDER BY ce."id_oficina"
+        ORDER BY us."ID_OFICINA"
       `;
 
       try {
