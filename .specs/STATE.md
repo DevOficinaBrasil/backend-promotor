@@ -12,11 +12,11 @@
 
 ## Handoff
 
-- **Feature**: importador-oficinas (`.specs/features/importador-oficinas/`)
-- **Phase / Task**: Specify + Design + Tasks concluídos (spec.md, context.md, design.md, tasks.md — 13 tasks, `validate_spec.py`/`validate_tasks.py` limpos). Execute NÃO iniciado — aguardando aprovação explícita do usuário.
-- **Completed**: Specify, Design, Tasks
-- **In-progress**: nenhum arquivo de código tocado ainda — só artefatos `.specs/`
-- **Next step**: Usuário revisa `spec.md`/`design.md`/`tasks.md`; após aprovação, iniciar Execute pela Task T1 (Fase 1), seguindo `tasks.md` — nenhuma task requer acesso a banco real
-- **Blockers**: nenhum — todas as decisões de arquitetura/schema foram confirmadas com o usuário (ver `context.md`)
-- **Uncommitted files**: `.specs/features/importador-oficinas/spec.md`, `.specs/features/importador-oficinas/context.md`, `.specs/features/importador-oficinas/design.md`, `.specs/features/importador-oficinas/tasks.md`, `.specs/STATE.md`
+- **Feature**: importador-oficinas (`.specs/features/importador-oficinas/`) — **DONE**
+- **Phase / Task**: Specify + Design + Tasks + Execute + Verify todos concluídos. 13 tasks implementadas (13 commits) + 3 iterações de fix→re-verify (10 commits adicionais) até o Verifier independente retornar **PASS** na iteração 3/3. `validate_state.py` confirma o gate de conclusão.
+- **Completed**: Specify, Design, Tasks, Execute, Verify (PASS)
+- **In-progress**: nada — branch pronta para revisão humana/PR
+- **Next step**: Revisão humana da branch `feat/importador-oficinas` (23 commits sobre `main`) e, quando aprovada, `git push` + abertura de PR (não feito nesta sessão — push/PR exigem autorização explícita separada). Antes do deploy: aplicar `scripts/migration-oficina-importada.sql` manualmente (DBA) e validar o `UNION ALL` das 3 queries de comunidade contra um Postgres real (nunca executado nesta sessão, por restrição explícita) — ver `validation.md`, observação O6.
+- **Blockers**: nenhum
+- **Uncommitted files**: nenhum — árvore de trabalho limpa em `fe34a96`
 - **Branch**: feat/importador-oficinas

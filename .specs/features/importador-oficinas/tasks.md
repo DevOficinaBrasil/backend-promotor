@@ -11,7 +11,7 @@ Nenhuma task acessa o banco de dados real — gates `integration` que precisaria
 ---
 
 **Design**: `.specs/features/importador-oficinas/design.md`
-**Status**: Implementing (todas as 13 tasks commitadas; aguardando Verifier)
+**Status**: Done — Verifier PASS na iteração 3/3 (`.specs/features/importador-oficinas/validation.md`)
 
 ---
 
