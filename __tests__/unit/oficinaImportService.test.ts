@@ -3,8 +3,10 @@ import OficinaImportService from "../../service/oficinaImportService";
 import { AppDataSourceSync } from "../../data-source";
 import { createMockRepo } from "../helpers/mockRepo";
 import Oficina from "../../entities/Oficina";
+import GeolocationService from "../../service/geolocationService";
 
 jest.mock("../../data-source");
+jest.mock("../../service/geolocationService");
 
 const CABECALHO_VALIDO = [
   "NOME OFICINA",
@@ -191,6 +193,59 @@ describe("OficinaImportService", () => {
         CIDADE: "Sao Paulo",
         ORIGEM: "IMPORTACAO_PLANILHA",
       });
+    });
+  });
+
+  describe("garantirLatLong", () => {
+    beforeEach(() => {
+      jest.clearAllMocks();
+    });
+
+    it("should not call the geocoder when the oficina already has lat/long", async () => {
+      const repo = createMockRepo();
+      (repo.findOne as jest.Mock).mockResolvedValue({ LATITUDE: "-23.55", LONGITUDE: "-46.63" });
+      (AppDataSourceSync.getRepository as jest.Mock).mockReturnValue(repo);
+      const getLatLongByCep = jest.fn();
+      (GeolocationService as unknown as jest.Mock).mockImplementation(() => ({
+        getLatLongByCep,
+      }));
+
+      const resultado = await OficinaImportService.garantirLatLong(1, "01310100");
+
+      expect(resultado).toEqual({ lat: -23.55, lon: -46.63 });
+      expect(getLatLongByCep).not.toHaveBeenCalled();
+      expect(repo.update).not.toHaveBeenCalled();
+    });
+
+    it("should geocode and persist lat/long when the oficina has none", async () => {
+      const repo = createMockRepo();
+      (repo.findOne as jest.Mock).mockResolvedValue({ LATITUDE: null, LONGITUDE: null });
+      (AppDataSourceSync.getRepository as jest.Mock).mockReturnValue(repo);
+      const getLatLongByCep = jest.fn().mockResolvedValue({ lat: -23.55, long: -46.63 });
+      (GeolocationService as unknown as jest.Mock).mockImplementation(() => ({
+        getLatLongByCep,
+      }));
+
+      const resultado = await OficinaImportService.garantirLatLong(1, "01310100");
+
+      expect(resultado).toEqual({ lat: -23.55, lon: -46.63 });
+      expect(getLatLongByCep).toHaveBeenCalledWith("01310100");
+      expect(repo.update).toHaveBeenCalledWith(1, { LATITUDE: "-23.55", LONGITUDE: "-46.63" });
+    });
+
+    it("should return null and write nothing when geocoding fails", async () => {
+      const repo = createMockRepo();
+      (repo.findOne as jest.Mock).mockResolvedValue({ LATITUDE: null, LONGITUDE: null });
+      (AppDataSourceSync.getRepository as jest.Mock).mockReturnValue(repo);
+      const getLatLongByCep = jest.fn().mockResolvedValue(null);
+      (GeolocationService as unknown as jest.Mock).mockImplementation(() => ({
+        getLatLongByCep,
+      }));
+
+      const resultado = await OficinaImportService.garantirLatLong(1, "00000000");
+
+      expect(resultado).toBeNull();
+      expect(repo.update).not.toHaveBeenCalled();
     });
   });
 });

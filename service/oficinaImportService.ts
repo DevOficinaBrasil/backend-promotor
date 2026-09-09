@@ -1,6 +1,7 @@
 import * as XLSX from "xlsx";
 import { AppDataSourceSync } from "../data-source";
 import Oficina from "../entities/Oficina";
+import GeolocationService from "./geolocationService";
 import { cnpjIntParaLigacao, cnpjIntDaOficina } from "../utils/sqlCadastroEmpresa";
 
 export interface LinhaOficinaImport {
@@ -150,6 +151,41 @@ export default class OficinaImportService {
     const oficinaSalva = await repo.save(novaOficina);
 
     return { ID_OFICINA: oficinaSalva.ID_OFICINA!, criada: true };
+  }
+
+  /**
+   * Garante que a oficina tem lat/long. Se já tiver, retorna sem chamar o
+   * geocoder. Se não tiver, geocodifica o CEP e faz `UPDATE` só de
+   * `LATITUDE`/`LONGITUDE`. Retorna `null` quando a geocodificação falha —
+   * o chamador trata isso como rejeição da linha, sem escrever nada.
+   */
+  static async garantirLatLong(
+    idOficina: number,
+    cep: string
+  ): Promise<{ lat: number; lon: number } | null> {
+    const repo = AppDataSourceSync.getRepository(Oficina);
+    const oficinaAtual = await repo.findOne({ where: { ID_OFICINA: idOficina } });
+
+    if (oficinaAtual?.LATITUDE && oficinaAtual?.LONGITUDE) {
+      return {
+        lat: parseFloat(oficinaAtual.LATITUDE),
+        lon: parseFloat(oficinaAtual.LONGITUDE),
+      };
+    }
+
+    const geolocationService = new GeolocationService();
+    const coords = await geolocationService.getLatLongByCep(cep);
+
+    if (!coords) {
+      return null;
+    }
+
+    await repo.update(idOficina, {
+      LATITUDE: String(coords.lat),
+      LONGITUDE: String(coords.long),
+    });
+
+    return { lat: coords.lat, lon: coords.long };
   }
 }
 

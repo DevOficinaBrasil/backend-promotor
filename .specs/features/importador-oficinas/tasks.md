@@ -267,15 +267,16 @@ Tasks: T13 (depende de T2 e T3, na Fase 1).
 - Skill: NONE
 
 **Done when**:
-- [ ] Oficina que já tem lat/long não chama `GeolocationService`
-- [ ] Oficina sem lat/long chama `GeolocationService.getLatLongByCep` e persiste o resultado
-- [ ] Falha de geocodificação (retorno `null`) não escreve nada e marca a linha como rejeitada
-- [ ] Gate: `npm run test:unit`
+- [x] Oficina que já tem lat/long não chama `GeolocationService`
+- [x] Oficina sem lat/long chama `GeolocationService.getLatLongByCep` e persiste o resultado
+- [x] Falha de geocodificação (retorno `null`) não escreve nada e marca a linha como rejeitada
+- [x] Gate: `npm run test:unit` — 22/22 testes passando
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(oficina-import): geocode and fill oficina lat/long`
+**Status**: ✅ Complete
 
 ---
 
