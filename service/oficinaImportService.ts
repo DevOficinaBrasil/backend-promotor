@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { cnpjIntParaLigacao } from "../utils/sqlCadastroEmpresa";
 
 const CABECALHO_ESPERADO = [
   "NOME OFICINA",
@@ -68,6 +69,38 @@ export default class OficinaImportService {
     if (linhasDeDados > LIMITE_LINHAS_DE_DADOS) {
       throw new Error("LIMITE_LINHAS_EXCEDIDO");
     }
+  }
+
+  /**
+   * Normaliza o CNPJ de uma linha para a mesma regra usada em todo o
+   * sistema (exatamente 14 dígitos, comparável a `cnpj_int`). Retorna
+   * `null` quando o valor não normaliza para 14 dígitos.
+   */
+  static normalizarCnpj(valor: string): string | null {
+    return cnpjIntParaLigacao(valor);
+  }
+
+  /**
+   * Recebe os CNPJs já normalizados (na ordem das linhas do arquivo,
+   * `null` para os inválidos) e retorna os índices que são a segunda (ou
+   * posterior) ocorrência do mesmo CNPJ. Índices com CNPJ inválido
+   * (`null`) nunca entram no resultado — inválido é um erro à parte, não
+   * uma duplicata.
+   */
+  static indicesComCnpjDuplicado(cnpjsNormalizados: Array<string | null>): Set<number> {
+    const vistos = new Set<string>();
+    const duplicados = new Set<number>();
+
+    cnpjsNormalizados.forEach((cnpj, indice) => {
+      if (!cnpj) return;
+      if (vistos.has(cnpj)) {
+        duplicados.add(indice);
+      } else {
+        vistos.add(cnpj);
+      }
+    });
+
+    return duplicados;
   }
 }
 

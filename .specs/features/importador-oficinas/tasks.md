@@ -216,15 +216,16 @@ Tasks: T13 (depende de T2 e T3, na Fase 1).
 - Skill: NONE
 
 **Done when**:
-- [ ] CNPJ com máscara (`12.345.678/0001-90`) normaliza corretamente
-- [ ] CNPJ com menos/mais de 14 dígitos é rejeitado com motivo específico
-- [ ] Segunda ocorrência do mesmo CNPJ no arquivo é rejeitada como "CNPJ duplicado no arquivo"
-- [ ] Gate: `npm run test:unit`
+- [x] CNPJ com máscara (`12.345.678/0001-90`) normaliza corretamente
+- [x] CNPJ com menos/mais de 14 dígitos é rejeitado com motivo específico
+- [x] Segunda ocorrência do mesmo CNPJ no arquivo é rejeitada como "CNPJ duplicado no arquivo"
+- [x] Gate: `npm run test:unit` — 17/17 testes passando
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(oficina-import): normalize and validate row CNPJ`
+**Status**: ✅ Complete
 
 ---
 

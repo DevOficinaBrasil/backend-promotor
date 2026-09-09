@@ -94,4 +94,48 @@ describe("OficinaImportService", () => {
       expect(() => OficinaImportService.validarLimiteLinhas([CABECALHO_VALIDO])).not.toThrow();
     });
   });
+
+  describe("normalizarCnpj", () => {
+    it("should normalize a masked CNPJ to its 14-digit form", () => {
+      expect(OficinaImportService.normalizarCnpj("12.345.678/0001-90")).toBe("12345678000190");
+    });
+
+    it("should return null for a CNPJ with fewer than 14 digits", () => {
+      expect(OficinaImportService.normalizarCnpj("123456")).toBeNull();
+    });
+
+    it("should return null for a CNPJ with more than 14 digits", () => {
+      expect(OficinaImportService.normalizarCnpj("123456780001901234")).toBeNull();
+    });
+
+    it("should return null for an empty CNPJ", () => {
+      expect(OficinaImportService.normalizarCnpj("")).toBeNull();
+    });
+  });
+
+  describe("indicesComCnpjDuplicado", () => {
+    it("should return an empty set when there are no duplicates", () => {
+      const resultado = OficinaImportService.indicesComCnpjDuplicado([
+        "12345678000190",
+        "98765432000110",
+      ]);
+      expect(resultado.size).toBe(0);
+    });
+
+    it("should flag the second occurrence of a repeated CNPJ, not the first", () => {
+      const resultado = OficinaImportService.indicesComCnpjDuplicado([
+        "12345678000190",
+        "98765432000110",
+        "12345678000190",
+      ]);
+      expect(resultado.has(0)).toBe(false);
+      expect(resultado.has(1)).toBe(false);
+      expect(resultado.has(2)).toBe(true);
+    });
+
+    it("should never flag an invalid (null) CNPJ as a duplicate", () => {
+      const resultado = OficinaImportService.indicesComCnpjDuplicado([null, null]);
+      expect(resultado.size).toBe(0);
+    });
+  });
 });
