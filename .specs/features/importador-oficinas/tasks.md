@@ -366,25 +366,30 @@ Tasks: T13 (depende de T2 e T3, na Fase 1).
 **What**: Handler do controller que extrai `req.file` (via middleware de T4) e `ID_CAMPANHA` (validado por schema Zod), chama `OficinaImportService.importarPlanilha`, e mapeia os erros (404/422/400) para a resposta HTTP. Inclui o registro da rota em `routes/OficinaRoute.ts` (com `createDocumentedRoute`, mesmo padrão dos demais endpoints do arquivo) e os schemas Zod de request/response em `schemas/oficina.ts` — as três mudanças são wiring que só pode ser testado de ponta a ponta junto (a rota não compila sem o handler, o handler não valida sem o schema), por isso ficam em uma task só, com os testes de integração escritos junto.
 **Where**: `controllers/oficinaController.ts`
 **Depends on**: T11
-**Reuses**: `middlewares/validation.ts` (`validateSchema`), `utils/routeDocumentation.ts` (`createDocumentedRoute`), padrão try/catch dos outros handlers de `oficinaController.ts`
+**Reuses**: `utils/routeDocumentation.ts` (`createDocumentedRoute`), padrão try/catch dos outros handlers de `oficinaController.ts`
 **Requirement**: IMPORT-01, IMPORT-05, IMPORT-06
+
+**SPEC_DEVIATION registrado**: `middlewares/validation.ts` (`validateSchema`) **não** foi reusado como planejado. `createDocumentedRoute` sempre executa a validação de `schemas.body` **antes** dos middlewares customizados — para um request `multipart/form-data`, isso rodaria a validação Zod antes de o `multer` popular `req.body`, rejeitando todo upload por `ID_CAMPANHA` "ausente". `ID_CAMPANHA` é validado manualmente no controller, depois do `multer` já ter rodado (ver `ImportOficinasBodySchema` em `schemas/oficina.ts`, ainda definido e usado, só não via o mecanismo `schemas.body` do `createDocumentedRoute`).
 
 **Tools**:
 - MCP: NONE
 - Skill: NONE
 
 **Done when**:
-- [ ] Upload válido retorna 200 com o relatório de `OficinaImportService`
-- [ ] Extensão de arquivo inválida retorna 400 (via `fileFilter` do middleware)
-- [ ] `ID_CAMPANHA` inexistente retorna 404
-- [ ] Campanha sem `EMPRESA_SLUG` retorna 422
-- [ ] Teste de integração usa `jest.mock` em `OficinaImportService` (padrão de `__tests__/integration/visitaConfirmar.test.ts`) — **nunca** o padrão de banco real de `__tests__/integration/oficinaService.test.ts`
-- [ ] Gate: `npm run test:unit && npm run test:integration`
+- [x] Upload válido retorna 200 com o relatório de `OficinaImportService`
+- [x] Extensão de arquivo inválida retorna 400 (via `fileFilter` do middleware)
+- [x] `ID_CAMPANHA` ausente ou arquivo ausente retornam 400
+- [x] `ID_CAMPANHA` inexistente retorna 404
+- [x] Campanha sem `EMPRESA_SLUG` retorna 422
+- [x] Cabeçalho fora do padrão retorna 400
+- [x] Teste de integração usa `jest.mock` em `OficinaImportService` (padrão de `__tests__/integration/visitaConfirmar.test.ts`) — **nunca** o padrão de banco real de `__tests__/integration/oficinaService.test.ts`
+- [x] Gate: `npm run test:unit` (613/625, mesmas 12 falhas pré-existentes) + execução **direcionada** de `oficinaImport.test.ts` e `visitaConfirmar.test.ts` (7/7 e 17/17) — **não** rodei `npm run test:integration` completo, pois outras suítes de integração deste repositório batem em banco real (`__tests__/integration/oficinaService.test.ts` etc.), o que violaria a restrição de nunca acessar um banco nesta sessão
 
 **Tests**: integration
-**Gate**: full
+**Gate**: full (com a ressalva acima sobre o escopo do comando rodado)
 
 **Commit**: `feat(oficina-import): add POST /oficina/import endpoint`
+**Status**: ✅ Complete
 
 ---
 

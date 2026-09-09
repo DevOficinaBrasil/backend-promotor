@@ -1,6 +1,8 @@
 import { Request, Response } from "express";
 import OficinaService from "../service/oficinaService";
 import SegmentacaoService from "../service/segmentacaoService";
+import OficinaImportService from "../service/oficinaImportService";
+import { ImportOficinasBodySchema } from "../schemas/oficina";
 
 export default class OficinaController {
   /**
@@ -137,6 +139,62 @@ export default class OficinaController {
       console.error("Erro ao buscar oficinas próximas:", error);
       return res.status(500).json({
         message: "Erro interno ao buscar oficinas próximas.",
+        error: error instanceof Error ? error.message : "Erro desconhecido",
+      });
+    }
+  };
+
+  /**
+   * Imports oficinas from a .xlsx/.csv planilha, linking them to the client
+   * (EMPRESA_SLUG resolved from ID_CAMPANHA) even without a user.
+   * POST /oficina/import (multipart/form-data: file + ID_CAMPANHA)
+   */
+  static importOficinas = async (req: Request, res: Response) => {
+    try {
+      const parsedBody = ImportOficinasBodySchema.safeParse(req.body);
+      if (!parsedBody.success) {
+        return res.status(400).json({
+          message: "ID_CAMPANHA inválido.",
+          details: parsedBody.error.issues.map((issue) => ({
+            field: issue.path.join("."),
+            message: issue.message,
+            code: issue.code,
+          })),
+        });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({ message: "Arquivo não enviado." });
+      }
+
+      const resultado = await OficinaImportService.importarPlanilha(
+        req.file.buffer,
+        parsedBody.data.ID_CAMPANHA
+      );
+
+      return res.status(200).json({
+        message: "Importação processada.",
+        data: resultado,
+      });
+    } catch (error: any) {
+      if (error.message === "CAMPANHA_NAO_ENCONTRADA") {
+        return res.status(404).json({ message: "Campanha não encontrada." });
+      }
+      if (error.message === "CAMPANHA_SEM_EMPRESA_SLUG") {
+        return res.status(422).json({ message: "Campanha sem empresa vinculada." });
+      }
+      if (error.message === "HEADER_INVALIDO") {
+        return res.status(400).json({
+          message:
+            "Estrutura de colunas inválida. Esperado exatamente: NOME OFICINA; CNPJ; CEP; ENDEREÇO; NUMERO; ESTADO; CIDADE.",
+        });
+      }
+      if (error.message === "LIMITE_LINHAS_EXCEDIDO") {
+        return res.status(400).json({ message: "Arquivo excede o limite de 5.000 linhas." });
+      }
+      console.error("Erro ao importar oficinas:", error);
+      return res.status(500).json({
+        message: "Erro interno ao importar oficinas.",
         error: error instanceof Error ? error.message : "Erro desconhecido",
       });
     }

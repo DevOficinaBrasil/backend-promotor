@@ -92,3 +92,32 @@ export const GetCommunityCountResponseSchema = z.object({
   empresaSlug: z.string(),
   count: z.number(),
 });
+
+/**
+ * Body schema for importing oficinas from a planilha (.xlsx/.csv). Validated
+ * manually in the controller (not via createDocumentedRoute's `schemas.body`)
+ * because the request is multipart/form-data: the body-validation middleware
+ * runs before custom middlewares, so it would see `req.body` before `multer`
+ * has parsed the multipart stream and populated it.
+ */
+export const ImportOficinasBodySchema = z.object({
+  ID_CAMPANHA: z.coerce.number().int().positive(),
+});
+
+const ErroLinhaImportSchema = z.object({
+  linha: z.number(),
+  cnpj: z.string().optional(),
+  motivo: z.string(),
+});
+
+export const ImportOficinasResponseSchema = z.object({
+  message: z.string(),
+  data: z.object({
+    total_linhas: z.number(),
+    oficinas_criadas: z.number(),
+    oficinas_vinculadas_existentes: z.number(),
+    ja_na_comunidade: z.number(),
+    rotas_criadas: z.number(),
+    erros: z.array(ErroLinhaImportSchema),
+  }),
+});
