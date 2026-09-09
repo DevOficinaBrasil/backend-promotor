@@ -138,14 +138,15 @@ Tasks: T13 (depende de T2 e T3, na Fase 1).
 - Skill: NONE
 
 **Done when**:
-- [ ] Script usa `CREATE TABLE IF NOT EXISTS` / `CREATE INDEX IF NOT EXISTS` (idempotente, mesmo padrão dos scripts existentes)
-- [ ] Colunas do script batem exatamente com a entidade de T2
-- [ ] **Nota explícita no PR/commit**: aplicação em produção é manual pelo DBA — este agente não roda a migration contra nenhum banco
+- [x] Script usa `CREATE TABLE IF NOT EXISTS` / `CREATE INDEX IF NOT EXISTS` (idempotente, mesmo padrão dos scripts existentes)
+- [x] Colunas do script batem exatamente com a entidade de T2
+- [x] **Nota explícita no PR/commit**: aplicação em produção é manual pelo DBA — este agente não roda a migration contra nenhum banco (confirmado: script criado, nunca executado)
 
 **Tests**: none
 **Gate**: build
 
 **Commit**: `chore(oficina-import): add OFICINA_IMPORTADA migration script`
+**Status**: ✅ Complete
 
 ---
 
