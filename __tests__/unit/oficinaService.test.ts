@@ -92,6 +92,20 @@ describe('OficinaService', () => {
         ['empresa-test', -23.55, -46.63, 20]
       );
     });
+
+    it('should cast every text column on both UNION branches to a common type (Verifier fix: type-mismatch risk)', async () => {
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([]);
+
+      await OficinaService.getComunityNearbyOficinas(-23.55, -46.63, 20, 'empresa-test');
+
+      const query = (AppDataSourceSync.query as jest.Mock).mock.calls[0][0] as string;
+      const castCount = (query.match(/::text/g) || []).length;
+      // 9 text columns (NOME_FANTASIA, ENDERECO, BAIRRO, CIDADE, ESTADO, NUMERO,
+      // CEP, CNPJ, TELEFONE) cast on each of the 2 UNION branches = 18. A lower
+      // count means at least one column lost its cast (the exact regression a
+      // discrimination-sensor mutation found before this test existed).
+      expect(castCount).toBe(18);
+    });
   });
 
   describe('getCommunityOficinas', () => {
@@ -117,6 +131,16 @@ describe('OficinaService', () => {
         expect.stringContaining('OFICINA_IMPORTADA'),
         ['empresa-test']
       );
+    });
+
+    it('should cast every text column on both UNION branches to a common type (Verifier fix: type-mismatch risk)', async () => {
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([]);
+
+      await OficinaService.getCommunityOficinas('empresa-test');
+
+      const query = (AppDataSourceSync.query as jest.Mock).mock.calls[0][0] as string;
+      const castCount = (query.match(/::text/g) || []).length;
+      expect(castCount).toBe(18);
     });
 
     it('should rethrow database errors', async () => {

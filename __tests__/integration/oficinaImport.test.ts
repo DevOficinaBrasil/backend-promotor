@@ -105,6 +105,18 @@ describe("POST /oficina/import", () => {
     );
   });
 
+  it("should return 400 when the file exceeds the 5MB size limit", async () => {
+    const arquivoGrande = Buffer.alloc(6 * 1024 * 1024, "a"); // 6MB > o teto de 5MB
+
+    const response = await request(app)
+      .post("/oficina/import")
+      .field("ID_CAMPANHA", "10")
+      .attach("file", arquivoGrande, "oficinas.xlsx");
+
+    expect(response.status).toBe(400);
+    expect(importarPlanilhaMock).not.toHaveBeenCalled();
+  });
+
   it("should return 400 when the file exceeds the 5,000-row limit", async () => {
     importarPlanilhaMock.mockRejectedValue(new Error("LIMITE_LINHAS_EXCEDIDO"));
 
