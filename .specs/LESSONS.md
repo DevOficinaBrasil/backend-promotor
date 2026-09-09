@@ -74,6 +74,42 @@ Seen once or not yet corroborated. Tracked, not trusted.
 - evidence: P1 promotor AC2 — route-carousel.tsx:38 (spec)
 - last seen: 2026-08-17T03:18:55Z
 
+### L-011 - Write a test for every capability criterion ("the system SHALL permit X"), not only for the criteria that reject or transform input.
+- signal: `ac_gap` · recurrence: 1 feature(s) · scope: `service` · harmful: 0
+- features: importador-oficinas
+- evidence: IMPORT-15 (service)
+- last seen: 2026-09-09T18:13:58Z
+
+### L-012 - Give every spec-listed edge case its own test; an edge case satisfied only incidentally by another code path is not covered.
+- signal: `ac_gap` · recurrence: 1 feature(s) · scope: `service` · harmful: 0
+- features: importador-oficinas
+- evidence: spec.md edge case: CEP vazio ou ausente (service)
+- last seen: 2026-09-09T18:13:58Z
+
+### L-013 - Assert the exact error-response body the spec prescribes, not only the HTTP status code.
+- signal: `spec_precision_gap` · recurrence: 1 feature(s) · scope: `routes` · harmful: 0
+- features: importador-oficinas
+- evidence: IMPORT-03 (routes)
+- last seen: 2026-09-09T18:13:58Z
+
+### L-014 - When the database is mocked, asserting that a query string contains a table name does not verify the query's result; record it as unverified rather than covered.
+- signal: `spec_precision_gap` · recurrence: 1 feature(s) · scope: `service` · harmful: 0
+- features: importador-oficinas
+- evidence: IMPORT-20 (service)
+- last seen: 2026-09-09T18:13:58Z
+
+### L-015 - Reconcile the design's flow diagram against the spec's SHALL NOT clauses before implementing; the spec wins and the deviation must be logged.
+- signal: `spec_deviation` · recurrence: 1 feature(s) · harmful: 0
+- features: importador-oficinas
+- evidence: tasks.md T11 SPEC_DEVIATION
+- last seen: 2026-09-09T18:13:58Z
+
+### L-016 - Verify a shared route helper's middleware ordering before relying on its declarative body validation.
+- signal: `spec_deviation` · recurrence: 1 feature(s) · scope: `routes` · harmful: 0
+- features: importador-oficinas
+- evidence: tasks.md T12 SPEC_DEVIATION (routes)
+- last seen: 2026-09-09T18:13:58Z
+
 ## Quarantined (failed when applied - ignore)
 
 A confirmed lesson that recurred alongside failure. Kept for the maintainer to review.

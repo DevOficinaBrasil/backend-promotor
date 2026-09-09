@@ -3,7 +3,7 @@
   "promote_threshold": 2,
   "window_days": 45,
   "quarantine_threshold": 2,
-  "next_id": 11,
+  "next_id": 17,
   "lessons": [
     {
       "id": "L-001",
@@ -184,6 +184,114 @@
       ],
       "created": "2026-08-17T03:18:55Z",
       "last_seen": "2026-08-17T03:18:55Z"
+    },
+    {
+      "id": "L-011",
+      "key": "ac_gap::write a test for every capability criterion the system shall permit x not only for the criteria that reject or transform input",
+      "text": "Write a test for every capability criterion (\"the system SHALL permit X\"), not only for the criteria that reject or transform input.",
+      "signal": "ac_gap",
+      "scope": "service",
+      "status": "candidate",
+      "features": [
+        "importador-oficinas"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "IMPORT-15 (service)"
+      ],
+      "created": "2026-09-09T18:13:58Z",
+      "last_seen": "2026-09-09T18:13:58Z"
+    },
+    {
+      "id": "L-012",
+      "key": "ac_gap::give every spec listed edge case its own test an edge case satisfied only incidentally by another code path is not covered",
+      "text": "Give every spec-listed edge case its own test; an edge case satisfied only incidentally by another code path is not covered.",
+      "signal": "ac_gap",
+      "scope": "service",
+      "status": "candidate",
+      "features": [
+        "importador-oficinas"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "spec.md edge case: CEP vazio ou ausente (service)"
+      ],
+      "created": "2026-09-09T18:13:58Z",
+      "last_seen": "2026-09-09T18:13:58Z"
+    },
+    {
+      "id": "L-013",
+      "key": "spec_precision_gap::assert the exact error response body the spec prescribes not only the http status code",
+      "text": "Assert the exact error-response body the spec prescribes, not only the HTTP status code.",
+      "signal": "spec_precision_gap",
+      "scope": "routes",
+      "status": "candidate",
+      "features": [
+        "importador-oficinas"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "IMPORT-03 (routes)"
+      ],
+      "created": "2026-09-09T18:13:58Z",
+      "last_seen": "2026-09-09T18:13:58Z"
+    },
+    {
+      "id": "L-014",
+      "key": "spec_precision_gap::when the database is mocked asserting that a query string contains a table name does not verify the query s result record it as unverified rather than covered",
+      "text": "When the database is mocked, asserting that a query string contains a table name does not verify the query's result; record it as unverified rather than covered.",
+      "signal": "spec_precision_gap",
+      "scope": "service",
+      "status": "candidate",
+      "features": [
+        "importador-oficinas"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "IMPORT-20 (service)"
+      ],
+      "created": "2026-09-09T18:13:58Z",
+      "last_seen": "2026-09-09T18:13:58Z"
+    },
+    {
+      "id": "L-015",
+      "key": "spec_deviation::reconcile the design s flow diagram against the spec s shall not clauses before implementing the spec wins and the deviation must be logged",
+      "text": "Reconcile the design's flow diagram against the spec's SHALL NOT clauses before implementing; the spec wins and the deviation must be logged.",
+      "signal": "spec_deviation",
+      "scope": "",
+      "status": "candidate",
+      "features": [
+        "importador-oficinas"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "tasks.md T11 SPEC_DEVIATION"
+      ],
+      "created": "2026-09-09T18:13:58Z",
+      "last_seen": "2026-09-09T18:13:58Z"
+    },
+    {
+      "id": "L-016",
+      "key": "spec_deviation::verify a shared route helper s middleware ordering before relying on its declarative body validation",
+      "text": "Verify a shared route helper's middleware ordering before relying on its declarative body validation.",
+      "signal": "spec_deviation",
+      "scope": "routes",
+      "status": "candidate",
+      "features": [
+        "importador-oficinas"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "tasks.md T12 SPEC_DEVIATION (routes)"
+      ],
+      "created": "2026-09-09T18:13:58Z",
+      "last_seen": "2026-09-09T18:13:58Z"
     }
   ]
 }
