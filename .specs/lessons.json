@@ -29,17 +29,19 @@
       "text": "Every middleware wired into a route needs its own integration test - wiring it is not evidence that it behaves.",
       "signal": "ac_gap",
       "scope": "routes",
-      "status": "candidate",
+      "status": "confirmed",
       "features": [
-        "notificacao-visita-confirmacao"
+        "notificacao-visita-confirmacao",
+        "importador-oficinas"
       ],
-      "recurrence": 1,
+      "recurrence": 2,
       "harmful": 0,
       "evidence": [
-        "routes/VisitaRoute.ts:49; AC25 POST/PUT (routes)"
+        "routes/VisitaRoute.ts:49; AC25 POST/PUT (routes)",
+        "IMPORT-04 (5MB) - middlewares/uploadPlanilha.ts:19 (routes)"
       ],
       "created": "2026-08-05T18:43:52Z",
-      "last_seen": "2026-08-05T18:43:52Z"
+      "last_seen": "2026-09-09T18:34:21Z"
     },
     {
       "id": "L-003",
@@ -65,17 +67,19 @@
       "text": "When a test mocks the query runner, assert the SQL string's joins and column aliases too - hand-fed rows prove the mapper, never the query.",
       "signal": "surviving_mutant",
       "scope": "raw-sql",
-      "status": "candidate",
+      "status": "confirmed",
       "features": [
-        "notificacao-visita-confirmacao"
+        "notificacao-visita-confirmacao",
+        "importador-oficinas"
       ],
-      "recurrence": 1,
+      "recurrence": 2,
       "harmful": 0,
       "evidence": [
-        ".specs/features/notificacao-visita-confirmacao/validation.md M4, M11; service/campanhaService.ts:233-234, :225-227 (raw-sql)"
+        ".specs/features/notificacao-visita-confirmacao/validation.md M4, M11; service/campanhaService.ts:233-234, :225-227 (raw-sql)",
+        "M4 - service/oficinaService.ts:130,173 (::text casts) (raw-sql)"
       ],
       "created": "2026-08-05T19:21:55Z",
-      "last_seen": "2026-08-05T19:21:55Z"
+      "last_seen": "2026-09-09T18:34:21Z"
     },
     {
       "id": "L-005",

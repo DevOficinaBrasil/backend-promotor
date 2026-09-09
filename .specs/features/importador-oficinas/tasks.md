@@ -538,12 +538,21 @@ Verifier independente (sub-agent, author ≠ verifier) rodou após T13 e retorno
 
 | Gap do Verifier | Severidade | Correção | Commit |
 |---|---|---|---|
-| Edge case "CEP vazio/ausente" não rejeitava quando a oficina já tinha lat/long | Major | Linha rejeitada (`CEP_INVALIDO`) sempre que o CEP não normaliza para nenhum dígito, antes de `buscarOuCriarOficina` — independe de a oficina já ter coordenadas | `fix(oficina-import): reject blank CEP and isolate per-row processing errors` |
+| Edge case "CEP vazio/ausente" não rejeitava quando a oficina já tinha lat/long | Major | Linha rejeitada (`CEP_INVALIDO`) sempre que o CEP não normaliza para nenhum dígito, antes de `buscarOuCriarOficina` — independe de a oficina já ter coordenadas | `fix(oficina-import): reject blank CEP, isolate per-row errors` (`6151976`) |
 | Loop de `importarPlanilha` sem try/catch — falha de banco numa linha abortava o arquivo com escritas parciais, contra o que `design.md` já prometia | Major | Corpo de cada iteração envolvido em try/catch; erro inesperado vira `ERRO_PROCESSAMENTO` na linha, loop continua | mesmo commit acima |
 | `UNION ALL` das 3 queries de comunidade dependia de resolução implícita de tipo em 10 colunas cujo tipo real no DW só é conhecido por uma entity já provada imprecisa (risco de derrubar as 3 queries pra todo cliente) | Major | `::text` explícito nas colunas de texto dos dois ramos em `getComunityNearbyOficinas`/`getCommunityOficinas` (`countCommunityOficinas` só seleciona o id, sem risco); lat/long seguem `::double precision` (já confirmado seguro pelo Verifier) | `fix(oficina-import): cast UNION-ed text columns to a common type` |
-| IMPORT-15 (oficina vinculada a mais de um `EMPRESA_SLUG`) e a edge case equivalente sem nenhuma evidência de teste | Major | Teste em `garantirVinculo` com dois slugs distintos para o mesmo `ID_OFICINA` | `test(oficina-import): cover multi-EMPRESA_SLUG linking and lat/long fill on existing link` |
-| IMPORT-14 "apenas preencher lat/long" sem asserção própria | Minor | Teste em `importarPlanilha` para oficina já vinculada (`ja_vinculada`) que também está sem lat/long, confirmando `repo.update` chamado | mesmo commit acima |
-| IMPORT-03 (lista de colunas no corpo do 400) e IMPORT-04 (mapeamento de `LIMITE_LINHAS_EXCEDIDO` para 400) sem asserção de corpo/rota | Minor | 2 testes de integração novos, assertando o texto exato da mensagem | `test(oficina-import): assert exact header-error message and row-limit response` |
+| IMPORT-15 (oficina vinculada a mais de um `EMPRESA_SLUG`) e a edge case equivalente sem nenhuma evidência de teste | Major | Teste em `garantirVinculo` com dois slugs distintos para o mesmo `ID_OFICINA` | `fix(oficina-import): reject blank CEP, isolate per-row errors` (`6151976` — commitado junto por engano de `git add` abrangente; a mensagem do commit não menciona este teste) |
+| IMPORT-14 "apenas preencher lat/long" sem asserção própria | Minor | Teste em `importarPlanilha` para oficina já vinculada (`ja_vinculada`) que também está sem lat/long, confirmando `repo.update` chamado | mesmo commit acima (`6151976`) |
+| IMPORT-03 (lista de colunas no corpo do 400) e IMPORT-04 (mapeamento de `LIMITE_LINHAS_EXCEDIDO` para 400) sem asserção de corpo/rota | Minor | 2 testes de integração novos, assertando o texto exato da mensagem | `test(oficina-import): assert exact header-error message and row-limit response` (`f584fc4`) |
+
+**Correção pós-Verifier (iteração 2, FAIL de novo — 2 gaps menores, ambos só de teste):**
+
+| Gap do Verifier (iteração 2) | Severidade | Correção |
+|---|---|---|
+| IMPORT-04 (teto de 5MB) sem nenhuma evidência de teste fim-a-fim | Minor | Teste de integração com upload real de 6MB via `supertest`, confirma 400 sem chamar o service |
+| Casts `::text` do Fix 4 sem discriminação de teste (mutação removendo o cast de uma coluna sobrevivia) | Minor | Teste que conta ocorrências de `::text` na query enviada (18 esperadas: 9 colunas × 2 ramos) em `getComunityNearbyOficinas` e `getCommunityOficinas` |
+
+Também corrigido nesta rodada (observação não-bloqueante do Verifier, mas real): contador `oficinas_criadas`/`oficinas_vinculadas_existentes`/`ja_na_comunidade`/`rotas_criadas` só avança depois que a linha inteira é processada com sucesso — antes, uma falha em `garantirVinculo`/`atribuirRota` após `buscarOuCriarOficina` já ter incrementado o contador contava a mesma linha como sucesso E como erro. `console.error` adicionado no catch por linha, para bater com o padrão log-then-degrade do resto do repositório.
 
 **Não corrigido nesta rodada** (aceito como gap de documentação menor, não de comportamento, per o próprio Verifier): OpenAPI do endpoint não documenta o corpo multipart (`schemas.body` foi omitido deliberadamente em T12 — ver SPEC_DEVIATION daquela task). O contrato multipart continua descrito só em prosa na `description` da rota.
 

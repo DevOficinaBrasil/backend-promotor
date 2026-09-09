@@ -8,7 +8,17 @@
 
 Corroborated across multiple features. Safe to apply as guidance.
 
-_none_
+### L-002 - Every middleware wired into a route needs its own integration test - wiring it is not evidence that it behaves.
+- signal: `ac_gap` · recurrence: 2 feature(s) · scope: `routes` · harmful: 0
+- features: notificacao-visita-confirmacao, importador-oficinas
+- evidence: routes/VisitaRoute.ts:49; AC25 POST/PUT (routes) (+1 more)
+- last seen: 2026-09-09T18:34:21Z
+
+### L-004 - When a test mocks the query runner, assert the SQL string's joins and column aliases too - hand-fed rows prove the mapper, never the query.
+- signal: `surviving_mutant` · recurrence: 2 feature(s) · scope: `raw-sql` · harmful: 0
+- features: notificacao-visita-confirmacao, importador-oficinas
+- evidence: .specs/features/notificacao-visita-confirmacao/validation.md M4, M11; service/campanhaService.ts:233-234, :225-227 (raw-sql) (+1 more)
+- last seen: 2026-09-09T18:34:21Z
 
 ## Candidates (under observation - do NOT load as guidance yet)
 
@@ -20,23 +30,11 @@ Seen once or not yet corroborated. Tracked, not trusted.
 - evidence: .specs/features/notificacao-visita-confirmacao/validation.md P2 AC2; service/campanhaService.ts:212 (service-layer)
 - last seen: 2026-08-05T18:43:45Z
 
-### L-002 - Every middleware wired into a route needs its own integration test - wiring it is not evidence that it behaves.
-- signal: `ac_gap` · recurrence: 1 feature(s) · scope: `routes` · harmful: 0
-- features: notificacao-visita-confirmacao
-- evidence: routes/VisitaRoute.ts:49; AC25 POST/PUT (routes)
-- last seen: 2026-08-05T18:43:52Z
-
 ### L-003 - Specify the HTTP status code for every named error state, not just the state name, or the tests silently become the contract.
 - signal: `spec_precision_gap` · recurrence: 1 feature(s) · scope: `spec` · harmful: 0
 - features: notificacao-visita-confirmacao
 - evidence: .specs/features/notificacao-visita-confirmacao/validation.md Spec-Precision Gaps; AC16-AC20, AC33 (spec)
 - last seen: 2026-08-05T18:43:52Z
-
-### L-004 - When a test mocks the query runner, assert the SQL string's joins and column aliases too - hand-fed rows prove the mapper, never the query.
-- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `raw-sql` · harmful: 0
-- features: notificacao-visita-confirmacao
-- evidence: .specs/features/notificacao-visita-confirmacao/validation.md M4, M11; service/campanhaService.ts:233-234, :225-227 (raw-sql)
-- last seen: 2026-08-05T19:21:55Z
 
 ### L-005 - When a CLI script carries a guard that protects real data, extract it as a pure function and unit-test it — scoping the scripts layer to 'argument parsing' in the coverage matrix silently leaves that guard untested.
 - signal: `ac_gap` · recurrence: 1 feature(s) · scope: `scripts` · harmful: 0
