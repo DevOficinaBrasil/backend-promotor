@@ -114,13 +114,14 @@ Tasks: T13 (depende de T2 e T3, na Fase 1).
 - Skill: NONE
 
 **Done when**:
-- [ ] Colunas `ID_OFICINA_IMPORTADA`, `ID_OFICINA`, `EMPRESA_SLUG`, `ID_CAMPANHA`, `CREATED_BY`, `CREATED_AT`, `UPDATED_AT`, `DELETED_AT` definidas conforme design (sem `ORIGEM` — redundante com `MAIN_REGISTER.OFICINA.ORIGEM`, obtível via join quando necessário)
-- [ ] `npx tsc --noEmit` sem erros novos
+- [x] Colunas `ID_OFICINA_IMPORTADA`, `ID_OFICINA`, `EMPRESA_SLUG`, `ID_CAMPANHA`, `CREATED_BY`, `CREATED_AT`, `UPDATED_AT`, `DELETED_AT` definidas conforme design (sem `ORIGEM` — redundante com `MAIN_REGISTER.OFICINA.ORIGEM`, obtível via join quando necessário)
+- [x] `npx tsc --noEmit` sem erros novos
 
 **Tests**: none
 **Gate**: build
 
 **Commit**: `feat(oficina-import): add OficinaImportada entity`
+**Status**: ✅ Complete
 
 ---
 
