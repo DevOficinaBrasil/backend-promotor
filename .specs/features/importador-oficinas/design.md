@@ -170,7 +170,7 @@ CREATE INDEX IF NOT EXISTS idx_oficina_importada_empresa_slug
 
 > Segue a convenção do repositório: migrations em `scripts/*.sql`, aplicadas manualmente pelo DBA (ver `docs/` e `CONCERNS.md` — não há TypeORM migration runner configurado). Esta task ficará explícita na fase de Tasks como um passo manual/coordenado, não uma escrita automática deste agente.
 
-### Extensão de query (exemplo — mesmo padrão nas 3 queries)
+### Extensão de query (implementado — mesmo padrão nas 3 queries)
 
 ```sql
 SELECT DISTINCT ON ("ID_OFICINA") * FROM (
@@ -180,31 +180,32 @@ SELECT DISTINCT ON ("ID_OFICINA") * FROM (
   UNION ALL
 
   -- ramo novo: oficinas importadas sem usuário
-  SELECT DISTINCT ON (oi."ID_OFICINA")
+  SELECT
     oi."ID_OFICINA" AS "ID_OFICINA",
-    COALESCE(ce."latitude", o."LATITUDE") AS "LATITUDE",
-    COALESCE(ce."longitude", o."LONGITUDE") AS "LONGITUDE",
-    COALESCE(ce."razao_social", o."NOME_FANTASIA") AS "NOME_FANTASIA",
-    COALESCE(CONCAT(ce."logradouro", ' ', ce."rua"), o."ENDERECO") AS "ENDERECO",
-    ce."bairro" AS "BAIRRO",
-    COALESCE(ce."cidade", o."CIDADE") AS "CIDADE",
-    COALESCE(ce."estado", o."ESTADO") AS "ESTADO",
-    COALESCE(ce."numero", o."NUMERO") AS "NUMERO",
-    COALESCE(ce."cep", o."CEP") AS "CEP",
-    COALESCE(ce."cnpj", o."CNPJ") AS "CNPJ",
+    o."LATITUDE"::double precision AS "LATITUDE",
+    o."LONGITUDE"::double precision AS "LONGITUDE",
+    o."NOME_FANTASIA" AS "NOME_FANTASIA",
+    o."ENDERECO" AS "ENDERECO",
+    o."BAIRRO" AS "BAIRRO",
+    o."CIDADE" AS "CIDADE",
+    o."ESTADO" AS "ESTADO",
+    o."NUMERO" AS "NUMERO",
+    o."CEP" AS "CEP",
+    o."CNPJ" AS "CNPJ",
     o."TELEFONE" AS "TELEFONE"
   FROM "CAMPANHAS_OB"."OFICINA_IMPORTADA" oi
   INNER JOIN "MAIN_REGISTER"."OFICINA" o ON o."ID_OFICINA" = oi."ID_OFICINA"
-  ${ligacaoCadastroEmpresa('o', 'oi."ID_OFICINA"')}
   WHERE oi."EMPRESA_SLUG" = $1
     AND oi."DELETED_AT" IS NULL
-    AND COALESCE(ce."latitude", o."LATITUDE") IS NOT NULL
-    AND COALESCE(ce."longitude", o."LONGITUDE") IS NOT NULL
+    AND o."LATITUDE" IS NOT NULL
+    AND o."LONGITUDE" IS NOT NULL
 ) combinado
 ORDER BY "ID_OFICINA"
 ```
 
-O ramo importado não filtra por `ce."status_receita" = 'ATIVA'` — uma oficina recém-criada por este import tipicamente ainda não tem linha em `dw.cadastro_empresa` (ETL externo, batelada), então essa condição excluiria toda oficina nova. Ver Tech Decisions.
+**Mudança em relação ao rascunho original desta seção**: o ramo novo lê direto de `MAIN_REGISTER.OFICINA`, sem `ligacaoCadastroEmpresa`/`dw.cadastro_empresa`. Uma oficina recém-criada por este import tipicamente ainda não tem linha no DW (ETL externo, em lote) — dependeria de `COALESCE` para uma fonte quase sempre nula. `MAIN_REGISTER.OFICINA.LATITUDE`/`LONGITUDE` já são garantidos preenchidos pelo import (T8) antes do vínculo existir, então são a fonte confiável para este ramo. Consequência: o ramo importado também não filtra por `ce."status_receita" = 'ATIVA'` (não há `ce` neste ramo) — ver Tech Decisions e Risks & Concerns.
+
+**Verificação pendente contra banco real**: a combinação `UNION ALL` entre `ce."latitude"` (tipo do DW, ramo existente) e `o."LATITUDE"::double precision` (cast explícito, ramo novo) não foi executada contra Postgres real nesta sessão — instrução explícita de nunca acessar o banco durante Specify/Design/Tasks/Execute. Validar manualmente antes do deploy.
 
 ---
 

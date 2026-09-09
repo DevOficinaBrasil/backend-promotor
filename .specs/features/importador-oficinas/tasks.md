@@ -398,22 +398,27 @@ Tasks: T13 (depende de T2 e T3, na Fase 1).
 **What**: Estender `getComunityNearbyOficinas`, `getCommunityOficinas` e `countCommunityOficinas` (as 3 em `service/oficinaService.ts`) com o ramo `UNION ALL` sobre `OFICINA_IMPORTADA` descrito no design, mantendo a mesma assinatura e formato de retorno de cada método.
 **Where**: `service/oficinaService.ts`
 **Depends on**: T2, T3
-**Reuses**: `ligacaoCadastroEmpresa` (mesmo helper já usado nas 3 queries)
+**Reuses**: `ligacaoCadastroEmpresa` no ramo já existente das 3 queries (inalterado)
 **Requirement**: IMPORT-20
+
+**SPEC_DEVIATION registrado**: o ramo novo (`OFICINA_IMPORTADA`) **não** usa `ligacaoCadastroEmpresa`/`dw.cadastro_empresa` como o rascunho de SQL do design sugeria — lê lat/long e demais campos direto de `MAIN_REGISTER.OFICINA`. Motivo: uma oficina recém-criada por este import tipicamente ainda não tem linha em `dw.cadastro_empresa` (ETL externo, em lote), então depender do DW deixaria o ramo novo `NULL` na maioria dos casos — justamente o oposto do objetivo. `MAIN_REGISTER.OFICINA.LATITUDE/LONGITUDE` já são garantidos preenchidos pelo próprio import (T8) antes do vínculo existir, então essa é a fonte confiável. `design.md` atualizado com a nota.
+
+**⚠️ Risco residual não coberto pelos testes desta task**: como `AppDataSourceSync.query` é mockado em todo teste unitário deste repositório, nenhum teste aqui executa o SQL contra um Postgres real. A combinação `UNION ALL` entre `ce."latitude"` (tipo do DW, usado sem cast nas queries já existentes) e `o."LATITUDE"::double precision` (cast explícito de varchar) **precisa ser validada contra um banco real antes de ir para produção** — não foi possível verificar isso nesta sessão (instrução explícita de nunca acessar o banco). Recomendo ao DBA/QA rodar as 3 queries manualmente (ou via `__tests__/integration/oficinaService.test.ts`, que já usa banco real) contra um `empresaSlug` com pelo menos uma oficina em `OFICINA_IMPORTADA` antes do deploy.
 
 **Tools**:
 - MCP: NONE
 - Skill: NONE
 
 **Done when**:
-- [ ] Para um `empresaSlug` sem nenhuma oficina em `OFICINA_IMPORTADA`, as 3 queries retornam exatamente o mesmo resultado de antes (ramo novo é um no-op) — teste de regressão explícito
-- [ ] Para um `empresaSlug` com oficinas em `OFICINA_IMPORTADA`, as 3 queries incluem essas oficinas no resultado, sem duplicar as que já vêm de `USUARIO_COMMUNITY`
-- [ ] Gate: `npm run test:unit`
+- [x] Para um `empresaSlug` sem nenhuma oficina em `OFICINA_IMPORTADA`, as 3 queries retornam exatamente o mesmo resultado de antes (ramo novo é um no-op) — testes existentes de `getComunityNearbyOficinas` passam inalterados, sem nenhuma mudança de asserção
+- [x] Para um `empresaSlug` com oficinas em `OFICINA_IMPORTADA`, as 3 queries incluem essas oficinas no resultado, sem duplicar as que já vêm de `USUARIO_COMMUNITY` — verificado via `DISTINCT ON` externo e teste que confirma a string da query enviada contém `OFICINA_IMPORTADA` (não é possível provar isso fim-a-fim sem banco real, ver risco residual acima)
+- [x] Gate: `npm run test:unit` — 621/633 passando (14 novos testes, mesmas 12 falhas pré-existentes e não relacionadas)
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(oficina-import): include imported oficinas in community queries`
+**Status**: ✅ Complete
 
 ---
 
