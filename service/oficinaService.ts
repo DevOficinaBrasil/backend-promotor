@@ -122,15 +122,15 @@ export default class OficinaService {
             us."ID_OFICINA" AS "ID_OFICINA",
             ce."latitude" AS "LATITUDE",
             ce."longitude" AS "LONGITUDE",
-            ce."razao_social" AS "NOME_FANTASIA",
-            CONCAT(ce."logradouro", ' ', ce."rua") AS "ENDERECO",
-            ce."bairro" AS "BAIRRO",
-            ce."cidade" AS "CIDADE",
-            ce."estado" AS "ESTADO",
-            ce."numero" AS "NUMERO",
-            ce."cep" AS "CEP",
-            ce."cnpj" AS "CNPJ",
-            ce."telefone" AS "TELEFONE",
+            ce."razao_social"::text AS "NOME_FANTASIA",
+            CONCAT(ce."logradouro", ' ', ce."rua")::text AS "ENDERECO",
+            ce."bairro"::text AS "BAIRRO",
+            ce."cidade"::text AS "CIDADE",
+            ce."estado"::text AS "ESTADO",
+            ce."numero"::text AS "NUMERO",
+            ce."cep"::text AS "CEP",
+            ce."cnpj"::text AS "CNPJ",
+            ce."telefone"::text AS "TELEFONE",
             (
               ${EARTH_RADIUS_KM} * acos(
                 cos(radians($2)) * cos(radians(ce."latitude")) *
@@ -165,15 +165,15 @@ export default class OficinaService {
             oi."ID_OFICINA" AS "ID_OFICINA",
             o."LATITUDE"::double precision AS "LATITUDE",
             o."LONGITUDE"::double precision AS "LONGITUDE",
-            o."NOME_FANTASIA" AS "NOME_FANTASIA",
-            o."ENDERECO" AS "ENDERECO",
-            o."BAIRRO" AS "BAIRRO",
-            o."CIDADE" AS "CIDADE",
-            o."ESTADO" AS "ESTADO",
-            o."NUMERO" AS "NUMERO",
-            o."CEP" AS "CEP",
-            o."CNPJ" AS "CNPJ",
-            o."TELEFONE" AS "TELEFONE",
+            o."NOME_FANTASIA"::text AS "NOME_FANTASIA",
+            o."ENDERECO"::text AS "ENDERECO",
+            o."BAIRRO"::text AS "BAIRRO",
+            o."CIDADE"::text AS "CIDADE",
+            o."ESTADO"::text AS "ESTADO",
+            o."NUMERO"::text AS "NUMERO",
+            o."CEP"::text AS "CEP",
+            o."CNPJ"::text AS "CNPJ",
+            o."TELEFONE"::text AS "TELEFONE",
             (
               ${EARTH_RADIUS_KM} * acos(
                 cos(radians($2)) * cos(radians(o."LATITUDE"::double precision)) *
@@ -337,15 +337,15 @@ export default class OficinaService {
             us."ID_OFICINA" AS "ID_OFICINA",
             ce."latitude" AS "LATITUDE",
             ce."longitude" AS "LONGITUDE",
-            ce."razao_social" AS "NOME_FANTASIA",
-            CONCAT(ce."logradouro", ' ', ce."rua") AS "ENDERECO",
-            ce."bairro" AS "BAIRRO",
-            ce."cidade" AS "CIDADE",
-            ce."estado" AS "ESTADO",
-            ce."numero" AS "NUMERO",
-            ce."cep" AS "CEP",
-            ce."cnpj" AS "CNPJ",
-            ce."telefone" AS "TELEFONE"
+            ce."razao_social"::text AS "NOME_FANTASIA",
+            CONCAT(ce."logradouro", ' ', ce."rua")::text AS "ENDERECO",
+            ce."bairro"::text AS "BAIRRO",
+            ce."cidade"::text AS "CIDADE",
+            ce."estado"::text AS "ESTADO",
+            ce."numero"::text AS "NUMERO",
+            ce."cep"::text AS "CEP",
+            ce."cnpj"::text AS "CNPJ",
+            ce."telefone"::text AS "TELEFONE"
           FROM "OFICINA_PORTAL"."COMMUNITIES" cm
           INNER JOIN "MAIN_REGISTER"."USUARIO_COMMUNITY" uc
             ON cm."CommunityID" = uc."id_community"
@@ -365,15 +365,15 @@ export default class OficinaService {
             oi."ID_OFICINA" AS "ID_OFICINA",
             o."LATITUDE"::double precision AS "LATITUDE",
             o."LONGITUDE"::double precision AS "LONGITUDE",
-            o."NOME_FANTASIA" AS "NOME_FANTASIA",
-            o."ENDERECO" AS "ENDERECO",
-            o."BAIRRO" AS "BAIRRO",
-            o."CIDADE" AS "CIDADE",
-            o."ESTADO" AS "ESTADO",
-            o."NUMERO" AS "NUMERO",
-            o."CEP" AS "CEP",
-            o."CNPJ" AS "CNPJ",
-            o."TELEFONE" AS "TELEFONE"
+            o."NOME_FANTASIA"::text AS "NOME_FANTASIA",
+            o."ENDERECO"::text AS "ENDERECO",
+            o."BAIRRO"::text AS "BAIRRO",
+            o."CIDADE"::text AS "CIDADE",
+            o."ESTADO"::text AS "ESTADO",
+            o."NUMERO"::text AS "NUMERO",
+            o."CEP"::text AS "CEP",
+            o."CNPJ"::text AS "CNPJ",
+            o."TELEFONE"::text AS "TELEFONE"
           FROM "CAMPANHAS_OB"."OFICINA_IMPORTADA" oi
           INNER JOIN "MAIN_REGISTER"."OFICINA" o
             ON o."ID_OFICINA" = oi."ID_OFICINA"
