@@ -6,12 +6,12 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 
 **If the skill cannot be activated, STOP and tell the user - do not proceed without it.**
 
-**Não executar nesta sessão.** Esta fase produz o plano de tasks/commits para revisão; a execução (escrever código, rodar testes, criar commits) só começa em uma sessão futura, após aprovação explícita do usuário. Nenhum passo abaixo acessa o banco de dados — os gates de teste `integration` exigem um banco real e devem ser rodados pelo executor humano/CI, nunca pelo agente de design.
+Nenhuma task acessa o banco de dados real — gates `integration` que precisariam de banco real (ex: `oficinaService.test.ts` de integração) foram deliberadamente evitados; ver notas de cada task.
 
 ---
 
 **Design**: `.specs/features/importador-oficinas/design.md`
-**Status**: Draft
+**Status**: Implementing (todas as 13 tasks commitadas; aguardando Verifier)
 
 ---
 
