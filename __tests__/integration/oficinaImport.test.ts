@@ -91,7 +91,7 @@ describe("POST /oficina/import", () => {
     expect(response.status).toBe(422);
   });
 
-  it("should return 400 when the file header does not match the expected structure", async () => {
+  it("should return 400 with the expected column list when the file header does not match", async () => {
     importarPlanilhaMock.mockRejectedValue(new Error("HEADER_INVALIDO"));
 
     const response = await request(app)
@@ -100,5 +100,20 @@ describe("POST /oficina/import", () => {
       .attach("file", Buffer.from("conteudo"), "oficinas.xlsx");
 
     expect(response.status).toBe(400);
+    expect(response.body.message).toContain(
+      "NOME OFICINA; CNPJ; CEP; ENDEREÇO; NUMERO; ESTADO; CIDADE"
+    );
+  });
+
+  it("should return 400 when the file exceeds the 5,000-row limit", async () => {
+    importarPlanilhaMock.mockRejectedValue(new Error("LIMITE_LINHAS_EXCEDIDO"));
+
+    const response = await request(app)
+      .post("/oficina/import")
+      .field("ID_CAMPANHA", "10")
+      .attach("file", Buffer.from("conteudo"), "oficinas.xlsx");
+
+    expect(response.status).toBe(400);
+    expect(response.body.message).toContain("5.000 linhas");
   });
 });
