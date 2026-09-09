@@ -189,16 +189,17 @@ Tasks: T13 (depende de T2 e T3, na Fase 1).
 - Skill: NONE
 
 **Done when**:
-- [ ] Cabeçalho exato (qualquer capitalização/acentuação) é aceito
-- [ ] Cabeçalho fora de ordem, faltando coluna, ou com coluna extra é rejeitado
-- [ ] Arquivo com mais de 5.000 linhas de dados é rejeitado antes de processar qualquer linha
-- [ ] Arquivo com cabeçalho válido e 0 linhas de dados retorna lista vazia (sem erro)
-- [ ] Gate: `npm run test:unit`
+- [x] Cabeçalho exato (qualquer capitalização/acentuação) é aceito
+- [x] Cabeçalho fora de ordem, faltando coluna, ou com coluna extra é rejeitado
+- [x] Arquivo com mais de 5.000 linhas de dados é rejeitado antes de processar qualquer linha
+- [x] Arquivo com cabeçalho válido e 0 linhas de dados retorna lista vazia (sem erro)
+- [x] Gate: `npm run test:unit` — 10/10 testes passando
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(oficina-import): parse and validate planilha header`
+**Status**: ✅ Complete
 
 ---
 
