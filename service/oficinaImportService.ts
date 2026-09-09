@@ -1,5 +1,17 @@
 import * as XLSX from "xlsx";
-import { cnpjIntParaLigacao } from "../utils/sqlCadastroEmpresa";
+import { AppDataSourceSync } from "../data-source";
+import Oficina from "../entities/Oficina";
+import { cnpjIntParaLigacao, cnpjIntDaOficina } from "../utils/sqlCadastroEmpresa";
+
+export interface LinhaOficinaImport {
+  nomeOficina: string;
+  cnpj: string;
+  cep: string;
+  endereco: string;
+  numero: string;
+  estado: string;
+  cidade: string;
+}
 
 const CABECALHO_ESPERADO = [
   "NOME OFICINA",
@@ -101,6 +113,43 @@ export default class OficinaImportService {
     });
 
     return duplicados;
+  }
+
+  /**
+   * Busca `MAIN_REGISTER.OFICINA` pelo CNPJ normalizado. Se existir, reusa
+   * o `ID_OFICINA` sem alterar nenhum campo da oficina. Se não existir,
+   * cria uma oficina nova com os dados da linha e
+   * `ORIGEM = "IMPORTACAO_PLANILHA"`.
+   */
+  static async buscarOuCriarOficina(
+    linha: LinhaOficinaImport,
+    cnpjNormalizado: string
+  ): Promise<{ ID_OFICINA: number; criada: boolean }> {
+    const existente = await AppDataSourceSync.query(
+      `SELECT o."ID_OFICINA" FROM "MAIN_REGISTER"."OFICINA" o
+       WHERE ${cnpjIntDaOficina("o")} = $1::bigint
+       LIMIT 1`,
+      [cnpjNormalizado]
+    );
+
+    if (existente.length > 0) {
+      return { ID_OFICINA: existente[0].ID_OFICINA, criada: false };
+    }
+
+    const repo = AppDataSourceSync.getRepository(Oficina);
+    const novaOficina = repo.create({
+      NOME_FANTASIA: linha.nomeOficina,
+      CNPJ: linha.cnpj,
+      CEP: linha.cep,
+      ENDERECO: linha.endereco,
+      NUMERO: linha.numero,
+      ESTADO: linha.estado,
+      CIDADE: linha.cidade,
+      ORIGEM: "IMPORTACAO_PLANILHA",
+    });
+    const oficinaSalva = await repo.save(novaOficina);
+
+    return { ID_OFICINA: oficinaSalva.ID_OFICINA!, criada: true };
   }
 }
 

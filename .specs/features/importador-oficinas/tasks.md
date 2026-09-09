@@ -242,14 +242,15 @@ Tasks: T13 (depende de T2 e T3, na Fase 1).
 - Skill: NONE
 
 **Done when**:
-- [ ] CNPJ já cadastrado retorna o `ID_OFICINA` existente e não altera nenhum campo da oficina
-- [ ] CNPJ novo cria uma oficina com os 7 campos da planilha + `ORIGEM`
-- [ ] Gate: `npm run test:unit`
+- [x] CNPJ já cadastrado retorna o `ID_OFICINA` existente e não altera nenhum campo da oficina
+- [x] CNPJ novo cria uma oficina com os 7 campos da planilha + `ORIGEM`
+- [x] Gate: `npm run test:unit` — 19/19 testes passando
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(oficina-import): dedupe and create oficina by CNPJ`
+**Status**: ✅ Complete
 
 ---
 

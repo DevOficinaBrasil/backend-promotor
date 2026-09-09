@@ -1,5 +1,10 @@
 import * as XLSX from "xlsx";
 import OficinaImportService from "../../service/oficinaImportService";
+import { AppDataSourceSync } from "../../data-source";
+import { createMockRepo } from "../helpers/mockRepo";
+import Oficina from "../../entities/Oficina";
+
+jest.mock("../../data-source");
 
 const CABECALHO_VALIDO = [
   "NOME OFICINA",
@@ -136,6 +141,56 @@ describe("OficinaImportService", () => {
     it("should never flag an invalid (null) CNPJ as a duplicate", () => {
       const resultado = OficinaImportService.indicesComCnpjDuplicado([null, null]);
       expect(resultado.size).toBe(0);
+    });
+  });
+
+  describe("buscarOuCriarOficina", () => {
+    const linha = {
+      nomeOficina: "Oficina Teste",
+      cnpj: "12.345.678/0001-90",
+      cep: "01310100",
+      endereco: "Rua Teste",
+      numero: "100",
+      estado: "SP",
+      cidade: "Sao Paulo",
+    };
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+    });
+
+    it("should reuse the existing ID_OFICINA and not write any field when the CNPJ already exists", async () => {
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([{ ID_OFICINA: 42 }]);
+      const repo = createMockRepo();
+      (AppDataSourceSync.getRepository as jest.Mock).mockReturnValue(repo);
+
+      const resultado = await OficinaImportService.buscarOuCriarOficina(linha, "12345678000190");
+
+      expect(resultado).toEqual({ ID_OFICINA: 42, criada: false });
+      expect(repo.create).not.toHaveBeenCalled();
+      expect(repo.save).not.toHaveBeenCalled();
+    });
+
+    it("should create a new oficina with ORIGEM = IMPORTACAO_PLANILHA when the CNPJ does not exist", async () => {
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([]);
+      const repo = createMockRepo();
+      (repo.save as jest.Mock).mockResolvedValue({ ID_OFICINA: 99 });
+      (AppDataSourceSync.getRepository as jest.Mock).mockReturnValue(repo);
+
+      const resultado = await OficinaImportService.buscarOuCriarOficina(linha, "12345678000190");
+
+      expect(resultado).toEqual({ ID_OFICINA: 99, criada: true });
+      expect(AppDataSourceSync.getRepository).toHaveBeenCalledWith(Oficina);
+      expect(repo.create).toHaveBeenCalledWith({
+        NOME_FANTASIA: "Oficina Teste",
+        CNPJ: "12.345.678/0001-90",
+        CEP: "01310100",
+        ENDERECO: "Rua Teste",
+        NUMERO: "100",
+        ESTADO: "SP",
+        CIDADE: "Sao Paulo",
+        ORIGEM: "IMPORTACAO_PLANILHA",
+      });
     });
   });
 });
