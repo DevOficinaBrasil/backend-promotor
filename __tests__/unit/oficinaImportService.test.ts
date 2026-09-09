@@ -6,10 +6,12 @@ import Oficina from "../../entities/Oficina";
 import OficinaImportada from "../../entities/OficinaImportada";
 import GeolocationService from "../../service/geolocationService";
 import RotaService from "../../service/rotaService";
+import CampanhaService from "../../service/campanhaService";
 
 jest.mock("../../data-source");
 jest.mock("../../service/geolocationService");
 jest.mock("../../service/rotaService");
+jest.mock("../../service/campanhaService");
 
 const CABECALHO_VALIDO = [
   "NOME OFICINA",
@@ -380,6 +382,164 @@ describe("OficinaImportService", () => {
 
       expect(resultado).toBe(resultadoEsperado);
       expect(resultado.resumo.sem_promotor_disponivel).toBe(1);
+    });
+  });
+
+  describe("importarPlanilha", () => {
+    const oficinaRepo = createMockRepo();
+    const oficinaImportadaRepo = createMockRepo();
+
+    const campanhaValida = { ID_CAMPANHA: 10, EMPRESA_SLUG: "empresa-x" };
+
+    const linhaValida = ["Oficina Teste", "12345678000190", "01310100", "Rua Teste", "100", "SP", "Sao Paulo"];
+
+    function resumoAtribuicao(atribuidas: number, semPromotor = 0) {
+      return {
+        oficina: { ID_OFICINA: 1, CEP: "01310100", latitude: -23.55, longitude: -46.63 },
+        campanhas_processadas: 1,
+        atribuicoes: [],
+        resumo: { atribuidas, sem_promotor_disponivel: semPromotor, ja_atribuida: 0 },
+      };
+    }
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+      (AppDataSourceSync.getRepository as jest.Mock).mockImplementation((entity: unknown) => {
+        if (entity === OficinaImportada) return oficinaImportadaRepo;
+        return oficinaRepo;
+      });
+      (CampanhaService.findCampanhaById as jest.Mock).mockResolvedValue(campanhaValida);
+      (RotaService.assignOficinaFromCommunitySignup as jest.Mock).mockResolvedValue(
+        resumoAtribuicao(0)
+      );
+    });
+
+    it("should throw CAMPANHA_NAO_ENCONTRADA and never parse the file when the campaign does not exist", async () => {
+      (CampanhaService.findCampanhaById as jest.Mock).mockResolvedValue(null);
+      const buffer = bufferDeLinhas([CABECALHO_VALIDO]);
+
+      await expect(OficinaImportService.importarPlanilha(buffer, 999)).rejects.toThrow(
+        "CAMPANHA_NAO_ENCONTRADA"
+      );
+      expect(AppDataSourceSync.query).not.toHaveBeenCalled();
+    });
+
+    it("should throw CAMPANHA_SEM_EMPRESA_SLUG when the campaign has no EMPRESA_SLUG", async () => {
+      (CampanhaService.findCampanhaById as jest.Mock).mockResolvedValue({
+        ID_CAMPANHA: 10,
+        EMPRESA_SLUG: null,
+      });
+      const buffer = bufferDeLinhas([CABECALHO_VALIDO]);
+
+      await expect(OficinaImportService.importarPlanilha(buffer, 10)).rejects.toThrow(
+        "CAMPANHA_SEM_EMPRESA_SLUG"
+      );
+    });
+
+    it("should return zero counts and no errors for a header-only file", async () => {
+      const buffer = bufferDeLinhas([CABECALHO_VALIDO]);
+
+      const resultado = await OficinaImportService.importarPlanilha(buffer, 10);
+
+      expect(resultado).toEqual({
+        total_linhas: 0,
+        oficinas_criadas: 0,
+        oficinas_vinculadas_existentes: 0,
+        ja_na_comunidade: 0,
+        rotas_criadas: 0,
+        erros: [],
+      });
+    });
+
+    it("should process a valid new row end-to-end: create, geocode, link, and assign a route", async () => {
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([]); // CNPJ not found + not in USUARIO_COMMUNITY
+      (oficinaRepo.save as jest.Mock).mockResolvedValue({ ID_OFICINA: 50 });
+      (oficinaRepo.findOne as jest.Mock).mockResolvedValue({ LATITUDE: null, LONGITUDE: null });
+      (oficinaImportadaRepo.findOne as jest.Mock).mockResolvedValue(null);
+      const getLatLongByCep = jest.fn().mockResolvedValue({ lat: -23.55, long: -46.63 });
+      (GeolocationService as unknown as jest.Mock).mockImplementation(() => ({ getLatLongByCep }));
+      (RotaService.assignOficinaFromCommunitySignup as jest.Mock).mockResolvedValue(
+        resumoAtribuicao(1)
+      );
+
+      const buffer = bufferDeLinhas([CABECALHO_VALIDO, linhaValida]);
+      const resultado = await OficinaImportService.importarPlanilha(buffer, 10, 7);
+
+      expect(resultado).toEqual({
+        total_linhas: 1,
+        oficinas_criadas: 1,
+        oficinas_vinculadas_existentes: 0,
+        ja_na_comunidade: 0,
+        rotas_criadas: 1,
+        erros: [],
+      });
+      expect(oficinaRepo.delete).not.toHaveBeenCalled();
+    });
+
+    it("should isolate a row with an invalid CNPJ without aborting the rest of the file", async () => {
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([]);
+      (oficinaRepo.save as jest.Mock).mockResolvedValue({ ID_OFICINA: 50 });
+      (oficinaRepo.findOne as jest.Mock).mockResolvedValue({ LATITUDE: "-23.55", LONGITUDE: "-46.63" });
+      (oficinaImportadaRepo.findOne as jest.Mock).mockResolvedValue(null);
+
+      const linhaCnpjInvalido = ["Oficina Ruim", "123", "01310100", "Rua Teste", "100", "SP", "Sao Paulo"];
+      const buffer = bufferDeLinhas([CABECALHO_VALIDO, linhaCnpjInvalido, linhaValida]);
+
+      const resultado = await OficinaImportService.importarPlanilha(buffer, 10);
+
+      expect(resultado.total_linhas).toBe(2);
+      expect(resultado.erros).toEqual([{ linha: 2, cnpj: "123", motivo: "CNPJ_INVALIDO" }]);
+      expect(resultado.oficinas_criadas).toBe(1);
+    });
+
+    it("should reject the second occurrence of a duplicate CNPJ within the file and process only the first", async () => {
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([]);
+      (oficinaRepo.save as jest.Mock).mockResolvedValue({ ID_OFICINA: 50 });
+      (oficinaRepo.findOne as jest.Mock).mockResolvedValue({ LATITUDE: "-23.55", LONGITUDE: "-46.63" });
+      (oficinaImportadaRepo.findOne as jest.Mock).mockResolvedValue(null);
+
+      const buffer = bufferDeLinhas([CABECALHO_VALIDO, linhaValida, linhaValida]);
+
+      const resultado = await OficinaImportService.importarPlanilha(buffer, 10);
+
+      expect(resultado.oficinas_criadas).toBe(1);
+      expect(resultado.erros).toEqual([
+        { linha: 3, cnpj: "12345678000190", motivo: "CNPJ_DUPLICADO_NO_ARQUIVO" },
+      ]);
+    });
+
+    it("should delete the just-created oficina and reject the row when geocoding fails for a brand-new CNPJ", async () => {
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([]); // CNPJ not found
+      (oficinaRepo.save as jest.Mock).mockResolvedValue({ ID_OFICINA: 77 });
+      (oficinaRepo.findOne as jest.Mock).mockResolvedValue({ LATITUDE: null, LONGITUDE: null });
+      const getLatLongByCep = jest.fn().mockResolvedValue(null);
+      (GeolocationService as unknown as jest.Mock).mockImplementation(() => ({ getLatLongByCep }));
+
+      const buffer = bufferDeLinhas([CABECALHO_VALIDO, linhaValida]);
+      const resultado = await OficinaImportService.importarPlanilha(buffer, 10);
+
+      expect(oficinaRepo.delete).toHaveBeenCalledWith(77);
+      expect(resultado.oficinas_criadas).toBe(0);
+      expect(resultado.erros).toEqual([
+        { linha: 2, cnpj: "12345678000190", motivo: "GEOCODIFICACAO_FALHOU" },
+      ]);
+    });
+
+    it("should not delete anything when geocoding fails for an oficina that already existed", async () => {
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([{ ID_OFICINA: 88 }]); // CNPJ found
+      (oficinaRepo.findOne as jest.Mock).mockResolvedValue({ LATITUDE: null, LONGITUDE: null });
+      const getLatLongByCep = jest.fn().mockResolvedValue(null);
+      (GeolocationService as unknown as jest.Mock).mockImplementation(() => ({ getLatLongByCep }));
+
+      const buffer = bufferDeLinhas([CABECALHO_VALIDO, linhaValida]);
+      const resultado = await OficinaImportService.importarPlanilha(buffer, 10);
+
+      expect(oficinaRepo.delete).not.toHaveBeenCalled();
+      expect(oficinaRepo.save).not.toHaveBeenCalled();
+      expect(resultado.oficinas_vinculadas_existentes).toBe(0);
+      expect(resultado.erros).toEqual([
+        { linha: 2, cnpj: "12345678000190", motivo: "GEOCODIFICACAO_FALHOU" },
+      ]);
     });
   });
 });

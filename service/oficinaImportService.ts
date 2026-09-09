@@ -4,6 +4,7 @@ import Oficina from "../entities/Oficina";
 import OficinaImportada from "../entities/OficinaImportada";
 import GeolocationService from "./geolocationService";
 import RotaService from "./rotaService";
+import CampanhaService from "./campanhaService";
 import { cnpjIntParaLigacao, cnpjIntDaOficina } from "../utils/sqlCadastroEmpresa";
 
 export interface LinhaOficinaImport {
@@ -29,6 +30,21 @@ const CABECALHO_ESPERADO = [
 const LIMITE_LINHAS_DE_DADOS = 5000;
 
 const MARCAS_DIACRITICAS = /[\u0300-\u036f]/g;
+
+export interface ErroLinhaImport {
+  linha: number;
+  cnpj?: string;
+  motivo: string;
+}
+
+export interface ImportResult {
+  total_linhas: number;
+  oficinas_criadas: number;
+  oficinas_vinculadas_existentes: number;
+  ja_na_comunidade: number;
+  rotas_criadas: number;
+  erros: ErroLinhaImport[];
+}
 
 export default class OficinaImportService {
   /** Remove acentuação e normaliza para maiúsculas, para comparação de cabeçalho tolerante a variação trivial. */
@@ -248,6 +264,125 @@ export default class OficinaImportService {
     empresaSlug: string
   ): ReturnType<typeof RotaService.assignOficinaFromCommunitySignup> {
     return RotaService.assignOficinaFromCommunitySignup(idOficina, empresaSlug);
+  }
+
+  /**
+   * Orquestra o fluxo completo: resolve `EMPRESA_SLUG` a partir da campanha,
+   * valida a planilha, e processa linha a linha isolando erro de linha (não
+   * aborta o arquivo). Lança "CAMPANHA_NAO_ENCONTRADA" ou
+   * "CAMPANHA_SEM_EMPRESA_SLUG" antes de processar qualquer linha; erros
+   * estruturais do arquivo (`HEADER_INVALIDO`, `LIMITE_LINHAS_EXCEDIDO`)
+   * também propagam antes de qualquer escrita.
+   *
+   * Quando a oficina acabou de ser criada nesta importação e a
+   * geocodificação falha, a oficina recém-criada é removida — a linha não
+   * pode deixar rastro de uma oficina sem lat/long (spec: "SHALL NOT criar
+   * ... a oficina").
+   */
+  static async importarPlanilha(
+    buffer: Buffer,
+    idCampanha: number,
+    createdBy?: number
+  ): Promise<ImportResult> {
+    const campanha = await CampanhaService.findCampanhaById(idCampanha);
+    if (!campanha) {
+      throw new Error("CAMPANHA_NAO_ENCONTRADA");
+    }
+    if (!campanha.EMPRESA_SLUG) {
+      throw new Error("CAMPANHA_SEM_EMPRESA_SLUG");
+    }
+    const empresaSlug = campanha.EMPRESA_SLUG;
+
+    const linhas = this.parseArquivo(buffer);
+    this.validarCabecalho(linhas);
+    this.validarLimiteLinhas(linhas);
+
+    const linhasDeDados = linhas.slice(1);
+    const cnpjsNormalizados = linhasDeDados.map((linha) => this.normalizarCnpj(linha[1]));
+    const indicesDuplicados = this.indicesComCnpjDuplicado(cnpjsNormalizados);
+
+    const resultado: ImportResult = {
+      total_linhas: linhasDeDados.length,
+      oficinas_criadas: 0,
+      oficinas_vinculadas_existentes: 0,
+      ja_na_comunidade: 0,
+      rotas_criadas: 0,
+      erros: [],
+    };
+
+    for (let indice = 0; indice < linhasDeDados.length; indice++) {
+      const numeroLinha = indice + 2; // linha 1 é o cabeçalho
+      const [nomeOficina, cnpjBruto, cep, endereco, numero, estado, cidade] = linhasDeDados[indice];
+      const cnpjNormalizado = cnpjsNormalizados[indice];
+
+      if (!cnpjNormalizado) {
+        resultado.erros.push({ linha: numeroLinha, cnpj: cnpjBruto, motivo: "CNPJ_INVALIDO" });
+        continue;
+      }
+
+      if (indicesDuplicados.has(indice)) {
+        resultado.erros.push({
+          linha: numeroLinha,
+          cnpj: cnpjBruto,
+          motivo: "CNPJ_DUPLICADO_NO_ARQUIVO",
+        });
+        continue;
+      }
+
+      const linhaOficina: LinhaOficinaImport = {
+        nomeOficina,
+        cnpj: cnpjBruto,
+        cep,
+        endereco,
+        numero,
+        estado,
+        cidade,
+      };
+
+      const { ID_OFICINA, criada } = await this.buscarOuCriarOficina(
+        linhaOficina,
+        cnpjNormalizado
+      );
+
+      const coords = await this.garantirLatLong(ID_OFICINA, cep);
+      if (!coords) {
+        if (criada) {
+          // SPEC_DEVIATION: design.md's flow diagram creates the oficina before
+          // geocoding and only marks the row as rejected on geocode failure.
+          // spec.md's IMPORT-12 requires the system SHALL NOT create the
+          // oficina when geocoding fails. Reconciled here: roll back the
+          // just-created row so no oficina without lat/long persists.
+          await AppDataSourceSync.getRepository(Oficina).delete(ID_OFICINA);
+        }
+        resultado.erros.push({
+          linha: numeroLinha,
+          cnpj: cnpjBruto,
+          motivo: "GEOCODIFICACAO_FALHOU",
+        });
+        continue;
+      }
+
+      if (criada) {
+        resultado.oficinas_criadas++;
+      } else {
+        resultado.oficinas_vinculadas_existentes++;
+      }
+
+      const statusVinculo = await this.garantirVinculo(
+        ID_OFICINA,
+        empresaSlug,
+        idCampanha,
+        createdBy
+      );
+      if (statusVinculo === "ja_vinculada") {
+        resultado.ja_na_comunidade++;
+      }
+
+      const atribuicao = await this.atribuirRota(ID_OFICINA, empresaSlug);
+      resultado.rotas_criadas += atribuicao.resumo.atribuidas;
+    }
+
+    return resultado;
   }
 }
 

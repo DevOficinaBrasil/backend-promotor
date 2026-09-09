@@ -220,7 +220,7 @@ O ramo importado não filtra por `ce."status_receita" = 'ATIVA'` — uma oficina
 | Campanha sem `EMPRESA_SLUG` | Checado após resolver a campanha | 422 |
 | CNPJ de uma linha inválido (≠14 dígitos) | Linha marcada com erro, loop continua | 200 com a linha em `erros[]` |
 | CNPJ duplicado no arquivo | Segunda ocorrência marcada com erro, loop continua | 200 com a linha em `erros[]` |
-| Geocodificação falha para uma linha | Linha marcada com erro, nenhuma escrita para essa linha, loop continua | 200 com a linha em `erros[]` |
+| Geocodificação falha para uma linha | Linha marcada com erro; se a oficina foi criada nesta mesma importação (CNPJ novo), o registro é removido (`repo.delete`) antes de reportar o erro — nenhuma oficina sem lat/long fica persistida (reconciliação com IMPORT-12; o diagrama acima antecede essa correção, aplicada na implementação de T11) | 200 com a linha em `erros[]` |
 | Nenhum promotor no raio para uma oficina | Não é erro — oficina importada normalmente | 200, oficina reportada com `rota: "sem_promotor_disponivel"` |
 | Falha de banco durante o processamento de uma linha específica | Linha marcada com erro genérico, loop continua (mesmo princípio de isolamento por linha) | 200 com a linha em `erros[]` |
 

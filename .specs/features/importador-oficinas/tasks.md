@@ -345,16 +345,19 @@ Tasks: T13 (depende de T2 e T3, na Fase 1).
 - Skill: NONE
 
 **Done when**:
-- [ ] `ID_CAMPANHA` inexistente/soft-deleted lança erro mapeável para 404
-- [ ] Campanha sem `EMPRESA_SLUG` lança erro mapeável para 422
-- [ ] Uma linha com erro não interrompe o processamento das demais
-- [ ] Relatório final reflete corretamente os contadores de cada categoria
-- [ ] Gate: `npm run test:unit`
+- [x] `ID_CAMPANHA` inexistente/soft-deleted lança erro mapeável para 404 (`CAMPANHA_NAO_ENCONTRADA`)
+- [x] Campanha sem `EMPRESA_SLUG` lança erro mapeável para 422 (`CAMPANHA_SEM_EMPRESA_SLUG`)
+- [x] Uma linha com erro não interrompe o processamento das demais
+- [x] Relatório final reflete corretamente os contadores de cada categoria
+- [x] Gate: `npm run test:unit` — 37/37 testes passando (regressão completa: 613 passando, mesmas 12 falhas pré-existentes e não relacionadas)
+
+**SPEC_DEVIATION registrado**: o diagrama do design cria a oficina antes de geocodificar; IMPORT-12 exige que a oficina NÃO seja criada quando a geocodificação falha. Reconciliado com um rollback (`repo.delete`) da oficina recém-criada quando a geocodificação falha para CNPJ novo — nada é apagado quando a oficina já existia antes do import. `design.md` atualizado com a nota.
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(oficina-import): orchestrate planilha import flow`
+**Status**: ✅ Complete
 
 ---
 
