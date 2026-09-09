@@ -369,28 +369,31 @@ export default class OficinaImportService {
           continue;
         }
 
-        if (criada) {
-          resultado.oficinas_criadas++;
-        } else {
-          resultado.oficinas_vinculadas_existentes++;
-        }
-
         const statusVinculo = await this.garantirVinculo(
           ID_OFICINA,
           empresaSlug,
           idCampanha,
           createdBy
         );
+        const atribuicao = await this.atribuirRota(ID_OFICINA, empresaSlug);
+
+        // Contadores só avançam depois que a linha inteira é processada com
+        // sucesso — uma falha em garantirVinculo/atribuirRota (capturada
+        // abaixo) nunca deve contar a mesma linha como sucesso E como erro.
+        if (criada) {
+          resultado.oficinas_criadas++;
+        } else {
+          resultado.oficinas_vinculadas_existentes++;
+        }
         if (statusVinculo === "ja_vinculada") {
           resultado.ja_na_comunidade++;
         }
-
-        const atribuicao = await this.atribuirRota(ID_OFICINA, empresaSlug);
         resultado.rotas_criadas += atribuicao.resumo.atribuidas;
-      } catch {
+      } catch (erro) {
         // Isola falha inesperada (DB, rede) na linha em vez de abortar o
         // arquivo inteiro — mesmo princípio de isolamento por linha já
         // aplicado aos erros de validação/geocodificação acima.
+        console.error(`[oficinaImportService] falha ao processar linha ${numeroLinha}`, erro);
         resultado.erros.push({
           linha: numeroLinha,
           cnpj: cnpjBruto,

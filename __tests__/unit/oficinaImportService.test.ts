@@ -609,6 +609,22 @@ describe("OficinaImportService", () => {
       expect(resultado.oficinas_criadas).toBe(1);
     });
 
+    it("should not count a row as created when garantirVinculo throws after the oficina was already created", async () => {
+      (AppDataSourceSync.query as jest.Mock)
+        .mockResolvedValueOnce([]) // buscarOuCriarOficina: CNPJ novo
+        .mockRejectedValueOnce(new Error("boom")); // garantirVinculo: consulta via usuario falha
+      (oficinaRepo.save as jest.Mock).mockResolvedValue({ ID_OFICINA: 70 });
+      (oficinaRepo.findOne as jest.Mock).mockResolvedValue({ LATITUDE: "-23.55", LONGITUDE: "-46.63" });
+
+      const buffer = bufferDeLinhas([CABECALHO_VALIDO, linhaValida]);
+      const resultado = await OficinaImportService.importarPlanilha(buffer, 10);
+
+      expect(resultado.oficinas_criadas).toBe(0);
+      expect(resultado.erros).toEqual([
+        { linha: 2, cnpj: "12345678000190", motivo: "ERRO_PROCESSAMENTO" },
+      ]);
+    });
+
     it("should still fill missing lat/long even when the oficina is already linked to the community (IMPORT-14)", async () => {
       (AppDataSourceSync.query as jest.Mock)
         .mockResolvedValueOnce([{ ID_OFICINA: 33 }]) // buscarOuCriarOficina: CNPJ existente
