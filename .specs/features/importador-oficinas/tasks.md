@@ -293,15 +293,16 @@ Tasks: T13 (depende de T2 e T3, na Fase 1).
 - Skill: NONE
 
 **Done when**:
-- [ ] Oficina nova para o `empresaSlug` cria um registro em `OFICINA_IMPORTADA`
-- [ ] Oficina já na comunidade (via `USUARIO_COMMUNITY` ou `OFICINA_IMPORTADA` prévia) não cria um segundo vínculo — idempotente
-- [ ] Reimportar a mesma planilha para o mesmo `empresaSlug` não duplica vínculos
-- [ ] Gate: `npm run test:unit`
+- [x] Oficina nova para o `empresaSlug` cria um registro em `OFICINA_IMPORTADA`
+- [x] Oficina já na comunidade (via `USUARIO_COMMUNITY` ou `OFICINA_IMPORTADA` prévia) não cria um segundo vínculo — idempotente
+- [x] Reimportar a mesma planilha para o mesmo `empresaSlug` não duplica vínculos
+- [x] Gate: `npm run test:unit` — 26/26 testes passando
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(oficina-import): link imported oficina without user`
+**Status**: ✅ Complete
 
 ---
 

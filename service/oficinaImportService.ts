@@ -1,6 +1,7 @@
 import * as XLSX from "xlsx";
 import { AppDataSourceSync } from "../data-source";
 import Oficina from "../entities/Oficina";
+import OficinaImportada from "../entities/OficinaImportada";
 import GeolocationService from "./geolocationService";
 import { cnpjIntParaLigacao, cnpjIntDaOficina } from "../utils/sqlCadastroEmpresa";
 
@@ -186,6 +187,52 @@ export default class OficinaImportService {
     });
 
     return { lat: coords.lat, lon: coords.long };
+  }
+
+  /**
+   * Vincula a oficina ao cliente (`empresaSlug`) sem depender de usuário.
+   * Se a oficina já pertence à comunidade — via `USUARIO_COMMUNITY` (usuário
+   * real) ou via um vínculo `OFICINA_IMPORTADA` anterior — não cria um novo
+   * vínculo (idempotente). Caso contrário, insere o vínculo.
+   */
+  static async garantirVinculo(
+    idOficina: number,
+    empresaSlug: string,
+    idCampanha: number,
+    createdBy?: number
+  ): Promise<"criado" | "ja_vinculada"> {
+    const viaUsuario = await AppDataSourceSync.query(
+      `SELECT 1
+       FROM "OFICINA_PORTAL"."COMMUNITIES" cm
+       INNER JOIN "MAIN_REGISTER"."USUARIO_COMMUNITY" uc ON cm."CommunityID" = uc."id_community"
+       INNER JOIN "MAIN_REGISTER"."USUARIO" us ON us."ID_USUARIO" = uc."id_usuario"
+       WHERE cm."EmpresaSlug" = $1 AND us."ID_OFICINA" = $2
+       LIMIT 1`,
+      [empresaSlug, idOficina]
+    );
+
+    if (viaUsuario.length > 0) {
+      return "ja_vinculada";
+    }
+
+    const repo = AppDataSourceSync.getRepository(OficinaImportada);
+    const viaImportacao = await repo.findOne({
+      where: { ID_OFICINA: idOficina, EMPRESA_SLUG: empresaSlug },
+    });
+
+    if (viaImportacao) {
+      return "ja_vinculada";
+    }
+
+    const novoVinculo = repo.create({
+      ID_OFICINA: idOficina,
+      EMPRESA_SLUG: empresaSlug,
+      ID_CAMPANHA: idCampanha,
+      CREATED_BY: createdBy,
+    });
+    await repo.save(novoVinculo);
+
+    return "criado";
   }
 }
 

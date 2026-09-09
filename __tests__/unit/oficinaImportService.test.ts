@@ -3,6 +3,7 @@ import OficinaImportService from "../../service/oficinaImportService";
 import { AppDataSourceSync } from "../../data-source";
 import { createMockRepo } from "../helpers/mockRepo";
 import Oficina from "../../entities/Oficina";
+import OficinaImportada from "../../entities/OficinaImportada";
 import GeolocationService from "../../service/geolocationService";
 
 jest.mock("../../data-source");
@@ -246,6 +247,68 @@ describe("OficinaImportService", () => {
 
       expect(resultado).toBeNull();
       expect(repo.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("garantirVinculo", () => {
+    beforeEach(() => {
+      jest.clearAllMocks();
+    });
+
+    it("should return ja_vinculada and create nothing when the oficina already belongs to the community via a real user", async () => {
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([{ "?column?": 1 }]);
+      const repo = createMockRepo();
+      (AppDataSourceSync.getRepository as jest.Mock).mockReturnValue(repo);
+
+      const resultado = await OficinaImportService.garantirVinculo(1, "empresa-x", 10);
+
+      expect(resultado).toBe("ja_vinculada");
+      expect(repo.findOne).not.toHaveBeenCalled();
+      expect(repo.save).not.toHaveBeenCalled();
+    });
+
+    it("should return ja_vinculada and create nothing when an OFICINA_IMPORTADA link already exists", async () => {
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([]);
+      const repo = createMockRepo();
+      (repo.findOne as jest.Mock).mockResolvedValue({ ID_OFICINA_IMPORTADA: 5 });
+      (AppDataSourceSync.getRepository as jest.Mock).mockReturnValue(repo);
+
+      const resultado = await OficinaImportService.garantirVinculo(1, "empresa-x", 10);
+
+      expect(resultado).toBe("ja_vinculada");
+      expect(repo.save).not.toHaveBeenCalled();
+    });
+
+    it("should create a new OFICINA_IMPORTADA link when the oficina is not yet in the community", async () => {
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([]);
+      const repo = createMockRepo();
+      (repo.findOne as jest.Mock).mockResolvedValue(null);
+      (AppDataSourceSync.getRepository as jest.Mock).mockReturnValue(repo);
+
+      const resultado = await OficinaImportService.garantirVinculo(1, "empresa-x", 10, 7);
+
+      expect(resultado).toBe("criado");
+      expect(AppDataSourceSync.getRepository).toHaveBeenCalledWith(OficinaImportada);
+      expect(repo.create).toHaveBeenCalledWith({
+        ID_OFICINA: 1,
+        EMPRESA_SLUG: "empresa-x",
+        ID_CAMPANHA: 10,
+        CREATED_BY: 7,
+      });
+      expect(repo.save).toHaveBeenCalled();
+    });
+
+    it("should not create a duplicate link when re-importing the same oficina for the same empresaSlug", async () => {
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([]);
+      const repo = createMockRepo();
+      (repo.findOne as jest.Mock).mockResolvedValue({ ID_OFICINA_IMPORTADA: 5 });
+      (AppDataSourceSync.getRepository as jest.Mock).mockReturnValue(repo);
+
+      await OficinaImportService.garantirVinculo(1, "empresa-x", 10);
+      const resultado = await OficinaImportService.garantirVinculo(1, "empresa-x", 10);
+
+      expect(resultado).toBe("ja_vinculada");
+      expect(repo.save).not.toHaveBeenCalled();
     });
   });
 });
