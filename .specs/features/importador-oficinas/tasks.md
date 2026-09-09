@@ -89,14 +89,15 @@ Tasks: T13 (depende de T2 e T3, na Fase 1).
 - Skill: NONE
 
 **Done when**:
-- [ ] `cnpjIntDaOficina` é exportada (`export function`)
-- [ ] Nenhuma outra linha do arquivo muda — comportamento de `ligacaoCadastroEmpresa` idêntico ao atual
-- [ ] `npx tsc --noEmit` sem erros novos
+- [x] `cnpjIntDaOficina` é exportada (`export function`)
+- [x] Nenhuma outra linha do arquivo muda — comportamento de `ligacaoCadastroEmpresa` idêntico ao atual
+- [x] `npx tsc --noEmit` sem erros novos (2 erros pré-existentes e não relacionados em `segmentacaoCampanhaPromotor.test.ts`, confirmados via `git stash` contra o commit base)
 
 **Tests**: none
 **Gate**: build
 
 **Commit**: `chore(oficina-import): export cnpjIntDaOficina for CNPJ dedup reuse`
+**Status**: ✅ Complete
 
 ---
 
