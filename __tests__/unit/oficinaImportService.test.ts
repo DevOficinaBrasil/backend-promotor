@@ -5,9 +5,11 @@ import { createMockRepo } from "../helpers/mockRepo";
 import Oficina from "../../entities/Oficina";
 import OficinaImportada from "../../entities/OficinaImportada";
 import GeolocationService from "../../service/geolocationService";
+import RotaService from "../../service/rotaService";
 
 jest.mock("../../data-source");
 jest.mock("../../service/geolocationService");
+jest.mock("../../service/rotaService");
 
 const CABECALHO_VALIDO = [
   "NOME OFICINA",
@@ -309,6 +311,75 @@ describe("OficinaImportService", () => {
 
       expect(resultado).toBe("ja_vinculada");
       expect(repo.save).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("atribuirRota", () => {
+    beforeEach(() => {
+      jest.clearAllMocks();
+    });
+
+    it("should forward idOficina and empresaSlug to RotaService.assignOficinaFromCommunitySignup", async () => {
+      (RotaService.assignOficinaFromCommunitySignup as jest.Mock).mockResolvedValue({
+        oficina: { ID_OFICINA: 1, CEP: "01310100", latitude: -23.55, longitude: -46.63 },
+        campanhas_processadas: 1,
+        atribuicoes: [],
+        resumo: { atribuidas: 0, sem_promotor_disponivel: 0, ja_atribuida: 0 },
+      });
+
+      await OficinaImportService.atribuirRota(1, "empresa-x");
+
+      expect(RotaService.assignOficinaFromCommunitySignup).toHaveBeenCalledWith(1, "empresa-x");
+    });
+
+    it("should pass through a result with a route created (atribuida)", async () => {
+      const resultadoEsperado = {
+        oficina: { ID_OFICINA: 1, CEP: "01310100", latitude: -23.55, longitude: -46.63 },
+        campanhas_processadas: 1,
+        atribuicoes: [
+          {
+            ID_CAMPANHA: 10,
+            NOME_CAMPANHA: "Campanha X",
+            status: "atribuida" as const,
+            promotor: { ID_PROMOTOR: 5, NOME: "Promotor X", distancia_km: 3.2 },
+            ID_ROTA_PROMOTOR: 900,
+          },
+        ],
+        resumo: { atribuidas: 1, sem_promotor_disponivel: 0, ja_atribuida: 0 },
+      };
+      (RotaService.assignOficinaFromCommunitySignup as jest.Mock).mockResolvedValue(
+        resultadoEsperado
+      );
+
+      const resultado = await OficinaImportService.atribuirRota(1, "empresa-x");
+
+      expect(resultado).toBe(resultadoEsperado);
+      expect(resultado.resumo.atribuidas).toBe(1);
+    });
+
+    it("should pass through a result with no promoter in range (sem_promotor_disponivel), without treating it as an error", async () => {
+      const resultadoEsperado = {
+        oficina: { ID_OFICINA: 1, CEP: "01310100", latitude: -23.55, longitude: -46.63 },
+        campanhas_processadas: 1,
+        atribuicoes: [
+          {
+            ID_CAMPANHA: 10,
+            NOME_CAMPANHA: "Campanha X",
+            status: "sem_promotor_disponivel" as const,
+            promotor: null,
+            ID_ROTA_PROMOTOR: null,
+          },
+        ],
+        resumo: { atribuidas: 0, sem_promotor_disponivel: 1, ja_atribuida: 0 },
+      };
+      (RotaService.assignOficinaFromCommunitySignup as jest.Mock).mockResolvedValue(
+        resultadoEsperado
+      );
+
+      const resultado = await OficinaImportService.atribuirRota(1, "empresa-x");
+
+      expect(resultado).toBe(resultadoEsperado);
+      expect(resultado.resumo.sem_promotor_disponivel).toBe(1);
     });
   });
 });

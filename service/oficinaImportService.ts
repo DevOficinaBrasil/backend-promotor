@@ -3,6 +3,7 @@ import { AppDataSourceSync } from "../data-source";
 import Oficina from "../entities/Oficina";
 import OficinaImportada from "../entities/OficinaImportada";
 import GeolocationService from "./geolocationService";
+import RotaService from "./rotaService";
 import { cnpjIntParaLigacao, cnpjIntDaOficina } from "../utils/sqlCadastroEmpresa";
 
 export interface LinhaOficinaImport {
@@ -233,6 +234,20 @@ export default class OficinaImportService {
     await repo.save(novoVinculo);
 
     return "criado";
+  }
+
+  /**
+   * Tenta atribuir a oficina vinculada a um promotor, reaproveitando
+   * `RotaService.assignOficinaFromCommunitySignup` sem nenhuma alteração —
+   * o mesmo método já usado no fluxo de inscrição em comunidade já cobre
+   * raio, desempate por distância e idempotência para todas as campanhas
+   * ativas do cliente.
+   */
+  static async atribuirRota(
+    idOficina: number,
+    empresaSlug: string
+  ): ReturnType<typeof RotaService.assignOficinaFromCommunitySignup> {
+    return RotaService.assignOficinaFromCommunitySignup(idOficina, empresaSlug);
   }
 }
 

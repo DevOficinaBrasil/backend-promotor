@@ -319,15 +319,16 @@ Tasks: T13 (depende de T2 e T3, na Fase 1).
 - Skill: NONE
 
 **Done when**:
-- [ ] Oficina dentro do raio de um promotor da campanha recebe `ROTA_PROMOTOR` (`STATUS = BACKLOG`)
-- [ ] Oficina fora de qualquer raio é reportada como `sem_promotor_disponivel`, sem erro
-- [ ] Oficina já com rota ativa na campanha não gera rota duplicada (idempotência herdada do método reusado)
-- [ ] Gate: `npm run test:unit`
+- [x] Oficina dentro do raio de um promotor da campanha recebe `ROTA_PROMOTOR` (`STATUS = BACKLOG`) — garantido por `RotaService.assignOficinaFromCommunitySignup` (reusado, não reimplementado); coberto por teste de pass-through do resultado `atribuida`
+- [x] Oficina fora de qualquer raio é reportada como `sem_promotor_disponivel`, sem erro — coberto por teste de pass-through
+- [x] Oficina já com rota ativa na campanha não gera rota duplicada (idempotência herdada do método reusado, já coberta em `rotaService.test.ts` — não re-testada aqui)
+- [x] Gate: `npm run test:unit` — 29/29 testes de `oficinaImportService.test.ts` passando (12 falhas pré-existentes e não relacionadas em outras 2 suítes, confirmadas via `git stash`)
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(oficina-import): assign promoter route to linked oficina`
+**Status**: ✅ Complete
 
 ---
 
