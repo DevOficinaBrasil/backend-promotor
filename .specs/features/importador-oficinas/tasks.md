@@ -152,7 +152,7 @@ Tasks: T13 (depende de T2 e T3, na Fase 1).
 
 ### T4: Middleware de upload de planilha
 
-**What**: Middleware `multer` (`memoryStorage`, limite de 5MB) com `fileFilter` extraído como função pura `isPlanilhaValida(filename, mimetype): boolean` para ser testável isoladamente.
+**What**: Middleware `multer` (`memoryStorage`, limite de 5MB) com `fileFilter` extraído como função pura `isPlanilhaValida(filename): boolean` para ser testável isoladamente. (Assinatura sem `mimetype`: mimetype de planilha varia demais entre navegadores/SOs para ser um critério confiável — decisão tomada na implementação, ver comentário no arquivo.)
 **Where**: `middlewares/uploadPlanilha.ts`
 **Depends on**: None
 **Reuses**: Nenhum (primeiro uso de `multer` no repositório); mesmo estilo dos demais arquivos em `middlewares/`
@@ -163,15 +163,16 @@ Tasks: T13 (depende de T2 e T3, na Fase 1).
 - Skill: NONE
 
 **Done when**:
-- [ ] `isPlanilhaValida` aceita `.xlsx`/`.csv` e rejeita outras extensões
-- [ ] `multer` configurado com `limits.fileSize = 5 * 1024 * 1024`
-- [ ] Testes cobrem: extensão válida aceita, extensão inválida rejeitada
-- [ ] Gate: `npm run test:unit`
+- [x] `isPlanilhaValida` aceita `.xlsx`/`.csv` e rejeita outras extensões
+- [x] `multer` configurado com `limits.fileSize = 5 * 1024 * 1024`
+- [x] Testes cobrem: extensão válida aceita, extensão inválida rejeitada
+- [x] Gate: `npm run test:unit` — 6/6 testes passando
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(oficina-import): add planilha upload middleware`
+**Status**: ✅ Complete
 
 ---
 
