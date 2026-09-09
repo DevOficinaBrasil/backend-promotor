@@ -314,6 +314,27 @@ describe("OficinaImportService", () => {
       expect(resultado).toBe("ja_vinculada");
       expect(repo.save).not.toHaveBeenCalled();
     });
+
+    it("should create a separate link for a different empresaSlug on the same oficina (IMPORT-15)", async () => {
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([]); // sem usuário para nenhum slug
+      const repo = createMockRepo();
+      // Já vinculada a "empresa-x", mas não a "empresa-y"
+      (repo.findOne as jest.Mock).mockImplementation(({ where }) =>
+        where.EMPRESA_SLUG === "empresa-x" ? Promise.resolve({ ID_OFICINA_IMPORTADA: 5 }) : Promise.resolve(null)
+      );
+      (AppDataSourceSync.getRepository as jest.Mock).mockReturnValue(repo);
+
+      const resultado = await OficinaImportService.garantirVinculo(1, "empresa-y", 20);
+
+      expect(resultado).toBe("criado");
+      expect(repo.findOne).toHaveBeenCalledWith({ where: { ID_OFICINA: 1, EMPRESA_SLUG: "empresa-y" } });
+      expect(repo.create).toHaveBeenCalledWith({
+        ID_OFICINA: 1,
+        EMPRESA_SLUG: "empresa-y",
+        ID_CAMPANHA: 20,
+        CREATED_BY: undefined,
+      });
+    });
   });
 
   describe("atribuirRota", () => {
@@ -540,6 +561,68 @@ describe("OficinaImportService", () => {
       expect(resultado.erros).toEqual([
         { linha: 2, cnpj: "12345678000190", motivo: "GEOCODIFICACAO_FALHOU" },
       ]);
+    });
+
+    it("should reject a row with a blank CEP even when the oficina already has lat/long", async () => {
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([{ ID_OFICINA: 33 }]); // CNPJ found
+      (oficinaRepo.findOne as jest.Mock).mockResolvedValue({ LATITUDE: "-23.55", LONGITUDE: "-46.63" });
+
+      const linhaCepVazio = ["Oficina Sem Cep", "12345678000190", "", "Rua Teste", "100", "SP", "Sao Paulo"];
+      const buffer = bufferDeLinhas([CABECALHO_VALIDO, linhaCepVazio]);
+      const resultado = await OficinaImportService.importarPlanilha(buffer, 10);
+
+      expect(resultado.erros).toEqual([
+        { linha: 2, cnpj: "12345678000190", motivo: "CEP_INVALIDO" },
+      ]);
+      expect(resultado.oficinas_vinculadas_existentes).toBe(0);
+      expect(oficinaImportadaRepo.save).not.toHaveBeenCalled();
+    });
+
+    it("should reject a row with a blank CEP for a brand-new CNPJ without creating anything", async () => {
+      const linhaCepVazio = ["Oficina Sem Cep", "12345678000190", "", "Rua Teste", "100", "SP", "Sao Paulo"];
+      const buffer = bufferDeLinhas([CABECALHO_VALIDO, linhaCepVazio]);
+      const resultado = await OficinaImportService.importarPlanilha(buffer, 10);
+
+      expect(resultado.erros).toEqual([
+        { linha: 2, cnpj: "12345678000190", motivo: "CEP_INVALIDO" },
+      ]);
+      expect(resultado.oficinas_criadas).toBe(0);
+      expect(oficinaRepo.save).not.toHaveBeenCalled();
+      expect(AppDataSourceSync.query).not.toHaveBeenCalled();
+    });
+
+    it("should isolate an unexpected processing error on one row without aborting the rest of the file", async () => {
+      (AppDataSourceSync.query as jest.Mock)
+        .mockRejectedValueOnce(new Error("DB down"))
+        .mockResolvedValue([]);
+      (oficinaRepo.save as jest.Mock).mockResolvedValue({ ID_OFICINA: 60 });
+      (oficinaRepo.findOne as jest.Mock).mockResolvedValue({ LATITUDE: "-23.55", LONGITUDE: "-46.63" });
+      (oficinaImportadaRepo.findOne as jest.Mock).mockResolvedValue(null);
+
+      const linhaValida2 = ["Oficina Dois", "98765432000110", "01310100", "Rua Dois", "200", "SP", "Sao Paulo"];
+      const buffer = bufferDeLinhas([CABECALHO_VALIDO, linhaValida, linhaValida2]);
+      const resultado = await OficinaImportService.importarPlanilha(buffer, 10);
+
+      expect(resultado.erros).toEqual([
+        { linha: 2, cnpj: "12345678000190", motivo: "ERRO_PROCESSAMENTO" },
+      ]);
+      expect(resultado.oficinas_criadas).toBe(1);
+    });
+
+    it("should still fill missing lat/long even when the oficina is already linked to the community (IMPORT-14)", async () => {
+      (AppDataSourceSync.query as jest.Mock)
+        .mockResolvedValueOnce([{ ID_OFICINA: 33 }]) // buscarOuCriarOficina: CNPJ existente
+        .mockResolvedValueOnce([{ exists: 1 }]); // garantirVinculo: ja pertence via USUARIO_COMMUNITY
+      (oficinaRepo.findOne as jest.Mock).mockResolvedValue({ LATITUDE: null, LONGITUDE: null });
+      const getLatLongByCep = jest.fn().mockResolvedValue({ lat: -23.55, long: -46.63 });
+      (GeolocationService as unknown as jest.Mock).mockImplementation(() => ({ getLatLongByCep }));
+
+      const buffer = bufferDeLinhas([CABECALHO_VALIDO, linhaValida]);
+      const resultado = await OficinaImportService.importarPlanilha(buffer, 10);
+
+      expect(oficinaRepo.update).toHaveBeenCalledWith(33, { LATITUDE: "-23.55", LONGITUDE: "-46.63" });
+      expect(resultado.ja_na_comunidade).toBe(1);
+      expect(oficinaImportadaRepo.save).not.toHaveBeenCalled();
     });
   });
 });

@@ -529,3 +529,22 @@ Execution is strictly sequential - there is no intra-phase parallelism. Dentro d
 - Todas as tasks de T1 a T11 e T13 têm `Tests: unit` com `AppDataSourceSync` mockado — nenhuma delas toca um banco real.
 - T12 é a única com `Tests: integration`, e mesmo assim usa `OficinaImportService` mockado (não bate no banco).
 - Nenhuma task deste plano requer acesso a um banco de dados real para ser completada ou verificada.
+
+---
+
+## Fix Round 1 (pós-Verifier)
+
+Verifier independente (sub-agent, author ≠ verifier) rodou após T13 e retornou **FAIL** — relatório completo em `.specs/features/importador-oficinas/validation.md`. 5 gaps ranqueados, todos corrigidos nesta rodada (iteração 1 de 3 permitidas).
+
+| Gap do Verifier | Severidade | Correção | Commit |
+|---|---|---|---|
+| Edge case "CEP vazio/ausente" não rejeitava quando a oficina já tinha lat/long | Major | Linha rejeitada (`CEP_INVALIDO`) sempre que o CEP não normaliza para nenhum dígito, antes de `buscarOuCriarOficina` — independe de a oficina já ter coordenadas | `fix(oficina-import): reject blank CEP and isolate per-row processing errors` |
+| Loop de `importarPlanilha` sem try/catch — falha de banco numa linha abortava o arquivo com escritas parciais, contra o que `design.md` já prometia | Major | Corpo de cada iteração envolvido em try/catch; erro inesperado vira `ERRO_PROCESSAMENTO` na linha, loop continua | mesmo commit acima |
+| `UNION ALL` das 3 queries de comunidade dependia de resolução implícita de tipo em 10 colunas cujo tipo real no DW só é conhecido por uma entity já provada imprecisa (risco de derrubar as 3 queries pra todo cliente) | Major | `::text` explícito nas colunas de texto dos dois ramos em `getComunityNearbyOficinas`/`getCommunityOficinas` (`countCommunityOficinas` só seleciona o id, sem risco); lat/long seguem `::double precision` (já confirmado seguro pelo Verifier) | `fix(oficina-import): cast UNION-ed text columns to a common type` |
+| IMPORT-15 (oficina vinculada a mais de um `EMPRESA_SLUG`) e a edge case equivalente sem nenhuma evidência de teste | Major | Teste em `garantirVinculo` com dois slugs distintos para o mesmo `ID_OFICINA` | `test(oficina-import): cover multi-EMPRESA_SLUG linking and lat/long fill on existing link` |
+| IMPORT-14 "apenas preencher lat/long" sem asserção própria | Minor | Teste em `importarPlanilha` para oficina já vinculada (`ja_vinculada`) que também está sem lat/long, confirmando `repo.update` chamado | mesmo commit acima |
+| IMPORT-03 (lista de colunas no corpo do 400) e IMPORT-04 (mapeamento de `LIMITE_LINHAS_EXCEDIDO` para 400) sem asserção de corpo/rota | Minor | 2 testes de integração novos, assertando o texto exato da mensagem | `test(oficina-import): assert exact header-error message and row-limit response` |
+
+**Não corrigido nesta rodada** (aceito como gap de documentação menor, não de comportamento, per o próprio Verifier): OpenAPI do endpoint não documenta o corpo multipart (`schemas.body` foi omitido deliberadamente em T12 — ver SPEC_DEVIATION daquela task). O contrato multipart continua descrito só em prosa na `description` da rota.
+
+Próximo passo: re-dispatch do Verifier (iteração 2) para confirmar PASS.

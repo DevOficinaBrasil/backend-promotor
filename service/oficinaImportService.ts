@@ -329,6 +329,12 @@ export default class OficinaImportService {
         continue;
       }
 
+      const cepLimpo = (cep ?? "").replace(/\D/g, "");
+      if (!cepLimpo) {
+        resultado.erros.push({ linha: numeroLinha, cnpj: cnpjBruto, motivo: "CEP_INVALIDO" });
+        continue;
+      }
+
       const linhaOficina: LinhaOficinaImport = {
         nomeOficina,
         cnpj: cnpjBruto,
@@ -339,47 +345,58 @@ export default class OficinaImportService {
         cidade,
       };
 
-      const { ID_OFICINA, criada } = await this.buscarOuCriarOficina(
-        linhaOficina,
-        cnpjNormalizado
-      );
+      try {
+        const { ID_OFICINA, criada } = await this.buscarOuCriarOficina(
+          linhaOficina,
+          cnpjNormalizado
+        );
 
-      const coords = await this.garantirLatLong(ID_OFICINA, cep);
-      if (!coords) {
-        if (criada) {
-          // SPEC_DEVIATION: design.md's flow diagram creates the oficina before
-          // geocoding and only marks the row as rejected on geocode failure.
-          // spec.md's IMPORT-12 requires the system SHALL NOT create the
-          // oficina when geocoding fails. Reconciled here: roll back the
-          // just-created row so no oficina without lat/long persists.
-          await AppDataSourceSync.getRepository(Oficina).delete(ID_OFICINA);
+        const coords = await this.garantirLatLong(ID_OFICINA, cep);
+        if (!coords) {
+          if (criada) {
+            // SPEC_DEVIATION: design.md's flow diagram creates the oficina before
+            // geocoding and only marks the row as rejected on geocode failure.
+            // spec.md's IMPORT-12 requires the system SHALL NOT create the
+            // oficina when geocoding fails. Reconciled here: roll back the
+            // just-created row so no oficina without lat/long persists.
+            await AppDataSourceSync.getRepository(Oficina).delete(ID_OFICINA);
+          }
+          resultado.erros.push({
+            linha: numeroLinha,
+            cnpj: cnpjBruto,
+            motivo: "GEOCODIFICACAO_FALHOU",
+          });
+          continue;
         }
+
+        if (criada) {
+          resultado.oficinas_criadas++;
+        } else {
+          resultado.oficinas_vinculadas_existentes++;
+        }
+
+        const statusVinculo = await this.garantirVinculo(
+          ID_OFICINA,
+          empresaSlug,
+          idCampanha,
+          createdBy
+        );
+        if (statusVinculo === "ja_vinculada") {
+          resultado.ja_na_comunidade++;
+        }
+
+        const atribuicao = await this.atribuirRota(ID_OFICINA, empresaSlug);
+        resultado.rotas_criadas += atribuicao.resumo.atribuidas;
+      } catch {
+        // Isola falha inesperada (DB, rede) na linha em vez de abortar o
+        // arquivo inteiro — mesmo princípio de isolamento por linha já
+        // aplicado aos erros de validação/geocodificação acima.
         resultado.erros.push({
           linha: numeroLinha,
           cnpj: cnpjBruto,
-          motivo: "GEOCODIFICACAO_FALHOU",
+          motivo: "ERRO_PROCESSAMENTO",
         });
-        continue;
       }
-
-      if (criada) {
-        resultado.oficinas_criadas++;
-      } else {
-        resultado.oficinas_vinculadas_existentes++;
-      }
-
-      const statusVinculo = await this.garantirVinculo(
-        ID_OFICINA,
-        empresaSlug,
-        idCampanha,
-        createdBy
-      );
-      if (statusVinculo === "ja_vinculada") {
-        resultado.ja_na_comunidade++;
-      }
-
-      const atribuicao = await this.atribuirRota(ID_OFICINA, empresaSlug);
-      resultado.rotas_criadas += atribuicao.resumo.atribuidas;
     }
 
     return resultado;
