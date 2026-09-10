@@ -16,7 +16,7 @@ graph TD
     B --> C[uploadPlanilha middleware<br/>multer memoryStorage, 5MB]
     C --> D[OficinaController.importOficinas]
     D --> E[OficinaImportService.importarPlanilha]
-    E --> F{Cabeçalho válido?<br/>7 colunas, ordem exata}
+    E --> F{Cabeçalho válido?<br/>8 colunas, ordem exata}
     F -->|não| G[400 - nenhuma escrita]
     F -->|sim| H[Para cada linha]
     H --> I{CNPJ normaliza<br/>14 dígitos e é único no arquivo?}

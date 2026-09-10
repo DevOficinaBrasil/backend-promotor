@@ -557,3 +557,25 @@ Também corrigido nesta rodada (observação não-bloqueante do Verifier, mas re
 **Não corrigido nesta rodada** (aceito como gap de documentação menor, não de comportamento, per o próprio Verifier): OpenAPI do endpoint não documenta o corpo multipart (`schemas.body` foi omitido deliberadamente em T12 — ver SPEC_DEVIATION daquela task). O contrato multipart continua descrito só em prosa na `description` da rota.
 
 Próximo passo: re-dispatch do Verifier (iteração 2) para confirmar PASS.
+
+---
+
+## Mudança de escopo pós-entrega: coluna `BAIRRO`
+
+Pedido do usuário após o Verifier confirmar PASS (iteração 3): a planilha passou a exigir uma 8ª coluna, `BAIRRO`, posicionada entre `NUMERO` e `ESTADO` (posição escolhida pelo agente — segue a ordem natural de um endereço brasileiro; usuário não especificou a posição).
+
+**Padrão de colunas atualizado**: `NOME OFICINA; CNPJ; CEP; ENDEREÇO; NUMERO; BAIRRO; ESTADO; CIDADE`.
+
+**Arquivos alterados**:
+- `service/oficinaImportService.ts` — `CABECALHO_ESPERADO`, `LinhaOficinaImport`, destructuring da linha, `buscarOuCriarOficina` (grava `BAIRRO` na oficina nova)
+- `controllers/oficinaController.ts` — mensagem de erro `HEADER_INVALIDO` atualizada
+- `routes/OficinaRoute.ts` — descrição do endpoint atualizada
+- `__tests__/unit/oficinaImportService.test.ts` / `__tests__/integration/oficinaImport.test.ts` — todos os fixtures de linha/cabeçalho atualizados para 8 colunas
+- `docs/IMPORTADOR_OFICINAS_API.md` — contrato do frontend atualizado
+- `spec.md` (IMPORT-01, IMPORT-03, IMPORT-07, IMPORT-08, tabela de Assumptions), `design.md` (diagrama)
+
+**Não afetado**: `entities/OficinaImportada.ts`, `service/oficinaService.ts` (queries de comunidade — `BAIRRO` já existia como coluna ali antes desta mudança, sem relação com o cabeçalho da planilha), migration `scripts/migration-oficina-importada.sql`.
+
+**Gate**: `npx tsc --noEmit` sem erros novos; `npm run test:unit` — 629/641 passando (mesmas 12 falhas pré-existentes e não relacionadas); `oficinaImport.test.ts` (integração, sem banco) 9/9.
+
+**Verificação**: autoavaliação do agente (Check A/B/C do adequacy review), sem um novo Verifier independente dedicado — mudança mecânica e de baixo risco (adicionar um campo a um fluxo já testado e verificado), mesmo padrão em todos os pontos já estabelecido pelas 3 iterações anteriores. Usuário pode pedir uma rodada de Verifier se quiser essa garantia extra.

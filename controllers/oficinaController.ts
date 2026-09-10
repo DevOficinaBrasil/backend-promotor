@@ -186,7 +186,7 @@ export default class OficinaController {
       if (error.message === "HEADER_INVALIDO") {
         return res.status(400).json({
           message:
-            "Estrutura de colunas inválida. Esperado exatamente: NOME OFICINA; CNPJ; CEP; ENDEREÇO; NUMERO; ESTADO; CIDADE.",
+            "Estrutura de colunas inválida. Esperado exatamente: NOME OFICINA; CNPJ; CEP; ENDEREÇO; NUMERO; BAIRRO; ESTADO; CIDADE.",
         });
       }
       if (error.message === "LIMITE_LINHAS_EXCEDIDO") {

@@ -24,10 +24,10 @@ Campos do `multipart/form-data`:
 
 ### Padrão de colunas da planilha (obrigatório)
 
-A primeira linha da planilha deve conter **exatamente** estas 7 colunas, **nessa ordem**:
+A primeira linha da planilha deve conter **exatamente** estas 8 colunas, **nessa ordem**:
 
 ```
-NOME OFICINA | CNPJ | CEP | ENDEREÇO | NUMERO | ESTADO | CIDADE
+NOME OFICINA | CNPJ | CEP | ENDEREÇO | NUMERO | BAIRRO | ESTADO | CIDADE
 ```
 
 - Comparação tolera variação de **maiúsculas/minúsculas e acentuação** (ex: `endereco`, `Endereço`, `ENDEREÇO` são todos aceitos).
@@ -118,7 +118,7 @@ Nenhuma linha é processada nestes casos — nenhuma oficina é criada ou vincul
 | 400 | Extensão de arquivo diferente de `.xlsx`/`.csv`, ou arquivo acima de 5MB | `{ "message": "..." }` (mensagem do multer, ex: `"Arquivo deve ser .xlsx ou .csv"`) |
 | 400 | `ID_CAMPANHA` ausente ou não é um número positivo | `{ "message": "ID_CAMPANHA inválido.", "details": [...] }` |
 | 400 | Nenhum arquivo enviado no campo `file` | `{ "message": "Arquivo não enviado." }` |
-| 400 | Cabeçalho da planilha fora do padrão (nome/ordem/quantidade de colunas) | `{ "message": "Estrutura de colunas inválida. Esperado exatamente: NOME OFICINA; CNPJ; CEP; ENDEREÇO; NUMERO; ESTADO; CIDADE." }` |
+| 400 | Cabeçalho da planilha fora do padrão (nome/ordem/quantidade de colunas) | `{ "message": "Estrutura de colunas inválida. Esperado exatamente: NOME OFICINA; CNPJ; CEP; ENDEREÇO; NUMERO; BAIRRO; ESTADO; CIDADE." }` |
 | 400 | Mais de 5.000 linhas de dados | `{ "message": "Arquivo excede o limite de 5.000 linhas." }` |
 | 404 | `ID_CAMPANHA` não existe (ou foi excluída) | `{ "message": "Campanha não encontrada." }` |
 | 422 | Campanha existe mas não tem `EMPRESA_SLUG` configurado (não está vinculada a nenhum cliente) | `{ "message": "Campanha sem empresa vinculada." }` |

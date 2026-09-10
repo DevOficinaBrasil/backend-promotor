@@ -101,7 +101,7 @@ describe("POST /oficina/import", () => {
 
     expect(response.status).toBe(400);
     expect(response.body.message).toContain(
-      "NOME OFICINA; CNPJ; CEP; ENDEREÇO; NUMERO; ESTADO; CIDADE"
+      "NOME OFICINA; CNPJ; CEP; ENDEREÇO; NUMERO; BAIRRO; ESTADO; CIDADE"
     );
   });
 

@@ -19,6 +19,7 @@ const CABECALHO_VALIDO = [
   "CEP",
   "ENDEREÇO",
   "NUMERO",
+  "BAIRRO",
   "ESTADO",
   "CIDADE",
 ];
@@ -35,7 +36,7 @@ describe("OficinaImportService", () => {
     it("should parse a real xlsx buffer into rows of string cells", () => {
       const buffer = bufferDeLinhas([
         CABECALHO_VALIDO,
-        ["Oficina Teste", "12345678000190", "01310100", "Rua Teste", "100", "SP", "Sao Paulo"],
+        ["Oficina Teste", "12345678000190", "01310100", "Rua Teste", "100", "Centro", "SP", "Sao Paulo"],
       ]);
 
       const linhas = OficinaImportService.parseArquivo(buffer);
@@ -59,6 +60,7 @@ describe("OficinaImportService", () => {
         "cep",
         "endereco",
         "numero",
+        "bairro",
         "estado",
         "cidade",
       ];
@@ -66,12 +68,21 @@ describe("OficinaImportService", () => {
     });
 
     it("should reject a header with columns out of order", () => {
-      const foraDeOrdem = ["CNPJ", "NOME OFICINA", "CEP", "ENDEREÇO", "NUMERO", "ESTADO", "CIDADE"];
+      const foraDeOrdem = [
+        "CNPJ",
+        "NOME OFICINA",
+        "CEP",
+        "ENDEREÇO",
+        "NUMERO",
+        "BAIRRO",
+        "ESTADO",
+        "CIDADE",
+      ];
       expect(() => OficinaImportService.validarCabecalho([foraDeOrdem])).toThrow("HEADER_INVALIDO");
     });
 
     it("should reject a header missing a column", () => {
-      const faltandoColuna = ["NOME OFICINA", "CNPJ", "CEP", "ENDEREÇO", "NUMERO", "ESTADO"];
+      const faltandoColuna = ["NOME OFICINA", "CNPJ", "CEP", "ENDEREÇO", "NUMERO", "BAIRRO", "ESTADO"];
       expect(() => OficinaImportService.validarCabecalho([faltandoColuna])).toThrow(
         "HEADER_INVALIDO"
       );
@@ -158,6 +169,7 @@ describe("OficinaImportService", () => {
       cep: "01310100",
       endereco: "Rua Teste",
       numero: "100",
+      bairro: "Centro",
       estado: "SP",
       cidade: "Sao Paulo",
     };
@@ -194,6 +206,7 @@ describe("OficinaImportService", () => {
         CEP: "01310100",
         ENDERECO: "Rua Teste",
         NUMERO: "100",
+        BAIRRO: "Centro",
         ESTADO: "SP",
         CIDADE: "Sao Paulo",
         ORIGEM: "IMPORTACAO_PLANILHA",
@@ -412,7 +425,16 @@ describe("OficinaImportService", () => {
 
     const campanhaValida = { ID_CAMPANHA: 10, EMPRESA_SLUG: "empresa-x" };
 
-    const linhaValida = ["Oficina Teste", "12345678000190", "01310100", "Rua Teste", "100", "SP", "Sao Paulo"];
+    const linhaValida = [
+      "Oficina Teste",
+      "12345678000190",
+      "01310100",
+      "Rua Teste",
+      "100",
+      "Centro",
+      "SP",
+      "Sao Paulo",
+    ];
 
     function resumoAtribuicao(atribuidas: number, semPromotor = 0) {
       return {
@@ -503,7 +525,16 @@ describe("OficinaImportService", () => {
       (oficinaRepo.findOne as jest.Mock).mockResolvedValue({ LATITUDE: "-23.55", LONGITUDE: "-46.63" });
       (oficinaImportadaRepo.findOne as jest.Mock).mockResolvedValue(null);
 
-      const linhaCnpjInvalido = ["Oficina Ruim", "123", "01310100", "Rua Teste", "100", "SP", "Sao Paulo"];
+      const linhaCnpjInvalido = [
+        "Oficina Ruim",
+        "123",
+        "01310100",
+        "Rua Teste",
+        "100",
+        "Centro",
+        "SP",
+        "Sao Paulo",
+      ];
       const buffer = bufferDeLinhas([CABECALHO_VALIDO, linhaCnpjInvalido, linhaValida]);
 
       const resultado = await OficinaImportService.importarPlanilha(buffer, 10);
@@ -567,7 +598,16 @@ describe("OficinaImportService", () => {
       (AppDataSourceSync.query as jest.Mock).mockResolvedValue([{ ID_OFICINA: 33 }]); // CNPJ found
       (oficinaRepo.findOne as jest.Mock).mockResolvedValue({ LATITUDE: "-23.55", LONGITUDE: "-46.63" });
 
-      const linhaCepVazio = ["Oficina Sem Cep", "12345678000190", "", "Rua Teste", "100", "SP", "Sao Paulo"];
+      const linhaCepVazio = [
+        "Oficina Sem Cep",
+        "12345678000190",
+        "",
+        "Rua Teste",
+        "100",
+        "Centro",
+        "SP",
+        "Sao Paulo",
+      ];
       const buffer = bufferDeLinhas([CABECALHO_VALIDO, linhaCepVazio]);
       const resultado = await OficinaImportService.importarPlanilha(buffer, 10);
 
@@ -579,7 +619,16 @@ describe("OficinaImportService", () => {
     });
 
     it("should reject a row with a blank CEP for a brand-new CNPJ without creating anything", async () => {
-      const linhaCepVazio = ["Oficina Sem Cep", "12345678000190", "", "Rua Teste", "100", "SP", "Sao Paulo"];
+      const linhaCepVazio = [
+        "Oficina Sem Cep",
+        "12345678000190",
+        "",
+        "Rua Teste",
+        "100",
+        "Centro",
+        "SP",
+        "Sao Paulo",
+      ];
       const buffer = bufferDeLinhas([CABECALHO_VALIDO, linhaCepVazio]);
       const resultado = await OficinaImportService.importarPlanilha(buffer, 10);
 
@@ -599,7 +648,16 @@ describe("OficinaImportService", () => {
       (oficinaRepo.findOne as jest.Mock).mockResolvedValue({ LATITUDE: "-23.55", LONGITUDE: "-46.63" });
       (oficinaImportadaRepo.findOne as jest.Mock).mockResolvedValue(null);
 
-      const linhaValida2 = ["Oficina Dois", "98765432000110", "01310100", "Rua Dois", "200", "SP", "Sao Paulo"];
+      const linhaValida2 = [
+        "Oficina Dois",
+        "98765432000110",
+        "01310100",
+        "Rua Dois",
+        "200",
+        "Centro",
+        "SP",
+        "Sao Paulo",
+      ];
       const buffer = bufferDeLinhas([CABECALHO_VALIDO, linhaValida, linhaValida2]);
       const resultado = await OficinaImportService.importarPlanilha(buffer, 10);
 

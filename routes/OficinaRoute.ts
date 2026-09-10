@@ -238,7 +238,7 @@ createDocumentedRoute(router, {
     description:
       "Recebe um arquivo `.xlsx`/`.csv` (multipart/form-data, campo `file`) e `ID_CAMPANHA` " +
       "(campo de texto do form). A planilha deve ter exatamente as colunas " +
-      "`NOME OFICINA; CNPJ; CEP; ENDEREÇO; NUMERO; ESTADO; CIDADE`, nessa ordem " +
+      "`NOME OFICINA; CNPJ; CEP; ENDEREÇO; NUMERO; BAIRRO; ESTADO; CIDADE`, nessa ordem " +
       "(comparação case/acento-insensível) — fora do padrão, o arquivo inteiro é rejeitado " +
       "sem nenhuma escrita. `EMPRESA_SLUG` é resolvido no servidor a partir de `ID_CAMPANHA`, " +
       "nunca aceito do cliente. Deduplica por CNPJ contra `MAIN_REGISTER.OFICINA`, geocodifica " +

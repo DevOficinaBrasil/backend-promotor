@@ -13,6 +13,7 @@ export interface LinhaOficinaImport {
   cep: string;
   endereco: string;
   numero: string;
+  bairro: string;
   estado: string;
   cidade: string;
 }
@@ -23,6 +24,7 @@ const CABECALHO_ESPERADO = [
   "CEP",
   "ENDERECO",
   "NUMERO",
+  "BAIRRO",
   "ESTADO",
   "CIDADE",
 ];
@@ -73,7 +75,7 @@ export default class OficinaImportService {
   }
 
   /**
-   * Exige as 7 colunas do padrão, exatamente nessa ordem (comparação
+   * Exige as 8 colunas do padrão, exatamente nessa ordem (comparação
    * case/acento-insensível). Lança "HEADER_INVALIDO" se não bater.
    */
   static validarCabecalho(linhas: string[][]): void {
@@ -162,6 +164,7 @@ export default class OficinaImportService {
       CEP: linha.cep,
       ENDERECO: linha.endereco,
       NUMERO: linha.numero,
+      BAIRRO: linha.bairro,
       ESTADO: linha.estado,
       CIDADE: linha.cidade,
       ORIGEM: "IMPORTACAO_PLANILHA",
@@ -312,7 +315,8 @@ export default class OficinaImportService {
 
     for (let indice = 0; indice < linhasDeDados.length; indice++) {
       const numeroLinha = indice + 2; // linha 1 é o cabeçalho
-      const [nomeOficina, cnpjBruto, cep, endereco, numero, estado, cidade] = linhasDeDados[indice];
+      const [nomeOficina, cnpjBruto, cep, endereco, numero, bairro, estado, cidade] =
+        linhasDeDados[indice];
       const cnpjNormalizado = cnpjsNormalizados[indice];
 
       if (!cnpjNormalizado) {
@@ -341,6 +345,7 @@ export default class OficinaImportService {
         cep,
         endereco,
         numero,
+        bairro,
         estado,
         cidade,
       };

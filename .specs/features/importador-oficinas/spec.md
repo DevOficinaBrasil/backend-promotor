@@ -39,7 +39,7 @@ Decisões de arquitetura com impacto direto em schema (nova tabela, gravação e
 | Vínculo de oficina sem usuário ao cliente | Nova tabela `CAMPANHAS_OB.OFICINA_IMPORTADA` (`ID_OFICINA` + `EMPRESA_SLUG`), consultada em paralelo (UNION) às queries de comunidade existentes | Não altera a semântica de `USUARIO_COMMUNITY` (que hoje sempre representa um usuário real); isolado e reversível via migration própria | y (usuário) |
 | Momento do import no wizard | Sempre contra `ID_CAMPANHA` já persistido | Endpoint sempre tem um destino concreto (`Campanha.EMPRESA_SLUG`) para vincular; sem estado "rascunho" para gerenciar | y (usuário) |
 | Falha de geocodificação (CEP não resolve em nenhum provedor) | Rejeita a linha (não cria/vincula oficina); reportada como erro específico; demais linhas seguem processadas | Escolha do usuário — nunca existe oficina importada sem lat/long | y (usuário) |
-| Correspondência de colunas do cabeçalho | Nome exato (`NOME OFICINA`, `CNPJ`, `CEP`, `ENDEREÇO`, `NUMERO`, `ESTADO`, `CIDADE`), comparação *case*- e acento-insensível, mesma ordem, sem colunas extras nem faltantes | "Padrão de colunas" do requisito é tratado como contrato estrito — mas tolerante a variação trivial de maiúsculas/acentos, comum em planilhas exportadas manualmente | n |
+| Correspondência de colunas do cabeçalho | Nome exato (`NOME OFICINA`, `CNPJ`, `CEP`, `ENDEREÇO`, `NUMERO`, `BAIRRO`, `ESTADO`, `CIDADE`), comparação *case*- e acento-insensível, mesma ordem, sem colunas extras nem faltantes | "Padrão de colunas" do requisito é tratado como contrato estrito — mas tolerante a variação trivial de maiúsculas/acentos, comum em planilhas exportadas manualmente. `BAIRRO` adicionada após a implementação inicial (pedido do usuário), posicionada entre `NUMERO` e `ESTADO` por seguir a ordem natural de um endereço brasileiro | n |
 | Falha estrutural do cabeçalho | Rejeita o arquivo inteiro antes de processar qualquer linha (nenhuma escrita) | Requisito explícito do usuário | y (usuário) |
 | Normalização de CNPJ (arquivo e banco) | Extrai dígitos, exige exatamente 14; reutiliza a mesma convenção de `utils/sqlCadastroEmpresa.ts` (`cnpjIntParaLigacao`) | Consistência com a lógica de ligação CNPJ já testada e usada no resto do sistema | n |
 | CNPJ duplicado dentro do mesmo arquivo | Primeira ocorrência processada; ocorrências seguintes marcadas como erro de linha ("CNPJ duplicado no arquivo") | Evita duas tentativas de escrita para o mesmo CNPJ na mesma transação lógica | n |
@@ -63,9 +63,9 @@ Decisões de arquitetura com impacto direto em schema (nova tabela, gravação e
 
 **Acceptance Criteria**:
 
-1. WHEN o cliente envia um arquivo `.xlsx` ou `.csv` com a primeira linha exatamente `NOME OFICINA; CNPJ; CEP; ENDEREÇO; NUMERO; ESTADO; CIDADE` (comparação case/acento-insensível, mesma ordem) THEN o sistema SHALL prosseguir com o processamento das linhas de dados
+1. WHEN o cliente envia um arquivo `.xlsx` ou `.csv` com a primeira linha exatamente `NOME OFICINA; CNPJ; CEP; ENDEREÇO; NUMERO; BAIRRO; ESTADO; CIDADE` (comparação case/acento-insensível, mesma ordem) THEN o sistema SHALL prosseguir com o processamento das linhas de dados
 2. IF o arquivo enviado não é `.xlsx` nem `.csv` THEN o sistema SHALL responder 400 e SHALL NOT processar qualquer linha
-3. IF a primeira linha do arquivo não contém exatamente as 7 colunas esperadas (nomes e ordem) THEN o sistema SHALL responder 400 com a lista de colunas esperada e SHALL NOT criar, atualizar ou vincular nenhuma oficina
+3. IF a primeira linha do arquivo não contém exatamente as 8 colunas esperadas (nomes e ordem) THEN o sistema SHALL responder 400 com a lista de colunas esperada e SHALL NOT criar, atualizar ou vincular nenhuma oficina
 4. IF o arquivo excede 5MB ou 5.000 linhas de dados THEN o sistema SHALL responder 400 e SHALL NOT processar qualquer linha
 5. IF `ID_CAMPANHA` não corresponde a uma campanha existente (`DELETED_AT IS NULL`) THEN o sistema SHALL responder 404 e SHALL NOT processar o arquivo
 6. IF a campanha encontrada não possui `EMPRESA_SLUG` configurado THEN o sistema SHALL responder 422 e SHALL NOT processar o arquivo
@@ -82,8 +82,8 @@ Decisões de arquitetura com impacto direto em schema (nova tabela, gravação e
 
 **Acceptance Criteria**:
 
-1. WHEN uma linha tem um CNPJ (14 dígitos após normalização) que já existe em `MAIN_REGISTER.OFICINA` THEN o sistema SHALL reutilizar o `ID_OFICINA` existente e SHALL NOT sobrescrever `NOME_FANTASIA`, `ENDERECO`, `NUMERO`, `ESTADO`, `CIDADE` ou `CEP` já cadastrados
-2. WHEN uma linha tem um CNPJ que não existe em `MAIN_REGISTER.OFICINA` THEN o sistema SHALL criar uma nova oficina com `NOME_FANTASIA`, `CNPJ`, `CEP`, `ENDERECO`, `NUMERO`, `ESTADO`, `CIDADE` da planilha e `ORIGEM = "IMPORTACAO_PLANILHA"`
+1. WHEN uma linha tem um CNPJ (14 dígitos após normalização) que já existe em `MAIN_REGISTER.OFICINA` THEN o sistema SHALL reutilizar o `ID_OFICINA` existente e SHALL NOT sobrescrever `NOME_FANTASIA`, `ENDERECO`, `NUMERO`, `BAIRRO`, `ESTADO`, `CIDADE` ou `CEP` já cadastrados
+2. WHEN uma linha tem um CNPJ que não existe em `MAIN_REGISTER.OFICINA` THEN o sistema SHALL criar uma nova oficina com `NOME_FANTASIA`, `CNPJ`, `CEP`, `ENDERECO`, `NUMERO`, `BAIRRO`, `ESTADO`, `CIDADE` da planilha e `ORIGEM = "IMPORTACAO_PLANILHA"`
 3. IF o CNPJ de uma linha não normaliza para exatamente 14 dígitos THEN o sistema SHALL rejeitar apenas aquela linha, reportando o motivo, e SHALL continuar processando as demais linhas
 4. IF um CNPJ aparece mais de uma vez no arquivo THEN o sistema SHALL processar a primeira ocorrência e SHALL rejeitar as ocorrências seguintes reportando "CNPJ duplicado no arquivo"
 
