@@ -595,3 +595,34 @@ Usuário reportou: "muitas planilhas o campo de endereço vira ENDEREÇO e não 
 **Testes novos** (`__tests__/unit/oficinaImportService.test.ts`, describe `parseArquivo`): CSV UTF-8 puro, CSV UTF-8 com BOM, CSV Windows-1252/Latin1 simulado via `Buffer.from(str, "latin1")` (sem dependência nova — `iconv-lite` está em `node_modules` só transitivamente, não é dependência declarada do projeto).
 
 **Gate**: `npx tsc --noEmit` sem erros novos; `npm run test:unit` — 632/644 passando (+3 testes, mesmas 12 falhas pré-existentes); integração `oficinaImport.test.ts` 9/9.
+
+---
+
+## Melhoria pós-entrega: performance da importação
+
+Usuário reportou importação "extremamente lenta" testando com `docs/oficinas_teste.csv` (98 linhas). Investigação (sem acessar banco/geocoding real — só leitura de código e contagem de I/O) encontrou dois gargalos reais:
+
+1. **Fila de geocoding do Nominatim é global e serializada a 1 req/s** (`GeolocationService.nominatimQueue`, `service/geolocationService.ts:36`), com até 2 chamadas throttled por linha (busca com bairro + fallback sem bairro) e sem fallback funcional pro Google Maps (`GOOGLE_API_KEY` nem existe em `.env.example`). Para um arquivo onde a maioria das oficinas é nova (precisa geocoding), isso sozinho já é ~100-200s de espera artificial.
+2. **`RotaService.assignOficinaFromCommunitySignup` era chamado uma vez por linha**, e internamente refazia, a cada chamada, duas consultas (`getActiveCampanhasBySlug`, `getCandidatosPorCampanhas`) que retornam exatamente o mesmo resultado para o arquivo inteiro — o `empresaSlug` não muda entre linhas. Mais `getOficinasAssignedInCampanha`, uma query por campanha ativa, também repetida a cada linha. No CSV de teste, isso era ~200+ queries redundantes.
+
+Relatório completo (com estimativas e tabela de soluções possíveis) foi discutido com o usuário antes da implementação; ele aprovou as duas de melhor custo-benefício.
+
+### Solução 1 — concorrência limitada no loop de linhas
+
+`service/oficinaImportService.ts`: novo helper `executarComConcorrenciaLimitada` (pool de workers sobre um índice compartilhado, sem dependência nova — `proximoIndice++` é síncrono, seguro em Node single-thread). `importarPlanilha` roda as linhas com até `CONCORRENCIA_IMPORTACAO = 8` em paralelo em vez de um `for` sequencial. Não elimina o throttle do Nominatim (ainda é 1 req/s, política deles) — mas enquanto uma linha espera na fila de geocoding, outras linhas avançam com banco em paralelo, em vez de tudo somado em série. `resultado.erros` é ordenado por `linha` no fim, já que a ordem de conclusão sob concorrência não é a ordem do arquivo.
+
+**Segurança da concorrência**: cada linha opera sobre um `ID_OFICINA` próprio — CNPJs duplicados no arquivo já são descartados *antes* do loop (`indicesComCnpjDuplicado`), então nenhum worker concorrente escreve na mesma oficina. Contadores (`resultado.oficinas_criadas++` etc.) e `.push()` em `resultado.erros` são operações síncronas, seguras sob concorrência cooperativa de um único thread.
+
+### Solução 2 — contexto de atribuição de rota calculado uma vez por importação
+
+`service/rotaService.ts`: dois métodos novos, **sem alterar `assignOficinaFromCommunitySignup`** (mantido 100% intocado — ainda é o método usado pelo fluxo de inscrição em comunidade, já testado):
+- `prepararContextoAtribuicaoLote(empresaSlug)` — carrega campanhas ativas + candidatos + oficinas já atribuídas por campanha **uma vez**.
+- `atribuirComContexto(idOficina, lat, lon, contexto)` — mesma lógica de raio/desempate/idempotência de `assignOficinaFromCommunitySignup`, mas lendo do contexto pré-carregado em vez de reconsultar o banco. Recebe lat/lon já resolvidos pelo chamador (a importação já os tem de `garantirLatLong`), evitando também a consulta de coordenadas que o método original faria de novo. Mutação em memória do Set de "já atribuídas" por campanha mantém a idempotência dentro do próprio lote sem round-trip extra.
+
+`OficinaImportService.importarPlanilha` chama `prepararContextoAtribuicaoLote` uma vez, antes do loop, e cada linha usa `atribuirComContexto` (via `processarLinha`, novo método privado que isola o corpo por linha para caber no pool de concorrência) em vez do antigo `atribuirRota`/`assignOficinaFromCommunitySignup`. `atribuirRota` continua existindo, intocado, como bloco de construção standalone (não é mais chamado por `importarPlanilha`, mas seus 3 testes seguem válidos).
+
+**Testes novos**: `executarComConcorrenciaLimitada` (processa todo item exatamente uma vez; nunca excede o limite de concorrência — verificado por contador de tarefas em voo), um teste de ponta a ponta em `importarPlanilha` provando concorrência real via tempo de execução (8 linhas com geocoding de 20ms cada terminam em ~34ms, não ~160ms), e em `rotaService.test.ts`: `prepararContextoAtribuicaoLote` (contexto vazio sem campanha ativa; carrega candidatos/já-atribuídas uma vez — 3 queries totais para 1 campanha, não 1 por oficina) e `atribuirComContexto` (marca `ja_atribuida` do contexto em memória sem nenhuma query; marca `sem_promotor_disponivel`; atribui o mais próximo e atualiza o Set em memória, provado chamando duas vezes seguidas para a mesma oficina sem nova query na segunda).
+
+**Gate**: `npx tsc --noEmit` sem erros novos; `npm run test:unit` — 640/652 passando (+8 testes, mesmas 12 falhas pré-existentes); integração `oficinaImport.test.ts` 9/9; `rotaService.test.ts` 51/51 (nenhuma regressão nos testes existentes de `assignOficinaFromCommunitySignup`).
+
+**Não verificável nesta sessão**: o ganho real de tempo de parede contra o Nominatim/Postgres de verdade — a prova é por contagem de I/O eliminado (queries) e por teste de concorrência com dependência mockada e atraso artificial, não por rodar a importação de fato (proibido acessar banco/geocoding real nesta sessão).

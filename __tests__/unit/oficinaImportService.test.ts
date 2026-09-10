@@ -80,6 +80,37 @@ describe("OficinaImportService", () => {
     });
   });
 
+  describe("executarComConcorrenciaLimitada", () => {
+    it("should run every item exactly once, regardless of concurrency", async () => {
+      const processados: number[] = [];
+      const itens = [1, 2, 3, 4, 5, 6, 7];
+
+      await OficinaImportService.executarComConcorrenciaLimitada(itens, 3, async (item) => {
+        processados.push(item);
+      });
+
+      expect(processados.slice().sort((a, b) => a - b)).toEqual(itens);
+    });
+
+    it("should never run more tasks concurrently than the configured limit", async () => {
+      let emVoo = 0;
+      let maxEmVoo = 0;
+      const itens = Array.from({ length: 10 }, (_, i) => i);
+
+      await OficinaImportService.executarComConcorrenciaLimitada(itens, 3, async () => {
+        emVoo++;
+        maxEmVoo = Math.max(maxEmVoo, emVoo);
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        emVoo--;
+      });
+
+      expect(maxEmVoo).toBeLessThanOrEqual(3);
+      // Prova que roda de fato em paralelo, não sequencial disfarçado de
+      // paralelo — se fosse sequencial, maxEmVoo nunca passaria de 1.
+      expect(maxEmVoo).toBeGreaterThan(1);
+    });
+  });
+
   describe("validarCabecalho", () => {
     it("should accept the exact expected header", () => {
       expect(() => OficinaImportService.validarCabecalho([CABECALHO_VALIDO])).not.toThrow();
@@ -470,11 +501,13 @@ describe("OficinaImportService", () => {
 
     function resumoAtribuicao(atribuidas: number, semPromotor = 0) {
       return {
-        oficina: { ID_OFICINA: 1, CEP: "01310100", latitude: -23.55, longitude: -46.63 },
         campanhas_processadas: 1,
-        atribuicoes: [],
         resumo: { atribuidas, sem_promotor_disponivel: semPromotor, ja_atribuida: 0 },
       };
+    }
+
+    function contextoVazio() {
+      return { campanhasAtivas: [], candidatosPorCampanha: new Map(), atribuidosPorCampanha: new Map() };
     }
 
     beforeEach(() => {
@@ -484,9 +517,8 @@ describe("OficinaImportService", () => {
         return oficinaRepo;
       });
       (CampanhaService.findCampanhaById as jest.Mock).mockResolvedValue(campanhaValida);
-      (RotaService.assignOficinaFromCommunitySignup as jest.Mock).mockResolvedValue(
-        resumoAtribuicao(0)
-      );
+      (RotaService.prepararContextoAtribuicaoLote as jest.Mock).mockResolvedValue(contextoVazio());
+      (RotaService.atribuirComContexto as jest.Mock).mockResolvedValue(resumoAtribuicao(0));
     });
 
     it("should throw CAMPANHA_NAO_ENCONTRADA and never parse the file when the campaign does not exist", async () => {
@@ -533,9 +565,7 @@ describe("OficinaImportService", () => {
       (oficinaImportadaRepo.findOne as jest.Mock).mockResolvedValue(null);
       const getLatLongByCep = jest.fn().mockResolvedValue({ lat: -23.55, long: -46.63 });
       (GeolocationService as unknown as jest.Mock).mockImplementation(() => ({ getLatLongByCep }));
-      (RotaService.assignOficinaFromCommunitySignup as jest.Mock).mockResolvedValue(
-        resumoAtribuicao(1)
-      );
+      (RotaService.atribuirComContexto as jest.Mock).mockResolvedValue(resumoAtribuicao(1));
 
       const buffer = bufferDeLinhas([CABECALHO_VALIDO, linhaValida]);
       const resultado = await OficinaImportService.importarPlanilha(buffer, 10, 7);
@@ -549,6 +579,47 @@ describe("OficinaImportService", () => {
         erros: [],
       });
       expect(oficinaRepo.delete).not.toHaveBeenCalled();
+    });
+
+    it("should process rows concurrently, not strictly one at a time (performance fix)", async () => {
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([]);
+      let proximoId = 1;
+      (oficinaRepo.save as jest.Mock).mockImplementation(() =>
+        Promise.resolve({ ID_OFICINA: proximoId++ })
+      );
+      (oficinaRepo.findOne as jest.Mock).mockResolvedValue({ LATITUDE: null, LONGITUDE: null });
+      (oficinaImportadaRepo.findOne as jest.Mock).mockResolvedValue(null);
+
+      const ATRASO_GEOCODING_MS = 20;
+      const getLatLongByCep = jest.fn().mockImplementation(
+        () =>
+          new Promise((resolve) =>
+            setTimeout(() => resolve({ lat: -23.55, long: -46.63 }), ATRASO_GEOCODING_MS)
+          )
+      );
+      (GeolocationService as unknown as jest.Mock).mockImplementation(() => ({ getLatLongByCep }));
+
+      // Uma linha por unidade de concorrência: se o loop fosse sequencial,
+      // a importação levaria pelo menos NUM_LINHAS * ATRASO_GEOCODING_MS.
+      const NUM_LINHAS = 8;
+      const linhas = Array.from({ length: NUM_LINHAS }, (_, i) => [
+        `Oficina ${i}`,
+        `1234567800019${i}`,
+        "01310100",
+        "Rua Teste",
+        "100",
+        "Centro",
+        "SP",
+        "Sao Paulo",
+      ]);
+      const buffer = bufferDeLinhas([CABECALHO_VALIDO, ...linhas]);
+
+      const inicio = Date.now();
+      const resultado = await OficinaImportService.importarPlanilha(buffer, 10);
+      const duracaoMs = Date.now() - inicio;
+
+      expect(resultado.oficinas_criadas).toBe(NUM_LINHAS);
+      expect(duracaoMs).toBeLessThan(NUM_LINHAS * ATRASO_GEOCODING_MS);
     });
 
     it("should isolate a row with an invalid CNPJ without aborting the rest of the file", async () => {

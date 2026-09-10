@@ -31,6 +31,18 @@ const CABECALHO_ESPERADO = [
 
 const LIMITE_LINHAS_DE_DADOS = 5000;
 
+/**
+ * Quantas linhas processam em paralelo. O maior custo por linha é I/O de
+ * rede/banco (geocoding, queries) — processar várias linhas ao mesmo tempo
+ * sobrepõe essas esperas em vez de somá-las em série. O geocoding em si
+ * continua limitado a 1 req/s pela fila global de `GeolocationService`
+ * (política de uso do Nominatim); a concorrência aqui só garante que,
+ * enquanto uma linha espera na fila de geocoding, outras linhas avançam
+ * com banco de dados em paralelo. 8 fica dentro do pool de conexões padrão
+ * do driver `pg` (10) com folga para outras requisições no mesmo processo.
+ */
+const CONCORRENCIA_IMPORTACAO = 8;
+
 const MARCAS_DIACRITICAS = /[\u0300-\u036f]/g;
 
 /** Assinatura ZIP ("PK") \u2014 todo .xlsx \u00e9 um arquivo ZIP; um .csv n\u00e3o \u00e9. */
@@ -309,17 +321,149 @@ export default class OficinaImportService {
   }
 
   /**
+   * Roda `tarefa` para cada item de `itens`, no máximo `concorrencia` por
+   * vez. Sem dependência nova: um pool simples de workers avançando sobre
+   * um índice compartilhado — seguro porque `proximoIndice++` é síncrono
+   * (Node é single-thread; não há corrida real entre workers cooperativos).
+   */
+  static async executarComConcorrenciaLimitada<T>(
+    itens: T[],
+    concorrencia: number,
+    tarefa: (item: T, indice: number) => Promise<void>
+  ): Promise<void> {
+    let proximoIndice = 0;
+    const worker = async () => {
+      while (proximoIndice < itens.length) {
+        const indice = proximoIndice++;
+        await tarefa(itens[indice], indice);
+      }
+    };
+    const workers = Array.from({ length: Math.min(concorrencia, itens.length) }, () => worker());
+    await Promise.all(workers);
+  }
+
+  /**
+   * Processa uma linha de dados até o fim (dedup/criação, geocodificação,
+   * vínculo, atribuição de rota) ou registra o erro correspondente em
+   * `resultado.erros` — nunca lança, para não derrubar as outras linhas
+   * rodando em paralelo. Usa `RotaService.atribuirComContexto` (não
+   * `atribuirRota`) para reaproveitar o contexto pré-carregado da
+   * importação inteira (campanhas ativas/candidatos/já-atribuídas), em vez
+   * de reconsultar isso a cada linha — ver `prepararContextoAtribuicaoLote`.
+   */
+  private static async processarLinha(
+    linha: string[],
+    numeroLinha: number,
+    cnpjNormalizado: string | null,
+    duplicadaNoArquivo: boolean,
+    empresaSlug: string,
+    idCampanha: number,
+    createdBy: number | undefined,
+    contexto: Awaited<ReturnType<typeof RotaService.prepararContextoAtribuicaoLote>>,
+    resultado: ImportResult
+  ): Promise<void> {
+    const [nomeOficina, cnpjBruto, cep, endereco, numero, bairro, estado, cidade] = linha;
+
+    if (!cnpjNormalizado) {
+      resultado.erros.push({ linha: numeroLinha, cnpj: cnpjBruto, motivo: "CNPJ_INVALIDO" });
+      return;
+    }
+
+    if (duplicadaNoArquivo) {
+      resultado.erros.push({
+        linha: numeroLinha,
+        cnpj: cnpjBruto,
+        motivo: "CNPJ_DUPLICADO_NO_ARQUIVO",
+      });
+      return;
+    }
+
+    const cepLimpo = (cep ?? "").replace(/\D/g, "");
+    if (!cepLimpo) {
+      resultado.erros.push({ linha: numeroLinha, cnpj: cnpjBruto, motivo: "CEP_INVALIDO" });
+      return;
+    }
+
+    const linhaOficina: LinhaOficinaImport = {
+      nomeOficina,
+      cnpj: cnpjBruto,
+      cep,
+      endereco,
+      numero,
+      bairro,
+      estado,
+      cidade,
+    };
+
+    try {
+      const { ID_OFICINA, criada } = await this.buscarOuCriarOficina(linhaOficina, cnpjNormalizado);
+
+      const coords = await this.garantirLatLong(ID_OFICINA, cep);
+      if (!coords) {
+        if (criada) {
+          // SPEC_DEVIATION: design.md's flow diagram creates the oficina before
+          // geocoding and only marks the row as rejected on geocode failure.
+          // spec.md's IMPORT-12 requires the system SHALL NOT create the
+          // oficina when geocoding fails. Reconciled here: roll back the
+          // just-created row so no oficina without lat/long persists.
+          await AppDataSourceSync.getRepository(Oficina).delete(ID_OFICINA);
+        }
+        resultado.erros.push({
+          linha: numeroLinha,
+          cnpj: cnpjBruto,
+          motivo: "GEOCODIFICACAO_FALHOU",
+        });
+        return;
+      }
+
+      const statusVinculo = await this.garantirVinculo(ID_OFICINA, empresaSlug, idCampanha, createdBy);
+      const atribuicao = await RotaService.atribuirComContexto(
+        ID_OFICINA,
+        coords.lat,
+        coords.lon,
+        contexto
+      );
+
+      // Contadores só avançam depois que a linha inteira é processada com
+      // sucesso — uma falha em garantirVinculo/atribuirComContexto
+      // (capturada abaixo) nunca deve contar a mesma linha como sucesso E
+      // como erro.
+      if (criada) {
+        resultado.oficinas_criadas++;
+      } else {
+        resultado.oficinas_vinculadas_existentes++;
+      }
+      if (statusVinculo === "ja_vinculada") {
+        resultado.ja_na_comunidade++;
+      }
+      resultado.rotas_criadas += atribuicao.resumo.atribuidas;
+    } catch (erro) {
+      // Isola falha inesperada (DB, rede) na linha em vez de abortar o
+      // arquivo inteiro — mesmo princípio de isolamento por linha já
+      // aplicado aos erros de validação/geocodificação acima.
+      console.error(`[oficinaImportService] falha ao processar linha ${numeroLinha}`, erro);
+      resultado.erros.push({
+        linha: numeroLinha,
+        cnpj: cnpjBruto,
+        motivo: "ERRO_PROCESSAMENTO",
+      });
+    }
+  }
+
+  /**
    * Orquestra o fluxo completo: resolve `EMPRESA_SLUG` a partir da campanha,
-   * valida a planilha, e processa linha a linha isolando erro de linha (não
+   * valida a planilha, e processa as linhas isolando erro de linha (não
    * aborta o arquivo). Lança "CAMPANHA_NAO_ENCONTRADA" ou
    * "CAMPANHA_SEM_EMPRESA_SLUG" antes de processar qualquer linha; erros
    * estruturais do arquivo (`HEADER_INVALIDO`, `LIMITE_LINHAS_EXCEDIDO`)
    * também propagam antes de qualquer escrita.
    *
-   * Quando a oficina acabou de ser criada nesta importação e a
-   * geocodificação falha, a oficina recém-criada é removida — a linha não
-   * pode deixar rastro de uma oficina sem lat/long (spec: "SHALL NOT criar
-   * ... a oficina").
+   * As linhas rodam com concorrência limitada (`CONCORRENCIA_IMPORTACAO`) —
+   * seguro porque cada linha opera sobre um `ID_OFICINA` próprio (CNPJs
+   * duplicados no arquivo já foram descartados antes do loop) e o contexto
+   * de atribuição de rota compartilhado (`RotaService.
+   * prepararContextoAtribuicaoLote`) só é lido/estendido, nunca
+   * sobrescrito, por linha.
    */
   static async importarPlanilha(
     buffer: Buffer,
@@ -352,99 +496,34 @@ export default class OficinaImportService {
       erros: [],
     };
 
-    for (let indice = 0; indice < linhasDeDados.length; indice++) {
-      const numeroLinha = indice + 2; // linha 1 é o cabeçalho
-      const [nomeOficina, cnpjBruto, cep, endereco, numero, bairro, estado, cidade] =
-        linhasDeDados[indice];
-      const cnpjNormalizado = cnpjsNormalizados[indice];
+    // Calculado uma vez para a importação inteira, não por linha — ver
+    // Fix Round de performance em tasks.md. O mesmo `empresaSlug` vale para
+    // todas as linhas do arquivo.
+    const contexto = await RotaService.prepararContextoAtribuicaoLote(empresaSlug);
 
-      if (!cnpjNormalizado) {
-        resultado.erros.push({ linha: numeroLinha, cnpj: cnpjBruto, motivo: "CNPJ_INVALIDO" });
-        continue;
-      }
-
-      if (indicesDuplicados.has(indice)) {
-        resultado.erros.push({
-          linha: numeroLinha,
-          cnpj: cnpjBruto,
-          motivo: "CNPJ_DUPLICADO_NO_ARQUIVO",
-        });
-        continue;
-      }
-
-      const cepLimpo = (cep ?? "").replace(/\D/g, "");
-      if (!cepLimpo) {
-        resultado.erros.push({ linha: numeroLinha, cnpj: cnpjBruto, motivo: "CEP_INVALIDO" });
-        continue;
-      }
-
-      const linhaOficina: LinhaOficinaImport = {
-        nomeOficina,
-        cnpj: cnpjBruto,
-        cep,
-        endereco,
-        numero,
-        bairro,
-        estado,
-        cidade,
-      };
-
-      try {
-        const { ID_OFICINA, criada } = await this.buscarOuCriarOficina(
-          linhaOficina,
-          cnpjNormalizado
-        );
-
-        const coords = await this.garantirLatLong(ID_OFICINA, cep);
-        if (!coords) {
-          if (criada) {
-            // SPEC_DEVIATION: design.md's flow diagram creates the oficina before
-            // geocoding and only marks the row as rejected on geocode failure.
-            // spec.md's IMPORT-12 requires the system SHALL NOT create the
-            // oficina when geocoding fails. Reconciled here: roll back the
-            // just-created row so no oficina without lat/long persists.
-            await AppDataSourceSync.getRepository(Oficina).delete(ID_OFICINA);
-          }
-          resultado.erros.push({
-            linha: numeroLinha,
-            cnpj: cnpjBruto,
-            motivo: "GEOCODIFICACAO_FALHOU",
-          });
-          continue;
-        }
-
-        const statusVinculo = await this.garantirVinculo(
-          ID_OFICINA,
+    await this.executarComConcorrenciaLimitada(
+      linhasDeDados,
+      CONCORRENCIA_IMPORTACAO,
+      async (linha, indice) => {
+        const numeroLinha = indice + 2; // linha 1 é o cabeçalho
+        await this.processarLinha(
+          linha,
+          numeroLinha,
+          cnpjsNormalizados[indice],
+          indicesDuplicados.has(indice),
           empresaSlug,
           idCampanha,
-          createdBy
+          createdBy,
+          contexto,
+          resultado
         );
-        const atribuicao = await this.atribuirRota(ID_OFICINA, empresaSlug);
-
-        // Contadores só avançam depois que a linha inteira é processada com
-        // sucesso — uma falha em garantirVinculo/atribuirRota (capturada
-        // abaixo) nunca deve contar a mesma linha como sucesso E como erro.
-        if (criada) {
-          resultado.oficinas_criadas++;
-        } else {
-          resultado.oficinas_vinculadas_existentes++;
-        }
-        if (statusVinculo === "ja_vinculada") {
-          resultado.ja_na_comunidade++;
-        }
-        resultado.rotas_criadas += atribuicao.resumo.atribuidas;
-      } catch (erro) {
-        // Isola falha inesperada (DB, rede) na linha em vez de abortar o
-        // arquivo inteiro — mesmo princípio de isolamento por linha já
-        // aplicado aos erros de validação/geocodificação acima.
-        console.error(`[oficinaImportService] falha ao processar linha ${numeroLinha}`, erro);
-        resultado.erros.push({
-          linha: numeroLinha,
-          cnpj: cnpjBruto,
-          motivo: "ERRO_PROCESSAMENTO",
-        });
       }
-    }
+    );
+
+    // As linhas terminam fora de ordem sob concorrência — ordena por linha
+    // para a resposta ficar previsível para quem lê `erros` (e para os
+    // testes que comparam o array inteiro).
+    resultado.erros.sort((a, b) => a.linha - b.linha);
 
     return resultado;
   }
