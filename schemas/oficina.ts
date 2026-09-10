@@ -118,6 +118,8 @@ export const ImportOficinasResponseSchema = z.object({
     oficinas_vinculadas_existentes: z.number(),
     ja_na_comunidade: z.number(),
     rotas_criadas: z.number(),
+    rotas_sem_promotor_disponivel: z.number(),
+    campanhas_ativas_consideradas: z.number(),
     erros: z.array(ErroLinhaImportSchema),
   }),
 });

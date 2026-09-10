@@ -61,6 +61,23 @@ export interface ImportResult {
   oficinas_vinculadas_existentes: number;
   ja_na_comunidade: number;
   rotas_criadas: number;
+  /**
+   * Soma de oficinas processadas com sucesso para as quais pelo menos uma
+   * campanha ativa foi considerada, mas nenhum promotor estava dentro do
+   * raio configurado. Distingue "não achou promotor" (RAIO/posição) de
+   * "não havia nenhuma campanha ativa pra considerar" — sem isso, um
+   * `rotas_criadas: 0` é ambíguo demais para diagnosticar.
+   */
+  rotas_sem_promotor_disponivel: number;
+  /**
+   * Quantas campanhas ativas do cliente (`EMPRESA_SLUG`, não só a
+   * `ID_CAMPANHA` do import) foram consideradas para atribuição de rota.
+   * Zero aqui, com `rotas_criadas` e `rotas_sem_promotor_disponivel`
+   * também zerados, indica que nenhuma campanha do cliente está ativa
+   * agora (`START_TIME`/`END_TIME`) — a causa mais comum de "nenhuma rota
+   * atribuída" sem nenhum erro reportado.
+   */
+  campanhas_ativas_consideradas: number;
   erros: ErroLinhaImport[];
 }
 
@@ -437,6 +454,7 @@ export default class OficinaImportService {
         resultado.ja_na_comunidade++;
       }
       resultado.rotas_criadas += atribuicao.resumo.atribuidas;
+      resultado.rotas_sem_promotor_disponivel += atribuicao.resumo.sem_promotor_disponivel;
     } catch (erro) {
       // Isola falha inesperada (DB, rede) na linha em vez de abortar o
       // arquivo inteiro — mesmo princípio de isolamento por linha já
@@ -493,6 +511,8 @@ export default class OficinaImportService {
       oficinas_vinculadas_existentes: 0,
       ja_na_comunidade: 0,
       rotas_criadas: 0,
+      rotas_sem_promotor_disponivel: 0,
+      campanhas_ativas_consideradas: 0,
       erros: [],
     };
 
@@ -500,6 +520,7 @@ export default class OficinaImportService {
     // Fix Round de performance em tasks.md. O mesmo `empresaSlug` vale para
     // todas as linhas do arquivo.
     const contexto = await RotaService.prepararContextoAtribuicaoLote(empresaSlug);
+    resultado.campanhas_ativas_consideradas = contexto.campanhasAtivas.length;
 
     await this.executarComConcorrenciaLimitada(
       linhasDeDados,

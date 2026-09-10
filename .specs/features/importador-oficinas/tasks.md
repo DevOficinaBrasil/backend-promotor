@@ -626,3 +626,26 @@ Relatório completo (com estimativas e tabela de soluções possíveis) foi disc
 **Gate**: `npx tsc --noEmit` sem erros novos; `npm run test:unit` — 640/652 passando (+8 testes, mesmas 12 falhas pré-existentes); integração `oficinaImport.test.ts` 9/9; `rotaService.test.ts` 51/51 (nenhuma regressão nos testes existentes de `assignOficinaFromCommunitySignup`).
 
 **Não verificável nesta sessão**: o ganho real de tempo de parede contra o Nominatim/Postgres de verdade — a prova é por contagem de I/O eliminado (queries) e por teste de concorrência com dependência mockada e atraso artificial, não por rodar a importação de fato (proibido acessar banco/geocoding real nesta sessão).
+
+---
+
+## Bug reportado pós-entrega: rotas não atribuídas mesmo com promotor no raio
+
+Usuário reportou: import cria as oficinas corretamente, mas não atribui rota mesmo quando a oficina está no raio de atuação do promotor.
+
+**Investigação (sem acesso a banco)**: releitura linha a linha de `atribuirComContexto`/`prepararContextoAtribuicaoLote` contra o `assignOficinaFromCommunitySignup` original (intocado) — a lógica de raio/Haversine/desempate é **estruturalmente idêntica**; não há regressão encontrada nela. O que a releitura encontrou foi uma lacuna de observabilidade pré-existente (não introduzida pela reescrita de performance, apenas nunca corrigida): `atribuicao.resumo.sem_promotor_disponivel` e o número de campanhas ativas consideradas eram **computados e descartados** — `ImportResult` só expunha `rotas_criadas`. Um `rotas_criadas: 0` era indistinguível entre três causas bem diferentes:
+1. Nenhuma campanha do cliente está ativa agora (`START_TIME`/`END_TIME` não cobre `NOW()`) — nenhuma rota pode ser criada, para nenhuma oficina, independente de raio.
+2. Havia campanha ativa, mas o promotor não tem `CAMPANHA_PROMOTOR` pra ela, ou está sem lat/long.
+3. Havia campanha ativa e candidato(s), mas todos fora do raio configurado.
+
+**Correção**: `ImportResult` ganhou dois campos novos, agregados em `importarPlanilha`/`processarLinha`:
+- `campanhas_ativas_consideradas` — de `contexto.campanhasAtivas.length`, calculado uma vez.
+- `rotas_sem_promotor_disponivel` — soma de `atribuicao.resumo.sem_promotor_disponivel` por linha processada com sucesso.
+
+Isso não é uma correção de bug em si (a lógica de atribuição não mudou) — é o diagnóstico que faltava para descobrir *qual* das três causas acima é a real, sem acesso a banco. `schemas/oficina.ts` (`ImportOficinasResponseSchema`) e `docs/IMPORTADOR_OFICINAS_API.md` atualizados com uma tabela de diagnóstico para a UI.
+
+**Próximo passo**: usuário vai reimportar e reportar os valores de `campanhas_ativas_consideradas`/`rotas_sem_promotor_disponivel` — isso aponta exatamente qual das 3 causas é a real, sem precisar de acesso a banco nesta sessão.
+
+**Testes novos**: 2 em `importarPlanilha` provando que os campos distinguem os dois cenários silenciosos (`campanhas_ativas_consideradas: 0` vs `rotas_sem_promotor_disponivel > 0` com campanha considerada).
+
+**Gate**: `npx tsc --noEmit` sem erros novos; `npm run test:unit` — 642/654 passando (+2 testes, mesmas 12 falhas pré-existentes); integração `oficinaImport.test.ts` 9/9.

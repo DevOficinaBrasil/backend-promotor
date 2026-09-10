@@ -74,6 +74,8 @@ Sempre que o arquivo é estruturalmente válido (cabeçalho correto, dentro dos 
     "oficinas_vinculadas_existentes": 15,
     "ja_na_comunidade": 12,
     "rotas_criadas": 28,
+    "rotas_sem_promotor_disponivel": 2,
+    "campanhas_ativas_consideradas": 1,
     "erros": [
       { "linha": 7, "cnpj": "123", "motivo": "CNPJ_INVALIDO" },
       { "linha": 23, "cnpj": "12345678000190", "motivo": "CNPJ_DUPLICADO_NO_ARQUIVO" }
@@ -91,11 +93,19 @@ Sempre que o arquivo é estruturalmente válido (cabeçalho correto, dentro dos 
 | `oficinas_vinculadas_existentes` | Linhas cujo CNPJ já existia — a oficina existente foi reaproveitada (nenhum dado sobrescrito) |
 | `ja_na_comunidade` | Dentre as processadas com sucesso, quantas a oficina já pertencia à comunidade do cliente (não foi necessário criar vínculo novo) |
 | `rotas_criadas` | Quantas oficinas foram atribuídas a um promotor (nova `ROTA_PROMOTOR`) — considera todas as campanhas ativas do cliente, não só a `ID_CAMPANHA` enviada |
+| `rotas_sem_promotor_disponivel` | Oficinas importadas com sucesso para as quais pelo menos uma campanha ativa foi considerada, mas nenhum promotor tinha a oficina dentro do raio configurado |
+| `campanhas_ativas_consideradas` | Quantas campanhas do cliente (`EMPRESA_SLUG`) estavam ativas (`START_TIME`/`END_TIME` cobrindo agora) no momento da importação. Diagnóstico direto: se vier `0`, **nenhuma** campanha do cliente está ativa agora — nenhuma rota pode ser criada, independente de raio/promotor, e isso não é reportado como erro |
 | `erros` | Uma entrada por linha rejeitada — ver tabela de `motivo` abaixo |
 
 **Importante para a UI**: `oficinas_criadas + oficinas_vinculadas_existentes + erros.length === total_linhas` sempre — toda linha cai em exatamente uma dessas categorias (sucesso ou erro), nunca as duas.
 
-Se **nenhuma** oficina foi atribuída a um promotor (`rotas_criadas: 0` mesmo com sucessos > 0), vale considerar um aviso na UI do tipo "oficinas importadas, mas nenhuma tinha um promotor no raio de cobertura — atribuição manual pode ser necessária".
+**Diagnóstico de `rotas_criadas: 0`** (nenhum erro, mas nenhuma rota atribuída) — os dois novos campos acima dizem exatamente por quê, sem precisar adivinhar:
+
+| Cenário | `campanhas_ativas_consideradas` | `rotas_sem_promotor_disponivel` | O que mostrar na UI |
+|---|---|---|---|
+| Nenhuma campanha do cliente está ativa agora | `0` | `0` | "Nenhuma campanha ativa no momento — as oficinas foram importadas, mas a atribuição de rota só acontece quando uma campanha estiver em andamento." |
+| Havia campanha(s) ativa(s), mas nenhum promotor cobre essas oficinas | `> 0` | `> 0` (igual ou próximo do total de sucessos) | "Oficinas importadas, mas nenhuma tinha um promotor no raio de cobertura — atribuição manual pode ser necessária." |
+| Tudo certo | `> 0` | `0` (com `rotas_criadas > 0`) | Sem aviso — fluxo normal |
 
 ### Tabela de `motivo` (erros de linha)
 

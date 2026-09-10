@@ -554,6 +554,8 @@ describe("OficinaImportService", () => {
         oficinas_vinculadas_existentes: 0,
         ja_na_comunidade: 0,
         rotas_criadas: 0,
+        rotas_sem_promotor_disponivel: 0,
+        campanhas_ativas_consideradas: 0,
         erros: [],
       });
     });
@@ -565,6 +567,11 @@ describe("OficinaImportService", () => {
       (oficinaImportadaRepo.findOne as jest.Mock).mockResolvedValue(null);
       const getLatLongByCep = jest.fn().mockResolvedValue({ lat: -23.55, long: -46.63 });
       (GeolocationService as unknown as jest.Mock).mockImplementation(() => ({ getLatLongByCep }));
+      (RotaService.prepararContextoAtribuicaoLote as jest.Mock).mockResolvedValue({
+        campanhasAtivas: [{ ID_CAMPANHA: 1, NOME: "Campanha X" }],
+        candidatosPorCampanha: new Map(),
+        atribuidosPorCampanha: new Map(),
+      });
       (RotaService.atribuirComContexto as jest.Mock).mockResolvedValue(resumoAtribuicao(1));
 
       const buffer = bufferDeLinhas([CABECALHO_VALIDO, linhaValida]);
@@ -576,9 +583,63 @@ describe("OficinaImportService", () => {
         oficinas_vinculadas_existentes: 0,
         ja_na_comunidade: 0,
         rotas_criadas: 1,
+        rotas_sem_promotor_disponivel: 0,
+        campanhas_ativas_consideradas: 1,
         erros: [],
       });
       expect(oficinaRepo.delete).not.toHaveBeenCalled();
+    });
+
+    it("should report zero active campaigns considered when the client has none, distinguishing it from a raio miss", async () => {
+      // Contexto default do beforeEach já é campanhasAtivas: [] — cenário
+      // real mais comum de "0 rotas criadas" sem nenhum erro: nenhuma
+      // campanha do cliente está ativa agora (START_TIME/END_TIME).
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([]);
+      (oficinaRepo.save as jest.Mock).mockResolvedValue({ ID_OFICINA: 50 });
+      (oficinaRepo.findOne as jest.Mock).mockResolvedValue({ LATITUDE: null, LONGITUDE: null });
+      (oficinaImportadaRepo.findOne as jest.Mock).mockResolvedValue(null);
+      const getLatLongByCep = jest.fn().mockResolvedValue({ lat: -23.55, long: -46.63 });
+      (GeolocationService as unknown as jest.Mock).mockImplementation(() => ({ getLatLongByCep }));
+      // atribuirComContexto real (não mockado com um resumo fixo) receberia
+      // um contexto sem campanhas e devolveria isso mesmo, mas como o teste
+      // mocka RotaService inteiro, simulamos o retorno real para esse caso:
+      (RotaService.atribuirComContexto as jest.Mock).mockResolvedValue({
+        campanhas_processadas: 0,
+        resumo: { atribuidas: 0, sem_promotor_disponivel: 0, ja_atribuida: 0 },
+      });
+
+      const buffer = bufferDeLinhas([CABECALHO_VALIDO, linhaValida]);
+      const resultado = await OficinaImportService.importarPlanilha(buffer, 10);
+
+      expect(resultado.campanhas_ativas_consideradas).toBe(0);
+      expect(resultado.rotas_criadas).toBe(0);
+      expect(resultado.rotas_sem_promotor_disponivel).toBe(0);
+      expect(resultado.oficinas_criadas).toBe(1); // a oficina É criada mesmo sem rota
+    });
+
+    it("should report rotas_sem_promotor_disponivel when campaigns exist but no promoter is within range", async () => {
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([]);
+      (oficinaRepo.save as jest.Mock).mockResolvedValue({ ID_OFICINA: 50 });
+      (oficinaRepo.findOne as jest.Mock).mockResolvedValue({ LATITUDE: null, LONGITUDE: null });
+      (oficinaImportadaRepo.findOne as jest.Mock).mockResolvedValue(null);
+      const getLatLongByCep = jest.fn().mockResolvedValue({ lat: -23.55, long: -46.63 });
+      (GeolocationService as unknown as jest.Mock).mockImplementation(() => ({ getLatLongByCep }));
+      (RotaService.prepararContextoAtribuicaoLote as jest.Mock).mockResolvedValue({
+        campanhasAtivas: [{ ID_CAMPANHA: 1, NOME: "Campanha X" }],
+        candidatosPorCampanha: new Map(),
+        atribuidosPorCampanha: new Map(),
+      });
+      (RotaService.atribuirComContexto as jest.Mock).mockResolvedValue({
+        campanhas_processadas: 1,
+        resumo: { atribuidas: 0, sem_promotor_disponivel: 1, ja_atribuida: 0 },
+      });
+
+      const buffer = bufferDeLinhas([CABECALHO_VALIDO, linhaValida]);
+      const resultado = await OficinaImportService.importarPlanilha(buffer, 10);
+
+      expect(resultado.campanhas_ativas_consideradas).toBe(1);
+      expect(resultado.rotas_criadas).toBe(0);
+      expect(resultado.rotas_sem_promotor_disponivel).toBe(1);
     });
 
     it("should process rows concurrently, not strictly one at a time (performance fix)", async () => {

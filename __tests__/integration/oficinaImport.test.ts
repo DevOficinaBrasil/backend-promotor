@@ -19,6 +19,8 @@ const resultadoPadrao = {
   oficinas_vinculadas_existentes: 0,
   ja_na_comunidade: 0,
   rotas_criadas: 1,
+  rotas_sem_promotor_disponivel: 0,
+  campanhas_ativas_consideradas: 1,
   erros: [],
 };
 
