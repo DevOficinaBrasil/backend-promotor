@@ -46,6 +46,38 @@ describe("OficinaImportService", () => {
       expect(linhas[1][0]).toBe("Oficina Teste");
       expect(linhas[1][1]).toBe("12345678000190");
     });
+
+    const linhaCsv =
+      "NOME OFICINA;CNPJ;CEP;ENDEREÇO;NUMERO;BAIRRO;ESTADO;CIDADE\n" +
+      "Oficina Teste;12345678000190;01310100;Rua Teste;100;Centro;SP;Sao Paulo\n";
+
+    it("should correctly decode accented headers from a genuinely UTF-8 encoded csv", () => {
+      const buffer = Buffer.from(linhaCsv, "utf8");
+
+      const linhas = OficinaImportService.parseArquivo(buffer);
+
+      expect(linhas[0]).toEqual(CABECALHO_VALIDO);
+    });
+
+    it("should correctly decode accented headers from a UTF-8 csv with a BOM", () => {
+      const bom = Buffer.from([0xef, 0xbb, 0xbf]);
+      const buffer = Buffer.concat([bom, Buffer.from(linhaCsv, "utf8")]);
+
+      const linhas = OficinaImportService.parseArquivo(buffer);
+
+      expect(linhas[0]).toEqual(CABECALHO_VALIDO);
+    });
+
+    it("should correctly decode accented headers from a Windows-1252/Latin1 encoded csv (common Excel export on Windows PT-BR)", () => {
+      // Buffer.from(str, "latin1") grava 1 byte por caractere nos mesmos
+      // code points de ISO-8859-1/Windows-1252 — simula o csv exportado
+      // pelo Excel sem precisar de uma lib de codepage.
+      const buffer = Buffer.from(linhaCsv, "latin1");
+
+      const linhas = OficinaImportService.parseArquivo(buffer);
+
+      expect(linhas[0]).toEqual(CABECALHO_VALIDO);
+    });
   });
 
   describe("validarCabecalho", () => {

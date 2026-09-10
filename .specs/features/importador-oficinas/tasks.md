@@ -579,3 +579,19 @@ Pedido do usuário após o Verifier confirmar PASS (iteração 3): a planilha pa
 **Gate**: `npx tsc --noEmit` sem erros novos; `npm run test:unit` — 629/641 passando (mesmas 12 falhas pré-existentes e não relacionadas); `oficinaImport.test.ts` (integração, sem banco) 9/9.
 
 **Verificação**: autoavaliação do agente (Check A/B/C do adequacy review), sem um novo Verifier independente dedicado — mudança mecânica e de baixo risco (adicionar um campo a um fluxo já testado e verificado), mesmo padrão em todos os pontos já estabelecido pelas 3 iterações anteriores. Usuário pode pedir uma rodada de Verifier se quiser essa garantia extra.
+
+---
+
+## Bug pós-entrega: CSV UTF-8 com acentuação corrompida
+
+Usuário reportou: "muitas planilhas o campo de endereço vira ENDEREÇO e não ENDERECO" — a leitura inicial (uma questão de normalização de acento) estava errada; o texto literal já chegava corrompido, ANTES de qualquer normalização.
+
+**Causa raiz**: `XLSX.read(buffer, { type: "buffer" })` (SheetJS) não assume UTF-8 para CSV. Um CSV genuinamente UTF-8 — o caso comum de upload — tem seus bytes multi-byte (acentos) mal interpretados: `"ENDEREÇO"` vira `"ENDEREÃO"`. Confirmado empiricamente: um buffer UTF-8 puro contendo "ENDEREÇO" já saía corrompido do `XLSX.read`, mesmo sem nenhum problema de encoding real no arquivo.
+
+**Correção**: `service/oficinaImportService.ts` passa a detectar o formato pela assinatura ZIP do buffer ("PK", `0x50 0x4B`) em vez de confiar no `XLSX.read` para tudo:
+- `.xlsx` (ZIP) → `XLSX.read(buffer, { type: "buffer" })`, inalterado (texto já vem em UTF-8/UTF-16 dentro do XML interno, sem ambiguidade).
+- `.csv` (não-ZIP) → decodificado para string **antes** de chegar no SheetJS, via `type: "string"`: remove BOM UTF-8 se presente, tenta UTF-8 (`Buffer.toString("utf8")` substitui bytes inválidos por U+FFFD em vez de lançar — a presença desse caractere é o sinal de que não era UTF-8), e cai para `"latin1"` se inválido (cobre CSV exportado pelo Excel no Brasil em Windows-1252/ANSI — ISO-8859-1 mapeia byte a byte para os mesmos code points nos acentos do português).
+
+**Testes novos** (`__tests__/unit/oficinaImportService.test.ts`, describe `parseArquivo`): CSV UTF-8 puro, CSV UTF-8 com BOM, CSV Windows-1252/Latin1 simulado via `Buffer.from(str, "latin1")` (sem dependência nova — `iconv-lite` está em `node_modules` só transitivamente, não é dependência declarada do projeto).
+
+**Gate**: `npx tsc --noEmit` sem erros novos; `npm run test:unit` — 632/644 passando (+3 testes, mesmas 12 falhas pré-existentes); integração `oficinaImport.test.ts` 9/9.

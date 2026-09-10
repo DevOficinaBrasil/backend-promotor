@@ -33,6 +33,10 @@ const LIMITE_LINHAS_DE_DADOS = 5000;
 
 const MARCAS_DIACRITICAS = /[\u0300-\u036f]/g;
 
+/** Assinatura ZIP ("PK") \u2014 todo .xlsx \u00e9 um arquivo ZIP; um .csv n\u00e3o \u00e9. */
+const ASSINATURA_ZIP = Buffer.from([0x50, 0x4b]);
+const BOM_UTF8 = Buffer.from([0xef, 0xbb, 0xbf]);
+
 export interface ErroLinhaImport {
   linha: number;
   cnpj?: string;
@@ -59,12 +63,47 @@ export default class OficinaImportService {
   }
 
   /**
+   * Decodifica um buffer de texto (.csv) para string. O parser de CSV do
+   * SheetJS não assume UTF-8 por padrão — um CSV genuinamente UTF-8 (o caso
+   * comum de upload via browser) chega com acentuação corrompida
+   * ("ENDEREÇO" vira "ENDEREÃO"). Decodificamos nós mesmos e entregamos uma
+   * string pronta (`type: "string"`), contornando esse parser por completo:
+   *
+   *  1. Remove o BOM UTF-8 se presente.
+   *  2. Tenta UTF-8. `Buffer.toString("utf8")` não lança em bytes inválidos —
+   *     substitui por U+FFFD — então a presença desse caractere é o sinal de
+   *     que a fonte não era UTF-8.
+   *  3. Cai para "latin1": a maioria dos CSVs exportados pelo Excel no Brasil
+   *     usa Windows-1252/ANSI, e ISO-8859-1 (o que "latin1" decodifica)
+   *     mapeia byte a byte para os mesmos code points nos acentos do
+   *     português (á, é, í, ó, ú, ã, õ, ç, ...) — cobre o caso real sem
+   *     precisar de uma tabela de codepage completa.
+   */
+  private static decodificarTexto(buffer: Buffer): string {
+    const semBom = buffer.subarray(0, 3).equals(BOM_UTF8) ? buffer.subarray(3) : buffer;
+    const comoUtf8 = semBom.toString("utf8");
+    if (!comoUtf8.includes("�")) {
+      return comoUtf8;
+    }
+    return semBom.toString("latin1");
+  }
+
+  /**
    * Lê o buffer do upload (.xlsx ou .csv) e retorna a matriz de linhas
-   * (cada linha é um array de valores de célula como string). O SheetJS
-   * detecta o formato pelo conteúdo do buffer, não pela extensão.
+   * (cada linha é um array de valores de célula como string).
+   *
+   * Detecta o formato pela assinatura ZIP do buffer ("PK"), não pela
+   * extensão: todo .xlsx é um ZIP, então o que não é ZIP é tratado como
+   * texto (.csv) e passa por `decodificarTexto` antes do parser — ver o
+   * comentário ali sobre por que o buffer não pode ir direto para o SheetJS.
+   * Um .xlsx (ZIP) não tem essa ambiguidade — o texto já vem em UTF-8/UTF-16
+   * dentro do XML interno — e segue para `XLSX.read` sem decodificação prévia.
    */
   static parseArquivo(buffer: Buffer): string[][] {
-    const workbook = XLSX.read(buffer, { type: "buffer" });
+    const ehZip = buffer.subarray(0, 2).equals(ASSINATURA_ZIP);
+    const workbook = ehZip
+      ? XLSX.read(buffer, { type: "buffer" })
+      : XLSX.read(this.decodificarTexto(buffer), { type: "string" });
     const primeiraAba = workbook.SheetNames[0];
     const planilha = workbook.Sheets[primeiraAba];
     return XLSX.utils.sheet_to_json<string[]>(planilha, {
