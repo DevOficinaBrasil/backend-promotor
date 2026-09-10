@@ -768,4 +768,101 @@ describe('RotaService', () => {
         .rejects.toThrow('UNPROCESSABLE');
     });
   });
+
+  describe('prepararContextoAtribuicaoLote / atribuirComContexto', () => {
+    const { haversineDistanceKm } = require('../../utils/haversine');
+
+    function mockQueriesLote(overrides: {
+      campanhasAtivas?: any[];
+      candidatos?: any[];
+      assigned?: any[];
+    } = {}) {
+      (AppDataSourceSync.query as jest.Mock).mockImplementation((sql: string) => {
+        if (sql.includes('ROTA_PROMOTOR" rp')) return Promise.resolve(overrides.assigned ?? []);
+        if (sql.includes('PROMOTOR" p')) return Promise.resolve(overrides.candidatos ?? []);
+        if (sql.includes('"CAMPANHA" c')) return Promise.resolve(overrides.campanhasAtivas ?? []);
+        return Promise.resolve([]);
+      });
+    }
+
+    it('prepararContextoAtribuicaoLote returns an empty context when there is no active campaign', async () => {
+      mockQueriesLote({ campanhasAtivas: [] });
+
+      const contexto = await RotaService.prepararContextoAtribuicaoLote('empresa-x');
+
+      expect(contexto.campanhasAtivas).toEqual([]);
+      expect(contexto.candidatosPorCampanha.size).toBe(0);
+      expect(contexto.atribuidosPorCampanha.size).toBe(0);
+    });
+
+    it('prepararContextoAtribuicaoLote loads candidates and already-assigned workshops once per active campaign', async () => {
+      mockQueriesLote({
+        campanhasAtivas: [{ ID_CAMPANHA: 1, NOME: 'Campanha X' }],
+        candidatos: [
+          { ID_CAMPANHA_PROMOTOR: 20, ID_CAMPANHA: 1, ID_PROMOTOR: 8, NOME: 'Maria', RAIO: 20, LATITUDE: '-25.43', LONGITUDE: '-49.27' },
+        ],
+        assigned: [{ ID_OFICINA: 500 }],
+      });
+
+      const contexto = await RotaService.prepararContextoAtribuicaoLote('empresa-x');
+
+      expect(contexto.candidatosPorCampanha.get(1)).toHaveLength(1);
+      expect(contexto.atribuidosPorCampanha.get(1)).toEqual(new Set([500]));
+      // 1 chamada para campanhas ativas + 1 para candidatos + 1 para
+      // já-atribuídas (uma campanha só) = 3 no total, não 1 por oficina.
+      expect((AppDataSourceSync.query as jest.Mock).mock.calls).toHaveLength(3);
+    });
+
+    it('atribuirComContexto marks ja_atribuida from the in-memory context, without any query', async () => {
+      const contexto = {
+        campanhasAtivas: [{ ID_CAMPANHA: 1, NOME: 'Campanha X' }],
+        candidatosPorCampanha: new Map(),
+        atribuidosPorCampanha: new Map([[1, new Set([123])]]),
+      };
+      (AppDataSourceSync.query as jest.Mock).mockClear();
+
+      const resultado = await RotaService.atribuirComContexto(123, -23.5, -46.6, contexto);
+
+      expect(resultado.resumo).toEqual({ atribuidas: 0, sem_promotor_disponivel: 0, ja_atribuida: 1 });
+      expect(AppDataSourceSync.query).not.toHaveBeenCalled();
+      expect(rotaRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('atribuirComContexto marks sem_promotor_disponivel when no candidate is within range', async () => {
+      const contexto = {
+        campanhasAtivas: [{ ID_CAMPANHA: 1, NOME: 'Campanha X' }],
+        candidatosPorCampanha: new Map(),
+        atribuidosPorCampanha: new Map([[1, new Set<number>()]]),
+      };
+
+      const resultado = await RotaService.atribuirComContexto(123, -23.5, -46.6, contexto);
+
+      expect(resultado.resumo).toEqual({ atribuidas: 0, sem_promotor_disponivel: 1, ja_atribuida: 0 });
+    });
+
+    it('atribuirComContexto assigns the closest candidate, creates a route, and updates the context in memory', async () => {
+      haversineDistanceKm.mockReturnValue(5);
+      rotaRepo.save.mockResolvedValue({ ID_ROTA_PROMOTOR: 90, ID_OFICINA: 123 });
+      const contexto = {
+        campanhasAtivas: [{ ID_CAMPANHA: 1, NOME: 'Campanha X' }],
+        candidatosPorCampanha: new Map([
+          [1, [{ ID_CAMPANHA_PROMOTOR: 20, ID_CAMPANHA: 1, ID_PROMOTOR: 8, NOME: 'Maria', RAIO: 20, lat: -25.43, lon: -49.27 }]],
+        ]),
+        atribuidosPorCampanha: new Map([[1, new Set<number>()]]),
+      };
+
+      const primeira = await RotaService.atribuirComContexto(123, -23.5, -46.6, contexto);
+      expect(primeira.resumo).toEqual({ atribuidas: 1, sem_promotor_disponivel: 0, ja_atribuida: 0 });
+      expect(rotaRepo.save).toHaveBeenCalledTimes(1);
+
+      // Uma segunda chamada para a MESMA oficina, sem reconsultar o banco,
+      // já enxerga o Set atualizado em memória pela chamada anterior — é
+      // exatamente a idempotência dentro do lote que o contexto existe pra dar.
+      (AppDataSourceSync.query as jest.Mock).mockClear();
+      const segunda = await RotaService.atribuirComContexto(123, -23.5, -46.6, contexto);
+      expect(segunda.resumo).toEqual({ atribuidas: 0, sem_promotor_disponivel: 0, ja_atribuida: 1 });
+      expect(AppDataSourceSync.query).not.toHaveBeenCalled();
+      expect(rotaRepo.save).toHaveBeenCalledTimes(1);
+    });
+  });
 });
