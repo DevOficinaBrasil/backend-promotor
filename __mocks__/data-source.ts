@@ -5,6 +5,7 @@ export const AppDataSourceSync = {
     create: jest.fn((_: any, data: any) => data),
     save: jest.fn((data: any) => Promise.resolve(data)),
     softDelete: jest.fn(),
+    update: jest.fn(),
     find: jest.fn(),
     findOne: jest.fn(),
   })),

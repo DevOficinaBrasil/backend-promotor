@@ -30,6 +30,17 @@ interface ReassignResult {
   resumo: { mantidas: number; reatribuidas: number; sem_promotor_disponivel: number };
 }
 
+export interface AgendaResultado {
+  ID_CAMPANHA_PROMOTOR: number;
+  DATA_VISITA: string | null;
+  rotas: {
+    ID_ROTA_PROMOTOR: number;
+    ID_OFICINA: number | null;
+    ORDEM: number | null;
+    DATA_VISITA: string | null;
+  }[];
+}
+
 export default class RotaService {
   private static getRotaRepo() {
     return AppDataSourceSync.getRepository(RotaPromotor);
@@ -334,6 +345,142 @@ export default class RotaService {
 
 
     return null;
+  }
+
+
+  /**
+   * Converte um `Date` para o dia no calendário UTC (`YYYY-MM-DD`).
+   *
+   * `START_TIME` e `END_TIME` são `timestamp` sem fuso, e o dia da agenda é uma
+   * `date` pura. Comparar os dois exige escolher um calendário; escolhemos o
+   * UTC porque é o único determinístico aqui — o fuso do processo Node não é
+   * garantido. O efeito prático é que, numa campanha cujo fim caia à noite no
+   * horário de Brasília, o último dia agendável pode ser um dia além do
+   * esperado. Ser permissivo na borda é o modo de falhar certo: recusar um dia
+   * legítimo atrapalharia o supervisor, aceitar um dia a mais não quebra nada.
+   */
+  private static diaDe(valor: Date): string {
+    return new Date(valor).toISOString().slice(0, 10);
+  }
+
+  /**
+   * Grava o dia planejado e a ordem de um conjunto de rotas do mesmo vínculo.
+   *
+   * `idsRota` é a ordem desejada dentro do dia: a posição no array vira `ORDEM`
+   * 1..N. `idsDesagendar` são rotas que saem do dia e voltam a ficar sem data —
+   * é o que torna atômico o caso de mover uma oficina de um dia para outro.
+   *
+   * Com `data` nula, as rotas de `idsRota` são desagendadas.
+   *
+   * A escrita acontece em duas fases dentro da transação: primeiro `ORDEM` de
+   * todas as rotas envolvidas vai a nulo, só então os valores finais são
+   * gravados. Sem isso, o índice único parcial de (vínculo, dia, ordem) colide
+   * no meio do caminho, porque ele não pode ser adiado até o commit em Postgres
+   * (índice parcial não vira constraint, e só constraint aceita ser adiada).
+   */
+  static async agendarVisitas(
+    idCampanhaPromotor: number,
+    data: string | null,
+    idsRota: number[],
+    idsDesagendar: number[] = []
+  ): Promise<AgendaResultado> {
+    const cpRepo = this.getCampanhaPromotorRepo();
+    const vinculo = await cpRepo.findOne({
+      where: { ID_CAMPANHA_PROMOTOR: idCampanhaPromotor, DELETED_AT: IsNull() },
+      relations: ["campanha"],
+    });
+
+    if (!vinculo) {
+      throw new Error("VINCULO_NAO_ENCONTRADO");
+    }
+
+    if (data !== null) {
+      const campanha = vinculo.campanha;
+      if (!campanha?.START_TIME || !campanha?.END_TIME) {
+        throw new Error("CAMPANHA_SEM_PERIODO");
+      }
+      if (data < this.diaDe(campanha.START_TIME) || data > this.diaDe(campanha.END_TIME)) {
+        throw new Error("DATA_FORA_DO_PERIODO");
+      }
+    }
+
+    const idsAfetados = [...new Set([...idsRota, ...idsDesagendar])];
+    if (idsAfetados.length === 0) {
+      throw new Error("NENHUMA_ROTA_INFORMADA");
+    }
+
+    const repo = this.getRotaRepo();
+    const rotas = await repo.find({
+      where: {
+        ID_ROTA_PROMOTOR: In(idsAfetados),
+        ID_CAMPANHA_PROMOTOR: idCampanhaPromotor,
+        DELETED_AT: IsNull(),
+      },
+    });
+
+    // Uma rota que não voltou da consulta ou não é deste vínculo, ou está
+    // apagada. Nos dois casos o lote inteiro para: agendar metade do dia
+    // deixaria a agenda num estado que o supervisor não pediu.
+    if (rotas.length !== idsAfetados.length) {
+      throw new Error("ROTA_FORA_DO_VINCULO");
+    }
+
+    const concluida = rotas.find(
+      (rota) => rota.STATUS === StatusRota.FINALIZADO || rota.STATUS === StatusRota.CANCELADO
+    );
+    if (concluida) {
+      throw new Error("ROTA_JA_CONCLUIDA");
+    }
+
+    await AppDataSourceSync.transaction(async (manager) => {
+      // Fase 1: libera as posições. Sem isto, gravar linha a linha esbarra no
+      // índice único quando duas rotas trocam de posição entre si.
+      await manager.update(RotaPromotor, { ID_ROTA_PROMOTOR: In(idsAfetados) }, { ORDEM: null });
+
+      if (idsDesagendar.length > 0) {
+        await manager.update(
+          RotaPromotor,
+          { ID_ROTA_PROMOTOR: In(idsDesagendar) },
+          { DATA_VISITA: null }
+        );
+      }
+
+      // Fase 2: grava dia e posição final, na sequência recebida.
+      for (let indice = 0; indice < idsRota.length; indice += 1) {
+        await manager.update(
+          RotaPromotor,
+          { ID_ROTA_PROMOTOR: idsRota[indice] },
+          { DATA_VISITA: data, ORDEM: data === null ? null : indice + 1 }
+        );
+      }
+    });
+
+    // Agendar à mão é uma ordenação manual: o app de campo lê a estratégia para
+    // saber se deve respeitar `ORDEM` ou reordenar por GPS.
+    if (data !== null) {
+      await cpRepo.update(idCampanhaPromotor, {
+        ESTRATEGIA_ORDENACAO: EstrategiaOrdenacao.MANUAL,
+      } as any);
+    }
+
+    const atualizadas = await repo.find({
+      where: {
+        ID_ROTA_PROMOTOR: In(idsAfetados),
+        ID_CAMPANHA_PROMOTOR: idCampanhaPromotor,
+        DELETED_AT: IsNull(),
+      },
+    });
+
+    return {
+      ID_CAMPANHA_PROMOTOR: idCampanhaPromotor,
+      DATA_VISITA: data,
+      rotas: atualizadas.map((rota) => ({
+        ID_ROTA_PROMOTOR: rota.ID_ROTA_PROMOTOR!,
+        ID_OFICINA: rota.ID_OFICINA ?? null,
+        ORDEM: rota.ORDEM ?? null,
+        DATA_VISITA: rota.DATA_VISITA ?? null,
+      })),
+    };
   }
 
   /**

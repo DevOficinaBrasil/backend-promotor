@@ -72,8 +72,16 @@ export default class RotaPromotor {
   @Column({ type: "int", nullable: true, name: "CREATED_BY" })
   CREATED_BY?: number;
 
+  /**
+   * Posicao da visita. Com `DATA_VISITA` preenchida, e a ordem DENTRO do dia;
+   * sem ela, a ordem dentro do vinculo. Nulo significa "sem ordem definida".
+   *
+   * O tipo admite `null` explicitamente porque limpar a ordem exige gravar
+   * NULL: `update` do TypeORM ignora campos `undefined`, entao passar
+   * `undefined` nao limpa nada — vira um no-op silencioso.
+   */
   @Column({ type: "int", nullable: true, name: "ORDEM" })
-  ORDEM?: number;
+  ORDEM?: number | null;
 
   /**
    * Dia planejado da visita (`YYYY-MM-DD`). Nulo significa "sem dia definido",
