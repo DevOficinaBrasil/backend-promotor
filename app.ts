@@ -5,11 +5,14 @@ import { AppDataSourceSync } from "./data-source";
 import { registrarOutboxCron } from "./schedule/outboxNotificacaoCron";
 import cors from "cors";
 import { openAPIGenerator } from "./config/openapi";
+import { montarParserDeLotePlanilha } from "./middlewares/jsonLimitPlanilha";
 
 dotenv.config();
 
 const app = express();
 app.use(cors());
+// Antes do parser global de propósito — ver o comentário em jsonLimitPlanilha.
+montarParserDeLotePlanilha(app);
 app.use(express.json());
 
 // OpenAPI JSON endpoint

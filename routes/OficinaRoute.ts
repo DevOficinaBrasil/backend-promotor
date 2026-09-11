@@ -13,6 +13,8 @@ import {
   GetCommunityCountQuerySchema,
   GetCommunityCountResponseSchema,
   ImportOficinasResponseSchema,
+  ImportOficinasStreamBodySchema,
+  ImportStreamEventoSchema,
 } from "../schemas/oficina";
 import { ErrorResponseSchema } from "../schemas/common";
 
@@ -257,6 +259,46 @@ createDocumentedRoute(router, {
         schema: ErrorResponseSchema,
       },
       404: { description: "Campanha não encontrada", schema: ErrorResponseSchema },
+      422: { description: "Campanha sem EMPRESA_SLUG configurado", schema: ErrorResponseSchema },
+      500: { description: "Erro interno", schema: ErrorResponseSchema },
+    },
+  },
+});
+
+// Importa oficinas a partir de linhas já mapeadas, respondendo em stream
+createDocumentedRoute(router, {
+  method: "post",
+  path: "/import-stream",
+  handler: OficinaController.importOficinasStream,
+  basePath: "/oficina",
+  schemas: { body: ImportOficinasStreamBodySchema },
+  documentation: {
+    tags: ["Oficina"],
+    summary: "Importa oficinas de um lote já mapeado, com relatório em stream",
+    description:
+      "Recebe `ID_CAMPANHA` e um array `oficinas` com as linhas ja mapeadas pelo de-para feito " +
+      "no cliente. Nenhum nome ou ordem de coluna e validado aqui. Cada item exige `cnpj` e " +
+      "`cep`; os demais campos so sao usados quando a oficina e inedita. `EMPRESA_SLUG` e " +
+      "resolvido no servidor a partir de `ID_CAMPANHA`, nunca aceito do cliente. " +
+      "A resposta e NDJSON (`application/x-ndjson`): uma linha JSON por evento, na ordem " +
+      "`inicio`, depois `progresso` repetido, depois `fim`. Um evento `progresso` sai no " +
+      "maximo a cada 500ms, e o ultimo sempre sai, para a barra fechar em 100%. Falha depois " +
+      "do primeiro byte vira um evento `erro` e encerra o stream: o status ja e 200 nesse " +
+      "ponto e nao ha como voltar atras. As regras por linha sao as mesmas de " +
+      "`POST /oficina/import`: deduplicacao por CNPJ, geocodificacao obrigatoria, vinculo " +
+      "idempotente ao cliente e tentativa de atribuicao de rota.",
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: {
+        description: "Stream NDJSON de eventos da importação",
+        schema: ImportStreamEventoSchema,
+      },
+      400: {
+        description: "Corpo fora do schema (sem ID_CAMPANHA, array vazio, linha sem CNPJ/CEP, ou mais de 5.000 linhas)",
+        schema: ErrorResponseSchema,
+      },
+      404: { description: "Campanha não encontrada", schema: ErrorResponseSchema },
+      413: { description: "Corpo acima de 8MB", schema: ErrorResponseSchema },
       422: { description: "Campanha sem EMPRESA_SLUG configurado", schema: ErrorResponseSchema },
       500: { description: "Erro interno", schema: ErrorResponseSchema },
     },
