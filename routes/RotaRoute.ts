@@ -22,6 +22,8 @@ import {
   ReassignByAddressResponseSchema,
   AssignOficinaCommunitySchema,
   AssignOficinaCommunityResponseSchema,
+  AgendaVisitaSchema,
+  AgendaVisitaResponseSchema,
 } from "../schemas/rota";
 import { ErrorResponseSchema } from "../schemas/common";
 
@@ -396,6 +398,40 @@ createDocumentedRoute(router, {
       },
       404: { description: "Oficina não encontrada", schema: ErrorResponseSchema },
       422: { description: "CEP sem coordenadas", schema: ErrorResponseSchema },
+      500: { description: "Erro interno", schema: ErrorResponseSchema },
+    },
+  },
+});
+
+// Agenda as visitas de um dia
+createDocumentedRoute(router, {
+  method: "put",
+  path: "/agenda",
+  handler: RotaController.agendarVisitas,
+  basePath: "/rota",
+  schemas: { body: AgendaVisitaSchema },
+  documentation: {
+    tags: ["Rota"],
+    summary: "Agenda as visitas de um promotor num dia",
+    description:
+      "Grava o dia planejado e a ordem dentro dele. A posicao de cada id no array `rotas` vira " +
+      "`ORDEM` 1..N. `desagendar` lista rotas que saem do dia e voltam a ficar sem data, o que " +
+      "torna atomico mover uma oficina de um dia para outro. `DATA` nula desagenda as rotas de " +
+      "`rotas`. Tudo acontece numa transacao: ou o dia inteiro e gravado, ou nada e. " +
+      "Agendar a mao marca o vinculo como ordenacao MANUAL, para o app de campo respeitar a ordem.",
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: { description: "Agenda salva", schema: AgendaVisitaResponseSchema },
+      400: { description: "Corpo fora do schema ou lista vazia", schema: ErrorResponseSchema },
+      404: { description: "Vinculo nao encontrado", schema: ErrorResponseSchema },
+      409: {
+        description: "Visita ja concluida na selecao, ou rota de outro promotor",
+        schema: ErrorResponseSchema,
+      },
+      422: {
+        description: "Data fora do periodo da campanha, ou campanha sem periodo",
+        schema: ErrorResponseSchema,
+      },
       500: { description: "Erro interno", schema: ErrorResponseSchema },
     },
   },

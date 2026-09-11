@@ -2,6 +2,12 @@
 import { z } from 'zod';
 
 /**
+ * Um dia de calendário no formato `YYYY-MM-DD`. É uma `date` pura, sem hora e
+ * sem fuso: o dia planejado de uma visita não depende do relógio de quem lê.
+ */
+const DiaSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use o formato YYYY-MM-DD.");
+
+/**
  * Status Rota enum schema
  * Note: 'EM ANDAMENTO' preserves the database typo for compatibility
  */
@@ -287,8 +293,44 @@ export const OptimizeRotaSchema = z.object({
   ID_CAMPANHA_PROMOTOR: z.number().int().positive(),
   ID_OFICINA_INICIO: z.number().int().positive(),
   ID_OFICINA_FIM: z.number().int().positive(),
+  /**
+   * Dia da agenda a otimizar (`YYYY-MM-DD`). Omitido, otimiza o vínculo
+   * inteiro — o comportamento que existia antes da agenda por dia.
+   */
+  DATA_VISITA: DiaSchema.nullish(),
 }).refine(data => data.ID_OFICINA_INICIO !== data.ID_OFICINA_FIM, {
   message: "Oficina de início e fim devem ser diferentes.",
+});
+
+/**
+ * PUT /rota/agenda — agendar as visitas de um dia
+ *
+ * `rotas` é a ordem desejada dentro do dia: a posição no array vira `ORDEM`
+ * 1..N. `desagendar` são rotas que saem do dia e voltam a ficar sem data, o que
+ * torna atômico mover uma oficina de um dia para outro. `DATA` nula desagenda
+ * as rotas de `rotas`.
+ */
+export const AgendaVisitaSchema = z.object({
+  ID_CAMPANHA_PROMOTOR: z.number().int().positive(),
+  DATA: DiaSchema.nullable(),
+  rotas: z.array(z.number().int().positive()),
+  desagendar: z.array(z.number().int().positive()).optional(),
+}).refine((data) => data.rotas.length > 0 || (data.desagendar?.length ?? 0) > 0, {
+  message: "Informe ao menos uma rota em `rotas` ou em `desagendar`.",
+});
+
+export const AgendaVisitaResponseSchema = z.object({
+  message: z.string(),
+  data: z.object({
+    ID_CAMPANHA_PROMOTOR: z.number(),
+    DATA_VISITA: z.string().nullable(),
+    rotas: z.array(z.object({
+      ID_ROTA_PROMOTOR: z.number(),
+      ID_OFICINA: z.number().nullable(),
+      ORDEM: z.number().nullable(),
+      DATA_VISITA: z.string().nullable(),
+    })),
+  }),
 });
 
 /**

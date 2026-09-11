@@ -213,12 +213,13 @@ export default class RotaController {
    */
   static optimizeRoute = async (req: Request, res: Response) => {
     try {
-      const { ID_CAMPANHA_PROMOTOR, ID_OFICINA_INICIO, ID_OFICINA_FIM } = req.body;
+      const { ID_CAMPANHA_PROMOTOR, ID_OFICINA_INICIO, ID_OFICINA_FIM, DATA_VISITA } = req.body;
 
       const result = await RotaService.optimizeAndSaveRoute(
         ID_CAMPANHA_PROMOTOR,
         ID_OFICINA_INICIO,
-        ID_OFICINA_FIM
+        ID_OFICINA_FIM,
+        DATA_VISITA ?? null
       );
 
       return res.status(200).json({
@@ -251,10 +252,67 @@ export default class RotaController {
         message: "Rotas reordenadas com sucesso.",
         data: result,
       });
-    } catch (error) {
+    } catch (error: any) {
+      if (error?.message === "AGENDA_ATIVA_IMPEDE_PROXIMIDADE") {
+        return res.status(409).json({
+          message:
+            "Este promotor tem visitas agendadas por dia. Ordenar por GPS apagaria a ordem de todos os dias.",
+        });
+      }
       console.error("Erro ao reordenar rotas:", error);
       return res.status(400).json({
         message: error instanceof Error ? error.message : "Erro ao reordenar rotas.",
+      });
+    }
+  };
+
+  /**
+   * Agenda as visitas de um dia: grava o dia e a ordem dentro dele.
+   * PUT /rota/agenda
+   */
+  static agendarVisitas = async (req: Request, res: Response) => {
+    try {
+      const { ID_CAMPANHA_PROMOTOR, DATA, rotas, desagendar } = req.body;
+
+      const result = await RotaService.agendarVisitas(
+        ID_CAMPANHA_PROMOTOR,
+        DATA,
+        rotas,
+        desagendar ?? []
+      );
+
+      return res.status(200).json({ message: "Agenda salva com sucesso.", data: result });
+    } catch (error: any) {
+      const mensagemPorErro: Record<string, { status: number; message: string }> = {
+        VINCULO_NAO_ENCONTRADO: { status: 404, message: "Vínculo não encontrado." },
+        CAMPANHA_SEM_PERIODO: {
+          status: 422,
+          message: "A campanha precisa ter período definido para agendar visitas.",
+        },
+        DATA_FORA_DO_PERIODO: {
+          status: 422,
+          message: "A data escolhida está fora do período da campanha.",
+        },
+        ROTA_JA_CONCLUIDA: {
+          status: 409,
+          message: "Há visita já concluída ou cancelada na seleção. Nada foi alterado.",
+        },
+        ROTA_FORA_DO_VINCULO: {
+          status: 409,
+          message: "Há rota que não pertence a este promotor na seleção. Nada foi alterado.",
+        },
+        NENHUMA_ROTA_INFORMADA: { status: 400, message: "Informe ao menos uma rota." },
+      };
+
+      const conhecido = mensagemPorErro[error?.message];
+      if (conhecido) {
+        return res.status(conhecido.status).json({ message: conhecido.message });
+      }
+
+      console.error("Erro ao agendar visitas:", error);
+      return res.status(500).json({
+        message: "Erro interno ao agendar visitas.",
+        error: error instanceof Error ? error.message : "Erro desconhecido",
       });
     }
   };
