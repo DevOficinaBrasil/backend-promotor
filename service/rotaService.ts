@@ -485,36 +485,59 @@ export default class RotaService {
 
   /**
    * Calcula rota otimizada (Nearest Neighbor + 2-opt) e persiste ORDEM.
+   *
+   * Com `dataVisita` informada, o cálculo e a escrita ficam restritos às rotas
+   * daquele dia — é assim que a agenda por dia otimiza um trajeto por vez, sem
+   * tocar na ordem dos outros dias. Nesse caso `ID_OFICINA_INICIO` e
+   * `ID_OFICINA_FIM` do vínculo NÃO são gravados: eles guardam um par só, e um
+   * vínculo com vários dias teria vários. Ao reabrir um dia, início e fim são
+   * derivados da menor e da maior `ORDEM` daquele dia, que é a mesma informação
+   * sem coluna nova.
+   *
+   * Sem `dataVisita`, o comportamento é o de sempre: o vínculo inteiro.
    */
   static async optimizeAndSaveRoute(
     idCampanhaPromotor: number,
     idOficinaInicio: number,
-    idOficinaFim: number
+    idOficinaFim: number,
+    dataVisita?: string | null
   ) {
     const repo = this.getRotaRepo();
     const cpRepo = this.getCampanhaPromotorRepo();
 
     const rotas = await repo.find({
-      where: { ID_CAMPANHA_PROMOTOR: idCampanhaPromotor, DELETED_AT: IsNull() },
+      where: {
+        ID_CAMPANHA_PROMOTOR: idCampanhaPromotor,
+        DELETED_AT: IsNull(),
+        ...(dataVisita ? { DATA_VISITA: dataVisita } : {}),
+      },
       relations: ["oficina"],
     });
 
     if (rotas.length === 0) {
-      throw new Error("Nenhuma rota encontrada para este vínculo.");
+      throw new Error(
+        dataVisita
+          ? `Nenhuma rota agendada para ${dataVisita} neste vínculo.`
+          : "Nenhuma rota encontrada para este vínculo."
+      );
     }
 
-    const pontos = rotas
-      .filter((r) => r.oficina?.LATITUDE && r.oficina?.LONGITUDE)
-      .map((r) => ({
-        id: r.ID_ROTA_PROMOTOR!,
-        id_oficina: r.ID_OFICINA!,
-        lat: parseFloat(r?.oficina?.LATITUDE!),
-        lon: parseFloat(r?.oficina?.LONGITUDE!),
-      }));
-
-    if (pontos.length < rotas.length) {
-      throw new Error("Algumas oficinas não possuem coordenadas (LATITUDE/LONGITUDE).");
+    const semCoordenada = rotas.filter((r) => !r.oficina?.LATITUDE || !r.oficina?.LONGITUDE);
+    if (semCoordenada.length > 0) {
+      // Nomear a oficina é o que torna o erro acionável: sem isso o supervisor
+      // sabe que falhou, mas não qual das oficinas do dia precisa de endereço.
+      const nomes = semCoordenada
+        .map((r) => r.oficina?.NOME_FANTASIA || `Oficina ${r.ID_OFICINA}`)
+        .join(", ");
+      throw new Error(`Sem coordenadas para: ${nomes}.`);
     }
+
+    const pontos = rotas.map((r) => ({
+      id: r.ID_ROTA_PROMOTOR!,
+      id_oficina: r.ID_OFICINA!,
+      lat: parseFloat(r?.oficina?.LATITUDE!),
+      lon: parseFloat(r?.oficina?.LONGITUDE!),
+    }));
 
     const result = optimizeRoute(pontos, idOficinaInicio, idOficinaFim);
 
@@ -527,20 +550,29 @@ export default class RotaService {
     // Chamar OSRM para rota real por ruas
     const osrmResult = await fetchOSRMRoute(orderedPontos);
 
-    // Salvar ORDEM em cada rota (always on new DB)
-    for (const item of result.order) {
-      await repo.update(item.id, { ORDEM: item.ordem });
-    }
+    // Escrita em duas fases, pelo mesmo motivo de `agendarVisitas`: o índice
+    // único parcial de (vínculo, dia, ordem) não pode ser adiado até o commit,
+    // então gravar linha a linha colide assim que duas rotas trocam de posição.
+    const idsDoRecorte = rotas.map((r) => r.ID_ROTA_PROMOTOR!);
+    await AppDataSourceSync.transaction(async (manager) => {
+      await manager.update(RotaPromotor, { ID_ROTA_PROMOTOR: In(idsDoRecorte) }, { ORDEM: null });
+      for (const item of result.order) {
+        await manager.update(RotaPromotor, { ID_ROTA_PROMOTOR: item.id }, { ORDEM: item.ordem });
+      }
+    });
 
-    // Salvar estratégia no CampanhaPromotor (always on new DB)
+    // Com um dia informado, início e fim do vínculo ficam intocados — ver o
+    // comentário no topo do método.
     await cpRepo.update(idCampanhaPromotor, {
       ESTRATEGIA_ORDENACAO: EstrategiaOrdenacao.ROTA_OTIMIZADA,
-      ID_OFICINA_INICIO: idOficinaInicio,
-      ID_OFICINA_FIM: idOficinaFim,
+      ...(dataVisita
+        ? {}
+        : { ID_OFICINA_INICIO: idOficinaInicio, ID_OFICINA_FIM: idOficinaFim }),
     } as any);
 
     return {
       ESTRATEGIA_ORDENACAO: EstrategiaOrdenacao.ROTA_OTIMIZADA,
+      DATA_VISITA: dataVisita ?? null,
       ID_OFICINA_INICIO: idOficinaInicio,
       ID_OFICINA_FIM: idOficinaFim,
       distancia_total_km: osrmResult?.distanceKm ?? result.totalDistanceKm,

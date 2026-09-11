@@ -571,16 +571,26 @@ describe('RotaService', () => {
   });
 
   describe('optimizeAndSaveRoute', () => {
+    // A ordem passou a ser gravada dentro de uma transacao, em duas fases, por
+    // causa do indice unico parcial de (vinculo, dia, ordem).
+    let manager: { update: jest.Mock };
+
+    beforeEach(() => {
+      manager = { update: jest.fn() };
+      (AppDataSourceSync.transaction as jest.Mock).mockImplementation((cb: Function) => cb(manager));
+    });
+
     it('optimizes, calls OSRM and persists ORDEM', async () => {
       rotaRepo.find.mockResolvedValue([
         { ID_ROTA_PROMOTOR: 1, ID_OFICINA: 100, oficina: { LATITUDE: '-23.5', LONGITUDE: '-46.6' } },
       ]);
-      rotaRepo.update.mockResolvedValue(undefined);
       cpRepo.update.mockResolvedValue(undefined);
 
       const result = await RotaService.optimizeAndSaveRoute(5, 100, 100);
 
-      expect(rotaRepo.update).toHaveBeenCalledWith(1, { ORDEM: 1 });
+      const gravacoes = manager.update.mock.calls.map((c) => c[2]);
+      expect(gravacoes[0]).toEqual({ ORDEM: null });
+      expect(gravacoes[1]).toEqual({ ORDEM: 1 });
       expect(cpRepo.update).toHaveBeenCalledWith(5, expect.objectContaining({
         ESTRATEGIA_ORDENACAO: EstrategiaOrdenacao.ROTA_OTIMIZADA,
       }));
@@ -612,8 +622,10 @@ describe('RotaService', () => {
         { ID_ROTA_PROMOTOR: 1, ID_OFICINA: 100, oficina: { LATITUDE: null, LONGITUDE: null } },
       ]);
 
+      // A mensagem passou a nomear a oficina: sem isso o supervisor sabe que
+      // falhou, mas nao qual das oficinas do dia precisa de endereco.
       await expect(RotaService.optimizeAndSaveRoute(5, 100, 100))
-        .rejects.toThrow('Algumas oficinas não possuem coordenadas (LATITUDE/LONGITUDE).');
+        .rejects.toThrow('Sem coordenadas para: Oficina 100.');
     });
   });
 
