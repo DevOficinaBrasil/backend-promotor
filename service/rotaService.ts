@@ -568,6 +568,17 @@ export default class RotaService {
       where: { ID_CAMPANHA_PROMOTOR: idCampanhaPromotor, DELETED_AT: IsNull() },
     });
 
+    // Ordenar por GPS limpa a ORDEM de TODAS as rotas do vínculo de uma vez. Com
+    // agenda por dia montada, isso apagaria a ordem de todos os dias juntos, e
+    // não há como reconstruí-la: a ordem é a única coisa que guarda o trajeto
+    // que o supervisor montou. Por isso a troca é recusada em vez de avisada.
+    if (estrategia === EstrategiaOrdenacao.PROXIMIDADE_PROMOTOR) {
+      const temAgenda = rotas.some((rota) => rota.DATA_VISITA);
+      if (temAgenda) {
+        throw new Error("AGENDA_ATIVA_IMPEDE_PROXIMIDADE");
+      }
+    }
+
     if (estrategia === EstrategiaOrdenacao.MANUAL) {
       if (!rotasOrdem || rotasOrdem.length === 0) {
         throw new Error("Estratégia MANUAL exige array de rotas com ORDEM.");
