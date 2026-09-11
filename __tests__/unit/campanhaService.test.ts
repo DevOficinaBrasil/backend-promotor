@@ -154,6 +154,8 @@ describe('CampanhaService', () => {
         campanha: {
           ID_CAMPANHA: 1,
           NOME: 'Active',
+          // Rascunho nao conta como ativa para o app do promotor.
+          STATUS: 'PUBLICADA',
           START_TIME: new Date('2026-01-01'),
           END_TIME: new Date('2026-12-31'),
         },

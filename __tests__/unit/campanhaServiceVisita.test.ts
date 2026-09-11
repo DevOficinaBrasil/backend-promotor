@@ -30,6 +30,10 @@ describe('CampanhaService', () => {
     const campanhaAtiva = {
       ID_CAMPANHA: 1,
       NOME: 'Campanha Ativa',
+      // Uma campanha so e ativa para o app do promotor se estiver publicada:
+      // em rascunho ela ainda esta sendo montada no wizard, com vinculos e
+      // rotas ja criados, e o promotor nao pode enxerga-la.
+      STATUS: 'PUBLICADA',
       START_TIME: new Date('2026-01-01'),
       END_TIME: new Date('2026-12-31'),
     };
@@ -613,6 +617,8 @@ describe('CampanhaService', () => {
                 DELETED_AT: null,
                 campanha: {
                   ID_CAMPANHA: 1,
+                  // Rascunho nao conta como ativa para o app do promotor.
+                  STATUS: 'PUBLICADA',
                   START_TIME: new Date('2026-01-01'),
                   END_TIME: new Date('2026-12-31'),
                 },
@@ -680,6 +686,8 @@ describe('CampanhaService', () => {
                 DELETED_AT: null,
                 campanha: {
                   ID_CAMPANHA: 1,
+                  // Rascunho nao conta como ativa para o app do promotor.
+                  STATUS: 'PUBLICADA',
                   START_TIME: new Date('2026-01-01'),
                   END_TIME: new Date('2026-12-31'),
                 },
