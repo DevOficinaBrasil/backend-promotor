@@ -28,6 +28,14 @@ export interface PromotorOficinaData {
   ID_OFICINAS: number[];
 }
 
+/**
+ * Fuso em que "hoje" e decidido para promotor e supervisor. `DONE_AT` e um
+ * `timestamp` sem fuso e o app de campo grava em UTC (`toISOString`), por isso
+ * o recorte do historico converte de UTC para este fuso em vez de interpretar
+ * o valor como hora local.
+ */
+const FUSO_OPERACAO = 'America/Sao_Paulo';
+
 export default class CampanhaService {
   private static getCampanhaRepo() {
     return AppDataSourceSync.getRepository(Campanha);
@@ -205,11 +213,26 @@ export default class CampanhaService {
    * @param datetime - Optional datetime to check (defaults to current time)
    * @returns The active campaign with rotas array (each rota includes nested oficina with DuckDB data) or null if not found
    */
+  /**
+   * Dia corrente no fuso de operacao (`YYYY-MM-DD`).
+   *
+   * Promotor e supervisor operam no Brasil, entao "hoje" e o dia em Sao Paulo,
+   * nao o dia em UTC nem o do relogio do aparelho. Calcular aqui, e nao no
+   * banco, mantem uma fonte de verdade so: o mesmo valor vai como parametro
+   * para o filtro e volta na resposta, e o `datetime` injetavel continua
+   * controlando os dois nos testes.
+   */
+  static diaDeReferencia(instante: Date): string {
+    // 'en-CA' formata como YYYY-MM-DD, que e exatamente o formato de uma date.
+    return new Intl.DateTimeFormat('en-CA', { timeZone: FUSO_OPERACAO }).format(instante);
+  }
+
   static async getActiveCampanhaByPromotor(
     idPromotor: number,
     datetime?: Date
-  ): Promise<(Campanha & { ESTRATEGIA_ORDENACAO: EstrategiaOrdenacao | 'PROXIMIDADE_PROMOTOR'; rotas: RotaPromotor[] }) | null> {
+  ): Promise<(Campanha & { ESTRATEGIA_ORDENACAO: EstrategiaOrdenacao | 'PROXIMIDADE_PROMOTOR'; DATA_REFERENCIA: string; rotas: RotaPromotor[] }) | null> {
     const currentDatetime = datetime || new Date();
+    const dataReferencia = this.diaDeReferencia(currentDatetime);
     const cpRepo = this.getCampanhaPromotorRepo();
 
     // Find all campanha_promotor relationships for this promoter (both DBs)
@@ -281,10 +304,24 @@ export default class CampanhaService {
       ON rp."ID_ROTA_PROMOTOR" = nv."ID_ROTA_PROMOTOR"
       WHERE rp."ID_CAMPANHA_PROMOTOR" = $1
       AND rp."DELETED_AT" IS NULL
-      ORDER BY rp."ORDEM" ASC NULLS LAST, rp."ID_ROTA_PROMOTOR" ASC`;
+      -- Recorte do que o promotor enxerga hoje. Pendente: a de hoje, a atrasada
+      -- e a que nunca teve dia; a agendada para depois fica de fora, que e o que
+      -- da sentido a agenda. Concluida: so o que foi fechado hoje, para o
+      -- historico do dia nao virar o historico da campanha inteira.
+      AND (
+        (rp."STATUS" IN ('FINALIZADO', 'CANCELADO')
+           AND (rp."DONE_AT" AT TIME ZONE 'UTC' AT TIME ZONE 'America/Sao_Paulo')::date = $2::date)
+        OR
+        (rp."STATUS" NOT IN ('FINALIZADO', 'CANCELADO')
+           AND (rp."DATA_VISITA" IS NULL OR rp."DATA_VISITA" <= $2::date))
+      )
+      -- Atrasada primeiro (data menor), depois a de hoje, e por ultimo a sem
+      -- data. Dentro do dia, a ordem montada pelo supervisor.
+      ORDER BY rp."DATA_VISITA" ASC NULLS LAST, rp."ORDEM" ASC NULLS LAST, rp."ID_ROTA_PROMOTOR" ASC`;
 
     const rotasPromotor = await AppDataSourceSync.query(fullRotasQuery, [
       activeCampanha.ID_CAMPANHA_PROMOTOR,
+      dataReferencia,
     ]);
 
     // FILT-01 a FILT-05: a lista do app traz só rota cuja confirmação está
@@ -372,6 +409,9 @@ export default class CampanhaService {
           REDIRECT: rota.REDIRECT,
           CREATED_BY: rota.CREATED_BY,
           ORDEM: rota.ORDEM,
+          // `payloadRota` e uma lista branca: um campo que nao esteja aqui nao
+          // chega ao app, por mais que a query o traga.
+          DATA_VISITA: rota.DATA_VISITA ?? null,
           UPDATED_AT: rota.UPDATED_AT,
           CREATED_AT: rota.CREATED_AT,
           DELETED_AT: rota.DELETED_AT,
@@ -395,6 +435,9 @@ export default class CampanhaService {
     return {
       ...campanha,
       ESTRATEGIA_ORDENACAO: activeCampanha.ESTRATEGIA_ORDENACAO || 'PROXIMIDADE_PROMOTOR',
+      // O app marca a visita atrasada comparando com este dia, em vez de ler o
+      // relogio do aparelho.
+      DATA_REFERENCIA: dataReferencia,
       rotas: rotasWithDuckDBData,
     };
   }
