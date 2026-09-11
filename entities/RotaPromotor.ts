@@ -75,6 +75,20 @@ export default class RotaPromotor {
   @Column({ type: "int", nullable: true, name: "ORDEM" })
   ORDEM?: number;
 
+  /**
+   * Dia planejado da visita (`YYYY-MM-DD`). Nulo significa "sem dia definido",
+   * que e o estado de toda rota criada antes da agenda por dia existir.
+   *
+   * Com esta coluna preenchida, `ORDEM` passa a significar a ordem DENTRO do
+   * dia; para rota sem data, ela mantem o significado anterior de ordem dentro
+   * do vinculo. A unicidade de (vinculo, dia, ordem) e garantida por indice
+   * unico parcial — ver `scripts/migration-data-visita-rota.sql`.
+   *
+   * TypeORM entrega colunas `date` como string, nao como Date.
+   */
+  @Column({ type: "date", nullable: true, name: "DATA_VISITA" })
+  DATA_VISITA?: string | null;
+
   @UpdateDateColumn({
     type: "timestamp",
     default: () => "CURRENT_TIMESTAMP",
