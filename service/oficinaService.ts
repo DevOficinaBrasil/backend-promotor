@@ -108,47 +108,96 @@ export default class OficinaService {
     TELEFONE: string;
     distance: number;
   }>> {
+    // O ramo `OFICINA_IMPORTADA` (oficinas vinculadas ao cliente sem usuário,
+    // CON26-162) lê lat/long direto de MAIN_REGISTER.OFICINA, não de
+    // dw.cadastro_empresa: uma oficina recém-importada tipicamente ainda não
+    // tem linha no DW (ETL externo, em lote). O import garante LATITUDE/
+    // LONGITUDE preenchidos antes de criar o vínculo, então essa fonte é
+    // confiável para o filtro de raio. Sem filtro de status_receita/ATIVO
+    // neste ramo — ver Risks & Concerns em design.md.
     const query = `
-      SELECT DISTINCT ON (us."ID_OFICINA")
-        us."ID_OFICINA" AS "ID_OFICINA",
-        ce."latitude" AS "LATITUDE",
-        ce."longitude" AS "LONGITUDE",
-        ce."razao_social" AS "NOME_FANTASIA",
-        CONCAT(ce."logradouro", ' ', ce."rua") AS "ENDERECO",
-        ce."bairro" AS "BAIRRO",
-        ce."cidade" AS "CIDADE",
-        ce."estado" AS "ESTADO",
-        ce."numero" AS "NUMERO",
-        ce."cep" AS "CEP",
-        ce."cnpj" AS "CNPJ",
-        ce."telefone" AS "TELEFONE",
+      SELECT DISTINCT ON ("ID_OFICINA") * FROM (
         (
-          ${EARTH_RADIUS_KM} * acos(
-            cos(radians($2)) * cos(radians(ce."latitude")) *
-            cos(radians(ce."longitude") - radians($3)) +
-            sin(radians($2)) * sin(radians(ce."latitude"))
-          )
-        ) AS distance
-      FROM "OFICINA_PORTAL"."COMMUNITIES" cm
-      INNER JOIN "MAIN_REGISTER"."USUARIO_COMMUNITY" uc
-        ON cm."CommunityID" = uc."id_community"
-      INNER JOIN "MAIN_REGISTER"."USUARIO" us
-        ON us."ID_USUARIO" = uc."id_usuario"
-      LEFT JOIN "MAIN_REGISTER"."OFICINA" o
-        ON o."ID_OFICINA" = us."ID_OFICINA"${ligacaoCadastroEmpresa('o', 'us."ID_OFICINA"')}
-      WHERE cm."EmpresaSlug" = $1
-        AND ce."longitude" IS NOT NULL
-        AND ce."latitude" IS NOT NULL
-        AND ce.cnpj_int IS NOT NULL
-        AND ce."status_receita" = 'ATIVA'
-        AND (
-          ${EARTH_RADIUS_KM} * acos(
-            cos(radians($2)) * cos(radians(ce."latitude")) *
-            cos(radians(ce."longitude") - radians($3)) +
-            sin(radians($2)) * sin(radians(ce."latitude"))
-          )
-        ) <= $4
-      ORDER BY us."ID_OFICINA", distance ASC
+          SELECT DISTINCT ON (us."ID_OFICINA")
+            us."ID_OFICINA" AS "ID_OFICINA",
+            ce."latitude" AS "LATITUDE",
+            ce."longitude" AS "LONGITUDE",
+            ce."razao_social"::text AS "NOME_FANTASIA",
+            CONCAT(ce."logradouro", ' ', ce."rua")::text AS "ENDERECO",
+            ce."bairro"::text AS "BAIRRO",
+            ce."cidade"::text AS "CIDADE",
+            ce."estado"::text AS "ESTADO",
+            ce."numero"::text AS "NUMERO",
+            ce."cep"::text AS "CEP",
+            ce."cnpj"::text AS "CNPJ",
+            ce."telefone"::text AS "TELEFONE",
+            (
+              ${EARTH_RADIUS_KM} * acos(
+                cos(radians($2)) * cos(radians(ce."latitude")) *
+                cos(radians(ce."longitude") - radians($3)) +
+                sin(radians($2)) * sin(radians(ce."latitude"))
+              )
+            ) AS distance
+          FROM "OFICINA_PORTAL"."COMMUNITIES" cm
+          INNER JOIN "MAIN_REGISTER"."USUARIO_COMMUNITY" uc
+            ON cm."CommunityID" = uc."id_community"
+          INNER JOIN "MAIN_REGISTER"."USUARIO" us
+            ON us."ID_USUARIO" = uc."id_usuario"
+          LEFT JOIN "MAIN_REGISTER"."OFICINA" o
+            ON o."ID_OFICINA" = us."ID_OFICINA"${ligacaoCadastroEmpresa('o', 'us."ID_OFICINA"')}
+          WHERE cm."EmpresaSlug" = $1
+            AND ce."longitude" IS NOT NULL
+            AND ce."latitude" IS NOT NULL
+            AND ce.cnpj_int IS NOT NULL
+            AND ce."status_receita" = 'ATIVA'
+            AND (
+              ${EARTH_RADIUS_KM} * acos(
+                cos(radians($2)) * cos(radians(ce."latitude")) *
+                cos(radians(ce."longitude") - radians($3)) +
+                sin(radians($2)) * sin(radians(ce."latitude"))
+              )
+            ) <= $4
+          ORDER BY us."ID_OFICINA", distance ASC
+        )
+        UNION ALL
+        (
+          SELECT
+            oi."ID_OFICINA" AS "ID_OFICINA",
+            o."LATITUDE"::double precision AS "LATITUDE",
+            o."LONGITUDE"::double precision AS "LONGITUDE",
+            o."NOME_FANTASIA"::text AS "NOME_FANTASIA",
+            o."ENDERECO"::text AS "ENDERECO",
+            o."BAIRRO"::text AS "BAIRRO",
+            o."CIDADE"::text AS "CIDADE",
+            o."ESTADO"::text AS "ESTADO",
+            o."NUMERO"::text AS "NUMERO",
+            o."CEP"::text AS "CEP",
+            o."CNPJ"::text AS "CNPJ",
+            o."TELEFONE"::text AS "TELEFONE",
+            (
+              ${EARTH_RADIUS_KM} * acos(
+                cos(radians($2)) * cos(radians(o."LATITUDE"::double precision)) *
+                cos(radians(o."LONGITUDE"::double precision) - radians($3)) +
+                sin(radians($2)) * sin(radians(o."LATITUDE"::double precision))
+              )
+            ) AS distance
+          FROM "CAMPANHAS_OB"."OFICINA_IMPORTADA" oi
+          INNER JOIN "MAIN_REGISTER"."OFICINA" o
+            ON o."ID_OFICINA" = oi."ID_OFICINA"
+          WHERE oi."EMPRESA_SLUG" = $1
+            AND oi."DELETED_AT" IS NULL
+            AND o."LATITUDE" IS NOT NULL
+            AND o."LONGITUDE" IS NOT NULL
+            AND (
+              ${EARTH_RADIUS_KM} * acos(
+                cos(radians($2)) * cos(radians(o."LATITUDE"::double precision)) *
+                cos(radians(o."LONGITUDE"::double precision) - radians($3)) +
+                sin(radians($2)) * sin(radians(o."LATITUDE"::double precision))
+              )
+            ) <= $4
+        )
+      ) combinado
+      ORDER BY "ID_OFICINA", distance ASC
     `;
 
     try {
@@ -280,33 +329,61 @@ export default class OficinaService {
     CNPJ: string;
     TELEFONE: string;
   }>> {
+    // Ver comentário em getComunityNearbyOficinas sobre o ramo OFICINA_IMPORTADA.
     const query = `
-      SELECT DISTINCT ON (us."ID_OFICINA")
-        us."ID_OFICINA" AS "ID_OFICINA",
-        ce."latitude" AS "LATITUDE",
-        ce."longitude" AS "LONGITUDE",
-        ce."razao_social" AS "NOME_FANTASIA",
-        CONCAT(ce."logradouro", ' ', ce."rua") AS "ENDERECO",
-        ce."bairro" AS "BAIRRO",
-        ce."cidade" AS "CIDADE",
-        ce."estado" AS "ESTADO",
-        ce."numero" AS "NUMERO",
-        ce."cep" AS "CEP",
-        ce."cnpj" AS "CNPJ",
-        ce."telefone" AS "TELEFONE"
-      FROM "OFICINA_PORTAL"."COMMUNITIES" cm
-      INNER JOIN "MAIN_REGISTER"."USUARIO_COMMUNITY" uc
-        ON cm."CommunityID" = uc."id_community"
-      INNER JOIN "MAIN_REGISTER"."USUARIO" us
-        ON us."ID_USUARIO" = uc."id_usuario"
-      LEFT JOIN "MAIN_REGISTER"."OFICINA" o
-        ON o."ID_OFICINA" = us."ID_OFICINA"${ligacaoCadastroEmpresa('o', 'us."ID_OFICINA"')}
-      WHERE cm."EmpresaSlug" = $1
-        AND ce."longitude" IS NOT NULL
-        AND ce."latitude" IS NOT NULL
-        AND ce.cnpj_int IS NOT NULL
-        AND ce."status_receita" = 'ATIVA'
-      ORDER BY us."ID_OFICINA"
+      SELECT DISTINCT ON ("ID_OFICINA") * FROM (
+        (
+          SELECT DISTINCT ON (us."ID_OFICINA")
+            us."ID_OFICINA" AS "ID_OFICINA",
+            ce."latitude" AS "LATITUDE",
+            ce."longitude" AS "LONGITUDE",
+            ce."razao_social"::text AS "NOME_FANTASIA",
+            CONCAT(ce."logradouro", ' ', ce."rua")::text AS "ENDERECO",
+            ce."bairro"::text AS "BAIRRO",
+            ce."cidade"::text AS "CIDADE",
+            ce."estado"::text AS "ESTADO",
+            ce."numero"::text AS "NUMERO",
+            ce."cep"::text AS "CEP",
+            ce."cnpj"::text AS "CNPJ",
+            ce."telefone"::text AS "TELEFONE"
+          FROM "OFICINA_PORTAL"."COMMUNITIES" cm
+          INNER JOIN "MAIN_REGISTER"."USUARIO_COMMUNITY" uc
+            ON cm."CommunityID" = uc."id_community"
+          INNER JOIN "MAIN_REGISTER"."USUARIO" us
+            ON us."ID_USUARIO" = uc."id_usuario"
+          LEFT JOIN "MAIN_REGISTER"."OFICINA" o
+            ON o."ID_OFICINA" = us."ID_OFICINA"${ligacaoCadastroEmpresa('o', 'us."ID_OFICINA"')}
+          WHERE cm."EmpresaSlug" = $1
+            AND ce."longitude" IS NOT NULL
+            AND ce."latitude" IS NOT NULL
+            AND ce.cnpj_int IS NOT NULL
+            AND ce."status_receita" = 'ATIVA'
+        )
+        UNION ALL
+        (
+          SELECT
+            oi."ID_OFICINA" AS "ID_OFICINA",
+            o."LATITUDE"::double precision AS "LATITUDE",
+            o."LONGITUDE"::double precision AS "LONGITUDE",
+            o."NOME_FANTASIA"::text AS "NOME_FANTASIA",
+            o."ENDERECO"::text AS "ENDERECO",
+            o."BAIRRO"::text AS "BAIRRO",
+            o."CIDADE"::text AS "CIDADE",
+            o."ESTADO"::text AS "ESTADO",
+            o."NUMERO"::text AS "NUMERO",
+            o."CEP"::text AS "CEP",
+            o."CNPJ"::text AS "CNPJ",
+            o."TELEFONE"::text AS "TELEFONE"
+          FROM "CAMPANHAS_OB"."OFICINA_IMPORTADA" oi
+          INNER JOIN "MAIN_REGISTER"."OFICINA" o
+            ON o."ID_OFICINA" = oi."ID_OFICINA"
+          WHERE oi."EMPRESA_SLUG" = $1
+            AND oi."DELETED_AT" IS NULL
+            AND o."LATITUDE" IS NOT NULL
+            AND o."LONGITUDE" IS NOT NULL
+        )
+      ) combinado
+      ORDER BY "ID_OFICINA"
     `;
 
     try {
@@ -326,20 +403,36 @@ export default class OficinaService {
    * @param empresaSlug - Community EmpresaSlug
    */
   public static async countCommunityOficinas(empresaSlug: string): Promise<number> {
+    // Ver comentário em getComunityNearbyOficinas sobre o ramo OFICINA_IMPORTADA.
     const query = `
-      SELECT COUNT(DISTINCT us."ID_OFICINA")::int AS "total"
-      FROM "OFICINA_PORTAL"."COMMUNITIES" cm
-      INNER JOIN "MAIN_REGISTER"."USUARIO_COMMUNITY" uc
-        ON cm."CommunityID" = uc."id_community"
-      INNER JOIN "MAIN_REGISTER"."USUARIO" us
-        ON us."ID_USUARIO" = uc."id_usuario"
-      LEFT JOIN "MAIN_REGISTER"."OFICINA" o
-        ON o."ID_OFICINA" = us."ID_OFICINA"${ligacaoCadastroEmpresa('o', 'us."ID_OFICINA"')}
-      WHERE cm."EmpresaSlug" = $1
-        AND ce."longitude" IS NOT NULL
-        AND ce."latitude" IS NOT NULL
-        AND ce.cnpj_int IS NOT NULL
-        AND ce."status_receita" = 'ATIVA'
+      SELECT COUNT(DISTINCT "ID_OFICINA")::int AS "total" FROM (
+        (
+          SELECT us."ID_OFICINA" AS "ID_OFICINA"
+          FROM "OFICINA_PORTAL"."COMMUNITIES" cm
+          INNER JOIN "MAIN_REGISTER"."USUARIO_COMMUNITY" uc
+            ON cm."CommunityID" = uc."id_community"
+          INNER JOIN "MAIN_REGISTER"."USUARIO" us
+            ON us."ID_USUARIO" = uc."id_usuario"
+          LEFT JOIN "MAIN_REGISTER"."OFICINA" o
+            ON o."ID_OFICINA" = us."ID_OFICINA"${ligacaoCadastroEmpresa('o', 'us."ID_OFICINA"')}
+          WHERE cm."EmpresaSlug" = $1
+            AND ce."longitude" IS NOT NULL
+            AND ce."latitude" IS NOT NULL
+            AND ce.cnpj_int IS NOT NULL
+            AND ce."status_receita" = 'ATIVA'
+        )
+        UNION ALL
+        (
+          SELECT oi."ID_OFICINA" AS "ID_OFICINA"
+          FROM "CAMPANHAS_OB"."OFICINA_IMPORTADA" oi
+          INNER JOIN "MAIN_REGISTER"."OFICINA" o
+            ON o."ID_OFICINA" = oi."ID_OFICINA"
+          WHERE oi."EMPRESA_SLUG" = $1
+            AND oi."DELETED_AT" IS NULL
+            AND o."LATITUDE" IS NOT NULL
+            AND o."LONGITUDE" IS NOT NULL
+        )
+      ) combinado
     `;
 
     try {

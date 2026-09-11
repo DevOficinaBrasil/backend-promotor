@@ -60,7 +60,7 @@ const COLUNAS_CADASTRO_EMPRESA = [
  * Dígitos do `OFICINA."CNPJ"` como `bigint`, comparável a `cadastro_empresa.cnpj_int`.
  * `NULL` quando não há exatamente 14 dígitos — ver o corte explicado acima.
  */
-function cnpjIntDaOficina(aliasOficina: string): string {
+export function cnpjIntDaOficina(aliasOficina: string): string {
   const digitos = `regexp_replace(COALESCE(${aliasOficina}."CNPJ", ''), '[^0-9]', '', 'g')`;
   return `(CASE WHEN length(${digitos}) = 14 THEN ${digitos}::bigint END)`;
 }
