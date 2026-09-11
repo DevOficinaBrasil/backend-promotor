@@ -123,3 +123,61 @@ export const ImportOficinasResponseSchema = z.object({
     erros: z.array(ErroLinhaImportSchema),
   }),
 });
+
+/**
+ * Teto de linhas de um lote de importação. Mesmo valor de
+ * `LIMITE_LINHAS_DE_DADOS` em `service/oficinaImportService.ts` — repetido aqui
+ * porque o schema roda antes do serviço e precisa recusar o corpo grande demais
+ * sem carregar o serviço.
+ */
+export const IMPORT_STREAM_MAX_LINHAS = 5000;
+
+/**
+ * Uma linha de oficina já mapeada pelo "de-para" feito no cliente. Só CNPJ e
+ * CEP são obrigatórios: o CNPJ é a chave de deduplicação e o CEP é a única
+ * entrada da geocodificação. Os demais campos só entram quando a oficina é
+ * inédita e precisa ser criada.
+ *
+ * Nenhum nome nem ordem de coluna chega aqui — é justamente isso que o
+ * "de-para" resolve no browser.
+ */
+export const LinhaOficinaImportSchema = z.object({
+  linha: z.coerce.number().int().positive().optional(),
+  nomeOficina: z.string().optional(),
+  cnpj: z.string().trim().min(1),
+  cep: z.string().trim().min(1),
+  endereco: z.string().optional(),
+  numero: z.string().optional(),
+  bairro: z.string().optional(),
+  estado: z.string().optional(),
+  cidade: z.string().optional(),
+});
+
+export const ImportOficinasStreamBodySchema = z.object({
+  ID_CAMPANHA: z.coerce.number().int().positive(),
+  oficinas: z.array(LinhaOficinaImportSchema).min(1).max(IMPORT_STREAM_MAX_LINHAS),
+});
+
+/**
+ * Forma de cada evento NDJSON da resposta em stream. Serve à documentação da
+ * rota; o corpo em si é escrito linha a linha, não validado na saída.
+ */
+export const ImportStreamEventoSchema = z.discriminatedUnion('tipo', [
+  z.object({ tipo: z.literal('inicio'), total: z.number() }),
+  z.object({
+    tipo: z.literal('progresso'),
+    progresso: z.object({
+      processadas: z.number(),
+      total: z.number(),
+      oficinas_criadas: z.number(),
+      oficinas_vinculadas_existentes: z.number(),
+      ja_na_comunidade: z.number(),
+      erros: z.number(),
+    }),
+  }),
+  z.object({
+    tipo: z.literal('fim'),
+    resultado: ImportOficinasResponseSchema.shape.data,
+  }),
+  z.object({ tipo: z.literal('erro'), mensagem: z.string() }),
+]);
