@@ -1,6 +1,98 @@
 # Importador de Oficinas — Contrato da API (para o frontend)
 
-Referência de integração para o botão **"Importar oficinas"** do step 3 do wizard de campanha-promotores (repositório `ob-ads`). Endpoint já implementado e verificado no backend (`backend-promotor`, branch `feat/importador-oficinas`).
+Referência de integração do botão **"Importar oficinas"** do step 3 do wizard de campanha-promotores (repositório `ob-ads`).
+
+Existem **dois** endpoints de importação. O primeiro é o atual; o multipart segue de pé apenas por compatibilidade.
+
+| Endpoint | Estado | Quem usa |
+|---|---|---|
+| `POST /oficina/import-stream` | **Atual** | O modal de importação com "de-para" de colunas |
+| `POST /oficina/import` | **Depreciado** | O dashboard já publicado, até o deploy do front novo |
+
+---
+
+## `POST /oficina/import-stream` (atual)
+
+```
+POST /oficina/import-stream
+Content-Type: application/json
+```
+
+O "de-para" acontece no browser: o front lê o cabeçalho real da planilha, o usuário aponta qual coluna é qual, e o que chega aqui já são linhas mapeadas por nome de campo. **Nenhum nome nem ordem de coluna é validado no servidor.**
+
+### Requisição
+
+```json
+{
+  "ID_CAMPANHA": 42,
+  "oficinas": [
+    {
+      "linha": 2,
+      "cnpj": "12.345.678/0001-99",
+      "cep": "01310-100",
+      "nomeOficina": "Oficina Exemplo",
+      "endereco": "Av. Paulista",
+      "numero": "1000",
+      "bairro": "Bela Vista",
+      "estado": "SP",
+      "cidade": "São Paulo"
+    }
+  ]
+}
+```
+
+| Campo | Obrigatório | Observação |
+|---|---|---|
+| `ID_CAMPANHA` | sim | O `EMPRESA_SLUG` é resolvido no servidor a partir dela. Não existe campo para enviar o slug |
+| `oficinas` | sim | De 1 a 5.000 itens |
+| `oficinas[].cnpj` | sim | Chave de deduplicação contra `MAIN_REGISTER.OFICINA` |
+| `oficinas[].cep` | sim | Única entrada da geocodificação |
+| `oficinas[].linha` | não | Número da linha na planilha de origem, usado só para reportar erro. Ausente, o servidor usa a posição no array |
+| demais campos | não | Só são usados quando a oficina é inédita e precisa ser criada |
+
+Teto de corpo: **8MB**. Corpo maior recebe 413.
+
+### Resposta: NDJSON
+
+`Content-Type: application/x-ndjson`. Uma linha JSON por evento, na ordem `inicio`, depois `progresso` repetido, depois `fim`.
+
+```
+{"tipo":"inicio","total":120}
+{"tipo":"progresso","progresso":{"processadas":37,"total":120,"oficinas_criadas":21,"oficinas_vinculadas_existentes":14,"ja_na_comunidade":2,"erros":0}}
+{"tipo":"fim","resultado":{ ... mesmo objeto do endpoint antigo ... }}
+```
+
+| Evento | Quando | Conteúdo |
+|---|---|---|
+| `inicio` | Antes da primeira linha | `total` de linhas do lote |
+| `progresso` | Durante o processamento | Contadores acumulados. Sai no máximo a cada 500ms, e o último sempre sai, para a barra fechar em 100% |
+| `fim` | No encerramento normal | O relatório completo, incluindo `erros` |
+| `erro` | Falha depois do primeiro byte | `mensagem`. O status já é 200 nesse ponto e não há como voltar atrás |
+
+**Como consumir:** `axios` no browser usa XHR, que não entrega o corpo incrementalmente — use `fetch` com `response.body.getReader()` e acumule até o `\n`.
+
+### Erros de pré-voo
+
+Saem como JSON comum, antes de qualquer cabeçalho de stream.
+
+| Status | Quando |
+|---|---|
+| 400 | Corpo fora do schema: sem `ID_CAMPANHA`, `oficinas` vazio, linha sem `cnpj` ou sem `cep`, ou mais de 5.000 linhas |
+| 404 | Campanha inexistente ou apagada |
+| 413 | Corpo acima de 8MB |
+| 422 | Campanha sem `EMPRESA_SLUG` |
+
+### Se a conexão cair no meio
+
+As linhas já processadas **permanecem gravadas** — não há rollback do lote. Reimportar o mesmo arquivo é seguro: a deduplicação por CNPJ e o vínculo idempotente fazem a segunda passada convergir, contando as oficinas já processadas como "já na comunidade".
+
+Cada linha do lote roda as mesmas regras do endpoint antigo: deduplicação por CNPJ, geocodificação obrigatória, vínculo idempotente ao cliente e tentativa de atribuição de rota. Um erro de linha nunca aborta o lote.
+
+---
+
+## `POST /oficina/import` (depreciado)
+
+> **Depreciado.** Continua de pé sem nenhuma mudança de comportamento porque o dashboard publicado ainda o chama, e derrubá-lo quebraria produção no intervalo entre o deploy do backend e o do front. Nenhum código novo deve chamá-lo. A remoção é uma limpeza separada.
 
 ## Endpoint
 
@@ -32,7 +124,7 @@ NOME OFICINA | CNPJ | CEP | ENDEREÇO | NUMERO | BAIRRO | ESTADO | CIDADE
 
 - Comparação tolera variação de **maiúsculas/minúsculas e acentuação** (ex: `endereco`, `Endereço`, `ENDEREÇO` são todos aceitos).
 - **Não tolera** colunas fora de ordem, faltando, ou colunas extras — o arquivo inteiro é rejeitado (400) sem processar nenhuma linha.
-- Recomenda-se disponibilizar um botão de "baixar modelo" no frontend com esse cabeçalho pronto, para reduzir erro de upload.
+- Este cabeçalho fixo vale **somente** para o endpoint depreciado. O endpoint atual aceita qualquer cabeçalho, porque o mapeamento é feito no browser.
 
 ### Exemplo de requisição (fetch)
 
