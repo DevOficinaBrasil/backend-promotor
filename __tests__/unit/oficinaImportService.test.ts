@@ -482,6 +482,217 @@ describe("OficinaImportService", () => {
     });
   });
 
+  describe("importarLinhas", () => {
+    const oficinaRepo = createMockRepo();
+    const oficinaImportadaRepo = createMockRepo();
+
+    const campanhaValida = { ID_CAMPANHA: 10, EMPRESA_SLUG: "empresa-x" };
+
+    const linhaMapeada = (cnpj: string, extra: Record<string, unknown> = {}) => ({
+      nomeOficina: "Oficina Teste",
+      cnpj,
+      cep: "01310100",
+      ...extra,
+    });
+
+    function resumoAtribuicao(atribuidas: number, semPromotor = 0) {
+      return {
+        campanhas_processadas: 1,
+        resumo: { atribuidas, sem_promotor_disponivel: semPromotor, ja_atribuida: 0 },
+      };
+    }
+
+    function contextoVazio() {
+      return { campanhasAtivas: [], candidatosPorCampanha: new Map(), atribuidosPorCampanha: new Map() };
+    }
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+      (AppDataSourceSync.getRepository as jest.Mock).mockImplementation((entity: unknown) => {
+        if (entity === OficinaImportada) return oficinaImportadaRepo;
+        return oficinaRepo;
+      });
+      (CampanhaService.findCampanhaById as jest.Mock).mockResolvedValue(campanhaValida);
+      (RotaService.prepararContextoAtribuicaoLote as jest.Mock).mockResolvedValue(contextoVazio());
+      (RotaService.atribuirComContexto as jest.Mock).mockResolvedValue(resumoAtribuicao(0));
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([]);
+      oficinaRepo.save.mockImplementation(async (o: any) => ({ ...o, ID_OFICINA: 500 }));
+      oficinaRepo.findOne.mockResolvedValue({ ID_OFICINA: 500, LATITUDE: "-23.5", LONGITUDE: "-46.6" });
+      oficinaImportadaRepo.findOne.mockResolvedValue(null);
+    });
+
+    // API-04: o slug vem da campanha, nunca do cliente.
+    it("resolves EMPRESA_SLUG from the campaign and rejects when it does not exist", async () => {
+      (CampanhaService.findCampanhaById as jest.Mock).mockResolvedValue(null);
+
+      await expect(
+        OficinaImportService.importarLinhas([linhaMapeada("12345678000190")], 999)
+      ).rejects.toThrow("CAMPANHA_NAO_ENCONTRADA");
+    });
+
+    it("rejects a campaign without EMPRESA_SLUG before processing any row", async () => {
+      (CampanhaService.findCampanhaById as jest.Mock).mockResolvedValue({ ID_CAMPANHA: 10 });
+
+      await expect(
+        OficinaImportService.importarLinhas([linhaMapeada("12345678000190")], 10)
+      ).rejects.toThrow("CAMPANHA_SEM_EMPRESA_SLUG");
+      expect(oficinaRepo.save).not.toHaveBeenCalled();
+    });
+
+    // API-03: o teto vale tambem para o lote ja mapeado.
+    it("rejects a batch over the row cap without processing any row", async () => {
+      const lote = Array.from({ length: 5001 }, (_, i) =>
+        linhaMapeada(String(10000000000000 + i))
+      );
+
+      await expect(OficinaImportService.importarLinhas(lote, 10)).rejects.toThrow(
+        "LIMITE_LINHAS_EXCEDIDO"
+      );
+      expect(oficinaRepo.save).not.toHaveBeenCalled();
+    });
+
+    // API-08: nenhuma validacao de cabecalho existe neste caminho.
+    it("processes rows with no header at all", async () => {
+      const resultado = await OficinaImportService.importarLinhas(
+        [linhaMapeada("12345678000190")],
+        10
+      );
+
+      expect(resultado.total_linhas).toBe(1);
+      expect(resultado.erros).toEqual([]);
+      expect(resultado.oficinas_criadas).toBe(1);
+    });
+
+    // API-07: as regras de linha sao as mesmas do caminho multipart.
+    it("reuses an existing oficina instead of creating a second one for a known CNPJ", async () => {
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([{ ID_OFICINA: 77 }]);
+
+      const resultado = await OficinaImportService.importarLinhas(
+        [linhaMapeada("12345678000190")],
+        10
+      );
+
+      expect(resultado.oficinas_criadas).toBe(0);
+      expect(resultado.oficinas_vinculadas_existentes).toBe(1);
+      expect(oficinaRepo.save).not.toHaveBeenCalled();
+    });
+
+    // API-09: erro de linha nao aborta o lote.
+    it("isolates an invalid CNPJ and keeps processing the rest of the batch", async () => {
+      const resultado = await OficinaImportService.importarLinhas(
+        [linhaMapeada("nao-e-cnpj"), linhaMapeada("12345678000190")],
+        10
+      );
+
+      expect(resultado.erros).toHaveLength(1);
+      expect(resultado.erros[0].motivo).toBe("CNPJ_INVALIDO");
+      expect(resultado.oficinas_criadas).toBe(1);
+    });
+
+    it("reports the spreadsheet line number the client sent, not the array position", async () => {
+      const resultado = await OficinaImportService.importarLinhas(
+        [linhaMapeada("nao-e-cnpj", { linha: 42 })],
+        10
+      );
+
+      expect(resultado.erros[0].linha).toBe(42);
+    });
+
+    it("falls back to the array position when the client sends no line number", async () => {
+      const resultado = await OficinaImportService.importarLinhas(
+        [linhaMapeada("nao-e-cnpj")],
+        10
+      );
+
+      expect(resultado.erros[0].linha).toBe(1);
+    });
+
+    // STREAM-01/02: um evento por linha concluida, com o total desde o inicio.
+    it("reports progress once per finished row, including failed ones", async () => {
+      const progressoArray: any[] = [];
+
+      await OficinaImportService.importarLinhas(
+        [linhaMapeada("12345678000190"), linhaMapeada("nao-e-cnpj")],
+        10,
+        undefined,
+        (p) => progressoArray.push({ ...p })
+      );
+
+      expect(progressoArray).toHaveLength(2);
+      expect(progressoArray[progressoArray.length - 1]).toMatchObject({
+        processadas: 2,
+        total: 2,
+        erros: 1,
+      });
+    });
+
+    // STREAM-04: contadores acumulados nunca decrescem.
+    it("never decreases a counter between two consecutive progress events", async () => {
+      const progressoArray: any[] = [];
+
+      await OficinaImportService.importarLinhas(
+        [
+          linhaMapeada("12345678000190"),
+          linhaMapeada("12345678000191"),
+          linhaMapeada("12345678000192"),
+        ],
+        10,
+        undefined,
+        (p) => progressoArray.push({ ...p })
+      );
+
+      const chaves = [
+        "processadas",
+        "oficinas_criadas",
+        "oficinas_vinculadas_existentes",
+        "ja_na_comunidade",
+        "erros",
+      ] as const;
+      for (let i = 1; i < progressoArray.length; i += 1) {
+        for (const chave of chaves) {
+          expect(progressoArray[i][chave]).toBeGreaterThanOrEqual(progressoArray[i - 1][chave]);
+        }
+      }
+    });
+
+    it("does not require a progress callback", async () => {
+      await expect(
+        OficinaImportService.importarLinhas([linhaMapeada("12345678000190")], 10)
+      ).resolves.toMatchObject({ total_linhas: 1 });
+    });
+
+    // API-10: a concorrencia por linha e preservada.
+    it("processes rows concurrently rather than strictly one at a time", async () => {
+      let emVoo = 0;
+      let maximoEmVoo = 0;
+      (RotaService.atribuirComContexto as jest.Mock).mockImplementation(async () => {
+        emVoo += 1;
+        maximoEmVoo = Math.max(maximoEmVoo, emVoo);
+        await new Promise((r) => setTimeout(r, 5));
+        emVoo -= 1;
+        return resumoAtribuicao(0);
+      });
+      const lote = Array.from({ length: 6 }, (_, i) => linhaMapeada(String(12345678000190 + i)));
+
+      await OficinaImportService.importarLinhas(lote, 10);
+
+      expect(maximoEmVoo).toBeGreaterThan(1);
+    });
+
+    it("sorts row errors by line number even though rows finish out of order", async () => {
+      const resultado = await OficinaImportService.importarLinhas(
+        [
+          linhaMapeada("x", { linha: 9 }),
+          linhaMapeada("y", { linha: 3 }),
+          linhaMapeada("z", { linha: 6 }),
+        ],
+        10
+      );
+
+      expect(resultado.erros.map((e) => e.linha)).toEqual([3, 6, 9]);
+    });
+  });
+
   describe("importarPlanilha", () => {
     const oficinaRepo = createMockRepo();
     const oficinaImportadaRepo = createMockRepo();

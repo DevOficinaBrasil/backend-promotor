@@ -8,14 +8,35 @@ import CampanhaService from "./campanhaService";
 import { cnpjIntParaLigacao, cnpjIntDaOficina } from "../utils/sqlCadastroEmpresa";
 
 export interface LinhaOficinaImport {
-  nomeOficina: string;
+  /**
+   * Número da linha na planilha de origem, usado só para reportar erro. O
+   * caminho multipart preenche com a posição real no arquivo; o caminho de
+   * de-para recebe do cliente, que é quem sabe quais linhas descartou antes
+   * de enviar. Ausente, cai para a posição no array.
+   */
+  linha?: number;
+  nomeOficina?: string;
   cnpj: string;
   cep: string;
-  endereco: string;
-  numero: string;
-  bairro: string;
-  estado: string;
-  cidade: string;
+  endereco?: string;
+  numero?: string;
+  bairro?: string;
+  estado?: string;
+  cidade?: string;
+}
+
+/**
+ * Fotografia do andamento de um lote, entregue ao chamador a cada linha
+ * concluída. Todo contador é acumulado, então nunca decresce entre duas
+ * chamadas consecutivas.
+ */
+export interface ProgressoImport {
+  processadas: number;
+  total: number;
+  oficinas_criadas: number;
+  oficinas_vinculadas_existentes: number;
+  ja_na_comunidade: number;
+  erros: number;
 }
 
 const CABECALHO_ESPERADO = [
@@ -369,7 +390,7 @@ export default class OficinaImportService {
    * de reconsultar isso a cada linha — ver `prepararContextoAtribuicaoLote`.
    */
   private static async processarLinha(
-    linha: string[],
+    linha: LinhaOficinaImport,
     numeroLinha: number,
     cnpjNormalizado: string | null,
     duplicadaNoArquivo: boolean,
@@ -379,7 +400,8 @@ export default class OficinaImportService {
     contexto: Awaited<ReturnType<typeof RotaService.prepararContextoAtribuicaoLote>>,
     resultado: ImportResult
   ): Promise<void> {
-    const [nomeOficina, cnpjBruto, cep, endereco, numero, bairro, estado, cidade] = linha;
+    const cnpjBruto = linha.cnpj;
+    const cep = linha.cep;
 
     if (!cnpjNormalizado) {
       resultado.erros.push({ linha: numeroLinha, cnpj: cnpjBruto, motivo: "CNPJ_INVALIDO" });
@@ -401,19 +423,8 @@ export default class OficinaImportService {
       return;
     }
 
-    const linhaOficina: LinhaOficinaImport = {
-      nomeOficina,
-      cnpj: cnpjBruto,
-      cep,
-      endereco,
-      numero,
-      bairro,
-      estado,
-      cidade,
-    };
-
     try {
-      const { ID_OFICINA, criada } = await this.buscarOuCriarOficina(linhaOficina, cnpjNormalizado);
+      const { ID_OFICINA, criada } = await this.buscarOuCriarOficina(linha, cnpjNormalizado);
 
       const coords = await this.garantirLatLong(ID_OFICINA, cep);
       if (!coords) {
@@ -469,25 +480,11 @@ export default class OficinaImportService {
   }
 
   /**
-   * Orquestra o fluxo completo: resolve `EMPRESA_SLUG` a partir da campanha,
-   * valida a planilha, e processa as linhas isolando erro de linha (não
-   * aborta o arquivo). Lança "CAMPANHA_NAO_ENCONTRADA" ou
-   * "CAMPANHA_SEM_EMPRESA_SLUG" antes de processar qualquer linha; erros
-   * estruturais do arquivo (`HEADER_INVALIDO`, `LIMITE_LINHAS_EXCEDIDO`)
-   * também propagam antes de qualquer escrita.
-   *
-   * As linhas rodam com concorrência limitada (`CONCORRENCIA_IMPORTACAO`) —
-   * seguro porque cada linha opera sobre um `ID_OFICINA` próprio (CNPJs
-   * duplicados no arquivo já foram descartados antes do loop) e o contexto
-   * de atribuição de rota compartilhado (`RotaService.
-   * prepararContextoAtribuicaoLote`) só é lido/estendido, nunca
-   * sobrescrito, por linha.
+   * Resolve o `EMPRESA_SLUG` de destino a partir da campanha, no servidor —
+   * nunca aceito do cliente, para não permitir vincular oficina à empresa de
+   * outro. Lança antes de qualquer escrita.
    */
-  static async importarPlanilha(
-    buffer: Buffer,
-    idCampanha: number,
-    createdBy?: number
-  ): Promise<ImportResult> {
+  static async resolverEmpresaSlug(idCampanha: number): Promise<string> {
     const campanha = await CampanhaService.findCampanhaById(idCampanha);
     if (!campanha) {
       throw new Error("CAMPANHA_NAO_ENCONTRADA");
@@ -495,18 +492,47 @@ export default class OficinaImportService {
     if (!campanha.EMPRESA_SLUG) {
       throw new Error("CAMPANHA_SEM_EMPRESA_SLUG");
     }
-    const empresaSlug = campanha.EMPRESA_SLUG;
+    return campanha.EMPRESA_SLUG;
+  }
 
-    const linhas = this.parseArquivo(buffer);
-    this.validarCabecalho(linhas);
-    this.validarLimiteLinhas(linhas);
+  /**
+   * Processa um lote de linhas já mapeadas — o caminho do importador com
+   * "de-para", onde o cabeçalho da planilha foi resolvido no cliente e o
+   * servidor nunca vê nome nem ordem de coluna.
+   *
+   * Lança "CAMPANHA_NAO_ENCONTRADA" ou "CAMPANHA_SEM_EMPRESA_SLUG" antes de
+   * processar qualquer linha, e "LIMITE_LINHAS_EXCEDIDO" quando o lote passa
+   * do teto. Erro de uma linha nunca aborta o lote — vira um item em `erros`.
+   *
+   * `onProgress` é chamado uma vez por linha concluída (com sucesso ou com
+   * erro), sempre com os contadores acumulados do lote. Quem quiser espaçar
+   * essas notificações faz isso do lado de fora: o serviço não conhece tempo,
+   * o que mantém o progresso determinístico no teste.
+   *
+   * As linhas rodam com concorrência limitada (`CONCORRENCIA_IMPORTACAO`) —
+   * seguro porque cada linha opera sobre um `ID_OFICINA` próprio (CNPJs
+   * duplicados no lote já foram descartados antes do loop) e o contexto de
+   * atribuição de rota compartilhado (`RotaService.
+   * prepararContextoAtribuicaoLote`) só é lido/estendido, nunca sobrescrito,
+   * por linha.
+   */
+  static async importarLinhas(
+    linhas: LinhaOficinaImport[],
+    idCampanha: number,
+    createdBy?: number,
+    onProgress?: (progresso: ProgressoImport) => void
+  ): Promise<ImportResult> {
+    const empresaSlug = await this.resolverEmpresaSlug(idCampanha);
 
-    const linhasDeDados = linhas.slice(1);
-    const cnpjsNormalizados = linhasDeDados.map((linha) => this.normalizarCnpj(linha[1]));
+    if (linhas.length > LIMITE_LINHAS_DE_DADOS) {
+      throw new Error("LIMITE_LINHAS_EXCEDIDO");
+    }
+
+    const cnpjsNormalizados = linhas.map((linha) => this.normalizarCnpj(linha.cnpj));
     const indicesDuplicados = this.indicesComCnpjDuplicado(cnpjsNormalizados);
 
     const resultado: ImportResult = {
-      total_linhas: linhasDeDados.length,
+      total_linhas: linhas.length,
       oficinas_criadas: 0,
       oficinas_vinculadas_existentes: 0,
       ja_na_comunidade: 0,
@@ -516,17 +542,18 @@ export default class OficinaImportService {
       erros: [],
     };
 
-    // Calculado uma vez para a importação inteira, não por linha — ver
-    // Fix Round de performance em tasks.md. O mesmo `empresaSlug` vale para
-    // todas as linhas do arquivo.
+    // Calculado uma vez para a importação inteira, não por linha. O mesmo
+    // `empresaSlug` vale para todas as linhas do lote.
     const contexto = await RotaService.prepararContextoAtribuicaoLote(empresaSlug);
     resultado.campanhas_ativas_consideradas = contexto.campanhasAtivas.length;
 
+    let processadas = 0;
+
     await this.executarComConcorrenciaLimitada(
-      linhasDeDados,
+      linhas,
       CONCORRENCIA_IMPORTACAO,
       async (linha, indice) => {
-        const numeroLinha = indice + 2; // linha 1 é o cabeçalho
+        const numeroLinha = linha.linha ?? indice + 1;
         await this.processarLinha(
           linha,
           numeroLinha,
@@ -538,6 +565,16 @@ export default class OficinaImportService {
           contexto,
           resultado
         );
+
+        processadas += 1;
+        onProgress?.({
+          processadas,
+          total: linhas.length,
+          oficinas_criadas: resultado.oficinas_criadas,
+          oficinas_vinculadas_existentes: resultado.oficinas_vinculadas_existentes,
+          ja_na_comunidade: resultado.ja_na_comunidade,
+          erros: resultado.erros.length,
+        });
       }
     );
 
@@ -547,6 +584,46 @@ export default class OficinaImportService {
     resultado.erros.sort((a, b) => a.linha - b.linha);
 
     return resultado;
+  }
+
+  /**
+   * Caminho multipart legado: recebe o arquivo, exige o cabeçalho fixo, e
+   * delega o processamento a `importarLinhas`. Existe para o dashboard já
+   * publicado, que continua chamando `POST /oficina/import` até o deploy do
+   * front com "de-para". As regras de linha vivem num lugar só.
+   */
+  static async importarPlanilha(
+    buffer: Buffer,
+    idCampanha: number,
+    createdBy?: number
+  ): Promise<ImportResult> {
+    // A campanha é resolvida ANTES do parse de propósito: quando o arquivo e a
+    // campanha estão errados ao mesmo tempo, o contrato original responde 404
+    // (campanha), não 400 (cabeçalho). `importarLinhas` resolve de novo lá
+    // dentro — uma consulta a mais, só neste caminho já depreciado, em troca de
+    // manter a ordem de erro que o contrato promete.
+    await this.resolverEmpresaSlug(idCampanha);
+
+    const linhas = this.parseArquivo(buffer);
+    this.validarCabecalho(linhas);
+    this.validarLimiteLinhas(linhas);
+
+    const linhasMapeadas: LinhaOficinaImport[] = linhas.slice(1).map((linha, indice) => {
+      const [nomeOficina, cnpj, cep, endereco, numero, bairro, estado, cidade] = linha;
+      return {
+        linha: indice + 2, // linha 1 é o cabeçalho
+        nomeOficina,
+        cnpj,
+        cep,
+        endereco,
+        numero,
+        bairro,
+        estado,
+        cidade,
+      };
+    });
+
+    return this.importarLinhas(linhasMapeadas, idCampanha, createdBy);
   }
 }
 
