@@ -9,7 +9,7 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 ---
 
 **Design**: `.specs/features/modo-definicao-rota/design.md`
-**Status**: Approved
+**Status**: Done — 17/17 tasks, 17 commits (7 backend-promotor, 3 frontend-promotor, 7 ob-ads)
 
 **Pré-requisito:** a feature `importador-oficinas-de-para` precisa estar concluída antes desta.
 As duas editam `ob-ads/.../wizard/StepPromotores.tsx`.
@@ -106,11 +106,11 @@ T10 → T11 → T12 → T13 → T14 → T15 → T16 → T17
 
 **Done when**:
 
-- [ ] A migration adiciona `DATA_VISITA DATE NULL`, idempotente com `IF NOT EXISTS`
-- [ ] Índice de busca por `ID_CAMPANHA_PROMOTOR` e `DATA_VISITA`, limitado a linhas não apagadas
-- [ ] Índice único parcial em `ID_CAMPANHA_PROMOTOR`, `DATA_VISITA`, `ORDEM`, só quando há data
-- [ ] `entities/RotaPromotor.ts` declara a coluna como `date` anulável
-- [ ] Gate passa: `npx tsc --noEmit` e `npm run test:unit`
+- [x] A migration adiciona `DATA_VISITA DATE NULL`, idempotente com `IF NOT EXISTS`
+- [x] Índice de busca por `ID_CAMPANHA_PROMOTOR` e `DATA_VISITA`, limitado a linhas não apagadas
+- [x] Índice único parcial em `ID_CAMPANHA_PROMOTOR`, `DATA_VISITA`, `ORDEM`, só quando há data
+- [x] `entities/RotaPromotor.ts` declara a coluna como `date` anulável
+- [x] Gate passa: `npx tsc --noEmit` e `npm run test:unit`
 
 **Tests**: none
 **Gate**: build-backend
@@ -131,10 +131,10 @@ T10 → T11 → T12 → T13 → T14 → T15 → T16 → T17
 
 **Done when**:
 
-- [ ] `campanhaService.test.ts` e `campanhaServiceVisita.test.ts` ficam verdes
-- [ ] Nenhuma asserção é enfraquecida ou removida — só a fixture ganha o campo que o código passou a exigir
-- [ ] Gate passa: `npm run test:unit`, com `segmentacaoCampanhaPromotor` como única suíte vermelha
-- [ ] Contagem: 12 testes que falhavam passam a passar
+- [x] `campanhaService.test.ts` e `campanhaServiceVisita.test.ts` ficam verdes
+- [x] Nenhuma asserção é enfraquecida ou removida — só a fixture ganha o campo que o código passou a exigir
+- [x] Gate passa: `npm run test:unit`, com `segmentacaoCampanhaPromotor` como única suíte vermelha
+- [x] Contagem: 12 testes que falhavam passam a passar
 
 **Tests**: unit
 **Gate**: quick-backend
@@ -155,16 +155,16 @@ T10 → T11 → T12 → T13 → T14 → T15 → T16 → T17
 
 **Done when**:
 
-- [ ] Grava `DATA_VISITA` e `ORDEM` 1..N na sequência recebida
-- [ ] Data fora do período da campanha rejeita sem escrever nada
-- [ ] Rota concluída ou cancelada na lista rejeita o lote inteiro
-- [ ] Rota de outro vínculo na lista rejeita o lote inteiro
-- [ ] A ordem é zerada antes de ser regravada, para não colidir com o índice único
-- [ ] Data nula limpa `DATA_VISITA` e `ORDEM` das rotas informadas
-- [ ] Reenviar a mesma agenda produz o mesmo estado final
-- [ ] Falha no meio reverte a transação inteira
-- [ ] Gate passa: `npm run test:unit`
-- [ ] Contagem: pelo menos 14 testes novos
+- [x] Grava `DATA_VISITA` e `ORDEM` 1..N na sequência recebida
+- [x] Data fora do período da campanha rejeita sem escrever nada
+- [x] Rota concluída ou cancelada na lista rejeita o lote inteiro
+- [x] Rota de outro vínculo na lista rejeita o lote inteiro
+- [x] A ordem é zerada antes de ser regravada, para não colidir com o índice único
+- [x] Data nula limpa `DATA_VISITA` e `ORDEM` das rotas informadas
+- [x] Reenviar a mesma agenda produz o mesmo estado final
+- [x] Falha no meio reverte a transação inteira
+- [x] Gate passa: `npm run test:unit`
+- [x] Contagem: pelo menos 14 testes novos
 
 **Tests**: unit
 **Gate**: quick-backend
@@ -185,12 +185,12 @@ T10 → T11 → T12 → T13 → T14 → T15 → T16 → T17
 
 **Done when**:
 
-- [ ] Com qualquer rota do vínculo tendo `DATA_VISITA`, a estratégia por proximidade é recusada
-- [ ] Nenhuma `ORDEM` é limpa quando a recusa acontece
-- [ ] Sem nenhuma rota agendada, o comportamento atual é preservado bit a bit
-- [ ] A estratégia manual continua aceita mesmo com agenda
-- [ ] Gate passa: `npm run test:unit`
-- [ ] Contagem: pelo menos 4 testes novos
+- [x] Com qualquer rota do vínculo tendo `DATA_VISITA`, a estratégia por proximidade é recusada
+- [x] Nenhuma `ORDEM` é limpa quando a recusa acontece
+- [x] Sem nenhuma rota agendada, o comportamento atual é preservado bit a bit
+- [x] A estratégia manual continua aceita mesmo com agenda
+- [x] Gate passa: `npm run test:unit`
+- [x] Contagem: pelo menos 4 testes novos
 
 **Tests**: unit
 **Gate**: quick-backend
@@ -211,14 +211,14 @@ T10 → T11 → T12 → T13 → T14 → T15 → T16 → T17
 
 **Done when**:
 
-- [ ] Com um dia informado, só as rotas daquele dia entram no cálculo
-- [ ] A ordem de rotas de outros dias não muda
-- [ ] Com um dia informado, `ID_OFICINA_INICIO` e `ID_OFICINA_FIM` do vínculo não são escritos
-- [ ] Sem dia informado, o comportamento atual é preservado bit a bit
-- [ ] Oficina do dia sem coordenada rejeita, nomeando a oficina, sem alterar ordem
-- [ ] Falha do serviço de geometria não impede persistir a ordem
-- [ ] Gate passa: `npm run test:unit`
-- [ ] Contagem: pelo menos 8 testes novos
+- [x] Com um dia informado, só as rotas daquele dia entram no cálculo
+- [x] A ordem de rotas de outros dias não muda
+- [x] Com um dia informado, `ID_OFICINA_INICIO` e `ID_OFICINA_FIM` do vínculo não são escritos
+- [x] Sem dia informado, o comportamento atual é preservado bit a bit
+- [x] Oficina do dia sem coordenada rejeita, nomeando a oficina, sem alterar ordem
+- [x] Falha do serviço de geometria não impede persistir a ordem
+- [x] Gate passa: `npm run test:unit`
+- [x] Contagem: pelo menos 8 testes novos
 
 **Tests**: unit
 **Gate**: quick-backend
@@ -239,14 +239,14 @@ T10 → T11 → T12 → T13 → T14 → T15 → T16 → T17
 
 **Done when**:
 
-- [ ] Corpo fora do schema responde 400 sem tocar o serviço
-- [ ] Data fora do período responde 422
-- [ ] Visita já concluída na lista responde 409
-- [ ] Caminho feliz responde 200 com o estado resultante
-- [ ] `POST /rota/optimize` aceita `DATA_VISITA` opcional e repassa ao serviço
-- [ ] Suíte HTTP-level cobre cada um desses caminhos
-- [ ] Gate passa: `npm run test:unit` e `npx jest __tests__/integration/rotaAgenda.test.ts`
-- [ ] Contagem: pelo menos 10 testes na suíte nova
+- [x] Corpo fora do schema responde 400 sem tocar o serviço
+- [x] Data fora do período responde 422
+- [x] Visita já concluída na lista responde 409
+- [x] Caminho feliz responde 200 com o estado resultante
+- [x] `POST /rota/optimize` aceita `DATA_VISITA` opcional e repassa ao serviço
+- [x] Suíte HTTP-level cobre cada um desses caminhos
+- [x] Gate passa: `npm run test:unit` e `npx jest __tests__/integration/rotaAgenda.test.ts`
+- [x] Contagem: pelo menos 10 testes na suíte nova
 
 **Tests**: integration
 **Gate**: full-backend
@@ -267,16 +267,16 @@ T10 → T11 → T12 → T13 → T14 → T15 → T16 → T17
 
 **Done when**:
 
-- [ ] Rota não concluída com dia igual ao corrente entra na lista
-- [ ] Rota não concluída com dia anterior ao corrente entra na lista
-- [ ] Rota não concluída sem dia entra na lista
-- [ ] Rota não concluída com dia posterior ao corrente fica de fora
-- [ ] Só rota concluída ou cancelada no dia corrente, no fuso de São Paulo, entra
-- [ ] `DATA_VISITA` aparece em cada rota devolvida, e `DATA_REFERENCIA` no envelope
-- [ ] O teste afirma o texto do SQL: a coluna no `SELECT`, a conversão de UTC para São Paulo e a ordenação por dia
-- [ ] O filtro de confirmação de visita que já existia continua valendo
-- [ ] Gate passa: `npm run test:unit`
-- [ ] Contagem: pelo menos 10 testes novos
+- [x] Rota não concluída com dia igual ao corrente entra na lista
+- [x] Rota não concluída com dia anterior ao corrente entra na lista
+- [x] Rota não concluída sem dia entra na lista
+- [x] Rota não concluída com dia posterior ao corrente fica de fora
+- [x] Só rota concluída ou cancelada no dia corrente, no fuso de São Paulo, entra
+- [x] `DATA_VISITA` aparece em cada rota devolvida, e `DATA_REFERENCIA` no envelope
+- [x] O teste afirma o texto do SQL: a coluna no `SELECT`, a conversão de UTC para São Paulo e a ordenação por dia
+- [x] O filtro de confirmação de visita que já existia continua valendo
+- [x] Gate passa: `npm run test:unit`
+- [x] Contagem: pelo menos 10 testes novos
 
 **Tests**: unit
 **Gate**: quick-backend
@@ -297,14 +297,14 @@ T10 → T11 → T12 → T13 → T14 → T15 → T16 → T17
 
 **Done when**:
 
-- [ ] Particiona em atrasadas, de hoje e sem data, a partir da data de referência recebida
-- [ ] Atrasadas vêm primeiro, da mais antiga para a mais recente
-- [ ] As de hoje vêm em seguida, por ordem
-- [ ] As sem data vêm por último, pela estratégia vigente
-- [ ] A estratégia por GPS ordena só o grupo sem data
-- [ ] Nenhuma leitura de relógio dentro do módulo: a data de referência é sempre um parâmetro
-- [ ] Gate passa: `npx jest`
-- [ ] Contagem: pelo menos 12 testes
+- [x] Particiona em atrasadas, de hoje e sem data, a partir da data de referência recebida
+- [x] Atrasadas vêm primeiro, da mais antiga para a mais recente
+- [x] As de hoje vêm em seguida, por ordem
+- [x] As sem data vêm por último, pela estratégia vigente
+- [x] A estratégia por GPS ordena só o grupo sem data
+- [x] Nenhuma leitura de relógio dentro do módulo: a data de referência é sempre um parâmetro
+- [x] Gate passa: `npx jest`
+- [x] Contagem: pelo menos 12 testes
 
 **Tests**: unit
 **Gate**: quick-front
@@ -325,13 +325,13 @@ T10 → T11 → T12 → T13 → T14 → T15 → T16 → T17
 
 **Done when**:
 
-- [ ] O tipo da rota da API e o do app carregam o dia da visita
-- [ ] A resposta da campanha ativa carrega a data de referência
-- [ ] `normalizeRota` mapeia o dia, e ausência vira nulo em vez de indefinido
-- [ ] A data de referência cai para a data local só quando o servidor não a manda, cobrindo uma API antiga
-- [ ] `campanha.service.test.ts` cobre o campo novo sem alterar as asserções existentes
-- [ ] Gate passa: `npx jest`
-- [ ] Contagem: pelo menos 4 testes novos
+- [x] O tipo da rota da API e o do app carregam o dia da visita
+- [x] A resposta da campanha ativa carrega a data de referência
+- [x] `normalizeRota` mapeia o dia, e ausência vira nulo em vez de indefinido
+- [x] A data de referência cai para a data local só quando o servidor não a manda, cobrindo uma API antiga
+- [x] `campanha.service.test.ts` cobre o campo novo sem alterar as asserções existentes
+- [x] Gate passa: `npx jest`
+- [x] Contagem: pelo menos 4 testes novos
 
 **Tests**: unit
 **Gate**: quick-front
@@ -352,11 +352,11 @@ T10 → T11 → T12 → T13 → T14 → T15 → T16 → T17
 
 **Done when**:
 
-- [ ] A ordenação e a partição vêm do módulo puro, sem regra duplicada no componente
-- [ ] Visita atrasada aparece marcada, com a data para a qual estava agendada
-- [ ] Sem nenhuma visita pendente, a tela mostra um estado vazio dizendo que não há visitas para hoje
-- [ ] O histórico do dia continua listando o que o backend devolveu, agora já recortado
-- [ ] Gate passa: `npx jest`
+- [x] A ordenação e a partição vêm do módulo puro, sem regra duplicada no componente
+- [x] Visita atrasada aparece marcada, com a data para a qual estava agendada
+- [x] Sem nenhuma visita pendente, a tela mostra um estado vazio dizendo que não há visitas para hoje
+- [x] O histórico do dia continua listando o que o backend devolveu, agora já recortado
+- [x] Gate passa: `npx jest`
 
 **Tests**: none
 **Gate**: build-front
@@ -377,12 +377,12 @@ T10 → T11 → T12 → T13 → T14 → T15 → T16 → T17
 
 **Done when**:
 
-- [ ] `service/osrmService.ts` expõe a busca de geometria, com o mesmo comportamento de hoje
-- [ ] `agendarVisitas` envia vínculo, data, lista ordenada e rotas a desagendar
-- [ ] `optimizeRoute` aceita o dia opcional
-- [ ] Teste cobre o serviço de geometria: resposta boa, resposta ruim e menos de dois pontos
-- [ ] Gate passa: `npx jest --env=node osrmService`
-- [ ] Contagem: pelo menos 5 testes
+- [x] `service/osrmService.ts` expõe a busca de geometria, com o mesmo comportamento de hoje
+- [x] `agendarVisitas` envia vínculo, data, lista ordenada e rotas a desagendar
+- [x] `optimizeRoute` aceita o dia opcional
+- [x] Teste cobre o serviço de geometria: resposta boa, resposta ruim e menos de dois pontos
+- [x] Gate passa: `npx jest --env=node osrmService`
+- [x] Contagem: pelo menos 5 testes
 
 **Tests**: unit
 **Gate**: quick-obads
@@ -403,13 +403,13 @@ T10 → T11 → T12 → T13 → T14 → T15 → T16 → T17
 
 **Done when**:
 
-- [ ] Lista todos os dias entre início e fim, inclusive os dois extremos
-- [ ] Sábado e domingo entram na lista
-- [ ] Período invertido ou sem data devolve lista vazia
-- [ ] A contagem por dia sai de um mapa de rota para dia
-- [ ] Trabalha com a data no calendário local, sem deslocamento de fuso
-- [ ] Gate passa: `npx jest --env=node agendaCalendario`
-- [ ] Contagem: pelo menos 10 testes
+- [x] Lista todos os dias entre início e fim, inclusive os dois extremos
+- [x] Sábado e domingo entram na lista
+- [x] Período invertido ou sem data devolve lista vazia
+- [x] A contagem por dia sai de um mapa de rota para dia
+- [x] Trabalha com a data no calendário local, sem deslocamento de fuso
+- [x] Gate passa: `npx jest --env=node agendaCalendario`
+- [x] Contagem: pelo menos 10 testes
 
 **Tests**: unit
 **Gate**: quick-obads
@@ -430,14 +430,14 @@ T10 → T11 → T12 → T13 → T14 → T15 → T16 → T17
 
 **Done when**:
 
-- [ ] Disponíveis são só as rotas sem nenhum dia
-- [ ] Agendar em um dia tira a rota das disponíveis de todos os outros dias
-- [ ] Remover de um dia devolve a rota às disponíveis
-- [ ] Reordenar dentro do dia preserva a sequência escolhida
-- [ ] Só rotas não concluídas e não canceladas entram nas listas
-- [ ] O módulo sabe dizer se há alteração pendente em relação ao estado do servidor
-- [ ] Gate passa: `npx jest --env=node modoDefinicaoRotaState`
-- [ ] Contagem: pelo menos 14 testes
+- [x] Disponíveis são só as rotas sem nenhum dia
+- [x] Agendar em um dia tira a rota das disponíveis de todos os outros dias
+- [x] Remover de um dia devolve a rota às disponíveis
+- [x] Reordenar dentro do dia preserva a sequência escolhida
+- [x] Só rotas não concluídas e não canceladas entram nas listas
+- [x] O módulo sabe dizer se há alteração pendente em relação ao estado do servidor
+- [x] Gate passa: `npx jest --env=node modoDefinicaoRotaState`
+- [x] Contagem: pelo menos 14 testes
 
 **Tests**: unit
 **Gate**: quick-obads
@@ -458,15 +458,15 @@ T10 → T11 → T12 → T13 → T14 → T15 → T16 → T17
 
 **Done when**:
 
-- [ ] O drawer identifica qual promotor está sendo editado
-- [ ] O calendário marca a contagem de visitas por dia
-- [ ] As duas listas do dia permitem agendar, remover e reordenar
-- [ ] Início e fim são escolhidos entre as oficinas do dia, e o cálculo fica desabilitado sem os dois
-- [ ] Ao reabrir um dia já ordenado, início e fim vêm da menor e da maior ordem daquele dia
-- [ ] Salvar envia uma requisição só, com a data, a lista ordenada e as rotas a desagendar
-- [ ] Falha ao salvar mantém a lista como estava e mostra o motivo
-- [ ] Alteração pendente é sinalizada na tela
-- [ ] Gate passa: `npx tsc --noEmit` no `ob-ads`
+- [x] O drawer identifica qual promotor está sendo editado
+- [x] O calendário marca a contagem de visitas por dia
+- [x] As duas listas do dia permitem agendar, remover e reordenar
+- [x] Início e fim são escolhidos entre as oficinas do dia, e o cálculo fica desabilitado sem os dois
+- [x] Ao reabrir um dia já ordenado, início e fim vêm da menor e da maior ordem daquele dia
+- [x] Salvar envia uma requisição só, com a data, a lista ordenada e as rotas a desagendar
+- [x] Falha ao salvar mantém a lista como estava e mostra o motivo
+- [x] Alteração pendente é sinalizada na tela
+- [x] Gate passa: `npx tsc --noEmit` no `ob-ads`
 
 **Tests**: none
 **Gate**: build-obads
@@ -487,12 +487,12 @@ T10 → T11 → T12 → T13 → T14 → T15 → T16 → T17
 
 **Done when**:
 
-- [ ] A camada nova é opcional e não altera as camadas de raio e de oficinas
-- [ ] Com geometria do serviço de rotas, desenha o traçado por ruas
-- [ ] Sem geometria, desenha a ligação reta entre os pontos
-- [ ] Os marcadores do dia mostram a posição na ordem
-- [ ] Mudar a ordem redesenha a linha
-- [ ] Gate passa: `npx tsc --noEmit` no `ob-ads`
+- [x] A camada nova é opcional e não altera as camadas de raio e de oficinas
+- [x] Com geometria do serviço de rotas, desenha o traçado por ruas
+- [x] Sem geometria, desenha a ligação reta entre os pontos
+- [x] Os marcadores do dia mostram a posição na ordem
+- [x] Mudar a ordem redesenha a linha
+- [x] Gate passa: `npx tsc --noEmit` no `ob-ads`
 
 **Tests**: none
 **Gate**: build-obads
@@ -513,12 +513,12 @@ T10 → T11 → T12 → T13 → T14 → T15 → T16 → T17
 
 **Done when**:
 
-- [ ] O botão aparece acima da dica e da legenda, no canto inferior direito
-- [ ] Fica desabilitado sem promotor expandido
-- [ ] Fica habilitado com um promotor já vinculado expandido
-- [ ] Fica desabilitado com um promotor ainda em rascunho expandido
-- [ ] Abrir o modo passa o vínculo e a campanha ao drawer
-- [ ] Gate passa: `npx tsc --noEmit` no `ob-ads`
+- [x] O botão aparece acima da dica e da legenda, no canto inferior direito
+- [x] Fica desabilitado sem promotor expandido
+- [x] Fica habilitado com um promotor já vinculado expandido
+- [x] Fica desabilitado com um promotor ainda em rascunho expandido
+- [x] Abrir o modo passa o vínculo e a campanha ao drawer
+- [x] Gate passa: `npx tsc --noEmit` no `ob-ads`
 
 **Tests**: none
 **Gate**: build-obads
@@ -539,10 +539,10 @@ T10 → T11 → T12 → T13 → T14 → T15 → T16 → T17
 
 **Done when**:
 
-- [ ] O botão de ordenar sai dos cards de promotor
-- [ ] O modal de ordenação não é mais montado pelo passo
-- [ ] Nenhuma referência pendente sobra no arquivo
-- [ ] Gate passa: `npx tsc --noEmit` no `ob-ads`
+- [x] O botão de ordenar sai dos cards de promotor
+- [x] O modal de ordenação não é mais montado pelo passo
+- [x] Nenhuma referência pendente sobra no arquivo
+- [x] Gate passa: `npx tsc --noEmit` no `ob-ads`
 
 **Tests**: none
 **Gate**: build-obads

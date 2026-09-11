@@ -20,13 +20,14 @@
 
 ## Handoff
 
-- **Feature**: duas em paralelo — `importador-oficinas-de-para` e `modo-definicao-rota` (`.specs/features/`)
-- **Phase / Task**: Specify e Design concluidos para as duas. `context.md`, `spec.md` e `design.md` escritos; `validate_spec.py` passa limpo em ambos.
-- **Completed**: Specify, Design (as duas features)
-- **In-progress**: aguardando confirmacao humana dos designs antes de Tasks
-- **Next step**: quebrar em tasks. As duas sao Large, entao `tasks.md` formal em cada uma, com `validate_tasks.py` antes de apresentar.
+- **Feature**: `importador-oficinas-de-para` e `modo-definicao-rota` — ambas **DONE**
+- **Phase / Task**: Specify, Design, Tasks, Execute e Verify concluidos nas duas. 28 tasks, 28 commits de codigo. `validate_spec.py`, `validate_tasks.py` e `validate_state.py` passam limpos; as duas `validation.md` estao em PASS.
+- **Completed**: tudo
+- **In-progress**: nada
+- **Next step**: revisao humana e, quando aprovada, `git push` mais PR nos tres repositorios (nao feito nesta sessao — push exige autorizacao propria). **Antes do deploy do backend**, aplicar `scripts/migration-data-visita-rota.sql` manualmente: sem a coluna `DATA_VISITA`, toda leitura de rota quebra.
 - **Blockers**: nenhum
-- **Uncommitted files**: `.specs/features/importador-oficinas-de-para/*`, `.specs/features/modo-definicao-rota/*`, `.specs/STATE.md`, `package-lock.json` (modificado antes desta sessao)
-- **Branch**: feat/importador-oficinas
-- **Ordem de execucao obrigatoria**: `importador-oficinas-de-para` primeiro, `modo-definicao-rota` depois — as duas editam `ob-ads/.../wizard/StepPromotores.tsx`.
-- **Nota de precedencia**: `importador-oficinas-de-para` revoga IMPORT-01 e IMPORT-03 da spec `importador-oficinas`; o restante daquela spec continua valendo.
+- **Branches**: `backend-promotor` em `feat/importador-oficinas`; `ob-ads` em `feat/importador-oficinas-promotores`; `frontend-promotor` em `feat/modo-definicao-rota` (criada nesta sessao a partir de `main`)
+- **Gates finais**: backend 741 testes em 41 suites verdes (mais `segmentacaoCampanhaPromotor`, vermelha desde antes desta sessao e fora de escopo); ob-ads 141 testes em 10 suites puras; frontend-promotor 41 testes em 3 suites. `npx tsc --noEmit` limpo em backend-promotor e ob-ads.
+- **Sensor de discriminacao**: 16 mutantes de comportamento injetados nas tres bases, todos mortos pela suite; arvores verificadas limpas antes e depois.
+- **Divida registrada como tarefa separada**: `ImportOficinasResultModal.tsx` sem referencia no ob-ads; `segmentacaoCampanhaPromotor.test.ts` importando modulos apagados; no-op silencioso de `reorderRotas` ao limpar `ORDEM` com `undefined`.
+- **Achado de seguranca**: `frontend-promotor/.env`, arquivo rastreado pelo git, tem chave de acesso AWS em texto puro na copia de trabalho. Nao foi commitado nesta sessao e nao foi tocado.
