@@ -81,5 +81,115 @@ describe('OficinaService', () => {
       await expect(OficinaService.getComunityNearbyOficinas(-23.55, -46.63, 20, 'slug'))
         .rejects.toThrow('DB error');
     });
+
+    it('should include the OFICINA_IMPORTADA branch so oficinas linked without a user are considered (IMPORT-20)', async () => {
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([]);
+
+      await OficinaService.getComunityNearbyOficinas(-23.55, -46.63, 20, 'empresa-test');
+
+      expect(AppDataSourceSync.query).toHaveBeenCalledWith(
+        expect.stringContaining('OFICINA_IMPORTADA'),
+        ['empresa-test', -23.55, -46.63, 20]
+      );
+    });
+
+    it('should cast every text column on both UNION branches to a common type (Verifier fix: type-mismatch risk)', async () => {
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([]);
+
+      await OficinaService.getComunityNearbyOficinas(-23.55, -46.63, 20, 'empresa-test');
+
+      const query = (AppDataSourceSync.query as jest.Mock).mock.calls[0][0] as string;
+      const castCount = (query.match(/::text/g) || []).length;
+      // 9 text columns (NOME_FANTASIA, ENDERECO, BAIRRO, CIDADE, ESTADO, NUMERO,
+      // CEP, CNPJ, TELEFONE) cast on each of the 2 UNION branches = 18. A lower
+      // count means at least one column lost its cast (the exact regression a
+      // discrimination-sensor mutation found before this test existed).
+      expect(castCount).toBe(18);
+    });
+  });
+
+  describe('getCommunityOficinas', () => {
+    it('should list oficinas for the given slug', async () => {
+      const mockResults = [{ ID_OFICINA: 1 }];
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue(mockResults);
+
+      const result = await OficinaService.getCommunityOficinas('empresa-test');
+
+      expect(result).toEqual(mockResults);
+      expect(AppDataSourceSync.query).toHaveBeenCalledWith(
+        expect.stringContaining('COMMUNITIES'),
+        ['empresa-test']
+      );
+    });
+
+    it('should include the OFICINA_IMPORTADA branch so oficinas linked without a user are considered (IMPORT-20)', async () => {
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([]);
+
+      await OficinaService.getCommunityOficinas('empresa-test');
+
+      expect(AppDataSourceSync.query).toHaveBeenCalledWith(
+        expect.stringContaining('OFICINA_IMPORTADA'),
+        ['empresa-test']
+      );
+    });
+
+    it('should cast every text column on both UNION branches to a common type (Verifier fix: type-mismatch risk)', async () => {
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([]);
+
+      await OficinaService.getCommunityOficinas('empresa-test');
+
+      const query = (AppDataSourceSync.query as jest.Mock).mock.calls[0][0] as string;
+      const castCount = (query.match(/::text/g) || []).length;
+      expect(castCount).toBe(18);
+    });
+
+    it('should rethrow database errors', async () => {
+      (AppDataSourceSync.query as jest.Mock).mockRejectedValue(new Error('DB error'));
+
+      await expect(OficinaService.getCommunityOficinas('empresa-test')).rejects.toThrow(
+        'DB error'
+      );
+    });
+  });
+
+  describe('countCommunityOficinas', () => {
+    it('should return the total count for the given slug', async () => {
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([{ total: 7 }]);
+
+      const result = await OficinaService.countCommunityOficinas('empresa-test');
+
+      expect(result).toBe(7);
+      expect(AppDataSourceSync.query).toHaveBeenCalledWith(
+        expect.stringContaining('COMMUNITIES'),
+        ['empresa-test']
+      );
+    });
+
+    it('should return 0 when the query returns no rows', async () => {
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([]);
+
+      const result = await OficinaService.countCommunityOficinas('empresa-test');
+
+      expect(result).toBe(0);
+    });
+
+    it('should include the OFICINA_IMPORTADA branch so oficinas linked without a user are counted (IMPORT-20)', async () => {
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([{ total: 0 }]);
+
+      await OficinaService.countCommunityOficinas('empresa-test');
+
+      expect(AppDataSourceSync.query).toHaveBeenCalledWith(
+        expect.stringContaining('OFICINA_IMPORTADA'),
+        ['empresa-test']
+      );
+    });
+
+    it('should rethrow database errors', async () => {
+      (AppDataSourceSync.query as jest.Mock).mockRejectedValue(new Error('DB error'));
+
+      await expect(OficinaService.countCommunityOficinas('empresa-test')).rejects.toThrow(
+        'DB error'
+      );
+    });
   });
 });

@@ -892,4 +892,110 @@ export default class RotaService {
       resumo,
     };
   }
+
+  /**
+   * Contexto pré-carregado para atribuir várias oficinas de um mesmo cliente
+   * em lote (ex: importação de planilha) sem repetir, a cada oficina, as
+   * consultas que dependem só do `empresaSlug` — que não muda dentro do
+   * lote. `atribuidosPorCampanha` é mutado em memória por
+   * `atribuirComContexto` conforme rotas são criadas, mantendo a
+   * idempotência dentro do próprio lote sem reconsultar o banco a cada
+   * oficina.
+   */
+  static async prepararContextoAtribuicaoLote(empresaSlug: string): Promise<{
+    campanhasAtivas: Array<{ ID_CAMPANHA: number; NOME: string }>;
+    candidatosPorCampanha: Map<number, Array<{
+      ID_CAMPANHA_PROMOTOR: number;
+      ID_CAMPANHA: number;
+      ID_PROMOTOR: number;
+      NOME: string;
+      RAIO: number | null;
+      lat: number;
+      lon: number;
+    }>>;
+    atribuidosPorCampanha: Map<number, Set<number>>;
+  }> {
+    const campanhasAtivas = await this.getActiveCampanhasBySlug(empresaSlug);
+
+    if (campanhasAtivas.length === 0) {
+      return { campanhasAtivas: [], candidatosPorCampanha: new Map(), atribuidosPorCampanha: new Map() };
+    }
+
+    const campanhaIds = campanhasAtivas.map((c) => c.ID_CAMPANHA);
+    const candidatosPorCampanha = await this.getCandidatosPorCampanhas(campanhaIds);
+
+    const atribuidosPorCampanha = new Map<number, Set<number>>();
+    for (const idCampanha of campanhaIds) {
+      const assignedOficinas = await this.getOficinasAssignedInCampanha(idCampanha);
+      atribuidosPorCampanha.set(idCampanha, new Set(assignedOficinas));
+    }
+
+    return { campanhasAtivas, candidatosPorCampanha, atribuidosPorCampanha };
+  }
+
+  /**
+   * Mesma lógica de atribuição de `assignOficinaFromCommunitySignup`
+   * (raio, desempate por menor distância, idempotência), mas operando sobre
+   * um contexto pré-carregado por `prepararContextoAtribuicaoLote` — sem
+   * refazer, por oficina, as consultas de campanhas ativas / candidatos /
+   * oficinas já atribuídas. Recebe lat/lon já resolvidos pelo chamador (a
+   * importação já os tem de `garantirLatLong`), evitando também a consulta
+   * de coordenadas que `assignOficinaFromCommunitySignup` faria de novo.
+   *
+   * Duplica (não reaproveita) o pequeno trecho de match por raio/distância
+   * de `assignOficinaFromCommunitySignup` deliberadamente — mantém aquele
+   * método 100% intocado, já testado e usado pelo fluxo de inscrição em
+   * comunidade.
+   */
+  static async atribuirComContexto(
+    idOficina: number,
+    lat: number,
+    lon: number,
+    contexto: Awaited<ReturnType<typeof RotaService.prepararContextoAtribuicaoLote>>
+  ): Promise<{
+    campanhas_processadas: number;
+    resumo: { atribuidas: number; sem_promotor_disponivel: number; ja_atribuida: number };
+  }> {
+    let atribuidas = 0;
+    let semPromotorDisponivel = 0;
+    let jaAtribuida = 0;
+
+    for (const campanha of contexto.campanhasAtivas) {
+      const atribuidosNaCampanha = contexto.atribuidosPorCampanha.get(campanha.ID_CAMPANHA)!;
+
+      if (atribuidosNaCampanha.has(idOficina)) {
+        jaAtribuida++;
+        continue;
+      }
+
+      const candidatosCampanha = contexto.candidatosPorCampanha.get(campanha.ID_CAMPANHA) ?? [];
+
+      const candidatosElegiveis = candidatosCampanha
+        .map((c) => ({
+          ...c,
+          distancia: haversineDistanceKm(c.lat, c.lon, lat, lon),
+        }))
+        .filter((c) => c.distancia <= (c.RAIO ?? 20))
+        .sort((a, b) => a.distancia - b.distancia || a.ID_CAMPANHA_PROMOTOR - b.ID_CAMPANHA_PROMOTOR);
+
+      if (candidatosElegiveis.length === 0) {
+        semPromotorDisponivel++;
+        continue;
+      }
+
+      const melhor = candidatosElegiveis[0];
+      await this.createRotas(melhor.ID_CAMPANHA_PROMOTOR, idOficina);
+      atribuidosNaCampanha.add(idOficina);
+      atribuidas++;
+    }
+
+    return {
+      campanhas_processadas: contexto.campanhasAtivas.length,
+      resumo: {
+        atribuidas,
+        sem_promotor_disponivel: semPromotorDisponivel,
+        ja_atribuida: jaAtribuida,
+      },
+    };
+  }
 }

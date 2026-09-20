@@ -10,6 +10,7 @@ export function createMockRepo() {
     save: jest.fn((data: unknown) => Promise.resolve(data)),
     softDelete: jest.fn(),
     update: jest.fn(),
+    delete: jest.fn(),
     remove: jest.fn((data: unknown) => Promise.resolve(data)),
     createQueryBuilder: jest.fn(),
   };
