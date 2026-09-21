@@ -655,8 +655,14 @@ export default class CampanhaService {
           };
         });
 
+      const totalRotas = promotores.reduce(
+        (sum: number, p: any) => sum + p.rotasPromotor.length,
+        0
+      );
+
       return {
         ...campanha,
+        TOTAL_ROTAS: totalRotas,
         campanhaPromotores: promotores,
         campanhaPerguntas,
       };
