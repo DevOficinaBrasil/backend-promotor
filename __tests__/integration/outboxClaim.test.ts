@@ -15,8 +15,13 @@ import OutboxNotificacaoService from "../../service/outboxNotificacaoService";
  *
  * Cuidado: `claimBatch` é a query de produção e não tem como ser escopada por
  * teste. Se o banco alvo tiver notificações realmente enfileiradas e vencidas,
- * esta suíte pode reivindicá-las junto — o lease vence sozinho em 5 minutos, mas
- * o ATTEMPTS delas fica +1. Rodar só contra dev.
+ * esta suíte reivindica junto — a ordem é por AVAILABLE_AT crescente, então uma
+ * fila represada de linhas antigas é pega ANTES das linhas frescas que o próprio
+ * teste acabou de criar. Por isso todo claim passa por `reivindicar()`, que
+ * rastreia quem não é nosso e devolve ATTEMPTS/LOCKED_AT/LOCKED_BY ao estado de
+ * antes no afterAll — sem isso, rodar a suíte repetidamente empurra notificação
+ * real para FALHOU sem ela nunca ter passado por um envio de verdade. Rodar só
+ * contra dev.
  *
  * Nota de ambiente: o banco de dev **tem** a FK
  * NOTIFICACAO_VISITA_ID_ROTA_PROMOTOR_fkey, que a decisão de 2026-08-07 em
@@ -26,7 +31,23 @@ import OutboxNotificacaoService from "../../service/outboxNotificacaoService";
  */
 describe("OutboxNotificacaoService.claimBatch (integração)", () => {
   const idsCriados: number[] = [];
+  const idsAlheiosReivindicados = new Set<number>();
   let rotasLivres: number[] = [];
+
+  /**
+   * Único ponto de chamada a `claimBatch`. Registra quem foi reivindicado sem
+   * ser criado por este teste, para o afterAll desfazer — ver comentário do
+   * topo do arquivo.
+   */
+  async function reivindicar(tamanho: number, workerId: string) {
+    const linhas = await OutboxNotificacaoService.claimBatch(tamanho, workerId);
+    for (const linha of linhas) {
+      if (!idsCriados.includes(linha.id)) {
+        idsAlheiosReivindicados.add(linha.id);
+      }
+    }
+    return linhas;
+  }
 
   beforeAll(async () => {
     const linhas = await AppDataSourceSync.query(
@@ -97,6 +118,21 @@ describe("OutboxNotificacaoService.claimBatch (integração)", () => {
         [idsCriados]
       );
     }
+
+    // Repara linhas reais que `reivindicar()` pegou de carona: claimBatch só
+    // toca ATTEMPTS/LOCKED_AT/LOCKED_BY, nunca STATUS/AVAILABLE_AT, então
+    // desfazer os três devolve a linha exatamente ao estado "reivindicável" que
+    // tinha antes — indistinguível de nunca ter sido tocada pela suíte.
+    if (idsAlheiosReivindicados.size > 0) {
+      await AppDataSourceSync.query(
+        `UPDATE "CAMPANHAS_OB"."NOTIFICACAO_VISITA"
+            SET "ATTEMPTS" = GREATEST("ATTEMPTS" - 1, 0),
+                "LOCKED_AT" = NULL,
+                "LOCKED_BY" = NULL
+          WHERE "ID_NOTIFICACAO_VISITA" = ANY($1)`,
+        [Array.from(idsAlheiosReivindicados)]
+      );
+    }
   });
 
   // AGND-05: a garantia central. Dois workers concorrentes recebem conjuntos
@@ -105,8 +141,8 @@ describe("OutboxNotificacaoService.claimBatch (integração)", () => {
     const ids = await Promise.all(Array.from({ length: 10 }, () => criarLinha()));
 
     const [primeiro, segundo] = await Promise.all([
-      OutboxNotificacaoService.claimBatch(10, "worker-A"),
-      OutboxNotificacaoService.claimBatch(10, "worker-B"),
+      reivindicar(10, "worker-A"),
+      reivindicar(10, "worker-B"),
     ]);
 
     const meus = new Set(ids);
@@ -125,7 +161,7 @@ describe("OutboxNotificacaoService.claimBatch (integração)", () => {
   it("stamps the worker id and increments ATTEMPTS in the claim itself", async () => {
     const id = await criarLinha({ tentativas: 0 });
 
-    const reivindicados = await OutboxNotificacaoService.claimBatch(50, "worker-carimbo");
+    const reivindicados = await reivindicar(50, "worker-carimbo");
 
     expect(reivindicados).toContain(id);
     const linha = await lerLinha(id);
@@ -140,7 +176,7 @@ describe("OutboxNotificacaoService.claimBatch (integração)", () => {
   it("never claims a row with a null AVAILABLE_AT", async () => {
     const id = await criarLinha({ disponivelEm: null });
 
-    const reivindicados = await OutboxNotificacaoService.claimBatch(50, "worker-nulo");
+    const reivindicados = await reivindicar(50, "worker-nulo");
 
     expect(reivindicados).not.toContain(id);
     const linha = await lerLinha(id);
@@ -152,7 +188,7 @@ describe("OutboxNotificacaoService.claimBatch (integração)", () => {
   it("does not claim a row scheduled for the future", async () => {
     const id = await criarLinha({ disponivelEm: "now() + interval '2 hours'" });
 
-    const reivindicados = await OutboxNotificacaoService.claimBatch(50, "worker-futuro");
+    const reivindicados = await reivindicar(50, "worker-futuro");
 
     expect(reivindicados).not.toContain(id);
   });
@@ -160,7 +196,7 @@ describe("OutboxNotificacaoService.claimBatch (integração)", () => {
   it("does not claim a row whose lease is still held", async () => {
     const id = await criarLinha({ travadaEm: "now() - interval '10 seconds'" });
 
-    const reivindicados = await OutboxNotificacaoService.claimBatch(50, "worker-lease");
+    const reivindicados = await reivindicar(50, "worker-lease");
 
     expect(reivindicados).not.toContain(id);
   });
@@ -169,7 +205,7 @@ describe("OutboxNotificacaoService.claimBatch (integração)", () => {
   it("reclaims a row whose lease has expired", async () => {
     const id = await criarLinha({ travadaEm: "now() - interval '30 minutes'" });
 
-    const reivindicados = await OutboxNotificacaoService.claimBatch(50, "worker-retomada");
+    const reivindicados = await reivindicar(50, "worker-retomada");
 
     expect(reivindicados).toContain(id);
     const linha = await lerLinha(id);
@@ -182,7 +218,7 @@ describe("OutboxNotificacaoService.claimBatch (integração)", () => {
     async (status) => {
       const id = await criarLinha({ status });
 
-      const reivindicados = await OutboxNotificacaoService.claimBatch(50, "worker-terminal");
+      const reivindicados = await reivindicar(50, "worker-terminal");
 
       expect(reivindicados).not.toContain(id);
     }
@@ -192,7 +228,7 @@ describe("OutboxNotificacaoService.claimBatch (integração)", () => {
   it("claims no more than the requested batch size", async () => {
     await Promise.all(Array.from({ length: 5 }, () => criarLinha()));
 
-    const reivindicados = await OutboxNotificacaoService.claimBatch(3, "worker-lote");
+    const reivindicados = await reivindicar(3, "worker-lote");
 
     expect(reivindicados.length).toBeLessThanOrEqual(3);
   });
@@ -200,7 +236,7 @@ describe("OutboxNotificacaoService.claimBatch (integração)", () => {
   it("claims nothing for a non-positive batch size, without touching the database", async () => {
     const id = await criarLinha();
 
-    const reivindicados = await OutboxNotificacaoService.claimBatch(0, "worker-zero");
+    const reivindicados = await reivindicar(0, "worker-zero");
 
     expect(reivindicados).toEqual([]);
     const linha = await lerLinha(id);
@@ -212,7 +248,7 @@ describe("OutboxNotificacaoService.claimBatch (integração)", () => {
     const antigo = await criarLinha({ disponivelEm: "now() - interval '10 days'" });
     await criarLinha({ disponivelEm: "now() - interval '9 days'" });
 
-    const reivindicados = await OutboxNotificacaoService.claimBatch(1, "worker-ordem");
+    const reivindicados = await reivindicar(1, "worker-ordem");
 
     expect(reivindicados).toEqual([antigo]);
   });
