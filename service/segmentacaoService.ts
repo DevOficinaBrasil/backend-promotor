@@ -128,11 +128,28 @@ export default class SegmentacaoService {
   }
 
   static async listFilterOptions(tenantId: number): Promise<Record<string, unknown>> {
-    return listSegmentFilterOptions({
+    const options = await listSegmentFilterOptions({
       tenantId,
       attributeLimit: 100,
       tagLimit: 200,
       accessToken: process.env.CRM_API_TOKEN!,
     });
+
+    // Campos e tags de ZF vazam pro catálogo de qualquer cliente — não fazem
+    // sentido fora da comunidade da ZF, então saem da lista pra todo mundo.
+    // `contactAttributes.receivePartnerInfo` está bugado no CRM (time do CRM
+    // não removeu) — sai também.
+    const CAMPOS_EXCLUIDOS = new Set(['contactAttributes.receivePartnerInfo']);
+    const fieldOptionArray = (options as { fieldOptionArray?: Array<{ path: string; label: string }> })
+      .fieldOptionArray;
+    if (!Array.isArray(fieldOptionArray)) return options;
+
+    return {
+      ...options,
+      fieldOptionArray: fieldOptionArray.filter(
+        (campo) =>
+          !/zf/i.test(campo.path) && !/zf/i.test(campo.label) && !CAMPOS_EXCLUIDOS.has(campo.path)
+      ),
+    };
   }
 }
