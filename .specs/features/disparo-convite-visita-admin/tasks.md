@@ -239,11 +239,11 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] Rota em BACKLOG: sem notificação, PENDENTE, ENVIADO, EXPIRADO, FALHOU, DISPENSADO, RECUSADO, AGUARDANDO e valor desconhecido ficam ocultos; CONFIRMADO de qualquer origem aparece
-- [ ] Rota fora de BACKLOG sempre aparece
-- [ ] `estadoConvite` cobre os 12 estados do design
-- [ ] Os testes de `filtro-rotas-por-confirmacao` que afirmavam DISPENSADO/FALHOU visíveis são atualizados para a regra nova, com o motivo (AD-003) registrado no teste
-- [ ] Gate quick passa
+- [x] Rota em BACKLOG: sem notificação, PENDENTE, ENVIADO, EXPIRADO, FALHOU, DISPENSADO, RECUSADO, AGUARDANDO e valor desconhecido ficam ocultos; CONFIRMADO de qualquer origem aparece
+- [x] Rota fora de BACKLOG sempre aparece
+- [x] `estadoConvite` cobre os 12 estados do design
+- [x] Os testes de `filtro-rotas-por-confirmacao` que afirmavam DISPENSADO/FALHOU visíveis são atualizados para a regra nova, com o motivo (AD-003) registrado no teste
+- [x] Gate quick passa
 
 **Tests**: unit
 **Gate**: quick

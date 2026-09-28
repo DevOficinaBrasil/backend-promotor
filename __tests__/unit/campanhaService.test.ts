@@ -159,7 +159,8 @@ describe('CampanhaService', () => {
         },
       }]);
       (AppDataSourceSync.query as jest.Mock).mockResolvedValue([
-        { ID_ROTA_PROMOTOR: 1, ID_OFICINA: 100, ID_CAMPANHA_PROMOTOR: 1, STATUS: 'BACKLOG', NOME_FANTASIA: 'Ofc A' },
+        // CONFIRMADO: com AD-003, rota BACKLOG sem aceite não chega ao app.
+        { ID_ROTA_PROMOTOR: 1, ID_OFICINA: 100, ID_CAMPANHA_PROMOTOR: 1, STATUS: 'BACKLOG', NOME_FANTASIA: 'Ofc A', NOTIFICACAO_STATUS: 'CONFIRMADO' },
       ]);
 
       const result = await CampanhaService.getActiveCampanhaByPromotor(10, now);

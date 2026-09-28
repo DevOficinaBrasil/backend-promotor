@@ -1,6 +1,6 @@
-import { statusEfetivo, rotaListavelParaPromotor } from '../../utils/statusNotificacaoVisita';
+import { statusEfetivo, rotaListavelParaPromotor, estadoConvite } from '../../utils/statusNotificacaoVisita';
 import { StatusRota } from '../../entities/RotaPromotor';
-import { StatusNotificacaoVisita } from '../../entities/NotificacaoVisita';
+import { StatusNotificacaoVisita, OrigemAceite } from '../../entities/NotificacaoVisita';
 
 // Spec: AC22 — effective EXPIRADO status is derived at read time from
 // STATUS = 'ENVIADO' AND EXPIRA_EM < now(), via one shared helper, not
@@ -82,9 +82,10 @@ describe('statusEfetivo', () => {
   });
 });
 
-// FILT-01 a FILT-05 (spec: filtro-rotas-por-confirmacao). A lista do app de
-// campo traz só rota cuja confirmação está resolvida, rota sem pedido de
-// confirmação e rota já trabalhada.
+// FILT-01 a FILT-05 (spec: filtro-rotas-por-confirmacao), substituídos por
+// CONV-31 a CONV-33 (spec: disparo-convite-visita-admin, AD-003): rota em
+// BACKLOG só entra na lista do app com o convite aceito (CONFIRMADO, de
+// qualquer origem). Rota já trabalhada entra sempre.
 describe('rotaListavelParaPromotor', () => {
   const AGORA = new Date('2026-08-05T12:00:00.000Z');
   const EXPIRA_PASSADO = new Date('2026-08-01T12:00:00.000Z');
@@ -95,13 +96,34 @@ describe('rotaListavelParaPromotor', () => {
     notificacao: { STATUS, EXPIRA_EM },
   });
 
-  // FILT-01 / AC1
+  // CONV-31 (era FILT-01 / AC1): só CONFIRMADO entra, de qualquer origem.
   it.each([
-    StatusNotificacaoVisita.CONFIRMADO,
+    [null],
+    [OrigemAceite.REPARADOR],
+    [OrigemAceite.CONFIRMACAO_RECENTE],
+    [OrigemAceite.CONVITE_VINCULADO],
+    [OrigemAceite.IMPORTADA],
+  ])('lista rota BACKLOG CONFIRMADO com origem %s', (ORIGEM_ACEITE) => {
+    expect(
+      rotaListavelParaPromotor(
+        {
+          STATUS: StatusRota.BACKLOG,
+          notificacao: { STATUS: StatusNotificacaoVisita.CONFIRMADO, EXPIRA_EM: EXPIRA_FUTURO, ORIGEM_ACEITE },
+        },
+        AGORA
+      )
+    ).toBe(true);
+  });
+
+  // CONV-32 (era FILT-01 / AC1, que listava DISPENSADO e FALHOU): AD-003 tirou
+  // DISPENSADO e FALHOU da lista, e RECUSADO e AGUARDANDO também ficam fora.
+  it.each([
     StatusNotificacaoVisita.DISPENSADO,
     StatusNotificacaoVisita.FALHOU,
-  ])('lista rota BACKLOG com confirmacao resolvida: %s', (status) => {
-    expect(rotaListavelParaPromotor(backlogCom(status), AGORA)).toBe(true);
+    StatusNotificacaoVisita.RECUSADO,
+    StatusNotificacaoVisita.AGUARDANDO,
+  ])('esconde rota BACKLOG sem aceite: %s', (status) => {
+    expect(rotaListavelParaPromotor(backlogCom(status), AGORA)).toBe(false);
   });
 
   // FILT-02 / AC2
@@ -162,10 +184,18 @@ describe('rotaListavelParaPromotor', () => {
     ).toBe(true);
   });
 
-  // FILT-05 / AC5 + edge case do banco legado.
-  it('lista rota sem linha de notificacao', () => {
-    expect(rotaListavelParaPromotor({ STATUS: StatusRota.BACKLOG }, AGORA)).toBe(true);
+  // CONV-32 (era FILT-05 / AC5, que listava rota sem notificação): AD-003 —
+  // rota em BACKLOG sem notificação não foi aceita, então sai da lista.
+  it('esconde rota BACKLOG sem linha de notificacao', () => {
+    expect(rotaListavelParaPromotor({ STATUS: StatusRota.BACKLOG }, AGORA)).toBe(false);
     expect(rotaListavelParaPromotor({ STATUS: StatusRota.BACKLOG, notificacao: null }, AGORA)).toBe(
+      false
+    );
+  });
+
+  // CONV-33: rota já trabalhada sem notificação continua aparecendo.
+  it('lista rota ja trabalhada sem linha de notificacao', () => {
+    expect(rotaListavelParaPromotor({ STATUS: StatusRota.FINALIZADO, notificacao: null }, AGORA)).toBe(
       true
     );
   });
@@ -194,5 +224,58 @@ describe('rotaListavelParaPromotor', () => {
     expect(
       rotaListavelParaPromotor(backlogCom(StatusNotificacaoVisita.CONFIRMADO, null), AGORA)
     ).toBe(true);
+  });
+});
+
+// CONV-41 (disparo-convite-visita-admin, P2 AC1): estado de cada convite para o
+// painel do admin, um dos 12 estados do design.
+describe('estadoConvite', () => {
+  const AGORA = new Date('2026-08-05T12:00:00.000Z');
+  const PASSADO = new Date('2026-08-01T12:00:00.000Z');
+  const FUTURO = new Date('2026-08-12T12:00:00.000Z');
+
+  it('rota sem notificação é nao_disparada', () => {
+    expect(estadoConvite(null, AGORA)).toBe('nao_disparada');
+    expect(estadoConvite(undefined, AGORA)).toBe('nao_disparada');
+  });
+
+  it.each([
+    [{ STATUS: StatusNotificacaoVisita.PENDENTE }, 'agendada'],
+    [{ STATUS: StatusNotificacaoVisita.ENVIADO, EXPIRA_EM: FUTURO }, 'enviada'],
+    [{ STATUS: StatusNotificacaoVisita.CONFIRMADO, ORIGEM_ACEITE: OrigemAceite.REPARADOR }, 'aceita'],
+    [
+      { STATUS: StatusNotificacaoVisita.CONFIRMADO, ORIGEM_ACEITE: OrigemAceite.CONFIRMACAO_RECENTE },
+      'aceita_confirmacao_recente',
+    ],
+    [
+      { STATUS: StatusNotificacaoVisita.CONFIRMADO, ORIGEM_ACEITE: OrigemAceite.CONVITE_VINCULADO },
+      'aceita_convite_vinculado',
+    ],
+    [{ STATUS: StatusNotificacaoVisita.CONFIRMADO, ORIGEM_ACEITE: OrigemAceite.IMPORTADA }, 'aceita_importada'],
+    [{ STATUS: StatusNotificacaoVisita.RECUSADO }, 'recusada'],
+    [{ STATUS: StatusNotificacaoVisita.EXPIRADO }, 'expirada'],
+    [{ STATUS: StatusNotificacaoVisita.FALHOU }, 'falhou'],
+    [{ STATUS: StatusNotificacaoVisita.DISPENSADO }, 'dispensada'],
+    [{ STATUS: StatusNotificacaoVisita.AGUARDANDO }, 'aguardando'],
+  ])('%o vira %s', (notificacao, estado) => {
+    expect(estadoConvite(notificacao, AGORA)).toBe(estado);
+  });
+
+  // Mesmo status efetivo de toda leitura: ENVIADO vencido é expirada.
+  it('ENVIADO com EXPIRA_EM vencido é expirada', () => {
+    expect(estadoConvite({ STATUS: StatusNotificacaoVisita.ENVIADO, EXPIRA_EM: PASSADO }, AGORA)).toBe('expirada');
+  });
+
+  // Spec-precision gap: o design não diz como mostrar REAGENDADO (reservado) nem
+  // valor fora do enum. REAGENDADO é um agendamento, valor desconhecido aparece
+  // como falhou, para o admin investigar em vez de ver a rota como saudável.
+  it('REAGENDADO é agendada e valor desconhecido é falhou', () => {
+    expect(estadoConvite({ STATUS: StatusNotificacaoVisita.REAGENDADO }, AGORA)).toBe('agendada');
+    expect(estadoConvite({ STATUS: 'INVENTADO' as any }, AGORA)).toBe('falhou');
+  });
+
+  // Linha CONFIRMADO anterior à migration (sem origem) veio do reparador.
+  it('CONFIRMADO sem origem é aceita', () => {
+    expect(estadoConvite({ STATUS: StatusNotificacaoVisita.CONFIRMADO, ORIGEM_ACEITE: null }, AGORA)).toBe('aceita');
   });
 });

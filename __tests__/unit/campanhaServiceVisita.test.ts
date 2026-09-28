@@ -110,7 +110,8 @@ describe('CampanhaService', () => {
         expect(resultado!.rotas).toEqual([]);
       });
 
-      // FILT-01 / AC1: os tres estados resolvidos entram na lista.
+      // FILT-01 / AC1, atualizado para CONV-31/CONV-32 (AD-003): só CONFIRMADO
+      // entra. DISPENSADO e FALHOU, que a regra antiga listava, saem.
       it('lists BACKLOG routes whose confirmation is settled', async () => {
         montarRotaList([
           linhaRota(1, {
@@ -132,11 +133,9 @@ describe('CampanhaService', () => {
 
         const resultado = await CampanhaService.getActiveCampanhaByPromotor(10, AGORA);
 
-        expect(resultado!.rotas.map((r: any) => r.ID_ROTA_PROMOTOR)).toEqual([1, 2, 3]);
+        expect(resultado!.rotas.map((r: any) => r.ID_ROTA_PROMOTOR)).toEqual([1]);
         expect(resultado!.rotas.map((r: any) => r.notificacaoVisita.STATUS)).toEqual([
           StatusNotificacaoVisita.CONFIRMADO,
-          StatusNotificacaoVisita.DISPENSADO,
-          StatusNotificacaoVisita.FALHOU,
         ]);
       });
 
@@ -219,24 +218,25 @@ describe('CampanhaService', () => {
         });
       });
 
-      // FILT-05 / AC5 (rota sem notificacao aparece, sem o campo) + FILT-02 / AC2
-      // (a PENDENTE ao lado dela sai). A asserção anterior afirmava o contrato
-      // antigo, em que a PENDENTE voltava com seu status.
+      // FILT-05 / AC5 + FILT-02 / AC2, atualizado para CONV-32/CONV-33 (AD-003):
+      // rota BACKLOG sem notificacao agora sai, como a PENDENTE. A rota ja
+      // trabalhada sem notificacao continua na lista, sem o campo.
       it('lists a route with no notification row and drops the PENDENTE next to it', async () => {
         montarRotaList([linhaRota(1), linhaRota(2, {
           NOTIFICACAO_STATUS: StatusNotificacaoVisita.PENDENTE,
           NOTIFICACAO_EXPIRA_EM: null,
           NOTIFICACAO_CONFIRMADO_EM: null,
-        })]);
+        }), { ...linhaRota(3), STATUS: 'FINALIZADO' }]);
 
         const resultado = await CampanhaService.getActiveCampanhaByPromotor(10, AGORA);
 
-        expect(resultado!.rotas.map((r: any) => r.ID_ROTA_PROMOTOR)).toEqual([1]);
+        expect(resultado!.rotas.map((r: any) => r.ID_ROTA_PROMOTOR)).toEqual([3]);
         expect((resultado!.rotas[0] as any).notificacaoVisita).toBeUndefined();
       });
 
       // FILT-07 / AC9: uma consulta para a lista inteira, sem consulta por rota.
-      // O fixture usa os estados listaveis porque ENVIADO nao chega mais ao app.
+      // O fixture usa estados listaveis: com AD-003, DISPENSADO e FALHOU so
+      // chegam ao app em rota ja trabalhada.
       it('loads every route status in the list query, without a per-route query', async () => {
         montarRotaList([
           linhaRota(1, {
@@ -244,16 +244,16 @@ describe('CampanhaService', () => {
             NOTIFICACAO_EXPIRA_EM: EXPIRA_FUTURO,
             NOTIFICACAO_CONFIRMADO_EM: CONFIRMADO_EM,
           }),
-          linhaRota(2, {
+          { ...linhaRota(2, {
             NOTIFICACAO_STATUS: StatusNotificacaoVisita.DISPENSADO,
             NOTIFICACAO_EXPIRA_EM: EXPIRA_FUTURO,
             NOTIFICACAO_CONFIRMADO_EM: null,
-          }),
-          linhaRota(3, {
+          }), STATUS: 'EM ANDAMENTO' },
+          { ...linhaRota(3, {
             NOTIFICACAO_STATUS: StatusNotificacaoVisita.FALHOU,
             NOTIFICACAO_EXPIRA_EM: EXPIRA_FUTURO,
             NOTIFICACAO_CONFIRMADO_EM: null,
-          }),
+          }), STATUS: 'FINALIZADO' },
         ]);
 
         const resultado = await CampanhaService.getActiveCampanhaByPromotor(10, AGORA);
@@ -274,10 +274,14 @@ describe('CampanhaService', () => {
       // consulta que monta o ENDERECO é a mesma que traz as coordenadas.
       it('keeps LATITUDE and LONGITUDE on the oficina of every route', async () => {
         montarRotaList([
+          // CONFIRMADO: com AD-003, rota BACKLOG sem aceite nao chega ao app.
           linhaRota(1, {
             LATITUDE: '-22.9099',
             LONGITUDE: '-47.0626',
             ENDERECO: 'Chacara do Ze',
+            NOTIFICACAO_STATUS: StatusNotificacaoVisita.CONFIRMADO,
+            NOTIFICACAO_EXPIRA_EM: null,
+            NOTIFICACAO_CONFIRMADO_EM: CONFIRMADO_EM,
           }),
         ]);
 
@@ -690,9 +694,10 @@ describe('CampanhaService', () => {
         return { find: jest.fn(), findOne: jest.fn() };
       });
       (AppDataSourceSync.query as jest.Mock).mockImplementation(async (sql: string) => {
-        // Rota sem NOME_FANTASIA: é o que dispara o enriquecimento.
+        // Rota sem NOME_FANTASIA: é o que dispara o enriquecimento. CONFIRMADO
+        // porque, com AD-003, rota BACKLOG sem aceite nem chega ao enriquecimento.
         if (sql.includes('"CAMPANHAS_OB"."ROTA_PROMOTOR" rp')) {
-          return [{ ID_ROTA_PROMOTOR: 1, ID_CAMPANHA_PROMOTOR: 1, ID_OFICINA: 395444 }];
+          return [{ ID_ROTA_PROMOTOR: 1, ID_CAMPANHA_PROMOTOR: 1, ID_OFICINA: 395444, NOTIFICACAO_STATUS: 'CONFIRMADO' }];
         }
         return [];
       });
