@@ -1043,8 +1043,8 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] Uma função por endpoint, com tipos de request e response
-- [ ] `npx tsc --noEmit` sem erros novos
+- [x] Uma função por endpoint, com tipos de request e response
+- [x] `npx tsc --noEmit` sem erros novos
 
 **Tests**: none
 **Gate**: build
