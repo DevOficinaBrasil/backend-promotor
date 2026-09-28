@@ -1131,8 +1131,8 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] Sem a prop, igual a hoje; com a prop, usa a função passada
-- [ ] `npx tsc --noEmit` sem erros novos
+- [x] Sem a prop, igual a hoje; com a prop, usa a função passada
+- [x] `npx tsc --noEmit` sem erros novos
 
 **Tests**: none
 **Gate**: build
