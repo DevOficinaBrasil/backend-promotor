@@ -5,6 +5,31 @@ import {
   listSegmentFilterOptions,
 } from "@obcrm/segmentation";
 
+/**
+ * Campos "core" (fora de `contactAttributes.*`) que o CRM remoto resolve com
+ * JOIN ao vivo em MAIN_REGISTER, não via CRM.contact_attribute — confirmado
+ * batendo `previewOficinasComunidade` com IS_SET em cada um (uma coluna
+ * inexistente derruba a query remota com o nome da tabela/coluna no erro).
+ * Só os paths abaixo — os mesmos que `ALIAS_CORE` expõe no builder do
+ * frontend — têm coluna validada; qualquer outro path cai no fallback vazio.
+ */
+const CORE_FIELD_TABLE: Record<string, "OFICINA" | "USUARIO"> = {
+  "oficina.ELEVADOR": "OFICINA",
+  "oficina.QUANTIDADE_ELEVADOR": "OFICINA",
+  "oficina.ATIVO": "OFICINA",
+  "oficina.CIDADE": "OFICINA",
+  "oficina.ESTADO": "OFICINA",
+  "oficina.QUANTIDADE_FUNCIONARIOS": "OFICINA",
+  "oficina.ESTOQUE_PECAS": "OFICINA",
+  "oficina.QUANTIDADE_VEICULOS": "OFICINA",
+  "oficina.ORIGEM": "OFICINA",
+  "oficina.STATUS": "OFICINA",
+  "mainRegisterUser.CARGO": "USUARIO",
+  "mainRegisterUser.ATIVO": "USUARIO",
+  "mainRegisterUser.ORIGEM": "USUARIO",
+  "mainRegisterUser.INTERESSE": "USUARIO",
+};
+
 export default class SegmentacaoService {
   static validateDsl(dsl: Record<string, unknown>): { valid: boolean; errors?: string[] } {
     const validator = new SegmentValidator();
@@ -151,5 +176,76 @@ export default class SegmentacaoService {
           !/zf/i.test(campo.path) && !/zf/i.test(campo.label) && !CAMPOS_EXCLUIDOS.has(campo.path)
       ),
     };
+  }
+
+  /**
+   * Valores existentes de um campo de segmentação no tenant informado, para a
+   * tela oferecer um select em vez de texto livre. Lê o banco direto: o CRM
+   * não expõe endpoint de valores. Usado pela rota por campanha (tenant da
+   * comunidade) e pela tela de admin (tenant 15, CONV-12).
+   */
+  static async valoresDeCampo(
+    tenantId: number,
+    path: string
+  ): Promise<Array<{ valor: string; contatos: number }>> {
+    if (path.startsWith("contactTagByNameMap.")) {
+      // Tag é booleana, não tem domínio de valores.
+      return [];
+    }
+
+    const prefixo = "contactAttributes.";
+    let linhas: Array<{ valor: string; contatos: number }>;
+
+    if (path.startsWith(prefixo)) {
+      const attributeKey = path.slice(prefixo.length);
+      linhas = await AppDataSourceSync.query(
+        `SELECT ca."attribute_value_json" #>> '{}' AS valor, COUNT(*)::int AS contatos
+         FROM "CRM"."contact_attribute" ca
+         INNER JOIN "CRM"."contact" ct ON ct."id" = ca."contact_id"
+         WHERE ct."tenant_id" = $1 AND ca."attribute_key" = $2
+           AND ca."attribute_value_json" #>> '{}' IS NOT NULL
+           AND ca."attribute_value_json" #>> '{}' <> ''
+         GROUP BY 1
+         ORDER BY contatos DESC, valor ASC
+         LIMIT 50`,
+        [tenantId, attributeKey]
+      );
+    } else {
+      const tabela = CORE_FIELD_TABLE[path];
+      if (!tabela) {
+        // Path core sem coluna validada (ou desconhecido) — sem domínio de
+        // valores pra oferecer com segurança.
+        return [];
+      }
+
+      // Mesmo JOIN ao vivo que o CRM remoto usa pra resolver campos core:
+      // contato → USUARIO pelo external_user_id, e OFICINA quando o path
+      // pede um campo da oficina. A coluna vem só do whitelist acima —
+      // nunca de `path` interpolado direto — pra não abrir injeção de SQL.
+      const coluna = path.split(".")[1];
+      const query =
+        tabela === "OFICINA"
+          ? `SELECT o."${coluna}"::text AS valor, COUNT(*)::int AS contatos
+             FROM "CRM"."contact" ct
+             INNER JOIN "MAIN_REGISTER"."USUARIO" us ON us."ID_USUARIO" = ct."external_user_id"
+             INNER JOIN "MAIN_REGISTER"."OFICINA" o ON o."ID_OFICINA" = us."ID_OFICINA"
+             WHERE ct."tenant_id" = $1
+               AND o."${coluna}" IS NOT NULL AND o."${coluna}"::text <> ''
+             GROUP BY 1
+             ORDER BY contatos DESC, valor ASC
+             LIMIT 50`
+          : `SELECT us."${coluna}"::text AS valor, COUNT(*)::int AS contatos
+             FROM "CRM"."contact" ct
+             INNER JOIN "MAIN_REGISTER"."USUARIO" us ON us."ID_USUARIO" = ct."external_user_id"
+             WHERE ct."tenant_id" = $1
+               AND us."${coluna}" IS NOT NULL AND us."${coluna}"::text <> ''
+             GROUP BY 1
+             ORDER BY contatos DESC, valor ASC
+             LIMIT 50`;
+
+      linhas = await AppDataSourceSync.query(query, [tenantId]);
+    }
+
+    return linhas;
   }
 }

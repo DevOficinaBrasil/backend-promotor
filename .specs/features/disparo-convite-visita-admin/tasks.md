@@ -900,10 +900,10 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] Sem região → erro 400 com a mensagem da spec; sem critério → 400; CEP sem coordenada → 400
-- [ ] CRM chamado com tenant 15, nunca com o da campanha; falha → erro 502
-- [ ] `truncado` repassado
-- [ ] Gate quick passa
+- [x] Sem região → erro 400 com a mensagem da spec; sem critério → 400; CEP sem coordenada → 400
+- [x] CRM chamado com tenant 15, nunca com o da campanha; falha → erro 502
+- [x] `truncado` repassado
+- [x] Gate quick passa
 
 **Tests**: unit
 **Gate**: quick

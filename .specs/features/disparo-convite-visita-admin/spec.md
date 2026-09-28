@@ -301,13 +301,13 @@ A Oficina Brasil quer inverter isso:
 | CONV-03 | P1: Auth admin - AC1 | Design | Implementing |
 | CONV-04 | P1: Auth admin - AC2 | Design | Implementing |
 | CONV-05 | P1: Auth admin - AC3 | Design | Pending |
-| CONV-06 | P1: Segmentação - AC1 | Design | Pending |
-| CONV-07 | P1: Segmentação - AC2 | Design | Pending |
+| CONV-06 | P1: Segmentação - AC1 | Design | Implementing |
+| CONV-07 | P1: Segmentação - AC2 | Design | Implementing |
 | CONV-08 | P1: Segmentação - AC3 | Design | Implementing |
 | CONV-09 | P1: Segmentação - AC4 | Design | Implementing |
-| CONV-10 | P1: Segmentação - AC5 | Design | Pending |
-| CONV-11 | P1: Segmentação - AC6 | Design | Pending |
-| CONV-12 | P1: Segmentação - AC7 | Design | Pending |
+| CONV-10 | P1: Segmentação - AC5 | Design | Implementing |
+| CONV-11 | P1: Segmentação - AC6 | Design | Implementing |
+| CONV-12 | P1: Segmentação - AC7 | Design | Implementing |
 | CONV-13 | P1: Rotas - AC1 | Design | Implementing |
 | CONV-14 | P1: Rotas - AC2 | Design | Pending |
 | CONV-15 | P1: Rotas - AC3 | Design | Implementing |

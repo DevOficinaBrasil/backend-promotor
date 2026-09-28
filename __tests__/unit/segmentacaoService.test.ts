@@ -157,4 +157,42 @@ describe('SegmentacaoService', () => {
       expect(result.estimatedCount).toBe(0);
     });
   });
+
+  // T17 (CONV-12): a leitura de valores recebe o tenant, para a tela de admin
+  // consultar o tenant 15 com a mesma regra da rota por campanha.
+  describe('valoresDeCampo', () => {
+    const normalizarSql = (sql: string) => sql.replace(/\s+/g, ' ').trim();
+
+    it('filtra CRM.contact_attribute pelo tenant informado e pela chave do atributo', async () => {
+      const valores = [{ valor: 'Masculino', contatos: 3 }];
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue(valores);
+
+      const result = await SegmentacaoService.valoresDeCampo(15, 'contactAttributes.gender');
+
+      expect(result).toEqual(valores);
+      const [sql, params] = (AppDataSourceSync.query as jest.Mock).mock.calls[0];
+      expect(normalizarSql(sql)).toContain(
+        'FROM "CRM"."contact_attribute" ca INNER JOIN "CRM"."contact" ct ON ct."id" = ca."contact_id" WHERE ct."tenant_id" = $1 AND ca."attribute_key" = $2'
+      );
+      expect(params).toEqual([15, 'gender']);
+    });
+
+    it('campo core da oficina: junta contato → USUARIO → OFICINA no tenant informado', async () => {
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([]);
+
+      await SegmentacaoService.valoresDeCampo(15, 'oficina.ESTADO');
+
+      const [sql, params] = (AppDataSourceSync.query as jest.Mock).mock.calls[0];
+      expect(normalizarSql(sql)).toContain(
+        'INNER JOIN "MAIN_REGISTER"."USUARIO" us ON us."ID_USUARIO" = ct."external_user_id" INNER JOIN "MAIN_REGISTER"."OFICINA" o ON o."ID_OFICINA" = us."ID_OFICINA" WHERE ct."tenant_id" = $1'
+      );
+      expect(params).toEqual([15]);
+    });
+
+    it('tag e path core fora da lista devolvem vazio sem consultar', async () => {
+      await expect(SegmentacaoService.valoresDeCampo(15, 'contactTagByNameMap.vip')).resolves.toEqual([]);
+      await expect(SegmentacaoService.valoresDeCampo(15, 'oficina.SENHA')).resolves.toEqual([]);
+      expect(AppDataSourceSync.query).not.toHaveBeenCalled();
+    });
+  });
 });
