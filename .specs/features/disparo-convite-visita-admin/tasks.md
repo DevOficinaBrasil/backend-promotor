@@ -1109,8 +1109,8 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] O card leva a `/admin/disparo-visitas`
-- [ ] Gate build passa
+- [x] O card leva a `/admin/disparo-visitas`
+- [x] Gate build passa
 
 **Tests**: none
 **Gate**: build
