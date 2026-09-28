@@ -389,9 +389,9 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] Referência CONFIRMADO → CONFIRMADO/CONVITE_VINCULADO; RECUSADO → RECUSADO; EXPIRADO, FALHOU, DISPENSADO ou ENVIADO vencido → PENDENTE na próxima janela, com a referência limpa
-- [ ] Roda antes do claim em cada tick; SQL afirmada
-- [ ] Gate quick passa
+- [x] Referência CONFIRMADO → CONFIRMADO/CONVITE_VINCULADO; RECUSADO → RECUSADO; EXPIRADO, FALHOU, DISPENSADO ou ENVIADO vencido → PENDENTE na próxima janela, com a referência limpa
+- [x] Roda antes do claim em cada tick; SQL afirmada
+- [x] Gate quick passa
 
 **Tests**: unit
 **Gate**: quick
