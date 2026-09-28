@@ -7,6 +7,7 @@ import {
   ConfirmarResponseSchema,
   ExchangeExpiredResponseSchema,
   ExchangeResponseSchema,
+  RecusarResponseSchema,
   UpdateEnderecoResponseSchema,
   UpdateEnderecoSchema,
   VisitaErrorResponseSchema,
@@ -90,6 +91,57 @@ createDocumentedRoute(router, {
       },
       409: {
         description: "Visit already confirmed",
+        schema: VisitaErrorResponseSchema,
+      },
+      410: {
+        description: "Link expired",
+        schema: VisitaErrorResponseSchema,
+      },
+      429: {
+        description: "Too many requests for this visit",
+        schema: VisitaErrorResponseSchema,
+      },
+      500: {
+        description: "Internal server error",
+        schema: VisitaErrorResponseSchema,
+      },
+    },
+  },
+});
+
+// Decline the visit (CONV-35, CONV-40): same auth and rate limit as /confirmar
+createDocumentedRoute(router, {
+  method: "post",
+  path: "/recusar",
+  handler: VisitaController.recusar,
+  basePath: "/visita",
+  middlewares: [visitaAuthMiddleware, limitadorAcao],
+  documentation: {
+    tags: ["Visita"],
+    summary: "Decline a scheduled visit",
+    description:
+      "Declines the visit. Requires the visita:confirmar JWT returned by GET /visita/{token}. " +
+      "No request body. A declined workshop gets no new route or invitation in this campaign.",
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: {
+        description: "Visit declined",
+        schema: RecusarResponseSchema,
+      },
+      401: {
+        description: "Unauthorized - JWT missing or malformed header",
+        schema: VisitaErrorResponseSchema,
+      },
+      403: {
+        description: "Forbidden - JWT invalid, expired or wrong scope",
+        schema: VisitaErrorResponseSchema,
+      },
+      404: {
+        description: "Visit no longer declinable",
+        schema: VisitaErrorResponseSchema,
+      },
+      409: {
+        description: "Visit already confirmed or already declined",
         schema: VisitaErrorResponseSchema,
       },
       410: {
@@ -194,7 +246,8 @@ createDocumentedRoute(router, {
       "brand itself with the company that sent the invite.",
     responses: {
       200: {
-        description: "Visit pending confirmation, or already confirmed (no JWT issued)",
+        description:
+          "Visit pending confirmation, or already confirmed or declined (no JWT issued)",
         schema: ExchangeResponseSchema,
       },
       404: {

@@ -26,6 +26,12 @@ export default class VisitaController {
             message: "Visita já confirmada.",
             data: resultado,
           });
+        case "ALREADY_DECLINED":
+          // CONV-37: 200 como o já confirmado; o front decide a tela pelo state.
+          return res.status(200).json({
+            message: "Visita recusada.",
+            data: resultado,
+          });
         case "EXPIRED":
           // Mantém o envelope de erro (o front decide o estado pelo status), mas
           // acrescenta quem convidou: a tela de expirado atribui o próximo
@@ -76,6 +82,35 @@ export default class VisitaController {
       console.error("Erro ao confirmar visita:", error);
       return res.status(500).json({
         message: "Erro interno ao confirmar a visita.",
+        error: "INTERNAL_ERROR",
+      });
+    }
+  };
+
+  /**
+   * Declines the visit
+   * POST /visita/recusar
+   *
+   * Same guard as /confirmar: reaches here only past visitaAuthMiddleware, and
+   * the service re-checks live state before transitioning (CONV-35, CONV-37).
+   */
+  static recusar = async (req: Request, res: Response) => {
+    try {
+      const payload = (req as VisitaRequest).visitaJwt!;
+      const resultado = await VisitaConfirmacaoService.recusar(payload, ipDoCliente(req));
+
+      if (resultado.state === "DECLINED") {
+        return res.status(200).json({
+          message: "Visita recusada.",
+          data: { state: "DECLINED", recusadoEm: resultado.recusadoEm },
+        });
+      }
+
+      return VisitaController.responderFalhaDeConfirmacao(res, resultado.state);
+    } catch (error) {
+      console.error("Erro ao recusar visita:", error);
+      return res.status(500).json({
+        message: "Erro interno ao recusar a visita.",
         error: "INTERNAL_ERROR",
       });
     }
@@ -142,8 +177,8 @@ export default class VisitaController {
   /**
    * Maps a rejected confirmation to its HTTP response.
    *
-   * 409 for an already-confirmed visit is what the frontend contract renders as
-   * the already-confirmed state; 410 mirrors the exchange endpoint's expired
+   * 409 for an already-confirmed or already-declined visit is what the frontend
+   * contract renders as the matching terminal state; 410 mirrors the exchange endpoint's expired
    * response so both surfaces report a dead link the same way.
    */
   protected static responderFalhaDeConfirmacao(res: Response, state: string) {
@@ -152,6 +187,10 @@ export default class VisitaController {
         return res
           .status(409)
           .json({ message: "Visita já confirmada.", error: "ALREADY_CONFIRMED" });
+      case "ALREADY_DECLINED":
+        return res
+          .status(409)
+          .json({ message: "Visita já recusada.", error: "ALREADY_DECLINED" });
       case "EXPIRED":
         return res.status(410).json({ message: "Este link expirou.", error: "EXPIRED" });
       default:

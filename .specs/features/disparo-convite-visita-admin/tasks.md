@@ -438,10 +438,10 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] 200 DECLINED, 409 (confirmado ou recusado), 410, 404 e 401 sem JWT, no formato de `/confirmar`
-- [ ] Rate limit ativo (21ª chamada no minuto → 429)
-- [ ] `GET /visita/:token` devolve `ALREADY_DECLINED`
-- [ ] Gate full passa
+- [x] 200 DECLINED, 409 (confirmado ou recusado), 410, 404 e 401 sem JWT, no formato de `/confirmar`
+- [x] Rate limit ativo (21ª chamada no minuto → 429)
+- [x] `GET /visita/:token` devolve `ALREADY_DECLINED`
+- [x] Gate full passa
 
 **Tests**: integration
 **Gate**: full
