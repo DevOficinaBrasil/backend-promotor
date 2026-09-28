@@ -949,10 +949,10 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] Teto fora de 1..1000 → 400; passou do fim → 422 com `tetoMinimo`, sem escrever
-- [ ] Já disparadas são ignoradas e contadas; `enfileiradas` = linhas inseridas de fato
-- [ ] `AVAILABLE_AT` segue o plano; a prévia não escreve nada
-- [ ] Gate quick passa
+- [x] Teto fora de 1..1000 → 400; passou do fim → 422 com `tetoMinimo`, sem escrever
+- [x] Já disparadas são ignoradas e contadas; `enfileiradas` = linhas inseridas de fato
+- [x] `AVAILABLE_AT` segue o plano; a prévia não escreve nada
+- [x] Gate quick passa
 
 **Tests**: unit
 **Gate**: quick

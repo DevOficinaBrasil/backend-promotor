@@ -314,12 +314,12 @@ A Oficina Brasil quer inverter isso:
 | CONV-16 | P1: Rotas - AC4, AC6 | Design | Implementing |
 | CONV-17 | P1: Rotas - AC5 | Design | Implementing |
 | CONV-18 | P1: Rotas - AC7 | Design | Implementing |
-| CONV-19 | P1: Disparo - AC1 | Design | Pending |
-| CONV-20 | P1: Disparo - AC2 | Design | Pending |
+| CONV-19 | P1: Disparo - AC1 | Design | Implementing |
+| CONV-20 | P1: Disparo - AC2 | Design | Implementing |
 | CONV-21 | P1: Disparo - AC3, AC4, AC5 | Design | Implementing |
-| CONV-22 | P1: Disparo - AC6 | Design | Pending |
-| CONV-23 | P1: Disparo - AC7 | Design | Pending |
-| CONV-24 | P1: Disparo - AC8 | Design | Pending |
+| CONV-22 | P1: Disparo - AC6 | Design | Implementing |
+| CONV-23 | P1: Disparo - AC7 | Design | Implementing |
+| CONV-24 | P1: Disparo - AC8 | Design | Implementing |
 | CONV-25 | P1: Guardas - AC1 | Design | Implementing |
 | CONV-26 | P1: Guardas - AC2 | Design | Implementing |
 | CONV-27 | P1: Guardas - AC3 | Design | Implementing |

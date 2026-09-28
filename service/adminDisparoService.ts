@@ -12,6 +12,8 @@ import GeolocationService from "./geolocationService";
 import RotaService, { escolherPromotorMaisProximo } from "./rotaService";
 import RotaPromotor from "../entities/RotaPromotor";
 import { ligacaoCadastroEmpresa } from "../utils/sqlCadastroEmpresa";
+import NotificacaoVisita, { CanalNotificacao, StatusNotificacaoVisita } from "../entities/NotificacaoVisita";
+import { planejarDisparo, tetoMinimo, TETO_DIARIO_MAXIMO } from "../utils/agendamento";
 
 /** Tenant do CRM que é a base Oficina Brasil inteira (CONV-08, CONV-12). */
 export const TENANT_OFICINA_BRASIL = 15;
@@ -42,6 +44,26 @@ export interface ConflitoRota {
   status: 409 | 422;
   motivo: string;
   promotorAtual?: { ID_CAMPANHA_PROMOTOR: number; NOME: string | null };
+}
+
+export const MSG_TETO_INVALIDO = "Teto diário deve ser um inteiro entre 1 e 1000";
+export const MSG_ROTAS_DISPARO = "Informe as rotas a disparar";
+export const MSG_PASSA_DO_FIM = "O último envio cairia depois do fim da campanha";
+
+/** Prévia do disparo (CONV-19): nada é escrito. */
+export interface PreviaDisparo {
+  totalConvites: number;
+  jaDisparadas: number;
+  porDia: { data: string; quantidade: number }[];
+  ultimoDia: string | null;
+}
+
+/** Resumo do disparo (CONV-23); `enfileiradas` são as linhas inseridas de fato. */
+export interface ResumoDisparo {
+  enfileiradas: number;
+  jaDisparadas: number;
+  porDia: { data: string; quantidade: number }[];
+  ultimoDia: string | null;
 }
 
 export interface ResultadoCriarRotas {
@@ -526,6 +548,134 @@ export default class AdminDisparoService {
         },
       ])
     );
+  }
+
+  /** Prévia do disparo: valida, separa as já disparadas e planeja, sem escrever (CONV-19). */
+  static async previaDisparo(
+    idCampanha: number,
+    rotaIds: unknown,
+    teto: unknown,
+    agora: Date = new Date()
+  ): Promise<PreviaDisparo> {
+    const plano = await this.planejar(idCampanha, rotaIds, teto, agora);
+    return {
+      totalConvites: plano.pendentes.length,
+      jaDisparadas: plano.jaDisparadas,
+      porDia: plano.porDia,
+      ultimoDia: plano.ultimoDia,
+    };
+  }
+
+  /**
+   * Enfileira um convite por rota ainda não disparada, no máximo `teto` por dia
+   * a partir da janela de amanhã (CONV-20 a CONV-24).
+   *
+   * O insert é o mesmo `ON CONFLICT DO NOTHING` de `agendarVisitasEmLote`
+   * sobre `UNIQUE(ID_ROTA_PROMOTOR)`: um disparo concorrente só tira linhas de
+   * um dia, nunca soma. As rotas que perderam a corrida contam como já
+   * disparadas, e `porDia` sai das linhas que entraram.
+   */
+  static async disparar(
+    idCampanha: number,
+    rotaIds: unknown,
+    teto: unknown,
+    agora: Date = new Date()
+  ): Promise<ResumoDisparo> {
+    const plano = await this.planejar(idCampanha, rotaIds, teto, agora);
+
+    const inseridas = new Set<number>();
+    const LOTE = 1000;
+    for (let i = 0; i < plano.pendentes.length; i += LOTE) {
+      const linhas = plano.pendentes.slice(i, i + LOTE).map((idRota, j) => ({
+        ID_ROTA_PROMOTOR: idRota,
+        CANAL: CanalNotificacao.WHATSAPP,
+        STATUS: StatusNotificacaoVisita.PENDENTE,
+        AVAILABLE_AT: plano.slots[i + j],
+        ATTEMPTS: 0,
+      }));
+
+      const resultado = await AppDataSourceSync.getRepository(NotificacaoVisita)
+        .createQueryBuilder()
+        .insert()
+        .into(NotificacaoVisita)
+        .values(linhas)
+        .orIgnore()
+        .returning(["ID_NOTIFICACAO_VISITA", "ID_ROTA_PROMOTOR"])
+        .execute();
+
+      for (const linha of (resultado.raw ?? []) as { ID_ROTA_PROMOTOR: number | string }[]) {
+        inseridas.add(Number(linha.ID_ROTA_PROMOTOR));
+      }
+    }
+
+    const porDia = new Map<string, number>();
+    plano.pendentes.forEach((idRota, i) => {
+      if (!inseridas.has(idRota)) return;
+      const data = plano.porDia[Math.floor(i / plano.teto)].data;
+      porDia.set(data, (porDia.get(data) ?? 0) + 1);
+    });
+    const dias = [...porDia].map(([data, quantidade]) => ({ data, quantidade }));
+
+    console.log("[adminDisparo] disparo enfileirado", {
+      ID_CAMPANHA: idCampanha,
+      enfileiradas: inseridas.size,
+      teto: plano.teto,
+    });
+
+    return {
+      enfileiradas: inseridas.size,
+      jaDisparadas: plano.jaDisparadas + (plano.pendentes.length - inseridas.size),
+      porDia: dias,
+      ultimoDia: dias.length > 0 ? dias[dias.length - 1].data : null,
+    };
+  }
+
+  /**
+   * Passos comuns à prévia e ao disparo: teto de 1 a 1000 (400), rotas desta
+   * campanha em `BACKLOG`, separação das que já têm notificação e o plano. Se
+   * o último envio passar do `END_TIME`, 422 com o teto mínimo que cabe.
+   */
+  private static async planejar(idCampanha: number, rotaIds: unknown, teto: unknown, agora: Date) {
+    if (!Number.isInteger(teto) || (teto as number) < 1 || (teto as number) > TETO_DIARIO_MAXIMO) {
+      throw new AdminDisparoErro(400, MSG_TETO_INVALIDO);
+    }
+    if (!Array.isArray(rotaIds) || rotaIds.length === 0 || !rotaIds.every(idValido)) {
+      throw new AdminDisparoErro(400, MSG_ROTAS_DISPARO);
+    }
+    const tetoDiario = teto as number;
+    const campanha = await this.carregarCampanha(idCampanha);
+
+    const rotas: { ID_ROTA_PROMOTOR: number | string; ID_NOTIFICACAO_VISITA: number | string | null }[] =
+      await AppDataSourceSync.query(
+        `SELECT rp."ID_ROTA_PROMOTOR", nv."ID_NOTIFICACAO_VISITA"
+           FROM "CAMPANHAS_OB"."ROTA_PROMOTOR" rp
+           JOIN "CAMPANHAS_OB"."CAMPANHA_PROMOTOR" cp
+             ON cp."ID_CAMPANHA_PROMOTOR" = rp."ID_CAMPANHA_PROMOTOR"
+           LEFT JOIN "CAMPANHAS_OB"."NOTIFICACAO_VISITA" nv
+             ON nv."ID_ROTA_PROMOTOR" = rp."ID_ROTA_PROMOTOR"
+          WHERE rp."ID_ROTA_PROMOTOR" = ANY($2::int[])
+            AND cp."ID_CAMPANHA" = $1
+            AND rp."DELETED_AT" IS NULL
+            AND cp."DELETED_AT" IS NULL
+            AND COALESCE(rp."STATUS", 'BACKLOG') = 'BACKLOG'
+          ORDER BY rp."ID_ROTA_PROMOTOR"`,
+        [idCampanha, [...new Set(rotaIds as number[])]]
+      );
+
+    const pendentes = rotas
+      .filter((r) => r.ID_NOTIFICACAO_VISITA == null)
+      .map((r) => Number(r.ID_ROTA_PROMOTOR));
+    const jaDisparadas = rotas.length - pendentes.length;
+
+    const plano = planejarDisparo(agora, pendentes.length, tetoDiario);
+    const ultimoSlot = plano.slots[plano.slots.length - 1];
+    if (campanha.END_TIME && ultimoSlot && ultimoSlot.getTime() > new Date(campanha.END_TIME).getTime()) {
+      throw new AdminDisparoErro(422, MSG_PASSA_DO_FIM, {
+        tetoMinimo: tetoMinimo(agora, pendentes.length, new Date(campanha.END_TIME)),
+      });
+    }
+
+    return { ...plano, pendentes, jaDisparadas, teto: tetoDiario };
   }
 
   /** Campanha não excluída, ou 404. */
