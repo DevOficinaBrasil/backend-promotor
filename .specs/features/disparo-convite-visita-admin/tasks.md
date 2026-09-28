@@ -1087,8 +1087,8 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] Nome ausente → `—`; 401/403 → mensagem
-- [ ] `npx tsc --noEmit` sem erros novos
+- [x] Nome ausente → `—`; 401/403 → mensagem
+- [x] `npx tsc --noEmit` sem erros novos
 
 **Tests**: none
 **Gate**: build
