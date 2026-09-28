@@ -169,8 +169,8 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] Colunas e enums batem com a migration T1
-- [ ] `npx tsc --noEmit` sem erros novos
+- [x] Colunas e enums batem com a migration T1
+- [x] `npx tsc --noEmit` sem erros novos
 
 **Tests**: none
 **Gate**: build
