@@ -1065,8 +1065,8 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] Todos os branches testados em `lib/__tests__/disparoVisitas.test.ts`
-- [ ] `npx jest lib/__tests__/disparoVisitas.test.ts` passa
+- [x] Todos os branches testados em `lib/__tests__/disparoVisitas.test.ts`
+- [x] `npx jest lib/__tests__/disparoVisitas.test.ts` passa
 
 **Tests**: unit
 **Gate**: build
