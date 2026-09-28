@@ -371,6 +371,92 @@ export default class NotificacaoVisitaService {
   }
 
   /**
+   * Ponto único depois de criar rotas, em qualquer fluxo (CONV-15, CONV-45).
+   *
+   * - Rota de oficina com `OFICINA_IMPORTADA` ativa para o `EMPRESA_SLUG` da
+   *   campanha nasce aceita: uma linha `CONFIRMADO`/`IMPORTADA`, sem token e
+   *   sem `AVAILABLE_AT`, então nada é enviado.
+   * - As demais vão para `agendarVisitasEmLote` se `agendar`; sem `agendar`
+   *   (tela de admin) nada é enfileirado até o disparo.
+   *
+   * Nunca lança: criação de rota não falha por causa de notificação. Se a
+   * detecção de importada falhar, as rotas seguem o fluxo de hoje (agendar).
+   */
+  static async registrarRotasCriadas(
+    rotas: RotaPromotor[],
+    { agendar }: { agendar: boolean },
+    agora: Date = new Date()
+  ): Promise<void> {
+    const comId = rotas.filter((rota) => rota.ID_ROTA_PROMOTOR != null);
+    if (comId.length === 0) {
+      return;
+    }
+
+    let importadas = new Set<number>();
+    try {
+      importadas = await this.rotasDeOficinaImportada(comId.map((r) => r.ID_ROTA_PROMOTOR!));
+    } catch (erro) {
+      console.error("[notificacaoVisita] falha ao detectar oficinas importadas", {
+        quantidade: comId.length,
+        erro: (erro as Error)?.message,
+      });
+    }
+
+    if (importadas.size > 0) {
+      try {
+        await AppDataSourceSync.getRepository(NotificacaoVisita)
+          .createQueryBuilder()
+          .insert()
+          .into(NotificacaoVisita)
+          .values(
+            [...importadas].map((idRota) => ({
+              ID_ROTA_PROMOTOR: idRota,
+              CANAL: CanalNotificacao.WHATSAPP,
+              STATUS: StatusNotificacaoVisita.CONFIRMADO,
+              ORIGEM_ACEITE: OrigemAceite.IMPORTADA,
+              CONFIRMADO_EM: agora,
+              ATTEMPTS: 0,
+            }))
+          )
+          .orIgnore()
+          .execute();
+      } catch (erro) {
+        console.error("[notificacaoVisita] falha ao registrar rotas importadas como aceitas", {
+          quantidade: importadas.size,
+          erro: (erro as Error)?.message,
+        });
+      }
+    }
+
+    if (!agendar) {
+      return;
+    }
+
+    const aAgendar = comId.filter((rota) => !importadas.has(rota.ID_ROTA_PROMOTOR!));
+    await this.agendarVisitasEmLote(aAgendar, agora);
+  }
+
+  /** Ids das rotas cuja oficina é importada para o slug da campanha da rota. */
+  private static async rotasDeOficinaImportada(idsRota: number[]): Promise<Set<number>> {
+    const linhas: { ID_ROTA_PROMOTOR: number | string }[] | undefined =
+      await AppDataSourceSync.query(
+        `SELECT rp."ID_ROTA_PROMOTOR"
+           FROM "CAMPANHAS_OB"."ROTA_PROMOTOR" rp
+           JOIN "CAMPANHAS_OB"."CAMPANHA_PROMOTOR" cp
+             ON cp."ID_CAMPANHA_PROMOTOR" = rp."ID_CAMPANHA_PROMOTOR"
+           JOIN "CAMPANHAS_OB"."CAMPANHA" c
+             ON c."ID_CAMPANHA" = cp."ID_CAMPANHA"
+           JOIN "CAMPANHAS_OB"."OFICINA_IMPORTADA" oi
+             ON oi."ID_OFICINA" = rp."ID_OFICINA"
+            AND oi."EMPRESA_SLUG" = c."EMPRESA_SLUG"
+            AND oi."DELETED_AT" IS NULL
+          WHERE rp."ID_ROTA_PROMOTOR" = ANY($1)`,
+        [idsRota]
+      );
+    return new Set((linhas ?? []).map((linha) => Number(linha.ID_ROTA_PROMOTOR)));
+  }
+
+  /**
    * Dispatches one already-queued notification (AGND-09).
    *
    * Runs the flow against state as of *now*, not as of route creation: the

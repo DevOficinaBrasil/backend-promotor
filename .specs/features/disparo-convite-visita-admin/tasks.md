@@ -340,10 +340,10 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] Importada para o slug da campanha → um insert `CONFIRMADO` sem token, sem agendar
-- [ ] Não importada com `agendar:true` → `agendarVisitasEmLote` com as rotas; com `agendar:false` → nada
-- [ ] SQL da detecção de importada afirmada (join `OFICINA_IMPORTADA` por `ID_OFICINA` + `EMPRESA_SLUG`, `DELETED_AT IS NULL`)
-- [ ] Gate quick passa
+- [x] Importada para o slug da campanha → um insert `CONFIRMADO` sem token, sem agendar
+- [x] Não importada com `agendar:true` → `agendarVisitasEmLote` com as rotas; com `agendar:false` → nada
+- [x] SQL da detecção de importada afirmada (join `OFICINA_IMPORTADA` por `ID_OFICINA` + `EMPRESA_SLUG`, `DELETED_AT IS NULL`)
+- [x] Gate quick passa
 
 **Tests**: unit
 **Gate**: quick
