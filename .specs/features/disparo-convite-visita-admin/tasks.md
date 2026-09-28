@@ -852,10 +852,10 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] UF + cidade com normalização de acento e CEP + raio por haversine; lotes de 1000 ids
-- [ ] Flags `membroComunidade`, `importada`, `rotaAtual`, `recusouNestaCampanha` e `temWhatsapp` (via `resolverTelefone`)
-- [ ] SQL com joins e aliases afirmados (L-004); dedup por `ID_OFICINA`
-- [ ] Gate quick passa
+- [x] UF + cidade com normalização de acento e CEP + raio por haversine; lotes de 1000 ids
+- [x] Flags `membroComunidade`, `importada`, `rotaAtual`, `recusouNestaCampanha` e `temWhatsapp` (via `resolverTelefone`)
+- [x] SQL com joins e aliases afirmados (L-004); dedup por `ID_OFICINA`
+- [x] Gate quick passa
 
 **Tests**: unit
 **Gate**: quick

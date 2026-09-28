@@ -303,8 +303,8 @@ A Oficina Brasil quer inverter isso:
 | CONV-05 | P1: Auth admin - AC3 | Design | Pending |
 | CONV-06 | P1: Segmentação - AC1 | Design | Pending |
 | CONV-07 | P1: Segmentação - AC2 | Design | Pending |
-| CONV-08 | P1: Segmentação - AC3 | Design | Pending |
-| CONV-09 | P1: Segmentação - AC4 | Design | Pending |
+| CONV-08 | P1: Segmentação - AC3 | Design | Implementing |
+| CONV-09 | P1: Segmentação - AC4 | Design | Implementing |
 | CONV-10 | P1: Segmentação - AC5 | Design | Pending |
 | CONV-11 | P1: Segmentação - AC6 | Design | Pending |
 | CONV-12 | P1: Segmentação - AC7 | Design | Pending |
@@ -342,7 +342,7 @@ A Oficina Brasil quer inverter isso:
 | CONV-44 | P1: Telefone/importada - AC2 | Design | Implementing |
 | CONV-45 | P1: Telefone/importada - AC4 | Design | Implementing |
 | CONV-46 | P1: Telefone/importada - AC5 | Design | Implementing |
-| CONV-47 | P1: Telefone/importada - AC6 | Design | Pending |
+| CONV-47 | P1: Telefone/importada - AC6 | Design | Implementing |
 
 **Coverage:** 47 total, 0 mapped to tasks, 47 unmapped ⚠️ (Tasks phase pending)
 
