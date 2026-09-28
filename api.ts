@@ -7,6 +7,7 @@ import rotaRoutes from "./routes/RotaRoute";
 import oficinaRoutes from "./routes/OficinaRoute";
 import visitaRoutes from "./routes/VisitaRoute";
 import segmentacaoRoutes from "./routes/SegmentacaoRoute";
+import adminDisparoRoutes from "./routes/AdminDisparoRoute";
 
 const routes = (app: express.Application) => {
   app.use("/campanha", campanhaRoutes);
@@ -17,6 +18,7 @@ const routes = (app: express.Application) => {
   app.use("/oficina", oficinaRoutes);
   app.use("/visita", visitaRoutes);
   app.use("/segmentacao", segmentacaoRoutes);
+  app.use("/admin", adminDisparoRoutes);
 };
 
 export default routes;

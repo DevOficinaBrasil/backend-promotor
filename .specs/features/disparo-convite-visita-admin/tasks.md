@@ -995,10 +995,10 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] Cada uma das 9 rotas: sem token → 401, não admin → 403, admin → 2xx (L-002)
-- [ ] Erros de domínio viram 400/404/409/422/502 conforme o design
-- [ ] Rotas antigas sem mudança de auth
-- [ ] Gate full passa
+- [x] Cada uma das 9 rotas: sem token → 401, não admin → 403, admin → 2xx (L-002)
+- [x] Erros de domínio viram 400/404/409/422/502 conforme o design
+- [x] Rotas antigas sem mudança de auth
+- [x] Gate full passa
 
 **Tests**: integration
 **Gate**: full
