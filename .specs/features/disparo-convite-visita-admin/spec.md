@@ -309,10 +309,10 @@ A Oficina Brasil quer inverter isso:
 | CONV-11 | P1: Segmentação - AC6 | Design | Implementing |
 | CONV-12 | P1: Segmentação - AC7 | Design | Implementing |
 | CONV-13 | P1: Rotas - AC1 | Design | Implementing |
-| CONV-14 | P1: Rotas - AC2 | Design | Pending |
+| CONV-14 | P1: Rotas - AC2 | Design | Implementing |
 | CONV-15 | P1: Rotas - AC3 | Design | Implementing |
-| CONV-16 | P1: Rotas - AC4, AC6 | Design | Pending |
-| CONV-17 | P1: Rotas - AC5 | Design | Pending |
+| CONV-16 | P1: Rotas - AC4, AC6 | Design | Implementing |
+| CONV-17 | P1: Rotas - AC5 | Design | Implementing |
 | CONV-18 | P1: Rotas - AC7 | Design | Implementing |
 | CONV-19 | P1: Disparo - AC1 | Design | Pending |
 | CONV-20 | P1: Disparo - AC2 | Design | Pending |
@@ -333,7 +333,7 @@ A Oficina Brasil quer inverter isso:
 | CONV-35 | P1: Recusa - AC1 | Design | Implementing |
 | CONV-36 | P1: Recusa - AC1 (atomicidade) | Design | Implementing |
 | CONV-37 | P1: Recusa - AC2, AC3 | Design | Implementing |
-| CONV-38 | P1: Recusa - AC4 | Design | Pending |
+| CONV-38 | P1: Recusa - AC4 | Design | Implementing |
 | CONV-39 | P1: Recusa - AC6 | Design | Implementing |
 | CONV-40 | P1: Recusa - AC5 | Design | Implementing |
 | CONV-41 | P2: Acompanhar - AC1 | Design | Implementing |

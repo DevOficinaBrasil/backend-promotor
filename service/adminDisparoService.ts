@@ -1,7 +1,17 @@
 import { AppDataSourceSync } from "../data-source";
 import SegmentacaoService from "./segmentacaoService";
-import OficinaService, { OficinaSegmentada, RegiaoResolvida } from "./oficinaService";
+import OficinaService, {
+  OficinaSegmentada,
+  RegiaoResolvida,
+  sqlOficinaImportada,
+  sqlRecusouNaCampanha,
+  sqlUsuariosDaOficina,
+  temWhatsappPelosCandidatos,
+} from "./oficinaService";
 import GeolocationService from "./geolocationService";
+import RotaService, { escolherPromotorMaisProximo } from "./rotaService";
+import RotaPromotor from "../entities/RotaPromotor";
+import { ligacaoCadastroEmpresa } from "../utils/sqlCadastroEmpresa";
 
 /** Tenant do CRM que é a base Oficina Brasil inteira (CONV-08, CONV-12). */
 export const TENANT_OFICINA_BRASIL = 15;
@@ -16,6 +26,29 @@ export const MSG_SEGMENTACAO_INDISPONIVEL = "Segmentação indisponível";
 export const MSG_CEP_NAO_ENCONTRADO = "CEP não encontrado";
 
 export type RegiaoEntrada = { uf: string; cidade: string } | { cep: string; raioKm: number };
+
+export const MSG_JA_EM_ROTA = "Oficina já está em rota nesta campanha";
+export const MSG_RECUSOU = "Oficina recusou a visita nesta campanha";
+export const MSG_SEM_WHATSAPP = "Oficina sem WhatsApp cadastrado";
+export const MSG_VINCULO_OUTRA_CAMPANHA = "Promotor não está vinculado a esta campanha";
+export const MSG_ENTRADA_ROTAS = "Informe as atribuições ou as oficinas a distribuir";
+
+export type EntradaCriarRotas =
+  | { atribuicoes: { idCampanhaPromotor: number; idOficina: number }[] }
+  | { distribuir: true; idOficinas: number[] };
+
+export interface ConflitoRota {
+  idOficina: number;
+  status: 409 | 422;
+  motivo: string;
+  promotorAtual?: { ID_CAMPANHA_PROMOTOR: number; NOME: string | null };
+}
+
+export interface ResultadoCriarRotas {
+  criadas: { ID_ROTA_PROMOTOR: number; ID_CAMPANHA_PROMOTOR: number; ID_OFICINA: number }[];
+  conflitos: ConflitoRota[];
+  foraDoAlcance: number[];
+}
 
 /**
  * Erro de domínio da tela de admin. A rota traduz `status` direto para o HTTP
@@ -97,6 +130,31 @@ function validarCriterio(dsl: unknown): Record<string, unknown> {
     throw new AdminDisparoErro(400, "Filtro de segmentação inválido.", { details: validacao.errors });
   }
   return dsl as Record<string, unknown>;
+}
+
+const idValido = (v: unknown): v is number => Number.isInteger(v) && (v as number) > 0;
+
+/** Atribuição manual ou distribuição automática, com ids inteiros positivos. */
+function validarEntradaRotas(entrada: unknown): EntradaCriarRotas {
+  const e = (entrada ?? {}) as Record<string, unknown>;
+  if (
+    Array.isArray(e.atribuicoes) &&
+    e.atribuicoes.length > 0 &&
+    e.atribuicoes.every(
+      (a) => idValido((a as any)?.idCampanhaPromotor) && idValido((a as any)?.idOficina)
+    )
+  ) {
+    return { atribuicoes: e.atribuicoes as { idCampanhaPromotor: number; idOficina: number }[] };
+  }
+  if (
+    e.distribuir === true &&
+    Array.isArray(e.idOficinas) &&
+    e.idOficinas.length > 0 &&
+    e.idOficinas.every(idValido)
+  ) {
+    return { distribuir: true, idOficinas: e.idOficinas as number[] };
+  }
+  throw new AdminDisparoErro(400, MSG_ENTRADA_ROTAS);
 }
 
 /** Chamada ao CRM com prazo; falha ou demora viram 502 (CONV-11). */
@@ -273,6 +331,201 @@ export default class AdminDisparoService {
     });
 
     return { oficinas, truncado: contatos.truncado, total: oficinas.length };
+  }
+
+  /**
+   * Coloca oficinas em rota pela tela de admin (CONV-14 a CONV-18, CONV-47).
+   *
+   * - Não exige que a oficina seja membro da comunidade da campanha.
+   * - Por oficina: já em rota nesta campanha → 409 com o promotor atual;
+   *   recusou convite aqui → 409; sem WhatsApp e não importada → 422. As
+   *   demais seguem; os conflitos voltam em `conflitos`.
+   * - Vínculo de outra campanha recusa a requisição inteira (400).
+   * - `distribuir` usa a regra do auto-assign (`escolherPromotorMaisProximo`);
+   *   quem nenhum raio alcança volta em `foraDoAlcance`, sem rota.
+   * - Cria com `agendar: false`: nada é enfileirado até o disparo (CONV-15).
+   */
+  static async criarRotas(
+    idCampanha: number,
+    entrada: unknown,
+    idAdmin?: number
+  ): Promise<ResultadoCriarRotas> {
+    const pedido = validarEntradaRotas(entrada);
+    const campanha = await this.carregarCampanha(idCampanha);
+
+    const vinculos: any[] = await AppDataSourceSync.query(
+      `SELECT cp."ID_CAMPANHA_PROMOTOR", cp."RAIO", p."NOME",
+              p."LATITUDE" AS "LAT", p."LONGITUDE" AS "LNG"
+         FROM "CAMPANHAS_OB"."CAMPANHA_PROMOTOR" cp
+         JOIN "CAMPANHAS_OB"."PROMOTOR" p ON p."ID_PROMOTOR" = cp."ID_PROMOTOR"
+        WHERE cp."ID_CAMPANHA" = $1
+          AND cp."DELETED_AT" IS NULL`,
+      [idCampanha]
+    );
+    const nomePorVinculo = new Map<number, string | null>(
+      vinculos.map((v) => [Number(v.ID_CAMPANHA_PROMOTOR), v.NOME ?? null])
+    );
+
+    const pares: { idOficina: number; idCampanhaPromotor: number | null }[] =
+      "atribuicoes" in pedido
+        ? pedido.atribuicoes.map((a) => ({ idOficina: a.idOficina, idCampanhaPromotor: a.idCampanhaPromotor }))
+        : pedido.idOficinas.map((idOficina) => ({ idOficina, idCampanhaPromotor: null }));
+
+    for (const par of pares) {
+      if (par.idCampanhaPromotor != null && !nomePorVinculo.has(par.idCampanhaPromotor)) {
+        throw new AdminDisparoErro(400, MSG_VINCULO_OUTRA_CAMPANHA, {
+          idCampanhaPromotor: par.idCampanhaPromotor,
+        });
+      }
+    }
+
+    const situacao = await this.situacaoDasOficinas(
+      [...new Set(pares.map((p) => p.idOficina))],
+      idCampanha,
+      campanha.EMPRESA_SLUG
+    );
+
+    const conflitos: ConflitoRota[] = [];
+    const foraDoAlcance: number[] = [];
+    const porVinculo = new Map<number, number[]>();
+    const atribuidaNestePedido = new Map<number, number>();
+
+    const candidatos = vinculos
+      .filter((v) => v.LAT != null && v.LNG != null)
+      .map((v) => ({
+        ID_CAMPANHA_PROMOTOR: Number(v.ID_CAMPANHA_PROMOTOR),
+        RAIO: v.RAIO == null ? null : Number(v.RAIO),
+        lat: Number(v.LAT),
+        lon: Number(v.LNG),
+      }));
+
+    for (const par of pares) {
+      const s = situacao.get(par.idOficina);
+      const repetida = atribuidaNestePedido.get(par.idOficina);
+      const idVinculoAtual = s?.idCampanhaPromotorAtual ?? repetida ?? null;
+
+      if (idVinculoAtual != null) {
+        conflitos.push({
+          idOficina: par.idOficina,
+          status: 409,
+          motivo: MSG_JA_EM_ROTA,
+          promotorAtual: {
+            ID_CAMPANHA_PROMOTOR: idVinculoAtual,
+            NOME: s?.promotorAtualNome ?? nomePorVinculo.get(idVinculoAtual) ?? null,
+          },
+        });
+        continue;
+      }
+      if (s?.recusou) {
+        conflitos.push({ idOficina: par.idOficina, status: 409, motivo: MSG_RECUSOU });
+        continue;
+      }
+      if (!s?.importada && !s?.temWhatsapp) {
+        conflitos.push({ idOficina: par.idOficina, status: 422, motivo: MSG_SEM_WHATSAPP });
+        continue;
+      }
+
+      let idVinculo = par.idCampanhaPromotor;
+      if (idVinculo == null) {
+        const escolhido =
+          s?.lat != null && s?.lon != null
+            ? escolherPromotorMaisProximo({ lat: s.lat, lon: s.lon }, candidatos)
+            : null;
+        if (!escolhido) {
+          foraDoAlcance.push(par.idOficina);
+          continue;
+        }
+        idVinculo = escolhido.ID_CAMPANHA_PROMOTOR;
+      }
+
+      atribuidaNestePedido.set(par.idOficina, idVinculo);
+      porVinculo.set(idVinculo, [...(porVinculo.get(idVinculo) ?? []), par.idOficina]);
+    }
+
+    const criadas: ResultadoCriarRotas["criadas"] = [];
+    for (const [idVinculo, idsOficina] of porVinculo) {
+      const rotas = (await RotaService.createRotas(idVinculo, idsOficina, idAdmin, {
+        agendar: false,
+      })) as RotaPromotor[];
+      for (const rota of rotas) {
+        criadas.push({
+          ID_ROTA_PROMOTOR: Number(rota.ID_ROTA_PROMOTOR),
+          ID_CAMPANHA_PROMOTOR: idVinculo,
+          ID_OFICINA: Number(rota.ID_OFICINA),
+        });
+      }
+    }
+
+    return { criadas, conflitos, foraDoAlcance };
+  }
+
+  /**
+   * Situação de cada oficina nesta campanha numa query só: rota ativa e seu
+   * promotor, recusa, importada para o slug, candidatos de telefone e
+   * coordenadas (dw.cadastro_empresa, ou a OFICINA para importada sem dw).
+   */
+  private static async situacaoDasOficinas(
+    idsOficina: number[],
+    idCampanha: number,
+    empresaSlug: string | null
+  ): Promise<
+    Map<
+      number,
+      {
+        idCampanhaPromotorAtual: number | null;
+        promotorAtualNome: string | null;
+        recusou: boolean;
+        importada: boolean;
+        temWhatsapp: boolean;
+        lat: number | null;
+        lon: number | null;
+      }
+    >
+  > {
+    const linhas: any[] = await AppDataSourceSync.query(
+      `SELECT ids.id_oficina AS "ID_OFICINA",
+              rota."ID_CAMPANHA_PROMOTOR" AS "ROTA_ID_CAMPANHA_PROMOTOR",
+              rota."PROMOTOR_NOME" AS "ROTA_PROMOTOR_NOME",
+              ${sqlRecusouNaCampanha("ids.id_oficina", "$1")} AS "RECUSOU_NESTA_CAMPANHA",
+              ${sqlOficinaImportada("ids.id_oficina", "$2")} AS "IMPORTADA",
+              ${sqlUsuariosDaOficina("ids.id_oficina")} AS "USUARIOS",
+              o."TELEFONE" AS "OFICINA_TELEFONE",
+              ce.telefone AS "CADASTRO_TELEFONE",
+              COALESCE(ce.latitude, o."LATITUDE") AS "LATITUDE",
+              COALESCE(ce.longitude, o."LONGITUDE") AS "LONGITUDE"
+         FROM unnest($3::int[]) AS ids(id_oficina)
+         LEFT JOIN "MAIN_REGISTER"."OFICINA" o
+           ON o."ID_OFICINA" = ids.id_oficina${ligacaoCadastroEmpresa("o", "ids.id_oficina")}
+         LEFT JOIN LATERAL (
+           SELECT rp."ID_CAMPANHA_PROMOTOR", p."NOME" AS "PROMOTOR_NOME"
+             FROM "CAMPANHAS_OB"."ROTA_PROMOTOR" rp
+             JOIN "CAMPANHAS_OB"."CAMPANHA_PROMOTOR" cp
+               ON cp."ID_CAMPANHA_PROMOTOR" = rp."ID_CAMPANHA_PROMOTOR"
+             LEFT JOIN "CAMPANHAS_OB"."PROMOTOR" p ON p."ID_PROMOTOR" = cp."ID_PROMOTOR"
+            WHERE rp."ID_OFICINA" = ids.id_oficina
+              AND cp."ID_CAMPANHA" = $1
+              AND rp."DELETED_AT" IS NULL
+              AND cp."DELETED_AT" IS NULL
+            ORDER BY rp."ID_ROTA_PROMOTOR" DESC
+            LIMIT 1
+         ) rota ON TRUE`,
+      [idCampanha, empresaSlug, idsOficina]
+    );
+
+    return new Map(
+      linhas.map((l) => [
+        Number(l.ID_OFICINA),
+        {
+          idCampanhaPromotorAtual: numeroOuNulo(l.ROTA_ID_CAMPANHA_PROMOTOR),
+          promotorAtualNome: l.ROTA_PROMOTOR_NOME ?? null,
+          recusou: l.RECUSOU_NESTA_CAMPANHA === true,
+          importada: l.IMPORTADA === true,
+          temWhatsapp: temWhatsappPelosCandidatos(l),
+          lat: numeroOuNulo(l.LATITUDE),
+          lon: numeroOuNulo(l.LONGITUDE),
+        },
+      ])
+    );
   }
 
   /** Campanha não excluída, ou 404. */

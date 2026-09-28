@@ -49,6 +49,68 @@ export function normalizarCidade(cidade: string): string {
     .join("");
 }
 
+/**
+ * Fragmentos de SQL compartilhados entre a segmentação do admin e a criação de
+ * rotas pela tela de admin, para as duas decidirem igual. `idExpr` é a
+ * expressão do `ID_OFICINA` no FROM de quem chama; os parâmetros são o número
+ * do placeholder (`$1`...).
+ */
+
+/** Usuários da oficina como JSON, na ordem do despacho: candidatos de telefone. */
+export function sqlUsuariosDaOficina(idExpr: string): string {
+  return `(
+            SELECT COALESCE(json_agg(json_build_object(
+                     'ID_USUARIO', u_tel."ID_USUARIO",
+                     'CELULAR', u_tel."CELULAR",
+                     'TELEFONE', u_tel."TELEFONE")
+                   ORDER BY u_tel."DATA_ALTERACAO" DESC NULLS LAST, u_tel."ID_USUARIO" ASC), '[]'::json)
+              FROM "MAIN_REGISTER"."USUARIO" u_tel
+             WHERE u_tel."ID_OFICINA" = ${idExpr}
+          )`;
+}
+
+/** Linha ativa em OFICINA_IMPORTADA para o slug (CONV-47). */
+export function sqlOficinaImportada(idExpr: string, slugParam: string): string {
+  return `EXISTS (
+            SELECT 1
+              FROM "CAMPANHAS_OB"."OFICINA_IMPORTADA" oi
+             WHERE oi."ID_OFICINA" = ${idExpr}
+               AND oi."EMPRESA_SLUG" = ${slugParam}
+               AND oi."DELETED_AT" IS NULL
+          )`;
+}
+
+/** Algum convite RECUSADO numa rota da oficina nesta campanha (CONV-38). */
+export function sqlRecusouNaCampanha(idExpr: string, campanhaParam: string): string {
+  return `EXISTS (
+            SELECT 1
+              FROM "CAMPANHAS_OB"."ROTA_PROMOTOR" rp_rec
+              JOIN "CAMPANHAS_OB"."CAMPANHA_PROMOTOR" cp_rec
+                ON cp_rec."ID_CAMPANHA_PROMOTOR" = rp_rec."ID_CAMPANHA_PROMOTOR"
+              JOIN "CAMPANHAS_OB"."NOTIFICACAO_VISITA" nv_rec
+                ON nv_rec."ID_ROTA_PROMOTOR" = rp_rec."ID_ROTA_PROMOTOR"
+             WHERE rp_rec."ID_OFICINA" = ${idExpr}
+               AND cp_rec."ID_CAMPANHA" = ${campanhaParam}
+               AND nv_rec."STATUS" = '${StatusNotificacaoVisita.RECUSADO}'
+          )`;
+}
+
+/** Tem número para WhatsApp pela regra do despacho (CONV-43). */
+export function temWhatsappPelosCandidatos(linha: {
+  USUARIOS?: unknown;
+  OFICINA_TELEFONE?: string | null;
+  CADASTRO_TELEFONE?: string | null;
+}): boolean {
+  const usuarios: CandidatoUsuarioTelefone[] = Array.isArray(linha.USUARIOS) ? linha.USUARIOS : [];
+  return (
+    resolverTelefone({
+      usuarios,
+      oficinaTelefone: linha.OFICINA_TELEFONE,
+      cadastroTelefone: linha.CADASTRO_TELEFONE,
+    })?.telefone != null
+  );
+}
+
 export default class OficinaService {
   /**
    * Finds the nearest oficinas based on latitude and longitude
@@ -630,15 +692,7 @@ export default class OficinaService {
           ce.longitude AS "LONGITUDE",
           o."TELEFONE" AS "OFICINA_TELEFONE",
           ce.telefone AS "CADASTRO_TELEFONE",
-          (
-            SELECT COALESCE(json_agg(json_build_object(
-                     'ID_USUARIO', u_tel."ID_USUARIO",
-                     'CELULAR', u_tel."CELULAR",
-                     'TELEFONE', u_tel."TELEFONE")
-                   ORDER BY u_tel."DATA_ALTERACAO" DESC NULLS LAST, u_tel."ID_USUARIO" ASC), '[]'::json)
-              FROM "MAIN_REGISTER"."USUARIO" u_tel
-             WHERE u_tel."ID_OFICINA" = us."ID_OFICINA"
-          ) AS "USUARIOS",
+          ${sqlUsuariosDaOficina('us."ID_OFICINA"')} AS "USUARIOS",
           EXISTS (
             SELECT 1
               FROM "MAIN_REGISTER"."USUARIO" u_cm
@@ -647,24 +701,8 @@ export default class OficinaService {
              WHERE u_cm."ID_OFICINA" = us."ID_OFICINA"
                AND cm."EmpresaSlug" = $2
           ) AS "MEMBRO_COMUNIDADE",
-          EXISTS (
-            SELECT 1
-              FROM "CAMPANHAS_OB"."OFICINA_IMPORTADA" oi
-             WHERE oi."ID_OFICINA" = us."ID_OFICINA"
-               AND oi."EMPRESA_SLUG" = $2
-               AND oi."DELETED_AT" IS NULL
-          ) AS "IMPORTADA",
-          EXISTS (
-            SELECT 1
-              FROM "CAMPANHAS_OB"."ROTA_PROMOTOR" rp_rec
-              JOIN "CAMPANHAS_OB"."CAMPANHA_PROMOTOR" cp_rec
-                ON cp_rec."ID_CAMPANHA_PROMOTOR" = rp_rec."ID_CAMPANHA_PROMOTOR"
-              JOIN "CAMPANHAS_OB"."NOTIFICACAO_VISITA" nv_rec
-                ON nv_rec."ID_ROTA_PROMOTOR" = rp_rec."ID_ROTA_PROMOTOR"
-             WHERE rp_rec."ID_OFICINA" = us."ID_OFICINA"
-               AND cp_rec."ID_CAMPANHA" = $1
-               AND nv_rec."STATUS" = '${StatusNotificacaoVisita.RECUSADO}'
-          ) AS "RECUSOU_NESTA_CAMPANHA",
+          ${sqlOficinaImportada('us."ID_OFICINA"', "$2")} AS "IMPORTADA",
+          ${sqlRecusouNaCampanha('us."ID_OFICINA"', "$1")} AS "RECUSOU_NESTA_CAMPANHA",
           rota."ID_ROTA_PROMOTOR" AS "ROTA_ID_ROTA_PROMOTOR",
           rota."ID_CAMPANHA_PROMOTOR" AS "ROTA_ID_CAMPANHA_PROMOTOR",
           rota."PROMOTOR_NOME" AS "ROTA_PROMOTOR_NOME",
@@ -718,13 +756,6 @@ export default class OficinaService {
   }
 
   private static mapearOficinaSegmentada(linha: any): OficinaSegmentada {
-    const usuarios: CandidatoUsuarioTelefone[] = Array.isArray(linha.USUARIOS) ? linha.USUARIOS : [];
-    const telefone = resolverTelefone({
-      usuarios,
-      oficinaTelefone: linha.OFICINA_TELEFONE,
-      cadastroTelefone: linha.CADASTRO_TELEFONE,
-    });
-
     const rotaAtual =
       linha.ROTA_ID_ROTA_PROMOTOR == null
         ? null
@@ -754,7 +785,7 @@ export default class OficinaService {
       LONGITUDE: Number(linha.LONGITUDE),
       membroComunidade: linha.MEMBRO_COMUNIDADE === true,
       importada: linha.IMPORTADA === true,
-      temWhatsapp: telefone?.telefone != null,
+      temWhatsapp: temWhatsappPelosCandidatos(linha),
       recusouNestaCampanha: linha.RECUSOU_NESTA_CAMPANHA === true,
       rotaAtual,
     };

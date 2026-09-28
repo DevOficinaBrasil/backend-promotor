@@ -924,11 +924,11 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] Oficina de fora da comunidade é aceita; já em rota → conflito 409 com o promotor atual; recusou → 409; sem WhatsApp e não importada → 422; importada sem WhatsApp → aceita
-- [ ] Vínculo de outra campanha → 400
-- [ ] Distribuição devolve `foraDoAlcance`
-- [ ] Nada enfileirado
-- [ ] Gate quick passa
+- [x] Oficina de fora da comunidade é aceita; já em rota → conflito 409 com o promotor atual; recusou → 409; sem WhatsApp e não importada → 422; importada sem WhatsApp → aceita
+- [x] Vínculo de outra campanha → 400
+- [x] Distribuição devolve `foraDoAlcance`
+- [x] Nada enfileirado
+- [x] Gate quick passa
 
 **Tests**: unit
 **Gate**: quick
