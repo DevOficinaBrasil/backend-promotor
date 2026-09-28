@@ -14,6 +14,7 @@ import RotaPromotor from "../entities/RotaPromotor";
 import { ligacaoCadastroEmpresa } from "../utils/sqlCadastroEmpresa";
 import NotificacaoVisita, { CanalNotificacao, StatusNotificacaoVisita } from "../entities/NotificacaoVisita";
 import { planejarDisparo, tetoMinimo, TETO_DIARIO_MAXIMO } from "../utils/agendamento";
+import { estadoConvite, EstadoConvite } from "../utils/statusNotificacaoVisita";
 
 /** Tenant do CRM que é a base Oficina Brasil inteira (CONV-08, CONV-12). */
 export const TENANT_OFICINA_BRASIL = 15;
@@ -64,6 +65,37 @@ export interface ResumoDisparo {
   jaDisparadas: number;
   porDia: { data: string; quantidade: number }[];
   ultimoDia: string | null;
+}
+
+/** Todos os estados do painel, na ordem em que a tela os mostra (CONV-41). */
+export const ESTADOS_CONVITE: readonly EstadoConvite[] = [
+  "nao_disparada",
+  "agendada",
+  "enviada",
+  "aceita",
+  "aceita_confirmacao_recente",
+  "aceita_convite_vinculado",
+  "aceita_importada",
+  "recusada",
+  "expirada",
+  "falhou",
+  "dispensada",
+  "aguardando",
+];
+export const MSG_ESTADO_INVALIDO = "Estado de convite inválido";
+
+export interface RotaComEstado {
+  ID_ROTA_PROMOTOR: number;
+  ID_CAMPANHA_PROMOTOR: number;
+  ID_OFICINA: number;
+  STATUS_ROTA: string | null;
+  oficinaNome: string | null;
+  promotorNome: string | null;
+  estado: EstadoConvite;
+  agendadaPara: Date | null;
+  enviadoEm: Date | null;
+  confirmadoEm: Date | null;
+  recusadoEm: Date | null;
 }
 
 export interface ResultadoCriarRotas {
@@ -676,6 +708,86 @@ export default class AdminDisparoService {
     }
 
     return { ...plano, pendentes, jaDisparadas, teto: tetoDiario };
+  }
+
+  /**
+   * Rotas da campanha com o estado do convite (CONV-41), filtradas por
+   * `estado` quando informado (CONV-42). `totaisPorEstado` conta sempre todas
+   * as rotas, com todos os estados presentes (zero incluso), para a tela
+   * mostrar os totais com qualquer filtro.
+   */
+  static async listarRotasComEstado(
+    idCampanha: number,
+    estado?: string,
+    agora: Date = new Date()
+  ): Promise<{ rotas: RotaComEstado[]; totaisPorEstado: Record<EstadoConvite, number> }> {
+    if (estado !== undefined && !(ESTADOS_CONVITE as readonly string[]).includes(estado)) {
+      throw new AdminDisparoErro(400, MSG_ESTADO_INVALIDO, { estados: ESTADOS_CONVITE });
+    }
+    await this.carregarCampanha(idCampanha);
+
+    const linhas: any[] = await AppDataSourceSync.query(
+      `SELECT rp."ID_ROTA_PROMOTOR", rp."ID_CAMPANHA_PROMOTOR", rp."ID_OFICINA",
+              rp."STATUS" AS "STATUS_ROTA",
+              o."NOME_FANTASIA" AS "oficinaNome",
+              p."NOME" AS "promotorNome",
+              nv."STATUS" AS "NV_STATUS",
+              nv."EXPIRA_EM" AS "NV_EXPIRA_EM",
+              nv."ORIGEM_ACEITE" AS "NV_ORIGEM_ACEITE",
+              nv."AVAILABLE_AT" AS "NV_AVAILABLE_AT",
+              nv."ENVIADO_EM" AS "NV_ENVIADO_EM",
+              nv."CONFIRMADO_EM" AS "NV_CONFIRMADO_EM",
+              nv."RECUSADO_EM" AS "NV_RECUSADO_EM"
+         FROM "CAMPANHAS_OB"."ROTA_PROMOTOR" rp
+         JOIN "CAMPANHAS_OB"."CAMPANHA_PROMOTOR" cp
+           ON cp."ID_CAMPANHA_PROMOTOR" = rp."ID_CAMPANHA_PROMOTOR"
+         LEFT JOIN "CAMPANHAS_OB"."PROMOTOR" p ON p."ID_PROMOTOR" = cp."ID_PROMOTOR"
+         LEFT JOIN "MAIN_REGISTER"."OFICINA" o ON o."ID_OFICINA" = rp."ID_OFICINA"
+         LEFT JOIN "CAMPANHAS_OB"."NOTIFICACAO_VISITA" nv
+           ON nv."ID_ROTA_PROMOTOR" = rp."ID_ROTA_PROMOTOR"
+        WHERE cp."ID_CAMPANHA" = $1
+          AND rp."DELETED_AT" IS NULL
+          AND cp."DELETED_AT" IS NULL
+        ORDER BY rp."ID_ROTA_PROMOTOR"`,
+      [idCampanha]
+    );
+
+    const totaisPorEstado = Object.fromEntries(ESTADOS_CONVITE.map((e) => [e, 0])) as Record<
+      EstadoConvite,
+      number
+    >;
+
+    const todas: RotaComEstado[] = linhas.map((l) => {
+      const estadoRota = estadoConvite(
+        l.NV_STATUS == null
+          ? null
+          : {
+              STATUS: l.NV_STATUS,
+              EXPIRA_EM: l.NV_EXPIRA_EM == null ? null : new Date(l.NV_EXPIRA_EM),
+              ORIGEM_ACEITE: l.NV_ORIGEM_ACEITE ?? null,
+            },
+        agora
+      );
+      totaisPorEstado[estadoRota] += 1;
+      return {
+        ID_ROTA_PROMOTOR: Number(l.ID_ROTA_PROMOTOR),
+        ID_CAMPANHA_PROMOTOR: Number(l.ID_CAMPANHA_PROMOTOR),
+        ID_OFICINA: Number(l.ID_OFICINA),
+        STATUS_ROTA: l.STATUS_ROTA ?? null,
+        oficinaNome: l.oficinaNome ?? null,
+        promotorNome: l.promotorNome ?? null,
+        estado: estadoRota,
+        agendadaPara: estadoRota === "agendada" ? l.NV_AVAILABLE_AT ?? null : null,
+        enviadoEm: l.NV_ENVIADO_EM ?? null,
+        confirmadoEm: l.NV_CONFIRMADO_EM ?? null,
+        recusadoEm: l.NV_RECUSADO_EM ?? null,
+      };
+    });
+
+    return {
+      rotas: estado === undefined ? todas : todas.filter((r) => r.estado === estado),
+      totaisPorEstado,
+    };
   }
 
   /** Campanha não excluída, ou 404. */

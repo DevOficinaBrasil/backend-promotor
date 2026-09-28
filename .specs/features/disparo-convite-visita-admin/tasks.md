@@ -973,8 +973,8 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] Cada estado aparece como no design; filtro por estado; totais sempre de todos os estados
-- [ ] Gate quick passa
+- [x] Cada estado aparece como no design; filtro por estado; totais sempre de todos os estados
+- [x] Gate quick passa
 
 **Tests**: unit
 **Gate**: quick
