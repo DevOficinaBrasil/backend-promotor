@@ -289,11 +289,11 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] `ENVIADO` não expirado em outra rota da mesma oficina → devolve o id de referência; a própria notificação é ignorada
-- [ ] `CONFIRMADO` com origem `REPARADOR` há menos de 3 meses → devolve o id; outras origens não contam
-- [ ] `enderecoRecente` sai do fluxo de guarda
-- [ ] SQL e filtros afirmados (L-004)
-- [ ] Gate quick passa
+- [x] `ENVIADO` não expirado em outra rota da mesma oficina → devolve o id de referência; a própria notificação é ignorada
+- [x] `CONFIRMADO` com origem `REPARADOR` há menos de 3 meses → devolve o id; outras origens não contam
+- [ ] `enderecoRecente` sai do fluxo de guarda (o fluxo vive em `despacharNotificacao`; sai em T8, junto com `avaliarGuardas`)
+- [x] SQL e filtros afirmados (L-004)
+- [x] Gate quick passa
 
 **Tests**: unit
 **Gate**: quick

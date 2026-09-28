@@ -320,12 +320,12 @@ A Oficina Brasil quer inverter isso:
 | CONV-22 | P1: Disparo - AC6 | Design | Pending |
 | CONV-23 | P1: Disparo - AC7 | Design | Pending |
 | CONV-24 | P1: Disparo - AC8 | Design | Pending |
-| CONV-25 | P1: Guardas - AC1 | Design | Pending |
-| CONV-26 | P1: Guardas - AC2 | Design | Pending |
+| CONV-25 | P1: Guardas - AC1 | Design | Implementing |
+| CONV-26 | P1: Guardas - AC2 | Design | Implementing |
 | CONV-27 | P1: Guardas - AC3 | Design | Pending |
 | CONV-28 | P1: Guardas - AC4 | Design | Pending |
 | CONV-29 | P1: Guardas - AC5 | Design | Pending |
-| CONV-30 | P1: Guardas - AC6, AC7 | Design | Pending |
+| CONV-30 | P1: Guardas - AC6, AC7 | Design | Implementing |
 | CONV-31 | P1: Visibilidade - AC1 | Design | Implementing |
 | CONV-32 | P1: Visibilidade - AC2, AC3 | Design | Implementing |
 | CONV-33 | P1: Visibilidade - AC4 | Design | Implementing |
