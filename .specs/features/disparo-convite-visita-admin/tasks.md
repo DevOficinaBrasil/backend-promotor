@@ -876,10 +876,10 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] Filtro ativo: `PUBLICADA`, sem `DELETED_AT`, dentro do período, `END_TIME` nulo = sem fim; `clienteNome` nulo sem slug ou sem comunidade
-- [ ] Promotores vinculados com raio e coordenadas; do cliente sem vínculo ativo
-- [ ] SQL afirmada; sem N+1
-- [ ] Gate quick passa
+- [x] Filtro ativo: `PUBLICADA`, sem `DELETED_AT`, dentro do período, `END_TIME` nulo = sem fim; `clienteNome` nulo sem slug ou sem comunidade
+- [x] Promotores vinculados com raio e coordenadas; do cliente sem vínculo ativo
+- [x] SQL afirmada; sem N+1
+- [x] Gate quick passa
 
 **Tests**: unit
 **Gate**: quick

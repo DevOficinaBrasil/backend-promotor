@@ -296,8 +296,8 @@ A Oficina Brasil quer inverter isso:
 
 | Requirement ID | Story | Phase | Status |
 | --- | --- | --- | --- |
-| CONV-01 | P1: Campanhas ativas - AC1, AC2 | Design | Pending |
-| CONV-02 | P1: Campanhas ativas - AC3, AC4 | Design | Pending |
+| CONV-01 | P1: Campanhas ativas - AC1, AC2 | Design | Implementing |
+| CONV-02 | P1: Campanhas ativas - AC3, AC4 | Design | Implementing |
 | CONV-03 | P1: Auth admin - AC1 | Design | Implementing |
 | CONV-04 | P1: Auth admin - AC2 | Design | Implementing |
 | CONV-05 | P1: Auth admin - AC3 | Design | Pending |
@@ -308,7 +308,7 @@ A Oficina Brasil quer inverter isso:
 | CONV-10 | P1: Segmentação - AC5 | Design | Pending |
 | CONV-11 | P1: Segmentação - AC6 | Design | Pending |
 | CONV-12 | P1: Segmentação - AC7 | Design | Pending |
-| CONV-13 | P1: Rotas - AC1 | Design | Pending |
+| CONV-13 | P1: Rotas - AC1 | Design | Implementing |
 | CONV-14 | P1: Rotas - AC2 | Design | Pending |
 | CONV-15 | P1: Rotas - AC3 | Design | Implementing |
 | CONV-16 | P1: Rotas - AC4, AC6 | Design | Pending |
