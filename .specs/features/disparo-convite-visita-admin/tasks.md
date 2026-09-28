@@ -449,6 +449,372 @@ T35
 
 ---
 
+### Phase 4: Endpoints de admin
+
+```
+T15 → T17
+T16
+T17 → T18
+T18 → T19
+T19 → T20
+T20 → T21
+```
+
+### Phase 5: ob-ads, base e lista
+
+```
+T22 → T23
+T23 → T25
+T24
+T25 → T26
+T27
+```
+
+### Phase 6: ob-ads, fluxo da campanha
+
+```
+T28 → T29
+T29 → T30
+T30 → T31
+```
+
+### Phase 7: jornal, recusa do reparador
+
+```
+T32 → T33
+T33 → T34
+```
+
+### Phase 8: Registro
+
+```
+T35
+```
+
+---
+
+## Task Breakdown
+
+### Phase 1: Fundação do backend (tasks)
+
+### T1: Migration de convite (status, colunas, CHKs, backfill)
+
+**What**: Script idempotente com `ROLLBACK:` que acrescenta `AGUARDANDO`/`RECUSADO`, as colunas `ORIGEM_ACEITE`, `ID_NOTIFICACAO_REFERENCIA`, `RECUSADO_EM/POR/IP` e `TELEFONE_ORIGEM`, os CHKs e o índice parcial, e faz os 3 backfills do design.
+**Where**: `backend-promotor/scripts/migration-convite-visita-admin.sql`
+**Depends on**: None
+**Reuses**: `scripts/migration-outbox-notificacao-visita.sql` (formato, cabeçalho, `IF NOT EXISTS`)
+**Requirement**: CONV-35, CONV-44, CONV-45, CONV-46
+
+**Tools**:
+- MCP: NONE
+- Skill: `anthropic-skills:dba-rules`
+
+**Done when**:
+- [x] Todo `ALTER`/`CREATE` é reexecutável sem erro
+- [x] Backfill 1: `CONFIRMADO` recebe `ORIGEM_ACEITE='REPARADOR'`, antes do CHK que o exige
+- [x] Backfills 2 e 3 só tocam rotas de oficina com `OFICINA_IMPORTADA` ativa no `EMPRESA_SLUG` da campanha, e deixam `CONFIRMADO`/`RECUSADO` como estão
+- [x] Sem `VARCHAR`, sem linha em branco nem `;` dentro de statement
+- [x] Não aplicado pelo agente
+
+**Tests**: none
+**Gate**: build
+**Commit**: `feat(db): migration de convite de visita com aceite, recusa e importadas`
+
+---
+
+### T2: Entity `NotificacaoVisita` com os status e colunas novos
+
+**What**: Acrescenta `AGUARDANDO` e `RECUSADO` ao enum e as colunas novas, com os tipos `OrigemAceite` e `TelefoneOrigem`.
+**Where**: `backend-promotor/entities/NotificacaoVisita.ts`
+**Depends on**: T1
+**Reuses**: Padrão de colunas da própria entity
+**Requirement**: CONV-35, CONV-44
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [x] Colunas e enums batem com a migration T1
+- [x] `npx tsc --noEmit` sem erros novos
+
+**Tests**: none
+**Gate**: build
+**Commit**: `feat(notificacao): status AGUARDANDO/RECUSADO e colunas de origem`
+
+---
+
+### T3: `ehCelular` e `resolverTelefone`
+
+**What**: Funções puras de fallback de telefone conforme o design.
+**Where**: `backend-promotor/utils/telefone.ts`
+**Depends on**: None
+**Reuses**: `normalizarTelefone`
+**Requirement**: CONV-43, CONV-44
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [x] `CELULAR` preenchido é usado em qualquer formato válido, como hoje; `CELULAR` inválido não cai para o fallback
+- [x] Sem `CELULAR`: ordem `USUARIO.TELEFONE` → `OFICINA.TELEFONE` → `ce.telefone`, só formato de celular; fixo é descartado
+- [x] `origem` e `idUsuario` corretos em cada fonte; sem usuário → `null`
+- [x] Gate quick passa
+
+**Tests**: unit
+**Gate**: quick
+**Commit**: `feat(telefone): fallback de telefone com formato de celular`
+
+---
+
+### T4: `horarioNoDia`, `planejarDisparo` e `tetoMinimo`
+
+**What**: Planejamento do disparo com teto diário a partir da janela do dia seguinte.
+**Where**: `backend-promotor/utils/agendamento.ts`
+**Depends on**: None
+**Reuses**: `proximoHorarioEnvio`, janela `NOTIFICACAO_HORA_ENVIO*`
+**Requirement**: CONV-21
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [x] `proximoHorarioEnvio(a,p,t)` é igual a `horarioNoDia(a,1,p,t)`; os testes antigos continuam verdes
+- [x] 25 itens com teto 10 dão 10/10/5 em três dias consecutivos a partir de amanhã, espaçados na janela
+- [x] Nenhum dia passa do teto; `tetoMinimo` devolve o menor teto que cabe até o fim, ou `null`
+- [x] Gate quick passa
+
+**Tests**: unit
+**Gate**: quick
+**Commit**: `feat(agendamento): planejar disparo com teto diário`
+
+---
+
+### T5: Regra "BACKLOG só se CONFIRMADO" e `estadoConvite`
+
+**What**: `rotaListavelParaPromotor` passa a mostrar a rota em `BACKLOG` só com `CONFIRMADO`; nova `estadoConvite` para o painel do admin.
+**Where**: `backend-promotor/utils/statusNotificacaoVisita.ts`
+**Depends on**: None
+**Reuses**: `statusEfetivo`
+**Requirement**: CONV-31, CONV-32, CONV-33, CONV-41
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [x] Rota em BACKLOG: sem notificação, PENDENTE, ENVIADO, EXPIRADO, FALHOU, DISPENSADO, RECUSADO, AGUARDANDO e valor desconhecido ficam ocultos; CONFIRMADO de qualquer origem aparece
+- [x] Rota fora de BACKLOG sempre aparece
+- [x] `estadoConvite` cobre os 12 estados do design
+- [x] Os testes de `filtro-rotas-por-confirmacao` que afirmavam DISPENSADO/FALHOU visíveis são atualizados para a regra nova, com o motivo (AD-003) registrado no teste
+- [x] Gate quick passa
+
+**Tests**: unit
+**Gate**: quick
+**Commit**: `feat(visibilidade): promotor só vê rota aceita`
+
+---
+
+### T6: `adminAuthMiddleware`
+
+**What**: Middleware que exige o JWT do backend-ob-ads com `user.IS_ADMIN`, verificado com `OBADS_JWT_SECRET` (documentado em `exemple.env`/`.env.example`).
+**Where**: `backend-promotor/middlewares/adminAuthMiddleware.ts`
+**Depends on**: None
+**Reuses**: Formato de erro de `middlewares/authMiddleware.ts`
+**Requirement**: CONV-03, CONV-04
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [x] Sem header → 401; token inválido ou expirado → 401; `IS_ADMIN` falso ou ausente → 403; `true`/`1` → `next()` com `req.admin`; segredo ausente → 500
+- [x] `SKIP_AUTH` não tem efeito
+- [x] Gate quick passa
+
+**Tests**: unit
+**Gate**: quick
+**Commit**: `feat(auth): middleware de admin com JWT do ob-ads`
+
+---
+
+### Phase 2: Fila e guardas (tasks)
+
+### T7: Guardas `convitePendenteDaOficina` e `confirmacaoRecente`
+
+**What**: Troca `avaliarGuardas` pelas duas guardas novas: convite em aberto por oficina e confirmação recente só de `REPARADOR`.
+**Where**: `backend-promotor/service/envioGuards.ts`
+**Depends on**: T2
+**Reuses**: `UPDATE` preguiçoso de expiração, `MESES_CONFIRMACAO_RECENTE`
+**Requirement**: CONV-25, CONV-26, CONV-30
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [x] `ENVIADO` não expirado em outra rota da mesma oficina → devolve o id de referência; a própria notificação é ignorada
+- [x] `CONFIRMADO` com origem `REPARADOR` há menos de 3 meses → devolve o id; outras origens não contam
+- [x] `enderecoRecente` sai do fluxo de guarda (o fluxo vive em `despacharNotificacao`; saiu em T8, junto com `avaliarGuardas`)
+- [x] SQL e filtros afirmados (L-004)
+- [x] Gate quick passa
+
+**Tests**: unit
+**Gate**: quick
+**Commit**: `feat(guardas): convite aberto por oficina e confirmação recente do reparador`
+
+---
+
+### T8: `despacharNotificacao` com a ordem nova de guardas e o fallback de telefone
+
+**What**: Aplica a ordem do design (sem endereço recente; AGUARDANDO; resolverTelefone; CONFIRMACAO_RECENTE; TELEFONE_ORIGEM).
+**Where**: `backend-promotor/service/notificacaoVisitaService.ts`
+**Depends on**: T7
+**Reuses**: `encerrarDispensado`, fluxo de envio atual
+**Requirement**: CONV-25, CONV-26, CONV-30, CONV-43, CONV-44
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [x] Oficina com `DATA_ALTERACAO` recente é enviada normalmente
+- [x] Convite aberto da oficina → `AGUARDANDO` com referência e `AVAILABLE_AT` nulo, sem chamar o canal
+- [x] Confirmação recente → `CONFIRMADO`/`CONFIRMACAO_RECENTE` com referência, sem chamar o canal
+- [x] Sem celular com telefone de oficina em formato de celular → envia e grava `TELEFONE_ORIGEM='OFICINA_TELEFONE'`
+- [x] Nenhuma fonte válida → `FALHOU` com o motivo de hoje
+- [x] Gate quick passa; os testes que já existiam foram atualizados, nenhum apagado sem substituto
+
+**Tests**: unit
+**Gate**: quick
+**Commit**: `feat(notificacao): guardas de aceite e telefone alternativo no despacho`
+
+---
+
+### T9: `registrarRotasCriadas`
+
+**What**: Ponto único pós-criação de rota: oficina importada → `CONFIRMADO`/`IMPORTADA`; demais → agenda se `agendar`.
+**Where**: `backend-promotor/service/notificacaoVisitaService.ts`
+**Depends on**: T8
+**Reuses**: `agendarVisitasEmLote`
+**Requirement**: CONV-15, CONV-45
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [x] Importada para o slug da campanha → um insert `CONFIRMADO` sem token, sem agendar
+- [x] Não importada com `agendar:true` → `agendarVisitasEmLote` com as rotas; com `agendar:false` → nada
+- [x] SQL da detecção de importada afirmada (join `OFICINA_IMPORTADA` por `ID_OFICINA` + `EMPRESA_SLUG`, `DELETED_AT IS NULL`)
+- [x] Gate quick passa
+
+**Tests**: unit
+**Gate**: quick
+**Commit**: `feat(notificacao): rota de oficina importada nasce aceita`
+
+---
+
+### T10: `createRotas` com `agendar` e `escolherPromotorMaisProximo`
+
+**What**: `createRotas` passa por `registrarRotasCriadas`; a regra do mais próximo é extraída como função pura, sem mudar o comportamento.
+**Where**: `backend-promotor/service/rotaService.ts`
+**Depends on**: T9
+**Reuses**: `rotaService.ts:1036-1042`, `:1163-1169`
+**Requirement**: CONV-15, CONV-18
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [x] Os chamadores que já existiam agendam como antes (`agendar` padrão `true`)
+- [x] `agendar:false` não enfileira
+- [x] `escolherPromotorMaisProximo`: dentro do raio, mais próximo, desempate por `ID_CAMPANHA_PROMOTOR`; fora do raio → `null`
+- [x] Os testes antigos de `rotaService` continuam verdes
+- [x] Gate quick passa
+
+**Tests**: unit
+**Gate**: quick
+**Commit**: `refactor(rota): createRotas com opção de agendar e regra do mais próximo extraída`
+
+---
+
+### T11: `liberarAguardando` no tick do outbox
+
+**What**: Reconciliação idempotente das `AGUARDANDO` antes do claim.
+**Where**: `backend-promotor/service/outboxNotificacaoService.ts`
+**Depends on**: T8
+**Reuses**: `horarioNoDia` (T4), estrutura do `tick`
+**Requirement**: CONV-27, CONV-28, CONV-29
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [x] Referência CONFIRMADO → CONFIRMADO/CONVITE_VINCULADO; RECUSADO → RECUSADO; EXPIRADO, FALHOU, DISPENSADO ou ENVIADO vencido → PENDENTE na próxima janela, com a referência limpa
+- [x] Roda antes do claim em cada tick; SQL afirmada
+- [x] Gate quick passa
+
+**Tests**: unit
+**Gate**: quick
+**Commit**: `feat(outbox): reconciliar notificações aguardando convite`
+
+---
+
+### Phase 3: Recusa e confirmação (tasks)
+
+### T12: `transicionar` genérico, `recusar` e `ALREADY_DECLINED`
+
+**What**: Confirmação e recusa atômicas com propagação para as AGUARDANDO; o estado recusado aparece em `trocarToken` e em `confirmar`.
+**Where**: `backend-promotor/service/visitaConfirmacaoService.ts`
+**Depends on**: T2
+**Reuses**: `transicionar`, `statusEfetivo`
+**Requirement**: CONV-27, CONV-28, CONV-35, CONV-36, CONV-37, CONV-38
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [x] Confirmar grava `ORIGEM_ACEITE='REPARADOR'` e propaga CONVITE_VINCULADO na mesma transação
+- [x] Recusar grava `RECUSADO_EM/POR/IP` e propaga RECUSADO
+- [x] Estado terminal → `ALREADY_CONFIRMED`/`ALREADY_DECLINED`; expirado → `EXPIRED`
+- [x] Gate quick passa
+
+**Tests**: unit
+**Gate**: quick
+**Commit**: `feat(visita): recusa atômica e propagação para convites aguardando`
+
+---
+
+### T13: Rota `POST /visita/recusar`
+
+**What**: Endpoint de recusa com `visitaAuthMiddleware` + `limitadorAcao` e o controller correspondente.
+**Where**: `backend-promotor/routes/VisitaRoute.ts`
+**Depends on**: T12
+**Reuses**: Rota `/confirmar`, `__tests__/integration/visitaConfirmar.test.ts`
+**Requirement**: CONV-37, CONV-40
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [x] 200 DECLINED, 409 (confirmado ou recusado), 410, 404 e 401 sem JWT, no formato de `/confirmar`
+- [x] Rate limit ativo (21ª chamada no minuto → 429)
+- [x] `GET /visita/:token` devolve `ALREADY_DECLINED`
+- [x] Gate full passa
+
+**Tests**: integration
+**Gate**: full
+**Commit**: `feat(visita): endpoint de recusa de visita`
+
+---
+
 ### T14: Contrato da página com a recusa
 
 **What**: Atualiza o contrato da página pública com `POST /visita/recusar` e o estado `ALREADY_DECLINED`.

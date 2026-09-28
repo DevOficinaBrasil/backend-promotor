@@ -334,7 +334,7 @@ A Oficina Brasil quer inverter isso:
 | CONV-36 | P1: Recusa - AC1 (atomicidade) | Design | Implementing |
 | CONV-37 | P1: Recusa - AC2, AC3 | Design | Implementing |
 | CONV-38 | P1: Recusa - AC4 | Design | Pending |
-| CONV-39 | P1: Recusa - AC6 | Design | Pending |
+| CONV-39 | P1: Recusa - AC6 | Design | Implementing |
 | CONV-40 | P1: Recusa - AC5 | Design | Implementing |
 | CONV-41 | P2: Acompanhar - AC1 | Design | Implementing |
 | CONV-42 | P2: Acompanhar - AC2 | Design | Pending |

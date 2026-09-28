@@ -4,6 +4,12 @@
 
 **Audience:** whichever agent/session builds the public confirmation page. This doc is meant to be enough on its own — you shouldn't need to read the backend source or the full `spec.md` to implement the page, only to understand *why* a rule exists.
 
+> **Changed on 2026-09-28 (feature `disparo-convite-visita-admin`, CONV-35 a CONV-40)** — the reparador can now **decline** the visit:
+> 1. **New endpoint: `POST /visita/recusar`** — same JWT, same auth and same rate limit as `POST /visita/confirmar`. No body.
+> 2. **New `GET /visita/{token}` state: `ALREADY_DECLINED`** (`200`, no JWT), carrying the inviting company and `recusadoEm`.
+> 3. **New `409` error code: `ALREADY_DECLINED`** on `POST /visita/confirmar`, `PUT /visita/endereco` and `POST /visita/recusar`.
+> 4. A declined workshop gets no new route or invitation in that campaign, so a declined link never becomes actionable again.
+>
 > **Changed from the previous revision** — if you read an earlier copy, three things moved:
 > 1. **`dataVisita` is gone.** No visit date is returned at all. There is no per-visit date anywhere in the schema, so the page must not claim one. (Removed field — do not render it.)
 > 2. **The page now shows the workshop's registered address**, and confirming means "the visit is acknowledged *and* this address is correct".
@@ -17,11 +23,12 @@ A reparador (workshop contact) taps a link inside a WhatsApp message. The link o
 
 1. Exchanges the link's token for a short-lived access token (JWT).
 2. Shows the workshop name and its **currently registered address**.
-3. Offers two mutually exclusive actions:
+3. Offers mutually exclusive actions:
    - **"Confirmar"** — the address is right, and they know about the visit.
    - **"Corrigir endereço"** — the address is wrong; they edit it and submit.
+   - **"Não quero receber a visita"** — they decline the visit (`POST /visita/recusar`).
 
-Either action ends in the same state: `CONFIRMED`. Correcting the address *also* confirms — the reparador never has to do both.
+Confirming and correcting end in the same state: `CONFIRMED`. Correcting the address *also* confirms — the reparador never has to do both. Declining ends in `DECLINED`, which is terminal just like `CONFIRMED`.
 
 No login screen, no account, no password. The link itself is the credential.
 
@@ -43,6 +50,8 @@ GET /visita/{linkToken}          ← no auth header needed here
       │
       ├─ 200 OK, já confirmado → render "Você já confirmou em {data}" + promotor + endereço
       │                          confirmado (no buttons, no JWT)
+      │
+      ├─ 200 OK, já recusado   → render the declined screen (no buttons, no JWT)
       │
       ├─ 410 Gone, expirado    → render "Este link expirou"
       │
@@ -66,6 +75,17 @@ Reparador picks ONE:
       ├─ 404          → the visit is no longer confirmable → render "Link inválido"
       └─ 401/403      → JWT expired mid-session (page open >30min) →
                          silently re-run the GET to get a fresh JWT, retry once
+
+  (c) taps "Não quero receber a visita", then "Sim, recusar" on the confirm step
+      │
+      ▼
+  POST /visita/recusar
+  Authorization: Bearer {jwt}
+  (no body)
+      │
+      ├─ 200 OK       → render the declined screen
+      ├─ 409 Conflict → already confirmed or already declined → re-run the GET, render its state
+      ├─ 410 / 404 / 401 / 403 / 429 → same handling as (a) and (b)
 ```
 
 ---
@@ -135,6 +155,21 @@ There is still **no JWT** here — nothing on this screen is actionable, and `en
 
 `empresaNome` is deliberately **not** returned on this branch. Ask if the confirmed screen needs it too.
 
+**Response `200` — already declined (no JWT, no actions):**
+```json
+{
+  "message": "Visita recusada.",
+  "data": {
+    "state": "ALREADY_DECLINED",
+    "empresaNome": "Bosch Brasil",
+    "empresaLogoUrl": "https://<bucket>/community/bosch/logo.png",
+    "recusadoEm": "2026-09-28T14:32:00.000Z"
+  }
+}
+```
+
+Like the expired screen, only the inviting company comes back: the declined screen names who will not visit, and nothing else. `empresaNome`, `empresaLogoUrl` and `recusadoEm` may each be `null`. A declined link stays `ALREADY_DECLINED` even after its `EXPIRA_EM` passes — declining is final.
+
 **Response `410` — link expired:**
 ```json
 { "message": "Este link expirou.", "error": "EXPIRED" }
@@ -158,6 +193,44 @@ Confirms the visit **and** that the displayed address is correct. Use when the r
   "data": { "state": "CONFIRMED", "confirmadoEm": "2026-08-09T14:32:00.000Z" }
 }
 ```
+
+### `POST /visita/recusar`
+
+Declines the visit. Same guard as `POST /visita/confirmar`: `visitaAuthMiddleware` plus the per-visit rate limit (20/minute, keyed on the JWT's `ID_NOTIFICACAO_VISITA`).
+
+**Header:** `Authorization: Bearer {jwt}`. No request body.
+
+**Response `200`:**
+```json
+{
+  "message": "Visita recusada.",
+  "data": { "state": "DECLINED", "recusadoEm": "2026-09-28T14:32:00.000Z" }
+}
+```
+
+**Response `409` — already confirmed:**
+```json
+{ "message": "Visita já confirmada.", "error": "ALREADY_CONFIRMED" }
+```
+
+**Response `409` — already declined (double-tap, two tabs):**
+```json
+{ "message": "Visita já recusada.", "error": "ALREADY_DECLINED" }
+```
+
+**Response `410` / `404` / `401` / `403` / `429`** — identical bodies to `POST /visita/confirmar`:
+```json
+{ "message": "Este link expirou.", "error": "EXPIRED" }
+{ "message": "Link inválido.", "error": "TOKEN_INVALID" }
+{ "message": "Muitas tentativas. Aguarde um minuto.", "error": "RATE_LIMITED" }
+```
+
+**Response `500`:**
+```json
+{ "message": "Erro interno ao recusar a visita.", "error": "INTERNAL_ERROR" }
+```
+
+The transition is atomic (`ENVIADO → RECUSADO` in one guarded statement), so two concurrent declines produce one `200` and one `409 ALREADY_DECLINED`, and a decline racing a confirm produces exactly one winner.
 
 ### `PUT /visita/endereco`
 
@@ -216,26 +289,30 @@ This is the whole contract, pinned in `spec.md` under "HTTP status codes (normat
 
 | Endpoint | Status | `error` | Meaning |
 | --- | --- | --- | --- |
-| `GET /visita/{token}` | `200` | - | `PENDING` or `ALREADY_CONFIRMED` (read `data.state`) |
+| `GET /visita/{token}` | `200` | - | `PENDING`, `ALREADY_CONFIRMED` or `ALREADY_DECLINED` (read `data.state`) |
 | `GET /visita/{token}` | `404` | `TOKEN_INVALID` | Malformed or unrecognized token |
 | `GET /visita/{token}` | `410` | `EXPIRED` | Link past its 7-day window |
 | `POST /visita/confirmar` | `200` | - | `CONFIRMED` |
 | `PUT /visita/endereco` | `200` | - | `CONFIRMED`, `enderecoAtualizado: true` |
+| `POST /visita/recusar` | `200` | - | `DECLINED` |
 | `PUT /visita/endereco` | `400` | `Validation Error` (route schema) or `VALIDATION_ERROR` (service) | Non-allowlisted or invalid field; nothing written. Both shapes carry `details[]`; treat either as the same state |
-| `POST` / `PUT` | `404` | `TOKEN_INVALID` | Visit no longer confirmable |
+| `POST` / `PUT` | `404` | `TOKEN_INVALID` | Visit no longer confirmable (or declinable) |
 | `POST` / `PUT` | `409` | `ALREADY_CONFIRMED` | Confirmed already, elsewhere or in another tab |
+| `POST` / `PUT` | `409` | `ALREADY_DECLINED` | Declined already, elsewhere or in another tab |
 | `POST` / `PUT` | `410` | `EXPIRED` | Link expired before the action landed |
 | `POST` / `PUT` | `401` | `TOKEN_INVALID` | No `Authorization: Bearer <jwt>` header |
 | `POST` / `PUT` | `403` | `TOKEN_INVALID` | JWT invalid, expired, or wrong scope |
 | `PUT /visita/endereco` | `500` | `ADDRESS_UPDATE_FAILED` | Registry write failed; **no** confirmation recorded |
-| All three | `429` | `RATE_LIMITED` | 20 requests/minute per visit exceeded |
-| All three | `500` | *(error message)* | Unexpected server error |
+| All four | `429` | `RATE_LIMITED` | 20 requests/minute per visit exceeded |
+| All four | `500` | *(error message)* | Unexpected server error |
+
+"`POST`" in the rows above covers both `POST /visita/confirmar` and `POST /visita/recusar`.
 
 ### Shared error responses (`POST` and `PUT`)
 
-**`401`/`403`** — JWT missing, expired, malformed, or wrong scope. Re-run `GET /visita/{token}` for a fresh JWT and retry **once**. If the visit now reports `ALREADY_CONFIRMED` or `EXPIRED`, render that instead of retrying again.
+**`401`/`403`** — JWT missing, expired, malformed, or wrong scope. Re-run `GET /visita/{token}` for a fresh JWT and retry **once**. If the visit now reports `ALREADY_CONFIRMED`, `ALREADY_DECLINED` or `EXPIRED`, render that instead of retrying again.
 
-**`409`** — already confirmed (double-tap, two tabs, or two devices). Treat identically to `ALREADY_CONFIRMED`.
+**`409`** — already confirmed or already declined (double-tap, two tabs, or two devices). Branch on `error`: `ALREADY_CONFIRMED` renders the already-confirmed state, `ALREADY_DECLINED` the declined state. The `409` body carries neither the company nor the dates, so re-run the `GET` to populate either screen.
 
 **`500`** — unexpected server error. For `PUT` specifically, a `500` may mean the address write itself failed; the backend guarantees it does **not** report a confirmation in that case, so treat it as "nothing happened" and let the user retry.
 
@@ -250,6 +327,9 @@ This is the whole contract, pinned in `spec.md` under "HTTP status codes (normat
 | `EDITING` | User tapped "Corrigir endereço" | Editable form of the 7 fields, "Salvar" / "Cancelar" |
 | `CONFIRMED` | `POST` or `PUT` succeeds | Success message, no further action |
 | `ALREADY_CONFIRMED` | `GET`/`POST`/`PUT` reports it | "Você já confirmou em {data}" + promotor + endereço confirmado — no actions. Only the `GET` carries `promotorNome`/`endereco`; the `409` from `POST`/`PUT` does not, so re-run the `GET` to populate that screen |
+| `CONFIRMING_DECLINE` | User tapped "Não quero receber a visita" | "Recusar a visita da {empresaNome}?" with **"Sim, recusar"** (calls `POST /visita/recusar`) and **"Voltar"** (back to `PENDING`, no request) |
+| `DECLINED` | `POST /visita/recusar` succeeds | "Visita recusada. Tudo certo — a {empresaNome} não fará esta visita." — no actions |
+| `ALREADY_DECLINED` | `GET` reports it, or any action returns `409 ALREADY_DECLINED` | Same declined screen as `DECLINED` — no actions |
 | `EXPIRED` | `GET`/`POST`/`PUT` returns `410` | "Este link expirou" — no actions, no retry |
 | `TOKEN_INVALID` | `GET`/`POST`/`PUT` returns `404` | "Link inválido" — no actions |
 | `VALIDATION_ERROR` | `PUT` returns `400` | Stay in `EDITING`, mark the offending field |
