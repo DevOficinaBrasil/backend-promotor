@@ -215,10 +215,10 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] `proximoHorarioEnvio(a,p,t)` é igual a `horarioNoDia(a,1,p,t)`; os testes antigos continuam verdes
-- [ ] 25 itens com teto 10 dão 10/10/5 em três dias consecutivos a partir de amanhã, espaçados na janela
-- [ ] Nenhum dia passa do teto; `tetoMinimo` devolve o menor teto que cabe até o fim, ou `null`
-- [ ] Gate quick passa
+- [x] `proximoHorarioEnvio(a,p,t)` é igual a `horarioNoDia(a,1,p,t)`; os testes antigos continuam verdes
+- [x] 25 itens com teto 10 dão 10/10/5 em três dias consecutivos a partir de amanhã, espaçados na janela
+- [x] Nenhum dia passa do teto; `tetoMinimo` devolve o menor teto que cabe até o fim, ou `null`
+- [x] Gate quick passa
 
 **Tests**: unit
 **Gate**: quick
