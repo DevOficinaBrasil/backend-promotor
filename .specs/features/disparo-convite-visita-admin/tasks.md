@@ -1021,8 +1021,8 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] Token anexado quando existe; ausente sem erro (SSR sem `window`)
-- [ ] `npx tsc --noEmit` sem erros novos
+- [x] Token anexado quando existe; ausente sem erro (SSR sem `window`)
+- [x] `npx tsc --noEmit` sem erros novos
 
 **Tests**: none
 **Gate**: build
