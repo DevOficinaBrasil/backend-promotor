@@ -191,10 +191,10 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] `CELULAR` preenchido é usado em qualquer formato válido, como hoje; `CELULAR` inválido não cai para o fallback
-- [ ] Sem `CELULAR`: ordem `USUARIO.TELEFONE` → `OFICINA.TELEFONE` → `ce.telefone`, só formato de celular; fixo é descartado
-- [ ] `origem` e `idUsuario` corretos em cada fonte; sem usuário → `null`
-- [ ] Gate quick passa
+- [x] `CELULAR` preenchido é usado em qualquer formato válido, como hoje; `CELULAR` inválido não cai para o fallback
+- [x] Sem `CELULAR`: ordem `USUARIO.TELEFONE` → `OFICINA.TELEFONE` → `ce.telefone`, só formato de celular; fixo é descartado
+- [x] `origem` e `idUsuario` corretos em cada fonte; sem usuário → `null`
+- [x] Gate quick passa
 
 **Tests**: unit
 **Gate**: quick

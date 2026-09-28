@@ -338,7 +338,7 @@ A Oficina Brasil quer inverter isso:
 | CONV-40 | P1: Recusa - AC5 | Design | Pending |
 | CONV-41 | P2: Acompanhar - AC1 | Design | Pending |
 | CONV-42 | P2: Acompanhar - AC2 | Design | Pending |
-| CONV-43 | P1: Telefone/importada - AC1, AC3 | Design | Pending |
+| CONV-43 | P1: Telefone/importada - AC1, AC3 | Design | Implementing |
 | CONV-44 | P1: Telefone/importada - AC2 | Design | Implementing |
 | CONV-45 | P1: Telefone/importada - AC4 | Design | Implementing |
 | CONV-46 | P1: Telefone/importada - AC5 | Design | Implementing |
