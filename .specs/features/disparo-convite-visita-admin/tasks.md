@@ -144,11 +144,11 @@ T35
 - Skill: `anthropic-skills:dba-rules`
 
 **Done when**:
-- [ ] Todo `ALTER`/`CREATE` é reexecutável sem erro
-- [ ] Backfill 1: `CONFIRMADO` recebe `ORIGEM_ACEITE='REPARADOR'`, antes do CHK que o exige
-- [ ] Backfills 2 e 3 só tocam rotas de oficina com `OFICINA_IMPORTADA` ativa no `EMPRESA_SLUG` da campanha, e deixam `CONFIRMADO`/`RECUSADO` como estão
-- [ ] Sem `VARCHAR`, sem linha em branco nem `;` dentro de statement
-- [ ] Não aplicado pelo agente
+- [x] Todo `ALTER`/`CREATE` é reexecutável sem erro
+- [x] Backfill 1: `CONFIRMADO` recebe `ORIGEM_ACEITE='REPARADOR'`, antes do CHK que o exige
+- [x] Backfills 2 e 3 só tocam rotas de oficina com `OFICINA_IMPORTADA` ativa no `EMPRESA_SLUG` da campanha, e deixam `CONFIRMADO`/`RECUSADO` como estão
+- [x] Sem `VARCHAR`, sem linha em branco nem `;` dentro de statement
+- [x] Não aplicado pelo agente
 
 **Tests**: none
 **Gate**: build

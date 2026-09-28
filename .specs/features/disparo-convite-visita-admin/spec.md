@@ -330,7 +330,7 @@ A Oficina Brasil quer inverter isso:
 | CONV-32 | P1: Visibilidade - AC2, AC3 | Design | Pending |
 | CONV-33 | P1: Visibilidade - AC4 | Design | Pending |
 | CONV-34 | P1: Visibilidade - AC5 | Design | Pending |
-| CONV-35 | P1: Recusa - AC1 | Design | Pending |
+| CONV-35 | P1: Recusa - AC1 | Design | Implementing |
 | CONV-36 | P1: Recusa - AC1 (atomicidade) | Design | Pending |
 | CONV-37 | P1: Recusa - AC2, AC3 | Design | Pending |
 | CONV-38 | P1: Recusa - AC4 | Design | Pending |
@@ -339,9 +339,9 @@ A Oficina Brasil quer inverter isso:
 | CONV-41 | P2: Acompanhar - AC1 | Design | Pending |
 | CONV-42 | P2: Acompanhar - AC2 | Design | Pending |
 | CONV-43 | P1: Telefone/importada - AC1, AC3 | Design | Pending |
-| CONV-44 | P1: Telefone/importada - AC2 | Design | Pending |
-| CONV-45 | P1: Telefone/importada - AC4 | Design | Pending |
-| CONV-46 | P1: Telefone/importada - AC5 | Design | Pending |
+| CONV-44 | P1: Telefone/importada - AC2 | Design | Implementing |
+| CONV-45 | P1: Telefone/importada - AC4 | Design | Implementing |
+| CONV-46 | P1: Telefone/importada - AC5 | Design | Implementing |
 | CONV-47 | P1: Telefone/importada - AC6 | Design | Pending |
 
 **Coverage:** 47 total, 0 mapped to tasks, 47 unmapped ⚠️ (Tasks phase pending)
