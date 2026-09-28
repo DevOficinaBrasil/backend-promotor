@@ -364,11 +364,11 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] Os chamadores que já existiam agendam como antes (`agendar` padrão `true`)
-- [ ] `agendar:false` não enfileira
-- [ ] `escolherPromotorMaisProximo`: dentro do raio, mais próximo, desempate por `ID_CAMPANHA_PROMOTOR`; fora do raio → `null`
-- [ ] Os testes antigos de `rotaService` continuam verdes
-- [ ] Gate quick passa
+- [x] Os chamadores que já existiam agendam como antes (`agendar` padrão `true`)
+- [x] `agendar:false` não enfileira
+- [x] `escolherPromotorMaisProximo`: dentro do raio, mais próximo, desempate por `ID_CAMPANHA_PROMOTOR`; fora do raio → `null`
+- [x] Os testes antigos de `rotaService` continuam verdes
+- [x] Gate quick passa
 
 **Tests**: unit
 **Gate**: quick
