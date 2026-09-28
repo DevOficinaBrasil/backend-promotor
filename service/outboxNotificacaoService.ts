@@ -156,8 +156,8 @@ export type AcaoFila =
  * permite o sistema de entrega compartilhado assumir o agendamento depois sem
  * herdar a política daqui.
  *
- * `DISPENSADO` e `FALHOU_TERMINAL` já foram persistidos pelo despacho, então
- * para a fila os dois são só "acabou, solta o lease".
+ * `DISPENSADO`, `FALHOU_TERMINAL`, `AGUARDANDO` e `ACEITO` já foram persistidos
+ * pelo despacho, então para a fila todos são só "acabou, solta o lease".
  */
 export function acaoDaFila(desfecho: DesfechoDespacho, tentativas: number): AcaoFila {
   if (desfecho.desfecho === "ENVIADO") {
@@ -168,7 +168,12 @@ export function acaoDaFila(desfecho: DesfechoDespacho, tentativas: number): Acao
     };
   }
 
-  if (desfecho.desfecho === "DISPENSADO" || desfecho.desfecho === "FALHOU_TERMINAL") {
+  if (
+    desfecho.desfecho === "DISPENSADO" ||
+    desfecho.desfecho === "FALHOU_TERMINAL" ||
+    desfecho.desfecho === "AGUARDANDO" ||
+    desfecho.desfecho === "ACEITO"
+  ) {
     return { acao: "CONCLUIDO" };
   }
 

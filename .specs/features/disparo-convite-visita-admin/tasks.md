@@ -291,7 +291,7 @@ T35
 **Done when**:
 - [x] `ENVIADO` não expirado em outra rota da mesma oficina → devolve o id de referência; a própria notificação é ignorada
 - [x] `CONFIRMADO` com origem `REPARADOR` há menos de 3 meses → devolve o id; outras origens não contam
-- [ ] `enderecoRecente` sai do fluxo de guarda (o fluxo vive em `despacharNotificacao`; sai em T8, junto com `avaliarGuardas`)
+- [x] `enderecoRecente` sai do fluxo de guarda (o fluxo vive em `despacharNotificacao`; saiu em T8, junto com `avaliarGuardas`)
 - [x] SQL e filtros afirmados (L-004)
 - [x] Gate quick passa
 
@@ -314,12 +314,12 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] Oficina com `DATA_ALTERACAO` recente é enviada normalmente
-- [ ] Convite aberto da oficina → `AGUARDANDO` com referência e `AVAILABLE_AT` nulo, sem chamar o canal
-- [ ] Confirmação recente → `CONFIRMADO`/`CONFIRMACAO_RECENTE` com referência, sem chamar o canal
-- [ ] Sem celular com telefone de oficina em formato de celular → envia e grava `TELEFONE_ORIGEM='OFICINA_TELEFONE'`
-- [ ] Nenhuma fonte válida → `FALHOU` com o motivo de hoje
-- [ ] Gate quick passa; os testes que já existiam foram atualizados, nenhum apagado sem substituto
+- [x] Oficina com `DATA_ALTERACAO` recente é enviada normalmente
+- [x] Convite aberto da oficina → `AGUARDANDO` com referência e `AVAILABLE_AT` nulo, sem chamar o canal
+- [x] Confirmação recente → `CONFIRMADO`/`CONFIRMACAO_RECENTE` com referência, sem chamar o canal
+- [x] Sem celular com telefone de oficina em formato de celular → envia e grava `TELEFONE_ORIGEM='OFICINA_TELEFONE'`
+- [x] Nenhuma fonte válida → `FALHOU` com o motivo de hoje
+- [x] Gate quick passa; os testes que já existiam foram atualizados, nenhum apagado sem substituto
 
 **Tests**: unit
 **Gate**: quick
