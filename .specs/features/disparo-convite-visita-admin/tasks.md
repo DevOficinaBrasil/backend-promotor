@@ -414,10 +414,10 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] Confirmar grava `ORIGEM_ACEITE='REPARADOR'` e propaga CONVITE_VINCULADO na mesma transação
-- [ ] Recusar grava `RECUSADO_EM/POR/IP` e propaga RECUSADO
-- [ ] Estado terminal → `ALREADY_CONFIRMED`/`ALREADY_DECLINED`; expirado → `EXPIRED`
-- [ ] Gate quick passa
+- [x] Confirmar grava `ORIGEM_ACEITE='REPARADOR'` e propaga CONVITE_VINCULADO na mesma transação
+- [x] Recusar grava `RECUSADO_EM/POR/IP` e propaga RECUSADO
+- [x] Estado terminal → `ALREADY_CONFIRMED`/`ALREADY_DECLINED`; expirado → `EXPIRED`
+- [x] Gate quick passa
 
 **Tests**: unit
 **Gate**: quick

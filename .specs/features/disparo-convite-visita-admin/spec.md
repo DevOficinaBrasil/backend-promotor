@@ -331,8 +331,8 @@ A Oficina Brasil quer inverter isso:
 | CONV-33 | P1: Visibilidade - AC4 | Design | Implementing |
 | CONV-34 | P1: Visibilidade - AC5 | Design | Pending |
 | CONV-35 | P1: Recusa - AC1 | Design | Implementing |
-| CONV-36 | P1: Recusa - AC1 (atomicidade) | Design | Pending |
-| CONV-37 | P1: Recusa - AC2, AC3 | Design | Pending |
+| CONV-36 | P1: Recusa - AC1 (atomicidade) | Design | Implementing |
+| CONV-37 | P1: Recusa - AC2, AC3 | Design | Implementing |
 | CONV-38 | P1: Recusa - AC4 | Design | Pending |
 | CONV-39 | P1: Recusa - AC6 | Design | Pending |
 | CONV-40 | P1: Recusa - AC5 | Design | Pending |
