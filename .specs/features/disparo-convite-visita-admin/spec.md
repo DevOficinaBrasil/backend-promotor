@@ -298,8 +298,8 @@ A Oficina Brasil quer inverter isso:
 | --- | --- | --- | --- |
 | CONV-01 | P1: Campanhas ativas - AC1, AC2 | Design | Pending |
 | CONV-02 | P1: Campanhas ativas - AC3, AC4 | Design | Pending |
-| CONV-03 | P1: Auth admin - AC1 | Design | Pending |
-| CONV-04 | P1: Auth admin - AC2 | Design | Pending |
+| CONV-03 | P1: Auth admin - AC1 | Design | Implementing |
+| CONV-04 | P1: Auth admin - AC2 | Design | Implementing |
 | CONV-05 | P1: Auth admin - AC3 | Design | Pending |
 | CONV-06 | P1: Segmentação - AC1 | Design | Pending |
 | CONV-07 | P1: Segmentação - AC2 | Design | Pending |

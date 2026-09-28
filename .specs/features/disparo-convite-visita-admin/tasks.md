@@ -264,9 +264,9 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] Sem header → 401; token inválido ou expirado → 401; `IS_ADMIN` falso ou ausente → 403; `true`/`1` → `next()` com `req.admin`; segredo ausente → 500
-- [ ] `SKIP_AUTH` não tem efeito
-- [ ] Gate quick passa
+- [x] Sem header → 401; token inválido ou expirado → 401; `IS_ADMIN` falso ou ausente → 403; `true`/`1` → `next()` com `req.admin`; segredo ausente → 500
+- [x] `SKIP_AUTH` não tem efeito
+- [x] Gate quick passa
 
 **Tests**: unit
 **Gate**: quick
