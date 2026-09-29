@@ -1322,6 +1322,31 @@ T35
 
 ---
 
+### T36: Rota CANCELADA não conta como "já em rota" no admin
+
+**What**: `situacaoDasOficinas` (join LATERAL de rota) e `listarRotasComEstado` passam a ignorar rotas com `STATUS='CANCELADO'`, além de `DELETED_AT`. Assim a oficina volta a poder entrar em rota depois de `DELETE /rota/:id`, e os totais por estado deixam de contar rotas canceladas. Achado no lote 5 (UAT).
+**Where**: `backend-promotor/service/adminDisparoService.ts`
+**Depends on**: None
+**Reuses**: SQL de T18/T20
+**Requirement**: CONV-16, CONV-42
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [ ] Oficina cuja única rota na campanha está `CANCELADO` é aceita em `criarRotas` (sem 409)
+- [ ] `listarRotasComEstado` não devolve nem conta rotas `CANCELADO`
+- [ ] Recusa em rota cancelada continua bloqueando (CONV-38)
+- [ ] SQL afirmada (L-004); gate quick passa
+
+**Tests**: unit
+**Gate**: quick
+**Commit**: `fix(admin): ignorar rota cancelada ao checar oficina já em rota`
+
+
+---
+
 ## Phase Execution Map
 
 Fases em sequência (Phase 1 → 8). Cadeias dentro de cada fase:
