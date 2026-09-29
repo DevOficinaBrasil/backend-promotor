@@ -1245,8 +1245,8 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] Bearer enviado; erros no mesmo formato
-- [ ] Testes em `service/__tests__/visitaService.test.ts` passam
+- [x] Bearer enviado; erros no mesmo formato
+- [x] Testes em `service/__tests__/visitaService.test.ts` passam
 
 **Tests**: unit
 **Gate**: build
