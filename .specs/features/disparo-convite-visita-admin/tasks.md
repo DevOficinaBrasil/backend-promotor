@@ -1313,8 +1313,8 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] Duas entradas com Decision/Reason/Trade-off/Scope/Date/Status
-- [ ] Gate build passa
+- [x] Duas entradas com Decision/Reason/Trade-off/Scope/Date/Status
+- [x] Gate build passa
 
 **Tests**: none
 **Gate**: build
