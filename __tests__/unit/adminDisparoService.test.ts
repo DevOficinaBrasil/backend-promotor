@@ -53,7 +53,7 @@ describe("AdminDisparoService.listarCampanhasAtivas", () => {
       'FROM "CAMPANHAS_OB"."CAMPANHA_PROMOTOR" cp WHERE cp."ID_CAMPANHA" = c."ID_CAMPANHA" AND cp."DELETED_AT" IS NULL) AS "totalPromotores"'
     );
     expect(s).toContain(
-      'JOIN "CAMPANHAS_OB"."CAMPANHA_PROMOTOR" cp_r ON cp_r."ID_CAMPANHA_PROMOTOR" = rp."ID_CAMPANHA_PROMOTOR" WHERE cp_r."ID_CAMPANHA" = c."ID_CAMPANHA" AND cp_r."DELETED_AT" IS NULL AND rp."DELETED_AT" IS NULL) AS "totalRotas"'
+      `JOIN "CAMPANHAS_OB"."CAMPANHA_PROMOTOR" cp_r ON cp_r."ID_CAMPANHA_PROMOTOR" = rp."ID_CAMPANHA_PROMOTOR" WHERE cp_r."ID_CAMPANHA" = c."ID_CAMPANHA" AND cp_r."DELETED_AT" IS NULL AND rp."DELETED_AT" IS NULL AND rp."STATUS" IS DISTINCT FROM 'CANCELADO') AS "totalRotas"`
     );
   });
 

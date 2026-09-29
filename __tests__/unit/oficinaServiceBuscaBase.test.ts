@@ -80,7 +80,7 @@ describe("OficinaService.buscarOficinasBase", () => {
       "WHERE rp_rec.\"ID_OFICINA\" = o.\"ID_OFICINA\" AND cp_rec.\"ID_CAMPANHA\" = $1 AND nv_rec.\"STATUS\" = 'RECUSADO' ) AS \"RECUSOU_NESTA_CAMPANHA\""
     );
     expect(s).toContain(
-      'WHERE rp."ID_OFICINA" = o."ID_OFICINA" AND cp."ID_CAMPANHA" = $1 AND rp."DELETED_AT" IS NULL AND cp."DELETED_AT" IS NULL'
+      `WHERE rp."ID_OFICINA" = o."ID_OFICINA" AND cp."ID_CAMPANHA" = $1 AND rp."DELETED_AT" IS NULL AND rp."STATUS" IS DISTINCT FROM 'CANCELADO' AND cp."DELETED_AT" IS NULL`
     );
     expect(s).toContain(') rota ON TRUE');
     expect(s).toContain('rota."NV_STATUS" AS "ROTA_NV_STATUS"');

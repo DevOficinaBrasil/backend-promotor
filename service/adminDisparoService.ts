@@ -191,7 +191,8 @@ export default class AdminDisparoService {
                    ON cp_r."ID_CAMPANHA_PROMOTOR" = rp."ID_CAMPANHA_PROMOTOR"
                 WHERE cp_r."ID_CAMPANHA" = c."ID_CAMPANHA"
                   AND cp_r."DELETED_AT" IS NULL
-                  AND rp."DELETED_AT" IS NULL) AS "totalRotas"
+                  AND rp."DELETED_AT" IS NULL
+                  AND rp."STATUS" IS DISTINCT FROM '${StatusRota.CANCELADO}') AS "totalRotas"
          FROM "CAMPANHAS_OB"."CAMPANHA" c
          LEFT JOIN LATERAL (
            SELECT com."Nome"

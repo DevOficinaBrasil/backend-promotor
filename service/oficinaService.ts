@@ -5,6 +5,7 @@ import { ligacaoCadastroEmpresa } from "../utils/sqlCadastroEmpresa";
 import { resolverTelefone, CandidatoUsuarioTelefone } from "../utils/telefone";
 import { estadoConvite, EstadoConvite } from "../utils/statusNotificacaoVisita";
 import { StatusNotificacaoVisita } from "../entities/NotificacaoVisita";
+import { StatusRota } from "../entities/RotaPromotor";
 import { FiltrosBusca, sqlFiltrosBusca, sqlTextoNormalizado } from "../utils/filtroBuscaOficina";
 
 // Earth's radius in kilometers (used for Haversine formula)
@@ -722,6 +723,7 @@ export default class OficinaService {
            WHERE rp."ID_OFICINA" = o."ID_OFICINA"
              AND cp."ID_CAMPANHA" = $1
              AND rp."DELETED_AT" IS NULL
+             AND rp."STATUS" IS DISTINCT FROM '${StatusRota.CANCELADO}'
              AND cp."DELETED_AT" IS NULL
            ORDER BY rp."ID_ROTA_PROMOTOR" DESC
            LIMIT 1

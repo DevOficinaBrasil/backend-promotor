@@ -1470,6 +1470,28 @@ T35
 
 ---
 
+### T47: Rota cancelada fora do `rotaAtual` da busca e da contagem de rotas
+
+**What**: O `LATERAL` de `rotaAtual` em `buscarOficinasBase` e o `totalRotas` de `listarCampanhasAtivas` passam a ignorar `STATUS='CANCELADO'`, como `criarRotas` já faz desde o T36. Achado no relatório do lote 7.
+**Where**: `backend-promotor/service/oficinaService.ts`
+**Depends on**: T41
+**Reuses**: `StatusRota.CANCELADO`
+**Requirement**: CONV-09, CONV-16
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [x] SQL do `rotaAtual` e do `totalRotas` exclui `CANCELADO` (asserções L-004 atualizadas, vermelhas antes do conserto)
+- [x] Gate quick passa
+
+**Tests**: unit
+**Gate**: quick
+**Commit**: `fix(admin): rota cancelada fora do rotaAtual e da contagem de rotas`
+
+---
+
 ### Phase 10: Busca por WHERE, ob-ads (revisão 2026-09-29) (tasks)
 
 ---
@@ -1600,6 +1622,7 @@ T22 → T23 → T25 → T26
 T28 → T29 → T30 → T31
 T32 → T33 → T34
 T37 → T38 → T39 → T40 → T41
+T41 → T47
 T42 → T44
 T43 → T44
 T44 → T46
