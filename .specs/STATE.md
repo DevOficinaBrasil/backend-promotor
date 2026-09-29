@@ -28,11 +28,26 @@
 
 ## Handoff
 
-- **Feature**: importador-oficinas (`.specs/features/importador-oficinas/`) — **DONE**
-- **Phase / Task**: Specify + Design + Tasks + Execute + Verify todos concluídos. 13 tasks implementadas (13 commits) + 3 iterações de fix→re-verify (10 commits adicionais) até o Verifier independente retornar **PASS** na iteração 3/3. `validate_state.py` confirma o gate de conclusão.
-- **Completed**: Specify, Design, Tasks, Execute, Verify (PASS)
-- **In-progress**: nada — branch pronta para revisão humana/PR
-- **Next step**: Revisão humana da branch `feat/importador-oficinas` (23 commits sobre `main`) e, quando aprovada, `git push` + abertura de PR (não feito nesta sessão — push/PR exigem autorização explícita separada). Antes do deploy: aplicar `scripts/migration-oficina-importada.sql` manualmente (DBA) e validar o `UNION ALL` das 3 queries de comunidade contra um Postgres real (nunca executado nesta sessão, por restrição explícita) — ver `validation.md`, observação O6.
-- **Blockers**: nenhum
-- **Uncommitted files**: nenhum — árvore de trabalho limpa em `fe34a96`
-- **Branch**: feat/importador-oficinas
+- **Feature**: disparo-convite-visita-admin (`.specs/features/disparo-convite-visita-admin/`), **DONE**
+- **Phase / Task**: Specify, Design, Tasks, Execute e Verify concluídos. As 36 tasks estão commitadas nos três repos. O Verifier deu **PASS**: 47/47 requisitos com evidência e 22/22 mutantes mortos. `validate_state.py` terminou com exit 0.
+- **Completed**: tudo. Depois do Verifier foram feitas mais duas coisas:
+  - as fixtures de `campanhaService*` receberam `STATUS='PUBLICADA'` (EG-1);
+  - no ob-ads, a coluna passou a se chamar "Promotores vinculados".
+- **In-progress**: nada
+- **Next step**:
+  1. Decisão do usuário sobre SPG-2. A recusa hoje só bloqueia nova rota no fluxo admin. Opções: proteger também os fluxos do cliente e o despacho, ou restringir a spec ao admin.
+  2. UAT no navegador (ob-ads admin e página do jornal).
+  3. Aplicar `scripts/migration-convite-visita-admin.sql` em homolog, com a prévia de impacto que está no cabeçalho do script. Depois validar os backfills e fazer um teste de disparo concorrente.
+  4. Configurar `OBADS_JWT_SECRET` com o mesmo valor do `JWT_SECRET` do backend-ob-ads.
+  5. `git push` e PRs nos três repos. Exigem autorização explícita.
+- **Blockers**: nenhum técnico. SPG-2 depende de decisão de produto.
+- **Uncommitted files**:
+  - `.specs/LESSONS.md`, `.specs/lessons.json`: mudanças que já existiam, mais as lições L-017..L-022 do Verifier, todas candidatas.
+  - `package-lock.json`: mudança que já existia, fora do escopo.
+- **Branches**:
+
+  | Repo | Branch |
+  | --- | --- |
+  | `backend-promotor` | `feat/disparo-convite-visita-admin` |
+  | `ob-ads` | `feat/disparo-convite-visita-admin` |
+  | `jornalOficinaBrasil` | `feat/recusar-visita`, no worktree `../jornalOficinaBrasil-recusar-visita` (com `node_modules` em junction para o checkout principal) |
