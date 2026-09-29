@@ -1599,8 +1599,8 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] Os filtros e o resultado continuam preservados entre os passos
-- [ ] `npx tsc --noEmit` sem erros novos
+- [x] Os filtros e o resultado continuam preservados entre os passos
+- [x] `npx tsc --noEmit` sem erros novos
 
 **Tests**: none
 **Gate**: build
