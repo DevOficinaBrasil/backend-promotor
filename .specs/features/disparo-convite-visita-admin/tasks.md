@@ -1509,8 +1509,8 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] Tipos iguais aos do backend (T41)
-- [ ] `npx tsc --noEmit` sem erros novos
+- [x] Tipos iguais aos do backend (T41)
+- [x] `npx tsc --noEmit` sem erros novos
 
 **Tests**: none
 **Gate**: build
