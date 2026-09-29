@@ -13,7 +13,7 @@ A Oficina Brasil quer inverter isso:
 ## Goals
 
 - [ ] Um admin lista todas as campanhas ativas, com o nome do cliente, e abre qualquer uma no fluxo de rotas.
-- [ ] O admin encontra oficinas da base Oficina Brasil (tenant 15 do CRM) por região e critério de segmentação, e as coloca em rota mesmo fora da comunidade da campanha.
+- [ ] O admin encontra oficinas de `MAIN_REGISTER.OFICINA` por filtros opcionais (linha de atividade, mínimo de elevadores, UF, cidade) e as coloca em rota mesmo fora da comunidade da campanha.
 - [ ] Um clique em "Disparar comunicação" agenda um convite por rota selecionada, com no máximo o teto diário informado pelo admin em cada dia de envio.
 - [ ] O reparador aceita ou recusa pelo link, e `GET /campanha/ativa` só mostra rotas em `BACKLOG` que foram aceitas, em todas as campanhas.
 - [ ] Os endpoints novos recusam, com 401 ou 403, qualquer chamada sem JWT de admin.
@@ -41,6 +41,7 @@ A Oficina Brasil quer inverter isso:
 | --- | --- |
 | Criar ou aprovar template de WhatsApp novo | O convite reusa o template aprovado `WHATSAPP_TEMPLATE_NAME_VISITA` (`atualizacao_dados_visita_oficina`). Aprovar template é tarefa do negócio. |
 | Convite para oficina importada | Decisão do usuário (2026-09-28): oficina importada para o slug da campanha (`OFICINA_IMPORTADA`) entra aceita, sem convite (CONV-45 a CONV-47). |
+| Segmentação do CRM na busca do admin | Removida em 2026-09-29 por decisão do usuário: a busca é um `WHERE` sobre `MAIN_REGISTER.OFICINA`. A segmentação do CRM continua no fluxo do cliente. |
 | Enviar para telefone fixo | WhatsApp não chega em linha fixa comum. O fallback de telefone só aceita número com formato de celular (CONV-43). |
 | Reenvio de convite `EXPIRADO` ou `FALHOU` | Fluxo próprio (Deferred Ideas). |
 | Autenticar as rotas antigas de `/campanha`, `/rota` e `/promotor` | Muda o contrato de três frontends; risco já registrado em `STATE.md`. |
@@ -60,9 +61,14 @@ A Oficina Brasil quer inverter isso:
 | Janela de envio | A janela que já existe (dia seguinte, `NOTIFICACAO_HORA_ENVIO`..`_FIM`, America/Sao_Paulo) vale dentro de cada dia do disparo | Reusa a regra existente; o teto só diz quantos por dia. | y |
 | Dois disparos no mesmo dia | Os tetos não se somam, cada disparo respeita só o seu | Consequência direta de "teto por disparo". | y |
 | Visibilidade | Global e imediata no deploy: rota em `BACKLOG` só aparece com o status efetivo aceito | Decisão do usuário. Consequência: rotas que o promotor vê hoje sem aceite somem no deploy. | y |
-| Universo de oficinas | Contatos do CRM no tenant 15 → `external_user_id` → `USUARIO` → `ID_OFICINA` | Decisão do usuário. É o que permite segmentar oficinas fora da comunidade. | y |
-| Tenant 15 no dev | Tem 1 contato só (medido em 2026-08-19); o fluxo não dá para demonstrar no dev | Dado de ambiente, não de código. A validação ponta a ponta exige homolog ou prod. | n |
-| Região e critério | Os dois são obrigatórios: região (UF + cidade, ou CEP + raio) e pelo menos 1 critério do CRM | Decisão do usuário. | y |
+| Universo de oficinas | `MAIN_REGISTER.OFICINA` com `WHERE` comum, sem CRM. **Revisado em 2026-09-29**: antes eram contatos do CRM no tenant 15 | Decisão do usuário: o filtro não segue o padrão de segmentação. | y |
+| Tenant 15 no dev | Obsoleto desde 2026-09-29: a busca do admin não usa mais o CRM | A revisão do universo acima removeu a dependência. | y |
+| Filtros da busca | Quatro filtros, todos opcionais: linha de atividade (várias), mínimo de elevadores, UF e cidade (só com UF). Sem filtro nenhum, a busca varre a base inteira até o teto. **Revisado em 2026-09-29**: antes região e critério do CRM eram obrigatórios, e havia CEP + raio | Decisão do usuário. | y |
+| Elevadores | Mínimo (`>= N`), campo vazio por padrão (não aplica). `QUANTIDADE_ELEVADOR` é texto livre: só valor numérico conta, o resto vale 0 | Decisão do usuário. Mesmo parse de `sqlFiltroPadraoOficina` (`utils/geocodificacaoRegiao.ts:186`). | y |
+| Linha de atividade | Casa se a oficina tem ao menos uma das linhas escolhidas em `MAIN_REGISTER.LINHA_ATIVIDADE` (N por oficina), comparando sem caixa e sem espaço nas pontas. Opções vêm do banco (distintos) | Valores gravados pelos cadastros: Leve, Pesada, Agricola, Moto (`AppOficinaBrasil`, `frontend-conecta-gamefication`). | n |
+| Teto da busca | 5000 oficinas por busca, com `truncado: true` e o aviso "Resultado parcial: refine os filtros" | Decisão do usuário: nenhum filtro é obrigatório e só SP tem ~45 mil oficinas. | y |
+| Critério fixo | Só oficina com CNPJ ativo na Receita (`dw.cadastro_empresa.status_receita = 'ATIVA'`, pela ligação canônica) | Decisão do usuário. Coordenadas **não** são exigidas. | y |
+| Oficina sem coordenadas | Aparece na lista marcada "sem localização", sem pino no mapa. Não entra na distribuição automática (vai em `semCoordenadas`), mas pode ser atribuída manualmente | Consequência de não exigir coordenadas. | n |
 | Campanha "ativa" | `STATUS='PUBLICADA'`, `DELETED_AT` nulo, e agora dentro de `START_TIME`..`END_TIME` (`END_TIME` nulo = sem fim) | Mesmo critério que o app do promotor usa; campanha em rascunho não entrega visita. | n |
 | Oficina sem celular | Tenta, em ordem: `USUARIO.CELULAR` (como hoje), depois `USUARIO.TELEFONE`, `OFICINA.TELEFONE` e `dw.cadastro_empresa.telefone`, aceitando nesses três só número com formato de celular (11 dígitos com 9 depois do DDD). Sem nenhum número válido, a oficina aparece "sem WhatsApp" e não entra em rota pela tela de admin | Pedido do usuário (2026-09-28): usar o telefone quando falta celular. Linha fixa não recebe WhatsApp comum, então fixo é descartado para não gerar `FALHOU` certo. | y (fallback) / n (só formato de celular) |
 | Oficina importada | Rota de oficina com linha ativa em `OFICINA_IMPORTADA` para o `EMPRESA_SLUG` da campanha nasce aceita (origem `IMPORTADA`), sem mensagem, em todos os fluxos. As rotas que já existem são ajustadas pela migration | Decisão do usuário (2026-09-28): "Oficina importada não precisa de convite". A oficina importada que já era membro da comunidade (`garantirVinculo` → `ja_vinculada`) não tem linha em `OFICINA_IMPORTADA` e continua recebendo convite | y (regra) / n (caso ja_vinculada) |
@@ -114,23 +120,23 @@ A Oficina Brasil quer inverter isso:
 
 ---
 
-### P1: Segmentar a base Oficina Brasil por região e critério ⭐ MVP
+### P1: Buscar oficinas da base com filtros opcionais ⭐ MVP
 
-**User Story**: Como admin, quero filtrar as oficinas de toda a base Oficina Brasil por região e por critérios do CRM, para convidar só o perfil certo, esteja ele dentro ou fora da comunidade do cliente.
+**User Story**: Como admin, quero buscar oficinas de toda a base Oficina Brasil (`MAIN_REGISTER.OFICINA`) escolhendo, se eu quiser, linha de atividade, mínimo de elevadores, UF e cidade, para convidar o perfil certo, esteja ele dentro ou fora da comunidade do cliente.
 
-**Why P1**: Sem isso não existe o "fora da comunidade", e sem região o disparo atinge o país inteiro.
+**Why P1**: Sem isso não existe o "fora da comunidade". Revisado em 2026-09-29: o filtro é um `WHERE` comum, não a segmentação do CRM.
 
 **Acceptance Criteria**:
 
-1. IF a requisição de segmentação não trouxer região (UF + cidade, ou CEP + raio em km maior que 0) THEN the system SHALL responder 400 com a mensagem "Informe a região (UF e cidade, ou CEP e raio)" e não consultar o CRM.
-2. IF a requisição de segmentação não trouxer pelo menos um critério do CRM THEN the system SHALL responder 400 com a mensagem "Informe ao menos um critério de segmentação" e não consultar o CRM.
-3. WHEN região e critério são válidos THEN the system SHALL avaliar os critérios sobre os contatos do tenant 15 do CRM e devolver as oficinas desses contatos que estão na região.
-4. The system SHALL marcar cada oficina devolvida com: `membroComunidade` (é membro da comunidade do `EMPRESA_SLUG` da campanha), `temWhatsapp` (tem celular em `USUARIO`), `rotaAtual` (promotor e status do convite, se já está em rota nesta campanha) e `recusouNestaCampanha`.
-5. IF a varredura do CRM atingir o teto de 5000 contatos THEN the system SHALL devolver `truncado: true`, e a tela SHALL mostrar o aviso "Resultado parcial: refine a segmentação".
-6. IF o CRM falhar ou exceder o tempo THEN the system SHALL responder 502 com a mensagem "Segmentação indisponível", e a tela SHALL manter a seleção anterior sem apagar nada.
-7. WHEN o admin pede os valores de um campo de critério THEN the system SHALL devolver os campos e valores do tenant 15, não os do tenant da comunidade da campanha.
+1. WHEN o admin busca sem nenhum filtro THEN the system SHALL devolver oficinas de toda a `MAIN_REGISTER.OFICINA` que passam no critério fixo, até o teto.
+2. WHERE um filtro é informado the system SHALL aplicá-lo como condição `AND`: linhas de atividade (a oficina tem ao menos uma das linhas em `LINHA_ATIVIDADE`, sem diferença de caixa), mínimo de elevadores (`QUANTIDADE_ELEVADOR` numérico `>= N`, não numérico vale 0), UF (`OFICINA.ESTADO`) e cidade (`OFICINA.CIDADE`, sem diferença de caixa e acento).
+3. IF a cidade vier sem UF, ou a UF não tiver 2 letras, ou o mínimo de elevadores não for inteiro `>= 0` THEN the system SHALL responder 400 com a mensagem "Informe a UF para filtrar por cidade", "UF inválida" ou "Quantidade de elevadores deve ser um inteiro maior ou igual a 0", respectivamente, sem consultar a base.
+4. The system SHALL devolver só oficinas com CNPJ ativo na Receita (`dw.cadastro_empresa.status_receita = 'ATIVA'`) e SHALL marcar cada uma com `membroComunidade`, `importada`, `temWhatsapp`, `rotaAtual`, `recusouNestaCampanha` e `semCoordenadas`.
+5. IF a busca passar de 5000 oficinas THEN the system SHALL devolver as 5000 primeiras com `truncado: true`, e a tela SHALL mostrar o aviso "Resultado parcial: refine os filtros".
+6. IF a consulta falhar THEN the system SHALL responder 500 com a mensagem "Não foi possível buscar as oficinas", e a tela SHALL manter o resultado e a seleção anteriores.
+7. WHEN o admin abre os filtros THEN the system SHALL oferecer as linhas de atividade e as UFs existentes na base e, depois de escolhida a UF, só as cidades daquela UF.
 
-**Independent Test**: com SPAAL ou outra campanha em homolog, aplicar "UF=SP, cidade=Campinas" mais um critério e ver oficinas com `membroComunidade` verdadeiro e falso; sem região, receber 400.
+**Independent Test**: sem filtro, a busca devolve até 5000 oficinas com `truncado: true`; com "UF=SP, cidade=Campinas, linha=Leve, elevadores>=2" só vêm oficinas de Campinas/SP da linha leve com 2 ou mais elevadores; cidade sem UF dá 400.
 
 ---
 
@@ -149,6 +155,7 @@ A Oficina Brasil quer inverter isso:
 5. IF a oficina não tem WhatsApp (`temWhatsapp` falso, depois do fallback de telefone) e não é importada para o slug da campanha THEN the system SHALL recusar a rota com 422 "Oficina sem WhatsApp cadastrado", e a tela SHALL exibir a oficina desabilitada para seleção.
 6. IF a oficina recusou convite nesta campanha THEN the system SHALL recusar a nova rota com 409 "Oficina recusou a visita nesta campanha".
 7. WHEN o admin pede distribuição automática THEN the system SHALL atribuir cada oficina selecionada ao promotor vinculado mais próximo cujo raio a alcança, pela regra que já existe (haversine, desempate por `ID_CAMPANHA_PROMOTOR`), e deixar sem rota, listadas como "fora do alcance", as que nenhum raio alcança.
+8. IF a oficina não tem coordenadas THEN the system SHALL aceitar a atribuição manual e, na distribuição automática, SHALL deixá-la sem rota e listá-la em `semCoordenadas`.
 
 **Independent Test**: selecionar uma oficina de fora da comunidade, colocá-la na rota de um promotor e ver a rota criada como "não disparada", sem nenhuma linha nova em `NOTIFICACAO_VISITA`.
 
@@ -280,14 +287,14 @@ A Oficina Brasil quer inverter isso:
 
 | Dimension | Resolution |
 | --- | --- |
-| Input validation & bounds | Região obrigatória; pelo menos 1 critério; teto de 1 a 1000; raio maior que 0 (CONV-06, CONV-07, CONV-18). |
-| Failure / partial-failure states | CRM fora do ar dá 502 sem perder a seleção (CONV-11); o disparo é tudo ou nada: 422 sem enfileirar (CONV-21). |
+| Input validation & bounds | Filtros opcionais validados (cidade exige UF, UF de 2 letras, elevadores inteiro >= 0); teto de busca 5000; teto diário de 1 a 1000 (CONV-08, CONV-10, CONV-20). |
+| Failure / partial-failure states | Falha na busca dá 500 sem perder a seleção (CONV-11); o disparo é tudo ou nada: 422 sem enfileirar (CONV-21). |
 | Idempotency / retry / duplicate handling | Rota já disparada é ignorada; disparos concorrentes dão no máximo uma notificação por rota, garantido pelo `UNIQUE(ID_ROTA_PROMOTOR)` que já existe (CONV-22, CONV-24). |
 | Auth boundaries & rate limits | JWT de admin nos endpoints novos (CONV-03, CONV-04); recusa com o mesmo rate limit de `/visita` (CONV-40). |
 | Concurrency / ordering | Recusa e confirmação atômicas (CONV-36); o claim da fila continua com `SKIP LOCKED`. |
 | Data lifecycle / expiry | Convite expira no `EXPIRA_EM` que já existe; ao expirar, as notificações que aguardavam são reenfileiradas (CONV-29). |
 | Observability | Resumo do disparo (CONV-23) e estado por rota (CONV-41, CONV-42). Métricas novas: N/A because o `status` do `outboxConsole` já responde "o que está enfileirado para quando". |
-| External-dependency failure | CRM: 502 (CONV-11). WhatsApp: retry e `FALHOU` do outbox que já existe, sem mudança. |
+| External-dependency failure | A busca não depende mais do CRM. WhatsApp: retry e `FALHOU` do outbox que já existe, sem mudança. |
 | State-transition integrity | `ENVIADO→CONFIRMADO` e `ENVIADO→RECUSADO` atômicas; estado terminal devolve 409 (CONV-36, CONV-37); aguardando → aceita, recusada ou reenfileirada (CONV-27 a CONV-29). |
 
 ---
@@ -301,13 +308,13 @@ A Oficina Brasil quer inverter isso:
 | CONV-03 | P1: Auth admin - AC1 | Design | Implementing |
 | CONV-04 | P1: Auth admin - AC2 | Design | Implementing |
 | CONV-05 | P1: Auth admin - AC3 | Design | Implementing |
-| CONV-06 | P1: Segmentação - AC1 | Design | Implementing |
-| CONV-07 | P1: Segmentação - AC2 | Design | Implementing |
-| CONV-08 | P1: Segmentação - AC3 | Design | Implementing |
-| CONV-09 | P1: Segmentação - AC4 | Design | Implementing |
-| CONV-10 | P1: Segmentação - AC5 | Design | Implementing |
-| CONV-11 | P1: Segmentação - AC6 | Design | Implementing |
-| CONV-12 | P1: Segmentação - AC7 | Design | Implementing |
+| CONV-06 | P1: Busca - AC1 | Design | Pending |
+| CONV-07 | P1: Busca - AC2 | Design | Pending |
+| CONV-08 | P1: Busca - AC3 | Design | Pending |
+| CONV-09 | P1: Busca - AC4 | Design | Pending |
+| CONV-10 | P1: Busca - AC5 | Design | Pending |
+| CONV-11 | P1: Busca - AC6 | Design | Pending |
+| CONV-12 | P1: Busca - AC7 | Design | Pending |
 | CONV-13 | P1: Rotas - AC1 | Design | Implementing |
 | CONV-14 | P1: Rotas - AC2 | Design | Implementing |
 | CONV-15 | P1: Rotas - AC3 | Design | Implementing |
@@ -343,8 +350,9 @@ A Oficina Brasil quer inverter isso:
 | CONV-45 | P1: Telefone/importada - AC4 | Design | Implementing |
 | CONV-46 | P1: Telefone/importada - AC5 | Design | Implementing |
 | CONV-47 | P1: Telefone/importada - AC6 | Design | Implementing |
+| CONV-48 | P1: Rotas - AC8 | Design | Pending |
 
-**Coverage:** 47 total, 0 mapped to tasks, 47 unmapped ⚠️ (Tasks phase pending)
+**Coverage:** 48 total ⚠️ (Tasks phase pending)
 
 ---
 

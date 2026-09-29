@@ -417,3 +417,34 @@ interface ResumoDisparo {
 - **AD-003**: "aceito" = `CONFIRMADO` + `ORIGEM_ACEITE`. `GET /campanha/ativa` mostra uma rota em `BACKLOG` só se ela estiver `CONFIRMADO`. Substitui a regra de `filtro-rotas-por-confirmacao` (`CONFIRMACAO_RESOLVIDA`).
 - **AD-004**: endpoints de admin do backend-promotor ficam em `/admin/*`, atrás de `adminAuthMiddleware` (`OBADS_JWT_SECRET` + claim `IS_ADMIN`). Endpoint de admin futuro reusa esse middleware.
 - AD-001 (`OFICINA_IMPORTADA`) e AD-002 (`DATA_VISITA`/`ORDEM`): **conforme**, sem mudança. A tela admin não escreve `DATA_VISITA` nem `ORDEM`; as rotas nascem sem dia, como no fluxo do cliente.
+
+---
+
+## Revisão 2026-09-29: busca por `WHERE` em `MAIN_REGISTER.OFICINA`
+
+O usuário trocou a busca. Em vez de segmentar contatos do CRM no tenant 15, a tela passa a fazer um `WHERE` comum sobre `MAIN_REGISTER.OFICINA`, com quatro filtros opcionais: linha de atividade, mínimo de elevadores, UF e cidade (esta só com UF). A região por CEP + raio sai. O critério fixo é só CNPJ ativo na Receita; coordenadas deixam de ser exigidas. O teto da busca é de 5000 oficinas, com `truncado`. Spec: CONV-06 a CONV-12 reescritos, CONV-48 novo.
+
+### O que muda
+
+| Componente | Mudança |
+| --- | --- |
+| `utils/filtroBuscaOficina.ts` [NOVO, puro] | `validarFiltrosBusca(entrada): FiltrosBusca` lança `AdminDisparoErro(400)` com as mensagens da spec (CONV-08). `sqlFiltrosBusca(alias, filtros, primeiroParam): { sql, params }` monta as condições `AND`: linhas via `EXISTS` em `LINHA_ATIVIDADE` com `upper(trim(la."LINHA_ATIVIDADE")) = ANY($n)`; elevadores com o mesmo `CASE` numérico de `sqlFiltroPadraoOficina` (`utils/geocodificacaoRegiao.ts:186`); UF com `upper(trim(o."ESTADO")) = $n`; cidade com `sqlTextoNormalizado(o."CIDADE") = $n`, reusando `sqlTextoNormalizado` (`geocodificacaoRegiao.ts:173`), com o parâmetro normalizado igual no TS. Todos os valores vão por parâmetro, nunca concatenados. |
+| `OficinaService.buscarOficinasBase(filtros, ctx, limite = 5000)` [NOVO] | Ponto de partida: `FROM "MAIN_REGISTER"."OFICINA" o` com `ligacaoCadastroEmpresa` (INNER) e `ce.status_receita = 'ATIVA'` como único critério fixo. Aplica `sqlFiltrosBusca` e reusa `sqlUsuariosDaOficina`, `sqlOficinaImportada`, `sqlRecusouNaCampanha` e `temWhatsappPelosCandidatos` para as flags. As coordenadas saem de `COALESCE` entre `ce` e `o`, com cast protegido; sem nenhuma das duas, `semCoordenadas: true`. `ORDER BY o."ID_OFICINA"`, `LIMIT limite + 1`, e `truncado` quando vier a linha extra. |
+| `OficinaService.opcoesFiltroBusca()` e `cidadesPorUf(uf)` [NOVO] | Linhas distintas (`upper(trim())`, exibidas com a grafia mais frequente), UFs distintas de `OFICINA.ESTADO` com 2 letras e cidades distintas da UF (normalizadas, exibidas com a grafia mais frequente). |
+| `AdminDisparoService.segmentarOficinas` → `buscarOficinas(idCampanha, filtros)` | Sem CRM, sem geocodificação e sem tenant 15. Qualquer falha de consulta vira `AdminDisparoErro(500, "Não foi possível buscar as oficinas")`. |
+| `AdminDisparoService.criarRotas` | A distribuição automática põe oficina sem coordenadas em `semCoordenadas: number[]` e não cria rota para ela (CONV-48). A atribuição manual segue permitida. |
+| Rotas `/admin` | Saem `GET /segmentacao/campos`, `GET /segmentacao/valores` e `POST /campanhas/:id/oficinas/segmentar`. Entram `GET /admin/oficinas/filtros` (`{ linhas, ufs }`), `GET /admin/oficinas/cidades?uf=` e `POST /admin/campanhas/:id/oficinas/buscar` com corpo `{ linhas?: string[], elevadoresMin?: number, uf?: string, cidade?: string }`. Todas atrás do `adminAuthMiddleware` do `router.use`. |
+| Código morto | `getOficinasBaseSegmentadas` e as constantes de CRM de `adminDisparoService` saem com os testes delas; esse comportamento foi removido da spec. `SegmentacaoService.valoresDeCampo(tenantId, path)` fica, porque a rota do cliente usa. |
+| ob-ads `service/adminDisparoService.ts` | Os clientes `listarCamposSegmentacao`, `listarValoresCampo` e `segmentarOficinas` são trocados por `listarFiltrosBusca`, `listarCidades(uf)` e `buscarOficinas(id, filtros)`. |
+| ob-ads `lib/disparoVisitas.ts` | `validarRegiao`/`MSG_SEM_REGIAO` viram `validarFiltros` (cidade exige UF, UF de 2 letras, elevadores inteiro `>= 0`) com as mesmas mensagens do backend. O aviso de truncado passa a ser "Resultado parcial: refine os filtros". `corOficina` não muda. |
+| ob-ads `StepRegiaoSegmentacao.tsx` → `StepFiltrosBusca.tsx` | Chips de seleção múltipla para as linhas, número mínimo de elevadores (vazio por padrão), select de UF e select de cidade habilitado só com UF e carregado por UF. "Buscar oficinas" sempre habilitado. Sem `CriterioValorInput`; a prop `buscarValores` de T27 fica sem uso no admin, e continua inofensiva. |
+| ob-ads `StepRotasAdmin.tsx` | Oficina com `semCoordenadas` aparece na lista com o badge "Sem localização" e fica fora do mapa. O resultado da distribuição mostra `semCoordenadas`. |
+| ob-ads `[id]/page.tsx` | O estado do passo 1 passa a guardar os filtros novos em vez de região + critérios. |
+
+### Risks & Concerns (delta)
+
+| Concern | Location | Impact | Mitigation |
+| --- | --- | --- | --- |
+| Busca sem filtro varre `OFICINA` inteira, com `EXISTS` por linha | `buscarOficinasBase` | Consulta lenta na base toda | `LIMIT 5001` com ordem por PK. A task de UAT mede o tempo em homolog. Não foi confirmado se existe índice em `LINHA_ATIVIDADE("ID_OFICINA")` nem em `OFICINA("ESTADO")`: sugerir ao DBA, sem migration nesta revisão. |
+| `OFICINA.ESTADO` pode ter valor fora de UF (nome por extenso) | dados | UF por extenso não casa com o filtro | As opções de UF só listam valores de 2 letras. Os valores fora do padrão ficam de fora quando se filtra por UF, o que é declarado no filtro. |
+| Oficina sem coordenadas não entra na distribuição automática | `criarRotas` | O admin precisa atribuir essas manualmente | CONV-48; a tela lista essas oficinas em `semCoordenadas`. |

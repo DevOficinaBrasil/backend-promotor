@@ -1344,6 +1344,245 @@ T35
 **Gate**: quick
 **Commit**: `fix(admin): ignorar rota cancelada ao checar oficina já em rota`
 
+---
+
+### Phase 9: Busca por WHERE, backend (revisão 2026-09-29) (tasks)
+
+---
+
+### T37: Filtros opcionais da busca (validação + SQL)
+
+**What**: `validarFiltrosBusca` e `sqlFiltrosBusca` puros, conforme a revisão do design.
+**Where**: `backend-promotor/utils/filtroBuscaOficina.ts`
+**Depends on**: None
+**Reuses**: `sqlTextoNormalizado` e o `CASE` de elevadores de `utils/geocodificacaoRegiao.ts`
+**Requirement**: CONV-07, CONV-08
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [ ] Sem filtro → nenhuma condição; cada filtro sozinho e combinados geram o `AND` certo, com valores só por parâmetro
+- [ ] Cidade sem UF, UF sem 2 letras, elevadores não inteiro ou negativo → erro 400 com a mensagem exata da spec
+- [ ] Linhas comparadas por `upper(trim())`; cidade normalizada igual no SQL e no TS
+- [ ] Gate quick passa
+
+**Tests**: unit
+**Gate**: quick
+**Commit**: `feat(admin): filtros opcionais da busca de oficinas`
+
+---
+
+### T38: `buscarOficinasBase`, `opcoesFiltroBusca` e `cidadesPorUf`
+
+**What**: Busca em `MAIN_REGISTER.OFICINA` com CNPJ ativo, flags, `semCoordenadas`, teto e `truncado`, mais as opções dos filtros.
+**Where**: `backend-promotor/service/oficinaService.ts`
+**Depends on**: T37
+**Reuses**: `sqlUsuariosDaOficina`, `sqlOficinaImportada`, `sqlRecusouNaCampanha`, `temWhatsappPelosCandidatos`, `ligacaoCadastroEmpresa`
+**Requirement**: CONV-06, CONV-09, CONV-10, CONV-12, CONV-48
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [ ] `FROM MAIN_REGISTER.OFICINA`, ligação canônica com `status_receita = 'ATIVA'`, sem exigir coordenadas; SQL afirmada (L-004)
+- [ ] 5001 linhas → 5000 devolvidas e `truncado: true`; 5000 → `truncado: false`
+- [ ] `semCoordenadas` verdadeiro quando `ce` e `o` não têm lat/long numéricos
+- [ ] Opções: linhas distintas, UFs de 2 letras, cidades só da UF pedida
+- [ ] `getOficinasBaseSegmentadas` removida com os testes dela (comportamento removido da spec)
+- [ ] Gate quick passa
+
+**Tests**: unit
+**Gate**: quick
+**Commit**: `feat(oficina): busca da base por filtros opcionais`
+
+---
+
+### T39: `buscarOficinas` no `AdminDisparoService`
+
+**What**: Troca `segmentarOficinas` (CRM + tenant 15 + CEP) por `buscarOficinas(idCampanha, filtros)` e expõe as opções.
+**Where**: `backend-promotor/service/adminDisparoService.ts`
+**Depends on**: T38
+**Reuses**: `validarFiltrosBusca`, `OficinaService.buscarOficinasBase`
+**Requirement**: CONV-06, CONV-08, CONV-11, CONV-12
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [ ] Não chama CRM nem geocodificação; campanha inexistente → 404
+- [ ] Falha de consulta → `AdminDisparoErro(500, "Não foi possível buscar as oficinas")`
+- [ ] Constantes e testes de CRM do admin removidos (comportamento removido da spec)
+- [ ] Gate quick passa
+
+**Tests**: unit
+**Gate**: quick
+**Commit**: `refactor(admin): busca de oficinas sem segmentação do CRM`
+
+---
+
+### T40: Distribuição automática com `semCoordenadas`
+
+**What**: `criarRotas` separa as oficinas sem coordenadas na distribuição automática e segue aceitando a atribuição manual delas.
+**Where**: `backend-promotor/service/adminDisparoService.ts`
+**Depends on**: T39
+**Reuses**: `escolherPromotorMaisProximo`
+**Requirement**: CONV-48
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [ ] Distribuição: oficina sem coordenadas → `semCoordenadas`, sem rota e sem entrar em `foraDoAlcance`
+- [ ] Atribuição manual de oficina sem coordenadas cria a rota
+- [ ] Gate quick passa
+
+**Tests**: unit
+**Gate**: quick
+**Commit**: `feat(admin): oficina sem coordenadas fora da distribuição automática`
+
+---
+
+### T41: Rotas `/admin` da busca nova
+
+**What**: Remove `/segmentacao/campos`, `/segmentacao/valores` e `/campanhas/:id/oficinas/segmentar` e cria `GET /oficinas/filtros`, `GET /oficinas/cidades?uf=` e `POST /campanhas/:id/oficinas/buscar`.
+**Where**: `backend-promotor/routes/AdminDisparoRoute.ts`
+**Depends on**: T40
+**Reuses**: `router.use(adminAuthMiddleware)` que já existe, supertest de `adminDisparo.test.ts`
+**Requirement**: CONV-06, CONV-08, CONV-11, CONV-12
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [ ] Cada rota nova: sem token → 401, não admin → 403, admin → 200 (L-002)
+- [ ] 400 e 500 com as mensagens da spec; as rotas removidas respondem 404
+- [ ] Gate full passa
+
+**Tests**: integration
+**Gate**: full
+**Commit**: `feat(admin): rotas da busca de oficinas por filtros`
+
+---
+
+### Phase 10: Busca por WHERE, ob-ads (revisão 2026-09-29) (tasks)
+
+---
+
+### T42: Cliente ob-ads da busca nova
+
+**What**: `listarFiltrosBusca`, `listarCidades(uf)` e `buscarOficinas(id, filtros)` no lugar dos clientes de segmentação.
+**Where**: `ob-ads/service/adminDisparoService.ts`
+**Depends on**: None
+**Reuses**: Padrão de `api_promotores` já usado no arquivo
+**Requirement**: CONV-06, CONV-12
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [ ] Tipos iguais aos do backend (T41)
+- [ ] `npx tsc --noEmit` sem erros novos
+
+**Tests**: none
+**Gate**: build
+**Commit**: `feat(admin): cliente da busca de oficinas por filtros`
+
+---
+
+### T43: `validarFiltros` na lógica pura
+
+**What**: Substitui `validarRegiao` por `validarFiltros` com as mensagens do backend e troca o texto do truncado.
+**Where**: `ob-ads/lib/disparoVisitas.ts`
+**Depends on**: None
+**Reuses**: `lib/__tests__/disparoVisitas.test.ts` (docblock `@jest-environment node`)
+**Requirement**: CONV-08, CONV-10
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [ ] Todos os branches testados; os testes de `validarRegiao` foram trocados pelos de `validarFiltros` (comportamento removido da spec)
+- [ ] `npx jest lib/__tests__` passa
+
+**Tests**: unit
+**Gate**: build
+**Commit**: `feat(admin): validação dos filtros opcionais da busca`
+
+---
+
+### T44: `StepFiltrosBusca`
+
+**What**: Passo 1 novo: linhas (chips múltiplos), mínimo de elevadores (vazio por padrão), UF, cidade por UF e "Buscar oficinas" sempre habilitado.
+**Where**: `ob-ads/app/admin/disparo-visitas/components/StepFiltrosBusca.tsx`
+**Depends on**: T42, T43
+**Reuses**: Visual do wizard (`OB`, `.wz-btn-*`), react-query
+**Requirement**: CONV-06, CONV-07, CONV-10, CONV-11, CONV-12
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [ ] Cidade desabilitada sem UF e recarregada ao trocar a UF
+- [ ] Aviso de truncado; o 500 mantém o resultado anterior; resultado vazio mostra a mensagem da spec
+- [ ] `StepRegiaoSegmentacao.tsx` removido
+- [ ] `npx tsc --noEmit` sem erros novos
+
+**Tests**: none
+**Gate**: build
+**Commit**: `feat(admin): passo de busca com filtros opcionais`
+
+---
+
+### T45: `StepRotasAdmin` com oficina sem localização
+
+**What**: Badge "Sem localização", fora do mapa, e exibição de `semCoordenadas` no resultado da distribuição.
+**Where**: `ob-ads/app/admin/disparo-visitas/components/StepRotasAdmin.tsx`
+**Depends on**: T42
+**Reuses**: Lista e badges que já existem no passo
+**Requirement**: CONV-48
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [ ] Oficina com `semCoordenadas` não gera marcador e pode ser selecionada para atribuição manual
+- [ ] `npx tsc --noEmit` sem erros novos
+
+**Tests**: none
+**Gate**: build
+**Commit**: `feat(admin): oficinas sem localização no passo de rotas`
+
+---
+
+### T46: Página da campanha com os filtros novos
+
+**What**: O estado do passo 1 guarda os filtros novos e o `StepFiltrosBusca` é ligado no lugar do passo antigo.
+**Where**: `ob-ads/app/admin/disparo-visitas/[id]/page.tsx`
+**Depends on**: T44, T45
+**Reuses**: Orquestração `?step=` que já existe
+**Requirement**: CONV-06
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [ ] Os filtros e o resultado continuam preservados entre os passos
+- [ ] `npx tsc --noEmit` sem erros novos
+
+**Tests**: none
+**Gate**: build
+**Commit**: `feat(admin): fluxo da campanha com busca por filtros`
 
 ---
 
@@ -1360,9 +1599,15 @@ T15 → T17 → T18 → T19 → T20 → T21
 T22 → T23 → T25 → T26
 T28 → T29 → T30 → T31
 T32 → T33 → T34
+T37 → T38 → T39 → T40 → T41
+T42 → T44
+T43 → T44
+T44 → T46
+T42 → T45
+T45 → T46
 ```
 
-Tasks sem seta (T3, T4, T5, T6, T16, T24, T27, T35) não dependem de ninguém da própria fase. Execução estritamente sequencial dentro de cada fase.
+Tasks sem seta (T3, T4, T5, T6, T16, T24, T27, T35, T36) não dependem de ninguém da própria fase. Execução estritamente sequencial dentro de cada fase.
 
 ---
 
