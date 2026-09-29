@@ -1553,10 +1553,10 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] Cidade desabilitada sem UF e recarregada ao trocar a UF
-- [ ] Aviso de truncado; o 500 mantém o resultado anterior; resultado vazio mostra a mensagem da spec
-- [ ] `StepRegiaoSegmentacao.tsx` removido
-- [ ] `npx tsc --noEmit` sem erros novos
+- [x] Cidade desabilitada sem UF e recarregada ao trocar a UF
+- [x] Aviso de truncado; o 500 mantém o resultado anterior; resultado vazio mostra a mensagem da spec
+- [x] `StepRegiaoSegmentacao.tsx` removido (feito em T46: a página ainda o importava, e removê-lo aqui quebraria o `tsc` deste commit)
+- [x] `npx tsc --noEmit` sem erros novos
 
 **Tests**: none
 **Gate**: build
