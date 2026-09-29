@@ -1289,8 +1289,8 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] Copy da spec e do design em pt-BR
-- [ ] Testes do componente passam
+- [x] Copy da spec e do design em pt-BR
+- [x] Testes do componente passam
 
 **Tests**: unit
 **Gate**: build
