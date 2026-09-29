@@ -1267,8 +1267,8 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] GET `ALREADY_DECLINED` → `already_declined`; 409 → GET de novo
-- [ ] Testes do hook passam
+- [x] GET `ALREADY_DECLINED` → `already_declined`; 409 → GET de novo
+- [x] Testes do hook passam
 
 **Tests**: unit
 **Gate**: build
