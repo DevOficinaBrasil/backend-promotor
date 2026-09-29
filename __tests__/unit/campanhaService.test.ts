@@ -156,6 +156,7 @@ describe('CampanhaService', () => {
           NOME: 'Active',
           START_TIME: new Date('2026-01-01'),
           END_TIME: new Date('2026-12-31'),
+          STATUS: 'PUBLICADA',
         },
       }]);
       (AppDataSourceSync.query as jest.Mock).mockResolvedValue([

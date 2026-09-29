@@ -32,6 +32,7 @@ describe('CampanhaService', () => {
       NOME: 'Campanha Ativa',
       START_TIME: new Date('2026-01-01'),
       END_TIME: new Date('2026-12-31'),
+      STATUS: 'PUBLICADA',
     };
 
     const campanhaPromotorAtivo = {
@@ -619,6 +620,7 @@ describe('CampanhaService', () => {
                   ID_CAMPANHA: 1,
                   START_TIME: new Date('2026-01-01'),
                   END_TIME: new Date('2026-12-31'),
+                  STATUS: 'PUBLICADA',
                 },
               },
             ]),
@@ -686,6 +688,7 @@ describe('CampanhaService', () => {
                   ID_CAMPANHA: 1,
                   START_TIME: new Date('2026-01-01'),
                   END_TIME: new Date('2026-12-31'),
+                  STATUS: 'PUBLICADA',
                 },
               },
             ]),
