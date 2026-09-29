@@ -262,7 +262,15 @@ describe("AdminDisparoService.criarRotas", () => {
       'WHERE oi."ID_OFICINA" = ids.id_oficina AND oi."EMPRESA_SLUG" = $2 AND oi."DELETED_AT" IS NULL ) AS "IMPORTADA"'
     );
     expect(s).toContain('WHERE u_tel."ID_OFICINA" = ids.id_oficina ) AS "USUARIOS"');
-    expect(s).toContain('COALESCE(ce.latitude, o."LATITUDE") AS "LATITUDE"');
+    // dw.cadastro_empresa.latitude é double precision e OFICINA.LATITUDE é varchar:
+    // COALESCE entre os dois tipos falha no Postgres, então o par sai de uma fonte só,
+    // com o texto da OFICINA convertido sob guarda.
+    expect(s).not.toContain('COALESCE(ce.latitude, o."LATITUDE")');
+    expect(s).not.toContain('COALESCE(ce.longitude, o."LONGITUDE")');
+    expect(s).toContain("CASE WHEN ce.latitude IS NOT NULL AND ce.longitude IS NOT NULL THEN ce.latitude::double precision");
+    expect(s).toContain(`replace(trim(o."LATITUDE"), ',', '.')`);
+    expect(s).toMatch(/END AS "LATITUDE"/);
+    expect(s).toMatch(/END AS "LONGITUDE"/);
 
     const vinc = normalizarSql(queryMock.mock.calls.map(([sql]) => sql).find((sql) => sql.includes('cp."RAIO", p."NOME"')));
     expect(vinc).toContain('WHERE cp."ID_CAMPANHA" = $1 AND cp."DELETED_AT" IS NULL');

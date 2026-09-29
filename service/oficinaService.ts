@@ -50,6 +50,25 @@ function sqlCoordenadaTexto(expr: string): string {
 }
 
 /**
+ * Par de coordenadas de uma oficina: do dw (`double precision`) quando o dw tem o
+ * par, senão do texto da OFICINA (`varchar`) com cast protegido. Nunca `COALESCE`
+ * entre as duas colunas: os tipos não casam no Postgres. O par sai sempre da
+ * mesma fonte.
+ */
+export function sqlParCoordenadas(aliasCe = "ce", aliasO = "o"): { lat: string; lon: string } {
+  const latO = sqlCoordenadaTexto(`${aliasO}."LATITUDE"`);
+  const lonO = sqlCoordenadaTexto(`${aliasO}."LONGITUDE"`);
+  const dwTemPar = `${aliasCe}.latitude IS NOT NULL AND ${aliasCe}.longitude IS NOT NULL`;
+  const oTemPar = `${latO} IS NOT NULL AND ${lonO} IS NOT NULL`;
+  return {
+    lat: `CASE WHEN ${dwTemPar} THEN ${aliasCe}.latitude::double precision
+               WHEN ${oTemPar} THEN ${latO} END`,
+    lon: `CASE WHEN ${dwTemPar} THEN ${aliasCe}.longitude::double precision
+               WHEN ${oTemPar} THEN ${lonO} END`,
+  };
+}
+
+/**
  * Fragmentos de SQL compartilhados entre a segmentação do admin e a criação de
  * rotas pela tela de admin, para as duas decidirem igual. `idExpr` é a
  * expressão do `ID_OFICINA` no FROM de quem chama; os parâmetros são o número
@@ -672,9 +691,7 @@ export default class OficinaService {
     limite: number = MAX_OFICINAS_BUSCA
   ): Promise<{ oficinas: OficinaBuscada[]; truncado: boolean }> {
     const filtro = sqlFiltrosBusca("o", filtros, 4);
-    const latO = sqlCoordenadaTexto('o."LATITUDE"');
-    const lonO = sqlCoordenadaTexto('o."LONGITUDE"');
-    const dwTemPar = "ce.latitude IS NOT NULL AND ce.longitude IS NOT NULL";
+    const coord = sqlParCoordenadas();
 
     const query = `
         SELECT
@@ -683,10 +700,8 @@ export default class OficinaService {
           COALESCE(o."CIDADE", ce.cidade) AS "CIDADE",
           COALESCE(o."ESTADO", ce.estado) AS "ESTADO",
           COALESCE(o."CEP", ce.cep) AS "CEP",
-          CASE WHEN ${dwTemPar} THEN ce.latitude::double precision
-               WHEN ${latO} IS NOT NULL AND ${lonO} IS NOT NULL THEN ${latO} END AS "LATITUDE",
-          CASE WHEN ${dwTemPar} THEN ce.longitude::double precision
-               WHEN ${latO} IS NOT NULL AND ${lonO} IS NOT NULL THEN ${lonO} END AS "LONGITUDE",
+          ${coord.lat} AS "LATITUDE",
+          ${coord.lon} AS "LONGITUDE",
           o."TELEFONE" AS "OFICINA_TELEFONE",
           ce.telefone AS "CADASTRO_TELEFONE",
           ${sqlUsuariosDaOficina('o."ID_OFICINA"')} AS "USUARIOS",

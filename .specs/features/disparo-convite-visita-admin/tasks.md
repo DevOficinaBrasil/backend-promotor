@@ -1492,6 +1492,29 @@ T35
 
 ---
 
+### T48: Coordenadas sem COALESCE entre tipos em `situacaoDasOficinas`
+
+**What**: `criarRotas` montava `COALESCE(ce.latitude, o."LATITUDE")`, mas `dw.cadastro_empresa.latitude` é `double precision` e `OFICINA.LATITUDE` é `varchar`. O Postgres rejeita isso, então toda chamada a `POST /admin/campanhas/:id/rotas` respondia 500. O par de coordenadas vira o helper `sqlParCoordenadas` (dw quando tem o par, senão o texto da OFICINA com cast protegido), usado na busca e em `criarRotas`. Achado R-1 do Verifier da revisão; o `EXPLAIN` no banco de dev confirmou que a forma antiga falha e a nova passa.
+**Where**: `backend-promotor/service/adminDisparoService.ts`
+**Depends on**: T47
+**Reuses**: `sqlCoordenadaTexto` e a expressão de `buscarOficinasBase` (`service/oficinaService.ts`)
+**Requirement**: CONV-14, CONV-18, CONV-48
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [x] A SQL de `situacaoDasOficinas` não tem `COALESCE` entre `ce.latitude`/`o."LATITUDE"` e usa o par protegido (asserção L-004 trocada, vermelha antes do conserto)
+- [x] `EXPLAIN` da expressão nova passa no banco de dev, e o da antiga falha
+- [x] Gate quick passa (911 testes)
+
+**Tests**: unit
+**Gate**: quick
+**Commit**: `fix(admin): coordenadas sem COALESCE entre tipos ao criar rotas`
+
+---
+
 ### Phase 10: Busca por WHERE, ob-ads (revisão 2026-09-29) (tasks)
 
 ---
@@ -1623,6 +1646,7 @@ T28 → T29 → T30 → T31
 T32 → T33 → T34
 T37 → T38 → T39 → T40 → T41
 T41 → T47
+T47 → T48
 T42 → T44
 T43 → T44
 T44 → T46

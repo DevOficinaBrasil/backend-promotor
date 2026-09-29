@@ -2,6 +2,7 @@ import { AppDataSourceSync } from "../data-source";
 import OficinaService, {
   OficinaBuscada,
   sqlOficinaImportada,
+  sqlParCoordenadas,
   sqlRecusouNaCampanha,
   sqlUsuariosDaOficina,
   temWhatsappPelosCandidatos,
@@ -478,8 +479,8 @@ export default class AdminDisparoService {
               ${sqlUsuariosDaOficina("ids.id_oficina")} AS "USUARIOS",
               o."TELEFONE" AS "OFICINA_TELEFONE",
               ce.telefone AS "CADASTRO_TELEFONE",
-              COALESCE(ce.latitude, o."LATITUDE") AS "LATITUDE",
-              COALESCE(ce.longitude, o."LONGITUDE") AS "LONGITUDE"
+              ${sqlParCoordenadas().lat} AS "LATITUDE",
+              ${sqlParCoordenadas().lon} AS "LONGITUDE"
          FROM unnest($3::int[]) AS ids(id_oficina)
          LEFT JOIN "MAIN_REGISTER"."OFICINA" o
            ON o."ID_OFICINA" = ids.id_oficina${ligacaoCadastroEmpresa("o", "ids.id_oficina")}
