@@ -92,6 +92,8 @@ export interface ResultadoCriarRotas {
   criadas: { ID_ROTA_PROMOTOR: number; ID_CAMPANHA_PROMOTOR: number; ID_OFICINA: number }[];
   conflitos: ConflitoRota[];
   foraDoAlcance: number[];
+  /** Na distribuição automática, oficinas sem coordenadas: ficam sem rota (CONV-48). */
+  semCoordenadas: number[];
 }
 
 
@@ -130,6 +132,13 @@ interface CampanhaCarregada {
 }
 
 const numeroOuNulo = (v: unknown): number | null => (v == null ? null : Number(v));
+
+/** Coordenada numérica, ou `null` para ausente, vazia ou não numérica. */
+const coordenadaOuNula = (v: unknown): number | null => {
+  if (v == null || (typeof v === "string" && v.trim() === "")) return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
 
 const idValido = (v: unknown): v is number => Number.isInteger(v) && (v as number) > 0;
 
@@ -315,7 +324,9 @@ export default class AdminDisparoService {
    *   demais seguem; os conflitos voltam em `conflitos`.
    * - Vínculo de outra campanha recusa a requisição inteira (400).
    * - `distribuir` usa a regra do auto-assign (`escolherPromotorMaisProximo`);
-   *   quem nenhum raio alcança volta em `foraDoAlcance`, sem rota.
+   *   quem nenhum raio alcança volta em `foraDoAlcance`, sem rota; quem não
+   *   tem coordenadas volta em `semCoordenadas`, também sem rota (CONV-48). A
+   *   atribuição manual não depende de coordenadas.
    * - Cria com `agendar: false`: nada é enfileirado até o disparo (CONV-15).
    */
   static async criarRotas(
@@ -360,6 +371,7 @@ export default class AdminDisparoService {
 
     const conflitos: ConflitoRota[] = [];
     const foraDoAlcance: number[] = [];
+    const semCoordenadas: number[] = [];
     const porVinculo = new Map<number, number[]>();
     const atribuidaNestePedido = new Map<number, number>();
 
@@ -400,10 +412,11 @@ export default class AdminDisparoService {
 
       let idVinculo = par.idCampanhaPromotor;
       if (idVinculo == null) {
-        const escolhido =
-          s?.lat != null && s?.lon != null
-            ? escolherPromotorMaisProximo({ lat: s.lat, lon: s.lon }, candidatos)
-            : null;
+        if (s?.lat == null || s?.lon == null) {
+          semCoordenadas.push(par.idOficina);
+          continue;
+        }
+        const escolhido = escolherPromotorMaisProximo({ lat: s.lat, lon: s.lon }, candidatos);
         if (!escolhido) {
           foraDoAlcance.push(par.idOficina);
           continue;
@@ -429,7 +442,7 @@ export default class AdminDisparoService {
       }
     }
 
-    return { criadas, conflitos, foraDoAlcance };
+    return { criadas, conflitos, foraDoAlcance, semCoordenadas };
   }
 
   /**
@@ -495,8 +508,8 @@ export default class AdminDisparoService {
           recusou: l.RECUSOU_NESTA_CAMPANHA === true,
           importada: l.IMPORTADA === true,
           temWhatsapp: temWhatsappPelosCandidatos(l),
-          lat: numeroOuNulo(l.LATITUDE),
-          lon: numeroOuNulo(l.LONGITUDE),
+          lat: coordenadaOuNula(l.LATITUDE),
+          lon: coordenadaOuNula(l.LONGITUDE),
         },
       ])
     );

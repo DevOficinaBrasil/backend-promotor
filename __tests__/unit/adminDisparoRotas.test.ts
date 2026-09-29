@@ -79,6 +79,7 @@ describe("AdminDisparoService.criarRotas", () => {
       criadas: [{ ID_ROTA_PROMOTOR: 1310, ID_CAMPANHA_PROMOTOR: 31, ID_OFICINA: 10 }],
       conflitos: [],
       foraDoAlcance: [],
+      semCoordenadas: [],
     });
     // A situação não consulta a comunidade: pertencer a ela não é requisito.
     expect(sqlSituacao()).not.toContain("USUARIO_COMMUNITY");
@@ -194,7 +195,40 @@ describe("AdminDisparoService.criarRotas", () => {
       { ID_ROTA_PROMOTOR: 1310, ID_CAMPANHA_PROMOTOR: 31, ID_OFICINA: 10 },
       { ID_ROTA_PROMOTOR: 1320, ID_CAMPANHA_PROMOTOR: 32, ID_OFICINA: 11 },
     ]);
-    expect(r.foraDoAlcance).toEqual([12, 13]);
+    expect(r.foraDoAlcance).toEqual([12]);
+    // CONV-48: sem coordenadas não é "fora do alcance".
+    expect(r.semCoordenadas).toEqual([13]);
+  });
+
+  it("distribuir: oficina sem coordenadas vai para semCoordenadas, sem rota (CONV-48)", async () => {
+    linhasSituacao = [
+      situacao({ ID_OFICINA: 10, LATITUDE: -23.56, LONGITUDE: -46.64 }),
+      situacao({ ID_OFICINA: 20, LATITUDE: null, LONGITUDE: -46.64 }),
+      situacao({ ID_OFICINA: 21, LATITUDE: "", LONGITUDE: "" }),
+      situacao({ ID_OFICINA: 22, LATITUDE: "abc", LONGITUDE: "-46.6" }),
+    ];
+
+    const r = await AdminDisparoService.criarRotas(77, { distribuir: true, idOficinas: [10, 20, 21, 22] }, 900);
+
+    expect(r.semCoordenadas).toEqual([20, 21, 22]);
+    expect(r.foraDoAlcance).toEqual([]);
+    expect(r.criadas).toEqual([{ ID_ROTA_PROMOTOR: 1310, ID_CAMPANHA_PROMOTOR: 31, ID_OFICINA: 10 }]);
+    expect(createRotasMock).toHaveBeenCalledTimes(1);
+    expect(createRotasMock).toHaveBeenCalledWith(31, [10], 900, { agendar: false });
+  });
+
+  it("atribuição manual de oficina sem coordenadas cria a rota (CONV-48)", async () => {
+    linhasSituacao = [situacao({ ID_OFICINA: 10, LATITUDE: null, LONGITUDE: null })];
+
+    const r = await AdminDisparoService.criarRotas(77, { atribuicoes: [{ idCampanhaPromotor: 32, idOficina: 10 }] }, 900);
+
+    expect(createRotasMock).toHaveBeenCalledWith(32, [10], 900, { agendar: false });
+    expect(r).toEqual({
+      criadas: [{ ID_ROTA_PROMOTOR: 1320, ID_CAMPANHA_PROMOTOR: 32, ID_OFICINA: 10 }],
+      conflitos: [],
+      foraDoAlcance: [],
+      semCoordenadas: [],
+    });
   });
 
   it("distribuir também aplica as validações por oficina", async () => {

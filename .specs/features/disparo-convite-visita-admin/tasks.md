@@ -1437,9 +1437,9 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] Distribuição: oficina sem coordenadas → `semCoordenadas`, sem rota e sem entrar em `foraDoAlcance`
-- [ ] Atribuição manual de oficina sem coordenadas cria a rota
-- [ ] Gate quick passa
+- [x] Distribuição: oficina sem coordenadas → `semCoordenadas`, sem rota e sem entrar em `foraDoAlcance`
+- [x] Atribuição manual de oficina sem coordenadas cria a rota
+- [x] Gate quick passa
 
 **Tests**: unit
 **Gate**: quick
