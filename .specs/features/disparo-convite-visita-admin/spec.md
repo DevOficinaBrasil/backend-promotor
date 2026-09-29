@@ -313,7 +313,7 @@ A Oficina Brasil quer inverter isso:
 | CONV-08 | P1: Busca - AC3 | Design | Implementing |
 | CONV-09 | P1: Busca - AC4 | Design | Implementing |
 | CONV-10 | P1: Busca - AC5 | Design | Implementing |
-| CONV-11 | P1: Busca - AC6 | Design | Pending |
+| CONV-11 | P1: Busca - AC6 | Design | Implementing |
 | CONV-12 | P1: Busca - AC7 | Design | Implementing |
 | CONV-13 | P1: Rotas - AC1 | Design | Implementing |
 | CONV-14 | P1: Rotas - AC2 | Design | Implementing |

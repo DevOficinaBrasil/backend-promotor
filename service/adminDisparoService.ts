@@ -1,14 +1,11 @@
 import { AppDataSourceSync } from "../data-source";
-import SegmentacaoService from "./segmentacaoService";
 import OficinaService, {
-  OficinaSegmentada,
-  RegiaoResolvida,
+  OficinaBuscada,
   sqlOficinaImportada,
   sqlRecusouNaCampanha,
   sqlUsuariosDaOficina,
   temWhatsappPelosCandidatos,
 } from "./oficinaService";
-import GeolocationService from "./geolocationService";
 import RotaService, { escolherPromotorMaisProximo } from "./rotaService";
 import RotaPromotor, { StatusRota } from "../entities/RotaPromotor";
 import { ligacaoCadastroEmpresa } from "../utils/sqlCadastroEmpresa";
@@ -16,22 +13,12 @@ import NotificacaoVisita, { CanalNotificacao, StatusNotificacaoVisita } from "..
 import { planejarDisparo, tetoMinimo, TETO_DIARIO_MAXIMO } from "../utils/agendamento";
 import { estadoConvite, EstadoConvite } from "../utils/statusNotificacaoVisita";
 import { AdminDisparoErro } from "../utils/adminDisparoErro";
+import { MSG_UF_INVALIDA, validarFiltrosBusca } from "../utils/filtroBuscaOficina";
 
 export { AdminDisparoErro };
 
-/** Tenant do CRM que é a base Oficina Brasil inteira (CONV-08, CONV-12). */
-export const TENANT_OFICINA_BRASIL = 15;
-/** Teto de contatos varridos no CRM por segmentação (CONV-10). */
-export const MAX_CONTATOS_SEGMENTACAO = 5000;
-/** Prazo de uma chamada ao CRM antes de virar 502 (CONV-11). */
-export const PRAZO_CRM_MS = 60_000;
-
-export const MSG_SEM_REGIAO = "Informe a região (UF e cidade, ou CEP e raio)";
-export const MSG_SEM_CRITERIO = "Informe ao menos um critério de segmentação";
-export const MSG_SEGMENTACAO_INDISPONIVEL = "Segmentação indisponível";
-export const MSG_CEP_NAO_ENCONTRADO = "CEP não encontrado";
-
-export type RegiaoEntrada = { uf: string; cidade: string } | { cep: string; raioKm: number };
+/** Falha de consulta na busca de oficinas (CONV-11). */
+export const MSG_BUSCA_INDISPONIVEL = "Não foi possível buscar as oficinas";
 
 export const MSG_JA_EM_ROTA = "Oficina já está em rota nesta campanha";
 export const MSG_RECUSOU = "Oficina recusou a visita nesta campanha";
@@ -144,37 +131,6 @@ interface CampanhaCarregada {
 
 const numeroOuNulo = (v: unknown): number | null => (v == null ? null : Number(v));
 
-const textoPreenchido = (v: unknown): v is string => typeof v === "string" && v.trim() !== "";
-
-/** Região obrigatória: UF + cidade, ou CEP + raio maior que 0 (CONV-06). */
-function validarRegiao(regiao: unknown): RegiaoEntrada {
-  const r = (regiao ?? {}) as Record<string, unknown>;
-  if (textoPreenchido(r.uf) && textoPreenchido(r.cidade)) {
-    return { uf: r.uf, cidade: r.cidade };
-  }
-  if (
-    textoPreenchido(r.cep) &&
-    typeof r.raioKm === "number" &&
-    Number.isFinite(r.raioKm) &&
-    r.raioKm > 0
-  ) {
-    return { cep: r.cep, raioKm: r.raioKm };
-  }
-  throw new AdminDisparoErro(400, MSG_SEM_REGIAO);
-}
-
-/** Ao menos um critério (CONV-07); DSL presente mas malformada também é 400. */
-function validarCriterio(dsl: unknown): Record<string, unknown> {
-  if (dsl == null || typeof dsl !== "object" || Array.isArray(dsl) || Object.keys(dsl).length === 0) {
-    throw new AdminDisparoErro(400, MSG_SEM_CRITERIO);
-  }
-  const validacao = SegmentacaoService.validateDsl(dsl as Record<string, unknown>);
-  if (!validacao.valid) {
-    throw new AdminDisparoErro(400, "Filtro de segmentação inválido.", { details: validacao.errors });
-  }
-  return dsl as Record<string, unknown>;
-}
-
 const idValido = (v: unknown): v is number => Number.isInteger(v) && (v as number) > 0;
 
 /** Atribuição manual ou distribuição automática, com ids inteiros positivos. */
@@ -198,22 +154,6 @@ function validarEntradaRotas(entrada: unknown): EntradaCriarRotas {
     return { distribuir: true, idOficinas: e.idOficinas as number[] };
   }
   throw new AdminDisparoErro(400, MSG_ENTRADA_ROTAS);
-}
-
-/** Chamada ao CRM com prazo; falha ou demora viram 502 (CONV-11). */
-async function chamarCrm<T>(chamada: () => Promise<T>): Promise<T> {
-  let timer: NodeJS.Timeout | undefined;
-  const prazo = new Promise<never>((_, rejeitar) => {
-    timer = setTimeout(() => rejeitar(new Error("CRM timeout")), PRAZO_CRM_MS);
-  });
-  try {
-    return await Promise.race([chamada(), prazo]);
-  } catch (erro) {
-    console.error("[adminDisparo] CRM indisponível", { erro: (erro as Error)?.message });
-    throw new AdminDisparoErro(502, MSG_SEGMENTACAO_INDISPONIVEL);
-  } finally {
-    clearTimeout(timer);
-  }
 }
 
 export default class AdminDisparoService {
@@ -328,52 +268,42 @@ export default class AdminDisparoService {
     };
   }
 
-  /** Campos e operadores de segmentação do tenant 15, não do tenant da campanha (CONV-12). */
-  static async listarCamposSegmentacao(): Promise<Record<string, unknown>> {
-    return chamarCrm(() => SegmentacaoService.listFilterOptions(TENANT_OFICINA_BRASIL));
+  /** Linhas de atividade e UFs existentes na base (CONV-12). */
+  static async listarFiltrosBusca(): Promise<{ linhas: string[]; ufs: string[] }> {
+    return OficinaService.opcoesFiltroBusca();
   }
 
-  /** Valores de um campo de critério no tenant 15 (CONV-12). */
-  static async listarValoresCampo(path: string): Promise<Array<{ valor: string; contatos: number }>> {
-    return SegmentacaoService.valoresDeCampo(TENANT_OFICINA_BRASIL, path);
+  /** Cidades da UF (CONV-12); UF ausente ou sem 2 letras é 400. */
+  static async listarCidades(uf: unknown): Promise<{ cidades: string[] }> {
+    const filtros = validarFiltrosBusca({ uf });
+    if (!filtros.uf) {
+      throw new AdminDisparoErro(400, MSG_UF_INVALIDA);
+    }
+    return { cidades: await OficinaService.cidadesPorUf(filtros.uf) };
   }
 
   /**
-   * Oficinas da base Oficina Brasil que atendem aos critérios e estão na região
-   * (CONV-06 a CONV-11). Região e critério são validados antes de qualquer
-   * chamada ao CRM; o CEP é convertido em coordenadas antes também, para um CEP
-   * ruim não gastar a varredura. O CRM roda sempre no tenant 15.
+   * Oficinas da base Oficina Brasil pelos filtros opcionais (CONV-06 a
+   * CONV-11). Os filtros são validados antes de qualquer consulta; não há CRM
+   * nem geocodificação. Falha da consulta vira 500 com a mensagem da spec.
    */
-  static async segmentarOficinas(
+  static async buscarOficinas(
     idCampanha: number,
-    regiao: unknown,
-    dsl: unknown
-  ): Promise<{ oficinas: OficinaSegmentada[]; truncado: boolean; total: number }> {
-    const entrada = validarRegiao(regiao);
-    const filtro = validarCriterio(dsl);
+    entrada: unknown
+  ): Promise<{ oficinas: OficinaBuscada[]; truncado: boolean; total: number }> {
+    const filtros = validarFiltrosBusca(entrada);
     const campanha = await this.carregarCampanha(idCampanha);
 
-    let resolvida: RegiaoResolvida;
-    if ("cep" in entrada) {
-      const coords = await new GeolocationService().getLatLongByCep(entrada.cep);
-      if (!coords) {
-        throw new AdminDisparoErro(400, MSG_CEP_NAO_ENCONTRADO);
-      }
-      resolvida = { lat: coords.lat, lon: coords.long, raioKm: entrada.raioKm };
-    } else {
-      resolvida = entrada;
+    try {
+      const { oficinas, truncado } = await OficinaService.buscarOficinasBase(filtros, {
+        idCampanha,
+        empresaSlug: campanha.EMPRESA_SLUG,
+      });
+      return { oficinas, truncado, total: oficinas.length };
+    } catch (erro) {
+      console.error("[adminDisparo] busca de oficinas falhou", { erro: (erro as Error)?.message });
+      throw new AdminDisparoErro(500, MSG_BUSCA_INDISPONIVEL);
     }
-
-    const contatos = await chamarCrm(() =>
-      SegmentacaoService.previewContactsAll(filtro, TENANT_OFICINA_BRASIL, MAX_CONTATOS_SEGMENTACAO)
-    );
-
-    const oficinas = await OficinaService.getOficinasBaseSegmentadas(contatos.externalUserIds, resolvida, {
-      idCampanha,
-      empresaSlug: campanha.EMPRESA_SLUG,
-    });
-
-    return { oficinas, truncado: contatos.truncado, total: oficinas.length };
   }
 
   /**

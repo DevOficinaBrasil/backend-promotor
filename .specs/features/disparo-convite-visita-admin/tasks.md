@@ -1391,7 +1391,7 @@ T35
 - [x] 5001 linhas → 5000 devolvidas e `truncado: true`; 5000 → `truncado: false`
 - [x] `semCoordenadas` verdadeiro quando `ce` e `o` não têm lat/long numéricos
 - [x] Opções: linhas distintas, UFs de 2 letras, cidades só da UF pedida
-- [ ] `getOficinasBaseSegmentadas` removida com os testes dela (comportamento removido da spec) (adiado para T39: o único chamador, `segmentarOficinas`, sai lá)
+- [x] `getOficinasBaseSegmentadas` removida com os testes dela (comportamento removido da spec) (feito no commit de T39, junto com o único chamador, `segmentarOficinas`)
 - [x] Gate quick passa
 
 **Tests**: unit
@@ -1413,10 +1413,10 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] Não chama CRM nem geocodificação; campanha inexistente → 404
-- [ ] Falha de consulta → `AdminDisparoErro(500, "Não foi possível buscar as oficinas")`
-- [ ] Constantes e testes de CRM do admin removidos (comportamento removido da spec)
-- [ ] Gate quick passa
+- [x] Não chama CRM nem geocodificação; campanha inexistente → 404
+- [x] Falha de consulta → `AdminDisparoErro(500, "Não foi possível buscar as oficinas")`
+- [x] Constantes e testes de CRM do admin removidos (comportamento removido da spec)
+- [x] Gate quick passa
 
 **Tests**: unit
 **Gate**: quick

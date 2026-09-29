@@ -10,31 +10,13 @@ import { FiltrosBusca, sqlFiltrosBusca, sqlTextoNormalizado } from "../utils/fil
 // Earth's radius in kilometers (used for Haversine formula)
 const EARTH_RADIUS_KM = 6371;
 
-/** Região já resolvida: UF + cidade, ou centro (do CEP) + raio em km. */
-export type RegiaoResolvida =
-  | { uf: string; cidade: string }
-  | { lat: number; lon: number; raioKm: number };
-
-/** Oficina da base Oficina Brasil devolvida à tela de admin (CONV-09). */
-export interface OficinaSegmentada {
-  ID_OFICINA: number;
-  NOME: string;
-  CIDADE: string;
-  ESTADO: string;
-  CEP: string;
-  LATITUDE: number;
-  LONGITUDE: number;
-  membroComunidade: boolean;
-  importada: boolean;
-  temWhatsapp: boolean;
-  recusouNestaCampanha: boolean;
-  rotaAtual: {
-    ID_ROTA_PROMOTOR: number;
-    ID_CAMPANHA_PROMOTOR: number;
-    promotorNome: string | null;
-    estado: EstadoConvite;
-  } | null;
-}
+/** Rota ativa da oficina na campanha, com o estado do convite. */
+export type RotaAtualOficina = {
+  ID_ROTA_PROMOTOR: number;
+  ID_CAMPANHA_PROMOTOR: number;
+  promotorNome: string | null;
+  estado: EstadoConvite;
+} | null;
 
 /**
  * Oficina devolvida pela busca do admin (CONV-09). Sem coordenada numérica no
@@ -54,7 +36,7 @@ export interface OficinaBuscada {
   importada: boolean;
   temWhatsapp: boolean;
   recusouNestaCampanha: boolean;
-  rotaAtual: OficinaSegmentada["rotaAtual"];
+  rotaAtual: RotaAtualOficina;
 }
 
 /** Teto de oficinas por busca do admin (CONV-10). */
@@ -64,20 +46,6 @@ export const MAX_OFICINAS_BUSCA = 5000;
 function sqlCoordenadaTexto(expr: string): string {
   const t = `replace(trim(${expr}), ',', '.')`;
   return `(CASE WHEN ${t} ~ '^-?[0-9]{1,3}(\\.[0-9]+)?$' THEN ${t}::double precision END)`;
-}
-
-// Mesmos pares do `translate` no SQL: os dois lados precisam casar.
-const ACENTOS = "áàâãäéèêëíìîïóòôõöúùûüç";
-const SEM_ACENTOS = "aaaaaeeeeiiiiooooouuuuc";
-
-/** Cidade em minúsculas e sem acento, igual ao `translate(lower(trim(...)))` do SQL. */
-export function normalizarCidade(cidade: string): string {
-  return Array.from(cidade.trim().toLowerCase())
-    .map((c) => {
-      const i = ACENTOS.indexOf(c);
-      return i >= 0 ? SEM_ACENTOS[i] : c;
-    })
-    .join("");
 }
 
 /**
@@ -143,7 +111,7 @@ export function temWhatsappPelosCandidatos(linha: {
 }
 
 /** Rota ativa da oficina nesta campanha, com o estado do convite, a partir das colunas `ROTA_*`. */
-function mapearRotaAtual(linha: any): OficinaSegmentada["rotaAtual"] {
+function mapearRotaAtual(linha: any): RotaAtualOficina {
   if (linha.ROTA_ID_ROTA_PROMOTOR == null) return null;
   return {
     ID_ROTA_PROMOTOR: Number(linha.ROTA_ID_ROTA_PROMOTOR),
@@ -689,123 +657,6 @@ export default class OficinaService {
   }
 
   /**
-   * Oficinas da base Oficina Brasil (tenant 15 do CRM) que estão na região,
-   * a partir dos `external_user_id` que o CRM devolveu (CONV-08, CONV-09).
-   *
-   * Mesma ligação de `getCommunityOficinasSegmentadas` (USUARIO → OFICINA →
-   * dw.cadastro_empresa), mas sem exigir a comunidade: as flags dizem se a
-   * oficina é membro da comunidade do slug, importada para ele, já está em rota
-   * nesta campanha ou recusou convite aqui. `temWhatsapp` sai de
-   * `resolverTelefone`, a mesma regra do despacho (CONV-43), sobre todos os
-   * usuários da oficina na ordem do despacho.
-   */
-  public static async getOficinasBaseSegmentadas(
-    externalUserIds: number[],
-    regiao: RegiaoResolvida,
-    ctx: { idCampanha: number; empresaSlug: string | null }
-  ): Promise<OficinaSegmentada[]> {
-    if (externalUserIds.length === 0) return [];
-
-    const fixos: unknown[] = [ctx.idCampanha, ctx.empresaSlug];
-    let filtroRegiao: string;
-    if ("uf" in regiao) {
-      fixos.push(regiao.uf.trim().toUpperCase(), normalizarCidade(regiao.cidade));
-      filtroRegiao = `ce.estado = $3
-          AND translate(lower(trim(ce.cidade)), '${ACENTOS}', '${SEM_ACENTOS}') = $4`;
-    } else {
-      fixos.push(regiao.lat, regiao.lon, regiao.raioKm);
-      filtroRegiao = `(
-            ${EARTH_RADIUS_KM} * acos(LEAST(1.0, GREATEST(-1.0,
-              cos(radians($3)) * cos(radians(ce.latitude)) *
-              cos(radians(ce.longitude) - radians($4)) +
-              sin(radians($3)) * sin(radians(ce.latitude))
-            )))
-          ) <= $5`;
-    }
-
-    const BATCH_SIZE = 1000;
-    const agregado: OficinaSegmentada[] = [];
-    const vistos = new Set<number>();
-
-    for (let i = 0; i < externalUserIds.length; i += BATCH_SIZE) {
-      const lote = externalUserIds.slice(i, i + BATCH_SIZE);
-      const placeholders = lote.map((_, idx) => `$${idx + fixos.length + 1}`).join(", ");
-
-      const query = `
-        SELECT DISTINCT ON (us."ID_OFICINA")
-          us."ID_OFICINA" AS "ID_OFICINA",
-          COALESCE(o."NOME_FANTASIA", ce.razao_social) AS "NOME",
-          ce.cidade AS "CIDADE",
-          ce.estado AS "ESTADO",
-          ce.cep AS "CEP",
-          ce.latitude AS "LATITUDE",
-          ce.longitude AS "LONGITUDE",
-          o."TELEFONE" AS "OFICINA_TELEFONE",
-          ce.telefone AS "CADASTRO_TELEFONE",
-          ${sqlUsuariosDaOficina('us."ID_OFICINA"')} AS "USUARIOS",
-          EXISTS (
-            SELECT 1
-              FROM "MAIN_REGISTER"."USUARIO" u_cm
-              JOIN "MAIN_REGISTER"."USUARIO_COMMUNITY" uc ON uc."id_usuario" = u_cm."ID_USUARIO"
-              JOIN "OFICINA_PORTAL"."COMMUNITIES" cm ON cm."CommunityID" = uc."id_community"
-             WHERE u_cm."ID_OFICINA" = us."ID_OFICINA"
-               AND cm."EmpresaSlug" = $2
-          ) AS "MEMBRO_COMUNIDADE",
-          ${sqlOficinaImportada('us."ID_OFICINA"', "$2")} AS "IMPORTADA",
-          ${sqlRecusouNaCampanha('us."ID_OFICINA"', "$1")} AS "RECUSOU_NESTA_CAMPANHA",
-          rota."ID_ROTA_PROMOTOR" AS "ROTA_ID_ROTA_PROMOTOR",
-          rota."ID_CAMPANHA_PROMOTOR" AS "ROTA_ID_CAMPANHA_PROMOTOR",
-          rota."PROMOTOR_NOME" AS "ROTA_PROMOTOR_NOME",
-          rota."NV_STATUS" AS "ROTA_NV_STATUS",
-          rota."NV_EXPIRA_EM" AS "ROTA_NV_EXPIRA_EM",
-          rota."NV_ORIGEM_ACEITE" AS "ROTA_NV_ORIGEM_ACEITE"
-        FROM "MAIN_REGISTER"."USUARIO" us
-        LEFT JOIN "MAIN_REGISTER"."OFICINA" o
-          ON o."ID_OFICINA" = us."ID_OFICINA"${ligacaoCadastroEmpresa('o', 'us."ID_OFICINA"')}
-        LEFT JOIN LATERAL (
-          SELECT rp."ID_ROTA_PROMOTOR", rp."ID_CAMPANHA_PROMOTOR",
-                 p."NOME" AS "PROMOTOR_NOME",
-                 nv."STATUS" AS "NV_STATUS",
-                 nv."EXPIRA_EM" AS "NV_EXPIRA_EM",
-                 nv."ORIGEM_ACEITE" AS "NV_ORIGEM_ACEITE"
-            FROM "CAMPANHAS_OB"."ROTA_PROMOTOR" rp
-            JOIN "CAMPANHAS_OB"."CAMPANHA_PROMOTOR" cp
-              ON cp."ID_CAMPANHA_PROMOTOR" = rp."ID_CAMPANHA_PROMOTOR"
-            LEFT JOIN "CAMPANHAS_OB"."PROMOTOR" p
-              ON p."ID_PROMOTOR" = cp."ID_PROMOTOR"
-            LEFT JOIN "CAMPANHAS_OB"."NOTIFICACAO_VISITA" nv
-              ON nv."ID_ROTA_PROMOTOR" = rp."ID_ROTA_PROMOTOR"
-           WHERE rp."ID_OFICINA" = us."ID_OFICINA"
-             AND cp."ID_CAMPANHA" = $1
-             AND rp."DELETED_AT" IS NULL
-             AND cp."DELETED_AT" IS NULL
-           ORDER BY rp."ID_ROTA_PROMOTOR" DESC
-           LIMIT 1
-        ) rota ON TRUE
-        WHERE us."ID_USUARIO" IN (${placeholders})
-          AND us."ID_OFICINA" IS NOT NULL
-          AND ce.latitude IS NOT NULL
-          AND ce.longitude IS NOT NULL
-          AND ce.cnpj_int IS NOT NULL
-          AND ce.status_receita = 'ATIVA'
-          AND ${filtroRegiao}
-        ORDER BY us."ID_OFICINA"
-      `;
-
-      const linhas = await AppDataSourceSync.query(query, [...fixos, ...lote]);
-      // Vários usuários por oficina podem cair em lotes diferentes.
-      for (const linha of linhas) {
-        const idOficina = Number(linha.ID_OFICINA);
-        if (vistos.has(idOficina)) continue;
-        vistos.add(idOficina);
-        agregado.push(OficinaService.mapearOficinaSegmentada(linha));
-      }
-    }
-
-    return agregado;
-  }
-
-  /**
    * Busca do admin sobre `MAIN_REGISTER.OFICINA` (CONV-06 a CONV-10, CONV-48).
    *
    * O único critério fixo é CNPJ ativo na Receita, pela ligação canônica com
@@ -964,25 +815,6 @@ export default class OficinaService {
       temWhatsapp: temWhatsappPelosCandidatos(linha),
       recusouNestaCampanha: linha.RECUSOU_NESTA_CAMPANHA === true,
       rotaAtual: mapearRotaAtual(linha),
-    };
-  }
-
-  private static mapearOficinaSegmentada(linha: any): OficinaSegmentada {
-    const rotaAtual = mapearRotaAtual(linha);
-
-    return {
-      ID_OFICINA: Number(linha.ID_OFICINA),
-      NOME: linha.NOME,
-      CIDADE: linha.CIDADE,
-      ESTADO: linha.ESTADO,
-      CEP: linha.CEP,
-      LATITUDE: Number(linha.LATITUDE),
-      LONGITUDE: Number(linha.LONGITUDE),
-      membroComunidade: linha.MEMBRO_COMUNIDADE === true,
-      importada: linha.IMPORTADA === true,
-      temWhatsapp: temWhatsappPelosCandidatos(linha),
-      recusouNestaCampanha: linha.RECUSOU_NESTA_CAMPANHA === true,
-      rotaAtual,
     };
   }
 }

@@ -18,7 +18,6 @@ const router = Router();
 router.use(adminAuthMiddleware);
 
 const IdCampanhaParams = z.object({ id: z.coerce.number().int().positive() });
-const ValoresQuery = z.object({ path: z.string().min(1) });
 const RotasQuery = z.object({ estado: z.string().min(1).optional() });
 
 const BASE = "/admin";
@@ -75,58 +74,6 @@ createDocumentedRoute(router, {
     description: "{ vinculados: [{ID_CAMPANHA_PROMOTOR, ID_PROMOTOR, NOME, RAIO, LAT, LNG}], doCliente: [{ID_PROMOTOR, NOME, LAT, LNG}] }",
     security: SEGURANCA,
     responses: { 200: { description: "Promotores" }, ...RESPOSTAS_AUTH, 404: { description: "Campanha não encontrada" } },
-  },
-});
-
-createDocumentedRoute(router, {
-  method: "get",
-  path: "/segmentacao/campos",
-  basePath: BASE,
-  handler: responder(() => AdminDisparoService.listarCamposSegmentacao()),
-  documentation: {
-    tags: ["Admin"],
-    summary: "Campos de segmentação do tenant 15 (base Oficina Brasil)",
-    security: SEGURANCA,
-    responses: { 200: { description: "filter-options do CRM" }, ...RESPOSTAS_AUTH, 502: { description: "Segmentação indisponível" } },
-  },
-});
-
-createDocumentedRoute(router, {
-  method: "get",
-  path: "/segmentacao/valores",
-  basePath: BASE,
-  schemas: { query: ValoresQuery },
-  handler: responder(async (req) => ({
-    valores: await AdminDisparoService.listarValoresCampo((req as any).validatedQuery.path),
-  })),
-  documentation: {
-    tags: ["Admin"],
-    summary: "Valores de um campo de segmentação no tenant 15",
-    security: SEGURANCA,
-    responses: { 200: { description: "{ valores: [{valor, contatos}] }" }, ...RESPOSTAS_AUTH },
-  },
-});
-
-createDocumentedRoute(router, {
-  method: "post",
-  path: "/campanhas/:id/oficinas/segmentar",
-  basePath: BASE,
-  schemas: { params: IdCampanhaParams },
-  handler: responder((req) =>
-    AdminDisparoService.segmentarOficinas(idCampanha(req), req.body?.regiao, req.body?.filtroSegmentacao)
-  ),
-  documentation: {
-    tags: ["Admin"],
-    summary: "Segmentar a base Oficina Brasil por região e critério",
-    description: "Body: { regiao: {uf, cidade} | {cep, raioKm}, filtroSegmentacao }. Resposta: { oficinas, truncado, total }.",
-    security: SEGURANCA,
-    responses: {
-      200: { description: "Oficinas segmentadas" },
-      400: { description: "Sem região, sem critério ou CEP não encontrado" },
-      ...RESPOSTAS_AUTH,
-      404: { description: "Campanha não encontrada" },
-      502: { description: "Segmentação indisponível" },
-    },
   },
 });
 

@@ -14,9 +14,6 @@ jest.mock("../../service/adminDisparoService", () => {
     default: {
       listarCampanhasAtivas: jest.fn(),
       listarPromotores: jest.fn(),
-      listarCamposSegmentacao: jest.fn(),
-      listarValoresCampo: jest.fn(),
-      segmentarOficinas: jest.fn(),
       listarRotasComEstado: jest.fn(),
       criarRotas: jest.fn(),
       previaDisparo: jest.fn(),
@@ -42,10 +39,7 @@ const tokenAdmin = () =>
 const tokenNaoAdmin = () =>
   jwt.sign({ user: { ID_USUARIO: 901, IS_ADMIN: false } }, SEGREDO, { algorithm: "HS256", expiresIn: "1h" });
 
-const regiao = { uf: "SP", cidade: "Campinas" };
-const filtroSegmentacao = { if: { behavior: {} }, then: { decision: "include" }, default: { decision: "exclude" } };
-
-// As 9 rotas do design, com um corpo válido e o que cada uma deve repassar ao service.
+// As rotas do design, com um corpo válido e o que cada uma deve repassar ao service.
 const ROTAS: Array<{
   nome: string;
   metodo: "get" | "post";
@@ -71,32 +65,6 @@ const ROTAS: Array<{
     metodoService: "listarPromotores",
     argumentos: [77],
     resposta: { vinculados: [], doCliente: [] },
-  },
-  {
-    nome: "GET /admin/segmentacao/campos",
-    metodo: "get",
-    url: "/admin/segmentacao/campos",
-    metodoService: "listarCamposSegmentacao",
-    argumentos: [],
-    resposta: { fieldOptionArray: [] },
-  },
-  {
-    nome: "GET /admin/segmentacao/valores",
-    metodo: "get",
-    url: "/admin/segmentacao/valores?path=contactAttributes.gender",
-    metodoService: "listarValoresCampo",
-    argumentos: ["contactAttributes.gender"],
-    resposta: [{ valor: "Masculino", contatos: 3 }],
-    esperado: { valores: [{ valor: "Masculino", contatos: 3 }] },
-  },
-  {
-    nome: "POST /admin/campanhas/:id/oficinas/segmentar",
-    metodo: "post",
-    url: "/admin/campanhas/77/oficinas/segmentar",
-    corpo: { regiao, filtroSegmentacao },
-    metodoService: "segmentarOficinas",
-    argumentos: [77, regiao, filtroSegmentacao],
-    resposta: { oficinas: [], truncado: false, total: 0 },
   },
   {
     nome: "GET /admin/campanhas/:id/rotas",
@@ -214,21 +182,6 @@ describe("autenticação antes da validação", () => {
 
 // Erros de domínio viram o status do design, com a mensagem e os extras no corpo.
 describe("mapeamento de erros de domínio", () => {
-  it("400: sem região na segmentação", async () => {
-    service.segmentarOficinas.mockRejectedValue(
-      new AdminDisparoErro(400, "Informe a região (UF e cidade, ou CEP e raio)")
-    );
-
-    const r = await request(app)
-      .post("/admin/campanhas/77/oficinas/segmentar")
-      .set("Authorization", `Bearer ${tokenAdmin()}`)
-      .send({ filtroSegmentacao });
-
-    expect(r.status).toBe(400);
-    expect(r.body).toEqual({ message: "Informe a região (UF e cidade, ou CEP e raio)" });
-    expect(service.segmentarOficinas).toHaveBeenCalledWith(77, undefined, filtroSegmentacao);
-  });
-
   it("400: teto inválido no disparo", async () => {
     service.disparar.mockRejectedValue(new AdminDisparoErro(400, "Teto diário deve ser um inteiro entre 1 e 1000"));
 
@@ -288,18 +241,6 @@ describe("mapeamento de erros de domínio", () => {
 
     expect(r.status).toBe(422);
     expect(r.body.tetoMinimo).toBe(13);
-  });
-
-  it("502: CRM indisponível", async () => {
-    service.segmentarOficinas.mockRejectedValue(new AdminDisparoErro(502, "Segmentação indisponível"));
-
-    const r = await request(app)
-      .post("/admin/campanhas/77/oficinas/segmentar")
-      .set("Authorization", `Bearer ${tokenAdmin()}`)
-      .send({ regiao, filtroSegmentacao });
-
-    expect(r.status).toBe(502);
-    expect(r.body).toEqual({ message: "Segmentação indisponível" });
   });
 
   it("erro inesperado → 500 genérico, sem vazar a mensagem interna", async () => {
