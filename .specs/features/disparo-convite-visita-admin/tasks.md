@@ -1199,8 +1199,8 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] 422 mostra o teto mínimo; o resumo aparece depois do disparo
-- [ ] `npx tsc --noEmit` sem erros novos
+- [x] 422 mostra o teto mínimo; o resumo aparece depois do disparo
+- [x] `npx tsc --noEmit` sem erros novos
 
 **Tests**: none
 **Gate**: build
