@@ -1577,8 +1577,8 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] Oficina com `semCoordenadas` não gera marcador e pode ser selecionada para atribuição manual
-- [ ] `npx tsc --noEmit` sem erros novos
+- [x] Oficina com `semCoordenadas` não gera marcador e pode ser selecionada para atribuição manual
+- [x] `npx tsc --noEmit` sem erros novos
 
 **Tests**: none
 **Gate**: build
