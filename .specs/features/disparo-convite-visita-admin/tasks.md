@@ -1335,10 +1335,10 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] Oficina cuja única rota na campanha está `CANCELADO` é aceita em `criarRotas` (sem 409)
-- [ ] `listarRotasComEstado` não devolve nem conta rotas `CANCELADO`
-- [ ] Recusa em rota cancelada continua bloqueando (CONV-38)
-- [ ] SQL afirmada (L-004); gate quick passa
+- [x] Oficina cuja única rota na campanha está `CANCELADO` é aceita em `criarRotas` (sem 409)
+- [x] `listarRotasComEstado` não devolve nem conta rotas `CANCELADO`
+- [x] Recusa em rota cancelada continua bloqueando (CONV-38)
+- [x] SQL afirmada (L-004); gate quick passa
 
 **Tests**: unit
 **Gate**: quick

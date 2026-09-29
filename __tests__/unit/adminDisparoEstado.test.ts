@@ -166,4 +166,14 @@ describe("AdminDisparoService.listarRotasComEstado", () => {
     expect(s).toContain('nv."ORIGEM_ACEITE" AS "NV_ORIGEM_ACEITE"');
     expect(s).toContain('nv."EXPIRA_EM" AS "NV_EXPIRA_EM"');
   });
+
+  // T36 (CONV-42): rota CANCELADO não aparece nem entra nos totais.
+  it("exclui rotas CANCELADO da lista e dos totais pela SQL (L-004)", async () => {
+    await AdminDisparoService.listarRotasComEstado(77, undefined, agora);
+
+    const chamada = queryMock.mock.calls.find(([sql]) => sql.includes('"CAMPANHAS_OB"."ROTA_PROMOTOR" rp'))!;
+    expect(normalizarSql(chamada[0])).toContain(
+      'WHERE cp."ID_CAMPANHA" = $1 AND rp."DELETED_AT" IS NULL AND cp."DELETED_AT" IS NULL AND rp."STATUS" IS DISTINCT FROM \'CANCELADO\' ORDER BY rp."ID_ROTA_PROMOTOR"'
+    );
+  });
 });

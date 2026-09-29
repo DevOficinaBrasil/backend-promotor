@@ -247,6 +247,45 @@ describe("AdminDisparoService.criarRotas", () => {
     expect(queryMock).not.toHaveBeenCalled();
   });
 
+  // T36 (CONV-16, CONV-38): rota CANCELADO (DELETE /rota/:id) não conta como
+  // "já em rota"; a recusa feita nela continua bloqueando.
+  it("a rota ativa da situação ignora rota CANCELADO, além de DELETED_AT (L-004)", async () => {
+    linhasSituacao = [];
+
+    await AdminDisparoService.criarRotas(77, { atribuicoes: [{ idCampanhaPromotor: 31, idOficina: 10 }] });
+
+    expect(sqlSituacao()).toContain(
+      'WHERE rp."ID_OFICINA" = ids.id_oficina AND cp."ID_CAMPANHA" = $1 AND rp."DELETED_AT" IS NULL AND cp."DELETED_AT" IS NULL AND rp."STATUS" IS DISTINCT FROM \'CANCELADO\' ORDER BY rp."ID_ROTA_PROMOTOR" DESC LIMIT 1 ) rota ON TRUE'
+    );
+  });
+
+  it("oficina cuja única rota na campanha está CANCELADO é aceita, sem 409 (CONV-16)", async () => {
+    // Com a rota cancelada fora do LATERAL, a situação volta sem rota ativa.
+    linhasSituacao = [situacao({ ID_OFICINA: 10, ROTA_ID_CAMPANHA_PROMOTOR: null, ROTA_PROMOTOR_NOME: null })];
+
+    const r = await AdminDisparoService.criarRotas(77, { atribuicoes: [{ idCampanhaPromotor: 31, idOficina: 10 }] });
+
+    expect(r.conflitos).toEqual([]);
+    expect(r.criadas).toEqual([{ ID_ROTA_PROMOTOR: 1310, ID_CAMPANHA_PROMOTOR: 31, ID_OFICINA: 10 }]);
+    expect(createRotasMock).toHaveBeenCalledWith(31, [10], undefined, { agendar: false });
+  });
+
+  it("recusa numa rota cancelada continua bloqueando: 409 de recusa (CONV-38)", async () => {
+    linhasSituacao = [
+      situacao({ ID_OFICINA: 10, ROTA_ID_CAMPANHA_PROMOTOR: null, RECUSOU_NESTA_CAMPANHA: true }),
+    ];
+
+    const r = await AdminDisparoService.criarRotas(77, { atribuicoes: [{ idCampanhaPromotor: 31, idOficina: 10 }] });
+
+    expect(r.conflitos).toEqual([{ idOficina: 10, status: 409, motivo: MSG_RECUSOU }]);
+    expect(createRotasMock).not.toHaveBeenCalled();
+    // A checagem de recusa olha todas as rotas da oficina na campanha, sem
+    // filtrar status nem exclusão da rota.
+    const recusa = sqlSituacao().match(/EXISTS \( SELECT 1 FROM "CAMPANHAS_OB"."ROTA_PROMOTOR" rp_rec.*?\) AS "RECUSOU_NESTA_CAMPANHA"/)![0];
+    expect(recusa).not.toContain('rp_rec."STATUS"');
+    expect(recusa).not.toContain('rp_rec."DELETED_AT"');
+  });
+
   it("campanha inexistente → 404", async () => {
     queryMock.mockResolvedValue([]);
 

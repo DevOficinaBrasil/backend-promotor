@@ -10,7 +10,7 @@ import OficinaService, {
 } from "./oficinaService";
 import GeolocationService from "./geolocationService";
 import RotaService, { escolherPromotorMaisProximo } from "./rotaService";
-import RotaPromotor from "../entities/RotaPromotor";
+import RotaPromotor, { StatusRota } from "../entities/RotaPromotor";
 import { ligacaoCadastroEmpresa } from "../utils/sqlCadastroEmpresa";
 import NotificacaoVisita, { CanalNotificacao, StatusNotificacaoVisita } from "../entities/NotificacaoVisita";
 import { planejarDisparo, tetoMinimo, TETO_DIARIO_MAXIMO } from "../utils/agendamento";
@@ -514,8 +514,8 @@ export default class AdminDisparoService {
   }
 
   /**
-   * Situação de cada oficina nesta campanha numa query só: rota ativa e seu
-   * promotor, recusa, importada para o slug, candidatos de telefone e
+   * Situação de cada oficina nesta campanha numa query só: rota ativa (sem
+   * `DELETED_AT` e não `CANCELADO`) e seu promotor, recusa, importada para o slug, candidatos de telefone e
    * coordenadas (dw.cadastro_empresa, ou a OFICINA para importada sem dw).
    */
   private static async situacaoDasOficinas(
@@ -560,6 +560,7 @@ export default class AdminDisparoService {
               AND cp."ID_CAMPANHA" = $1
               AND rp."DELETED_AT" IS NULL
               AND cp."DELETED_AT" IS NULL
+              AND rp."STATUS" IS DISTINCT FROM '${StatusRota.CANCELADO}'
             ORDER BY rp."ID_ROTA_PROMOTOR" DESC
             LIMIT 1
          ) rota ON TRUE`,
@@ -711,7 +712,7 @@ export default class AdminDisparoService {
   }
 
   /**
-   * Rotas da campanha com o estado do convite (CONV-41), filtradas por
+   * Rotas da campanha com o estado do convite (CONV-41), sem as `CANCELADO`, filtradas por
    * `estado` quando informado (CONV-42). `totaisPorEstado` conta sempre todas
    * as rotas, com todos os estados presentes (zero incluso), para a tela
    * mostrar os totais com qualquer filtro.
@@ -748,6 +749,7 @@ export default class AdminDisparoService {
         WHERE cp."ID_CAMPANHA" = $1
           AND rp."DELETED_AT" IS NULL
           AND cp."DELETED_AT" IS NULL
+          AND rp."STATUS" IS DISTINCT FROM '${StatusRota.CANCELADO}'
         ORDER BY rp."ID_ROTA_PROMOTOR"`,
       [idCampanha]
     );
