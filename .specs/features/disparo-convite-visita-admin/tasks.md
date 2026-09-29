@@ -1155,8 +1155,8 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] Aviso de truncado; 502 mantém a seleção
-- [ ] `npx tsc --noEmit` sem erros novos
+- [x] Aviso de truncado; 502 mantém a seleção
+- [x] `npx tsc --noEmit` sem erros novos
 
 **Tests**: none
 **Gate**: build
