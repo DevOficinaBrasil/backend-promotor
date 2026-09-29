@@ -1221,8 +1221,8 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] Navegação entre passos preserva o estado da seleção
-- [ ] `npx tsc --noEmit` sem erros novos
+- [x] Navegação entre passos preserva o estado da seleção
+- [x] `npx tsc --noEmit` sem erros novos
 
 **Tests**: none
 **Gate**: build
