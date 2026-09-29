@@ -5,6 +5,7 @@ import { ligacaoCadastroEmpresa } from "../utils/sqlCadastroEmpresa";
 import { resolverTelefone, CandidatoUsuarioTelefone } from "../utils/telefone";
 import { estadoConvite, EstadoConvite } from "../utils/statusNotificacaoVisita";
 import { StatusNotificacaoVisita } from "../entities/NotificacaoVisita";
+import { FiltrosBusca, sqlFiltrosBusca, sqlTextoNormalizado } from "../utils/filtroBuscaOficina";
 
 // Earth's radius in kilometers (used for Haversine formula)
 const EARTH_RADIUS_KM = 6371;
@@ -33,6 +34,36 @@ export interface OficinaSegmentada {
     promotorNome: string | null;
     estado: EstadoConvite;
   } | null;
+}
+
+/**
+ * Oficina devolvida pela busca do admin (CONV-09). Sem coordenada numérica no
+ * dw nem na OFICINA, `LATITUDE`/`LONGITUDE` vêm nulas e `semCoordenadas` é
+ * verdadeiro (CONV-48).
+ */
+export interface OficinaBuscada {
+  ID_OFICINA: number;
+  NOME: string;
+  CIDADE: string | null;
+  ESTADO: string | null;
+  CEP: string | null;
+  LATITUDE: number | null;
+  LONGITUDE: number | null;
+  semCoordenadas: boolean;
+  membroComunidade: boolean;
+  importada: boolean;
+  temWhatsapp: boolean;
+  recusouNestaCampanha: boolean;
+  rotaAtual: OficinaSegmentada["rotaAtual"];
+}
+
+/** Teto de oficinas por busca do admin (CONV-10). */
+export const MAX_OFICINAS_BUSCA = 5000;
+
+/** Texto de coordenada da OFICINA (varchar) como número, ou NULL; aceita vírgula decimal. */
+function sqlCoordenadaTexto(expr: string): string {
+  const t = `replace(trim(${expr}), ',', '.')`;
+  return `(CASE WHEN ${t} ~ '^-?[0-9]{1,3}(\\.[0-9]+)?$' THEN ${t}::double precision END)`;
 }
 
 // Mesmos pares do `translate` no SQL: os dois lados precisam casar.
@@ -109,6 +140,25 @@ export function temWhatsappPelosCandidatos(linha: {
       cadastroTelefone: linha.CADASTRO_TELEFONE,
     })?.telefone != null
   );
+}
+
+/** Rota ativa da oficina nesta campanha, com o estado do convite, a partir das colunas `ROTA_*`. */
+function mapearRotaAtual(linha: any): OficinaSegmentada["rotaAtual"] {
+  if (linha.ROTA_ID_ROTA_PROMOTOR == null) return null;
+  return {
+    ID_ROTA_PROMOTOR: Number(linha.ROTA_ID_ROTA_PROMOTOR),
+    ID_CAMPANHA_PROMOTOR: Number(linha.ROTA_ID_CAMPANHA_PROMOTOR),
+    promotorNome: linha.ROTA_PROMOTOR_NOME ?? null,
+    estado: estadoConvite(
+      linha.ROTA_NV_STATUS == null
+        ? null
+        : {
+            STATUS: linha.ROTA_NV_STATUS,
+            EXPIRA_EM: linha.ROTA_NV_EXPIRA_EM == null ? null : new Date(linha.ROTA_NV_EXPIRA_EM),
+            ORIGEM_ACEITE: linha.ROTA_NV_ORIGEM_ACEITE ?? null,
+          }
+    ),
+  };
 }
 
 export default class OficinaService {
@@ -755,25 +805,170 @@ export default class OficinaService {
     return agregado;
   }
 
+  /**
+   * Busca do admin sobre `MAIN_REGISTER.OFICINA` (CONV-06 a CONV-10, CONV-48).
+   *
+   * O único critério fixo é CNPJ ativo na Receita, pela ligação canônica com
+   * `dw.cadastro_empresa`. Coordenadas não são exigidas: vêm do dw ou, sem par
+   * no dw, do texto da OFICINA com cast protegido; o par sai sempre da mesma
+   * fonte. Os filtros opcionais vêm de `sqlFiltrosBusca`. Busca `limite + 1`
+   * linhas por ordem de `ID_OFICINA` para saber se truncou.
+   */
+  public static async buscarOficinasBase(
+    filtros: FiltrosBusca,
+    ctx: { idCampanha: number; empresaSlug: string | null },
+    limite: number = MAX_OFICINAS_BUSCA
+  ): Promise<{ oficinas: OficinaBuscada[]; truncado: boolean }> {
+    const filtro = sqlFiltrosBusca("o", filtros, 4);
+    const latO = sqlCoordenadaTexto('o."LATITUDE"');
+    const lonO = sqlCoordenadaTexto('o."LONGITUDE"');
+    const dwTemPar = "ce.latitude IS NOT NULL AND ce.longitude IS NOT NULL";
+
+    const query = `
+        SELECT
+          o."ID_OFICINA" AS "ID_OFICINA",
+          COALESCE(o."NOME_FANTASIA", ce.razao_social) AS "NOME",
+          COALESCE(o."CIDADE", ce.cidade) AS "CIDADE",
+          COALESCE(o."ESTADO", ce.estado) AS "ESTADO",
+          COALESCE(o."CEP", ce.cep) AS "CEP",
+          CASE WHEN ${dwTemPar} THEN ce.latitude::double precision
+               WHEN ${latO} IS NOT NULL AND ${lonO} IS NOT NULL THEN ${latO} END AS "LATITUDE",
+          CASE WHEN ${dwTemPar} THEN ce.longitude::double precision
+               WHEN ${latO} IS NOT NULL AND ${lonO} IS NOT NULL THEN ${lonO} END AS "LONGITUDE",
+          o."TELEFONE" AS "OFICINA_TELEFONE",
+          ce.telefone AS "CADASTRO_TELEFONE",
+          ${sqlUsuariosDaOficina('o."ID_OFICINA"')} AS "USUARIOS",
+          EXISTS (
+            SELECT 1
+              FROM "MAIN_REGISTER"."USUARIO" u_cm
+              JOIN "MAIN_REGISTER"."USUARIO_COMMUNITY" uc ON uc."id_usuario" = u_cm."ID_USUARIO"
+              JOIN "OFICINA_PORTAL"."COMMUNITIES" cm ON cm."CommunityID" = uc."id_community"
+             WHERE u_cm."ID_OFICINA" = o."ID_OFICINA"
+               AND cm."EmpresaSlug" = $2
+          ) AS "MEMBRO_COMUNIDADE",
+          ${sqlOficinaImportada('o."ID_OFICINA"', "$2")} AS "IMPORTADA",
+          ${sqlRecusouNaCampanha('o."ID_OFICINA"', "$1")} AS "RECUSOU_NESTA_CAMPANHA",
+          rota."ID_ROTA_PROMOTOR" AS "ROTA_ID_ROTA_PROMOTOR",
+          rota."ID_CAMPANHA_PROMOTOR" AS "ROTA_ID_CAMPANHA_PROMOTOR",
+          rota."PROMOTOR_NOME" AS "ROTA_PROMOTOR_NOME",
+          rota."NV_STATUS" AS "ROTA_NV_STATUS",
+          rota."NV_EXPIRA_EM" AS "ROTA_NV_EXPIRA_EM",
+          rota."NV_ORIGEM_ACEITE" AS "ROTA_NV_ORIGEM_ACEITE"
+        FROM "MAIN_REGISTER"."OFICINA" o${ligacaoCadastroEmpresa("o")}
+        LEFT JOIN LATERAL (
+          SELECT rp."ID_ROTA_PROMOTOR", rp."ID_CAMPANHA_PROMOTOR",
+                 p."NOME" AS "PROMOTOR_NOME",
+                 nv."STATUS" AS "NV_STATUS",
+                 nv."EXPIRA_EM" AS "NV_EXPIRA_EM",
+                 nv."ORIGEM_ACEITE" AS "NV_ORIGEM_ACEITE"
+            FROM "CAMPANHAS_OB"."ROTA_PROMOTOR" rp
+            JOIN "CAMPANHAS_OB"."CAMPANHA_PROMOTOR" cp
+              ON cp."ID_CAMPANHA_PROMOTOR" = rp."ID_CAMPANHA_PROMOTOR"
+            LEFT JOIN "CAMPANHAS_OB"."PROMOTOR" p
+              ON p."ID_PROMOTOR" = cp."ID_PROMOTOR"
+            LEFT JOIN "CAMPANHAS_OB"."NOTIFICACAO_VISITA" nv
+              ON nv."ID_ROTA_PROMOTOR" = rp."ID_ROTA_PROMOTOR"
+           WHERE rp."ID_OFICINA" = o."ID_OFICINA"
+             AND cp."ID_CAMPANHA" = $1
+             AND rp."DELETED_AT" IS NULL
+             AND cp."DELETED_AT" IS NULL
+           ORDER BY rp."ID_ROTA_PROMOTOR" DESC
+           LIMIT 1
+        ) rota ON TRUE
+        WHERE ce.cnpj_int IS NOT NULL
+          AND ce.status_receita = 'ATIVA'
+          ${filtro.sql}
+        ORDER BY o."ID_OFICINA"
+        LIMIT $3
+      `;
+
+    const linhas: any[] = await AppDataSourceSync.query(query, [
+      ctx.idCampanha,
+      ctx.empresaSlug,
+      limite + 1,
+      ...filtro.params,
+    ]);
+
+    return {
+      oficinas: linhas.slice(0, limite).map((linha) => OficinaService.mapearOficinaBuscada(linha)),
+      truncado: linhas.length > limite,
+    };
+  }
+
+  /**
+   * Opções dos filtros (CONV-12): linhas de atividade distintas sem diferença
+   * de caixa (exibidas com a grafia mais frequente) e UFs de 2 letras.
+   */
+  public static async opcoesFiltroBusca(): Promise<{ linhas: string[]; ufs: string[] }> {
+    const [linhas, ufs]: any[][] = await Promise.all([
+      AppDataSourceSync.query(`
+        SELECT DISTINCT ON (x.chave) x.rotulo AS "ROTULO"
+          FROM (
+            SELECT upper(trim(la."LINHA_ATIVIDADE")) AS chave,
+                   trim(la."LINHA_ATIVIDADE") AS rotulo,
+                   count(*) AS n
+              FROM "MAIN_REGISTER"."LINHA_ATIVIDADE" la
+             WHERE trim(la."LINHA_ATIVIDADE") <> ''
+             GROUP BY 1, 2
+          ) x
+         ORDER BY x.chave, x.n DESC, x.rotulo`),
+      AppDataSourceSync.query(`
+        SELECT DISTINCT upper(trim(o."ESTADO")) AS "UF"
+          FROM "MAIN_REGISTER"."OFICINA" o
+         WHERE upper(trim(o."ESTADO")) ~ '^[A-Z]{2}$'
+         ORDER BY 1`),
+    ]);
+    return {
+      linhas: linhas.map((l) => l.ROTULO),
+      ufs: ufs.map((u) => u.UF),
+    };
+  }
+
+  /**
+   * Cidades da UF (CONV-12), distintas pela mesma normalização do filtro de
+   * cidade e exibidas com a grafia mais frequente. `uf` já vem validada.
+   */
+  public static async cidadesPorUf(uf: string): Promise<string[]> {
+    const linhas: any[] = await AppDataSourceSync.query(
+      `SELECT DISTINCT ON (x.chave) x.rotulo AS "ROTULO"
+         FROM (
+           SELECT ${sqlTextoNormalizado('o."CIDADE"')} AS chave,
+                  trim(o."CIDADE") AS rotulo,
+                  count(*) AS n
+             FROM "MAIN_REGISTER"."OFICINA" o
+            WHERE upper(trim(o."ESTADO")) = $1
+              AND trim(o."CIDADE") <> ''
+            GROUP BY 1, 2
+         ) x
+        ORDER BY x.chave, x.n DESC, x.rotulo`,
+      [uf]
+    );
+    return linhas.map((l) => l.ROTULO);
+  }
+
+  private static mapearOficinaBuscada(linha: any): OficinaBuscada {
+    const lat = linha.LATITUDE == null ? null : Number(linha.LATITUDE);
+    const lon = linha.LONGITUDE == null ? null : Number(linha.LONGITUDE);
+    const semCoordenadas = !Number.isFinite(lat) || !Number.isFinite(lon);
+    return {
+      ID_OFICINA: Number(linha.ID_OFICINA),
+      NOME: linha.NOME,
+      CIDADE: linha.CIDADE ?? null,
+      ESTADO: linha.ESTADO ?? null,
+      CEP: linha.CEP ?? null,
+      LATITUDE: semCoordenadas ? null : lat,
+      LONGITUDE: semCoordenadas ? null : lon,
+      semCoordenadas,
+      membroComunidade: linha.MEMBRO_COMUNIDADE === true,
+      importada: linha.IMPORTADA === true,
+      temWhatsapp: temWhatsappPelosCandidatos(linha),
+      recusouNestaCampanha: linha.RECUSOU_NESTA_CAMPANHA === true,
+      rotaAtual: mapearRotaAtual(linha),
+    };
+  }
+
   private static mapearOficinaSegmentada(linha: any): OficinaSegmentada {
-    const rotaAtual =
-      linha.ROTA_ID_ROTA_PROMOTOR == null
-        ? null
-        : {
-            ID_ROTA_PROMOTOR: Number(linha.ROTA_ID_ROTA_PROMOTOR),
-            ID_CAMPANHA_PROMOTOR: Number(linha.ROTA_ID_CAMPANHA_PROMOTOR),
-            promotorNome: linha.ROTA_PROMOTOR_NOME ?? null,
-            estado: estadoConvite(
-              linha.ROTA_NV_STATUS == null
-                ? null
-                : {
-                    STATUS: linha.ROTA_NV_STATUS,
-                    EXPIRA_EM:
-                      linha.ROTA_NV_EXPIRA_EM == null ? null : new Date(linha.ROTA_NV_EXPIRA_EM),
-                    ORIGEM_ACEITE: linha.ROTA_NV_ORIGEM_ACEITE ?? null,
-                  }
-            ),
-          };
+    const rotaAtual = mapearRotaAtual(linha);
 
     return {
       ID_OFICINA: Number(linha.ID_OFICINA),

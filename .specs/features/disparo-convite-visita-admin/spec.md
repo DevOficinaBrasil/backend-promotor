@@ -308,13 +308,13 @@ A Oficina Brasil quer inverter isso:
 | CONV-03 | P1: Auth admin - AC1 | Design | Implementing |
 | CONV-04 | P1: Auth admin - AC2 | Design | Implementing |
 | CONV-05 | P1: Auth admin - AC3 | Design | Implementing |
-| CONV-06 | P1: Busca - AC1 | Design | Pending |
+| CONV-06 | P1: Busca - AC1 | Design | Implementing |
 | CONV-07 | P1: Busca - AC2 | Design | Implementing |
 | CONV-08 | P1: Busca - AC3 | Design | Implementing |
-| CONV-09 | P1: Busca - AC4 | Design | Pending |
-| CONV-10 | P1: Busca - AC5 | Design | Pending |
+| CONV-09 | P1: Busca - AC4 | Design | Implementing |
+| CONV-10 | P1: Busca - AC5 | Design | Implementing |
 | CONV-11 | P1: Busca - AC6 | Design | Pending |
-| CONV-12 | P1: Busca - AC7 | Design | Pending |
+| CONV-12 | P1: Busca - AC7 | Design | Implementing |
 | CONV-13 | P1: Rotas - AC1 | Design | Implementing |
 | CONV-14 | P1: Rotas - AC2 | Design | Implementing |
 | CONV-15 | P1: Rotas - AC3 | Design | Implementing |
@@ -350,7 +350,7 @@ A Oficina Brasil quer inverter isso:
 | CONV-45 | P1: Telefone/importada - AC4 | Design | Implementing |
 | CONV-46 | P1: Telefone/importada - AC5 | Design | Implementing |
 | CONV-47 | P1: Telefone/importada - AC6 | Design | Implementing |
-| CONV-48 | P1: Rotas - AC8 | Design | Pending |
+| CONV-48 | P1: Rotas - AC8 | Design | Implementing |
 
 **Coverage:** 48 total ⚠️ (Tasks phase pending)
 

@@ -1387,12 +1387,12 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] `FROM MAIN_REGISTER.OFICINA`, ligação canônica com `status_receita = 'ATIVA'`, sem exigir coordenadas; SQL afirmada (L-004)
-- [ ] 5001 linhas → 5000 devolvidas e `truncado: true`; 5000 → `truncado: false`
-- [ ] `semCoordenadas` verdadeiro quando `ce` e `o` não têm lat/long numéricos
-- [ ] Opções: linhas distintas, UFs de 2 letras, cidades só da UF pedida
-- [ ] `getOficinasBaseSegmentadas` removida com os testes dela (comportamento removido da spec)
-- [ ] Gate quick passa
+- [x] `FROM MAIN_REGISTER.OFICINA`, ligação canônica com `status_receita = 'ATIVA'`, sem exigir coordenadas; SQL afirmada (L-004)
+- [x] 5001 linhas → 5000 devolvidas e `truncado: true`; 5000 → `truncado: false`
+- [x] `semCoordenadas` verdadeiro quando `ce` e `o` não têm lat/long numéricos
+- [x] Opções: linhas distintas, UFs de 2 letras, cidades só da UF pedida
+- [ ] `getOficinasBaseSegmentadas` removida com os testes dela (comportamento removido da spec) (adiado para T39: o único chamador, `segmentarOficinas`, sai lá)
+- [x] Gate quick passa
 
 **Tests**: unit
 **Gate**: quick
