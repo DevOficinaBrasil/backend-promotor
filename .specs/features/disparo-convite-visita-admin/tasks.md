@@ -1531,8 +1531,8 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] Todos os branches testados; os testes de `validarRegiao` foram trocados pelos de `validarFiltros` (comportamento removido da spec)
-- [ ] `npx jest lib/__tests__` passa
+- [x] Todos os branches testados; os testes de `validarRegiao` foram trocados pelos de `validarFiltros` (comportamento removido da spec). `validarRegiao` e os testes dela saem em T46, junto com o último uso (`StepRegiaoSegmentacao`), para o `tsc` seguir limpo a cada commit
+- [x] `npx jest lib/__tests__` passa
 
 **Tests**: unit
 **Gate**: build
