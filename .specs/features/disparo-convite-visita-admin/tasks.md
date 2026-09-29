@@ -1363,10 +1363,10 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] Sem filtro → nenhuma condição; cada filtro sozinho e combinados geram o `AND` certo, com valores só por parâmetro
-- [ ] Cidade sem UF, UF sem 2 letras, elevadores não inteiro ou negativo → erro 400 com a mensagem exata da spec
-- [ ] Linhas comparadas por `upper(trim())`; cidade normalizada igual no SQL e no TS
-- [ ] Gate quick passa
+- [x] Sem filtro → nenhuma condição; cada filtro sozinho e combinados geram o `AND` certo, com valores só por parâmetro
+- [x] Cidade sem UF, UF sem 2 letras, elevadores não inteiro ou negativo → erro 400 com a mensagem exata da spec
+- [x] Linhas comparadas por `upper(trim())`; cidade normalizada igual no SQL e no TS
+- [x] Gate quick passa
 
 **Tests**: unit
 **Gate**: quick

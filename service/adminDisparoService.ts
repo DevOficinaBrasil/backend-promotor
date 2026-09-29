@@ -15,6 +15,9 @@ import { ligacaoCadastroEmpresa } from "../utils/sqlCadastroEmpresa";
 import NotificacaoVisita, { CanalNotificacao, StatusNotificacaoVisita } from "../entities/NotificacaoVisita";
 import { planejarDisparo, tetoMinimo, TETO_DIARIO_MAXIMO } from "../utils/agendamento";
 import { estadoConvite, EstadoConvite } from "../utils/statusNotificacaoVisita";
+import { AdminDisparoErro } from "../utils/adminDisparoErro";
+
+export { AdminDisparoErro };
 
 /** Tenant do CRM que é a base Oficina Brasil inteira (CONV-08, CONV-12). */
 export const TENANT_OFICINA_BRASIL = 15;
@@ -104,20 +107,6 @@ export interface ResultadoCriarRotas {
   foraDoAlcance: number[];
 }
 
-/**
- * Erro de domínio da tela de admin. A rota traduz `status` direto para o HTTP
- * (design, "Error Handling Strategy"); `extra` vai junto no corpo.
- */
-export class AdminDisparoErro extends Error {
-  constructor(
-    public readonly status: 400 | 404 | 409 | 422 | 502,
-    message: string,
-    public readonly extra?: Record<string, unknown>
-  ) {
-    super(message);
-    this.name = "AdminDisparoErro";
-  }
-}
 
 export interface CampanhaAdminResumo {
   ID_CAMPANHA: number;

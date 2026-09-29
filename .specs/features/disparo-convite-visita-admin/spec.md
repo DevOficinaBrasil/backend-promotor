@@ -309,8 +309,8 @@ A Oficina Brasil quer inverter isso:
 | CONV-04 | P1: Auth admin - AC2 | Design | Implementing |
 | CONV-05 | P1: Auth admin - AC3 | Design | Implementing |
 | CONV-06 | P1: Busca - AC1 | Design | Pending |
-| CONV-07 | P1: Busca - AC2 | Design | Pending |
-| CONV-08 | P1: Busca - AC3 | Design | Pending |
+| CONV-07 | P1: Busca - AC2 | Design | Implementing |
+| CONV-08 | P1: Busca - AC3 | Design | Implementing |
 | CONV-09 | P1: Busca - AC4 | Design | Pending |
 | CONV-10 | P1: Busca - AC5 | Design | Pending |
 | CONV-11 | P1: Busca - AC6 | Design | Pending |
