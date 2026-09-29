@@ -1177,8 +1177,8 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] Oficina sem WhatsApp e não importada fica desabilitada; os conflitos aparecem por oficina
-- [ ] `npx tsc --noEmit` sem erros novos
+- [x] Oficina sem WhatsApp e não importada fica desabilitada; os conflitos aparecem por oficina
+- [x] `npx tsc --noEmit` sem erros novos
 
 **Tests**: none
 **Gate**: build
