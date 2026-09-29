@@ -1460,9 +1460,9 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] Cada rota nova: sem token → 401, não admin → 403, admin → 200 (L-002)
-- [ ] 400 e 500 com as mensagens da spec; as rotas removidas respondem 404
-- [ ] Gate full passa
+- [x] Cada rota nova: sem token → 401, não admin → 403, admin → 200 (L-002)
+- [x] 400 e 500 com as mensagens da spec; as rotas removidas respondem 404
+- [x] Gate full passa
 
 **Tests**: integration
 **Gate**: full

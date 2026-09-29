@@ -14,6 +14,9 @@ jest.mock("../../service/adminDisparoService", () => {
     default: {
       listarCampanhasAtivas: jest.fn(),
       listarPromotores: jest.fn(),
+      listarFiltrosBusca: jest.fn(),
+      listarCidades: jest.fn(),
+      buscarOficinas: jest.fn(),
       listarRotasComEstado: jest.fn(),
       criarRotas: jest.fn(),
       previaDisparo: jest.fn(),
@@ -39,7 +42,9 @@ const tokenAdmin = () =>
 const tokenNaoAdmin = () =>
   jwt.sign({ user: { ID_USUARIO: 901, IS_ADMIN: false } }, SEGREDO, { algorithm: "HS256", expiresIn: "1h" });
 
-// As rotas do design, com um corpo válido e o que cada uma deve repassar ao service.
+const filtrosBusca = { linhas: ["Leve"], elevadoresMin: 2, uf: "SP", cidade: "Campinas" };
+
+// As 9 rotas do design, com um corpo válido e o que cada uma deve repassar ao service.
 const ROTAS: Array<{
   nome: string;
   metodo: "get" | "post";
@@ -65,6 +70,31 @@ const ROTAS: Array<{
     metodoService: "listarPromotores",
     argumentos: [77],
     resposta: { vinculados: [], doCliente: [] },
+  },
+  {
+    nome: "GET /admin/oficinas/filtros",
+    metodo: "get",
+    url: "/admin/oficinas/filtros",
+    metodoService: "listarFiltrosBusca",
+    argumentos: [],
+    resposta: { linhas: ["Leve", "Moto"], ufs: ["SP"] },
+  },
+  {
+    nome: "GET /admin/oficinas/cidades",
+    metodo: "get",
+    url: "/admin/oficinas/cidades?uf=SP",
+    metodoService: "listarCidades",
+    argumentos: ["SP"],
+    resposta: { cidades: ["Campinas"] },
+  },
+  {
+    nome: "POST /admin/campanhas/:id/oficinas/buscar",
+    metodo: "post",
+    url: "/admin/campanhas/77/oficinas/buscar",
+    corpo: filtrosBusca,
+    metodoService: "buscarOficinas",
+    argumentos: [77, filtrosBusca],
+    resposta: { oficinas: [{ ID_OFICINA: 10, semCoordenadas: true }], truncado: true, total: 1 },
   },
   {
     nome: "GET /admin/campanhas/:id/rotas",
@@ -182,6 +212,45 @@ describe("autenticação antes da validação", () => {
 
 // Erros de domínio viram o status do design, com a mensagem e os extras no corpo.
 describe("mapeamento de erros de domínio", () => {
+  it.each([
+    ["Informe a UF para filtrar por cidade", { cidade: "Campinas" }],
+    ["UF inválida", { uf: "SPA" }],
+    ["Quantidade de elevadores deve ser um inteiro maior ou igual a 0", { elevadoresMin: -1 }],
+  ])("400 na busca: %s", async (mensagem, corpo) => {
+    service.buscarOficinas.mockRejectedValue(new AdminDisparoErro(400, mensagem));
+
+    const r = await request(app)
+      .post("/admin/campanhas/77/oficinas/buscar")
+      .set("Authorization", `Bearer ${tokenAdmin()}`)
+      .send(corpo);
+
+    expect(r.status).toBe(400);
+    expect(r.body).toEqual({ message: mensagem });
+    expect(service.buscarOficinas).toHaveBeenCalledWith(77, corpo);
+  });
+
+  it("400 nas cidades: UF inválida", async () => {
+    service.listarCidades.mockRejectedValue(new AdminDisparoErro(400, "UF inválida"));
+
+    const r = await request(app).get("/admin/oficinas/cidades").set("Authorization", `Bearer ${tokenAdmin()}`);
+
+    expect(r.status).toBe(400);
+    expect(r.body).toEqual({ message: "UF inválida" });
+    expect(service.listarCidades).toHaveBeenCalledWith(undefined);
+  });
+
+  it("500 na busca: 'Não foi possível buscar as oficinas'", async () => {
+    service.buscarOficinas.mockRejectedValue(new AdminDisparoErro(500, "Não foi possível buscar as oficinas"));
+
+    const r = await request(app)
+      .post("/admin/campanhas/77/oficinas/buscar")
+      .set("Authorization", `Bearer ${tokenAdmin()}`)
+      .send({});
+
+    expect(r.status).toBe(500);
+    expect(r.body).toEqual({ message: "Não foi possível buscar as oficinas" });
+  });
+
   it("400: teto inválido no disparo", async () => {
     service.disparar.mockRejectedValue(new AdminDisparoErro(400, "Teto diário deve ser um inteiro entre 1 e 1000"));
 
@@ -250,5 +319,18 @@ describe("mapeamento de erros de domínio", () => {
 
     expect(r.status).toBe(500);
     expect(r.body).toEqual({ message: "Erro interno." });
+  });
+});
+
+// Revisão 2026-09-29: a segmentação pelo CRM saiu da tela de admin.
+describe("rotas de segmentação removidas", () => {
+  it.each([
+    ["get", "/admin/segmentacao/campos"],
+    ["get", "/admin/segmentacao/valores?path=contactAttributes.gender"],
+    ["post", "/admin/campanhas/77/oficinas/segmentar"],
+  ] as const)("%s %s → 404", async (metodo, url) => {
+    const r = await request(app)[metodo](url).set("Authorization", `Bearer ${tokenAdmin()}`).send({});
+
+    expect(r.status).toBe(404);
   });
 });

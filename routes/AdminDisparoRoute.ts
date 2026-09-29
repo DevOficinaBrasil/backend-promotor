@@ -79,6 +79,57 @@ createDocumentedRoute(router, {
 
 createDocumentedRoute(router, {
   method: "get",
+  path: "/oficinas/filtros",
+  basePath: BASE,
+  handler: responder(() => AdminDisparoService.listarFiltrosBusca()),
+  documentation: {
+    tags: ["Admin"],
+    summary: "Opções dos filtros da busca de oficinas",
+    description: "Resposta: { linhas: string[], ufs: string[] } (linhas de atividade e UFs de 2 letras da base).",
+    security: SEGURANCA,
+    responses: { 200: { description: "Opções" }, ...RESPOSTAS_AUTH },
+  },
+});
+
+createDocumentedRoute(router, {
+  method: "get",
+  path: "/oficinas/cidades",
+  basePath: BASE,
+  handler: responder((req) => AdminDisparoService.listarCidades(req.query.uf)),
+  documentation: {
+    tags: ["Admin"],
+    summary: "Cidades de uma UF",
+    description: "Query: uf (2 letras). Resposta: { cidades: string[] }.",
+    security: SEGURANCA,
+    responses: { 200: { description: "Cidades da UF" }, 400: { description: "UF inválida" }, ...RESPOSTAS_AUTH },
+  },
+});
+
+createDocumentedRoute(router, {
+  method: "post",
+  path: "/campanhas/:id/oficinas/buscar",
+  basePath: BASE,
+  schemas: { params: IdCampanhaParams },
+  handler: responder((req) => AdminDisparoService.buscarOficinas(idCampanha(req), req.body)),
+  documentation: {
+    tags: ["Admin"],
+    summary: "Buscar oficinas da base por filtros opcionais",
+    description:
+      "Body: { linhas?: string[], elevadoresMin?: number, uf?: string, cidade?: string } (cidade exige uf). " +
+      "Só CNPJ ativo na Receita; até 5000 oficinas. Resposta: { oficinas: OficinaBuscada[], truncado, total }.",
+    security: SEGURANCA,
+    responses: {
+      200: { description: "Oficinas encontradas" },
+      400: { description: "Cidade sem UF, UF inválida ou elevadores fora de inteiro >= 0" },
+      ...RESPOSTAS_AUTH,
+      404: { description: "Campanha não encontrada" },
+      500: { description: "Não foi possível buscar as oficinas" },
+    },
+  },
+});
+
+createDocumentedRoute(router, {
+  method: "get",
   path: "/campanhas/:id/rotas",
   basePath: BASE,
   schemas: { params: IdCampanhaParams, query: RotasQuery },
@@ -110,7 +161,7 @@ createDocumentedRoute(router, {
     summary: "Criar rotas pela tela de admin (sem enfileirar convite)",
     description:
       "Body: { atribuicoes: [{idCampanhaPromotor, idOficina}] } ou { distribuir: true, idOficinas }. " +
-      "Resposta: { criadas, conflitos: [{idOficina, status 409|422, motivo, promotorAtual?}], foraDoAlcance }.",
+      "Resposta: { criadas, conflitos: [{idOficina, status 409|422, motivo, promotorAtual?}], foraDoAlcance, semCoordenadas }.",
     security: SEGURANCA,
     responses: {
       200: { description: "Resultado por oficina" },
