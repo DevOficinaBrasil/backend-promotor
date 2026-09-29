@@ -828,8 +828,8 @@ T35
 - Skill: NONE
 
 **Done when**:
-- [ ] Endpoint, respostas e estado novo documentados com exemplos
-- [ ] Gate build passa
+- [x] Endpoint, respostas e estado novo documentados com exemplos
+- [x] Gate build passa
 
 **Tests**: none
 **Gate**: build
