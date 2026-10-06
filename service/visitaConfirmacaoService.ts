@@ -383,7 +383,12 @@ export default class VisitaConfirmacaoService {
 
     try {
       await AppDataSourceSync.transaction(async (manager) => {
-        await manager.update(Oficina, { ID_OFICINA: oficina.ID_OFICINA }, endereco);
+        // CONV-50: a correção pelo link conta como atualização de endereço.
+        await manager.update(
+          Oficina,
+          { ID_OFICINA: oficina.ID_OFICINA },
+          { ...endereco, DATA_ATUALIZACAO_ENDERECO: agora }
+        );
 
         // `id_oficina` não identifica uma linha em dw.cadastro_empresa: a chave
         // única é `cnpj_int`, e em PRD 59 ids se repetem sob CNPJs diferentes.

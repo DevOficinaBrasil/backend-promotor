@@ -735,10 +735,15 @@ describe("VisitaConfirmacaoService.atualizarEndereco", () => {
 
   // AC31: "...SHALL update only the address columns of the linked
   // MAIN_REGISTER.OFICINA row." Coordinates are left as-is by design.
-  it("writes only the seven address columns to the Oficina row", async () => {
+  // CONV-50 (disparo-convite-visita-admin, 2026-10-06): a mesma escrita grava
+  // DATA_ATUALIZACAO_ENDERECO com o instante da correção.
+  it("writes the seven address columns plus DATA_ATUALIZACAO_ENDERECO to the Oficina row", async () => {
     await VisitaConfirmacaoService.atualizarEndereco(payload, enderecoCorrigido, IP, AGORA);
 
-    expect(oficinaRepo.update).toHaveBeenCalledWith({ ID_OFICINA }, enderecoCorrigido);
+    expect(oficinaRepo.update).toHaveBeenCalledWith(
+      { ID_OFICINA },
+      { ...enderecoCorrigido, DATA_ATUALIZACAO_ENDERECO: AGORA }
+    );
 
     const escrito = oficinaRepo.update.mock.calls[0][1] as Record<string, unknown>;
     expect(Object.keys(escrito).sort()).toEqual([
@@ -746,6 +751,7 @@ describe("VisitaConfirmacaoService.atualizarEndereco", () => {
       "CEP",
       "CIDADE",
       "COMPLEMENTO",
+      "DATA_ATUALIZACAO_ENDERECO",
       "ENDERECO",
       "ESTADO",
       "NUMERO",
@@ -1000,7 +1006,10 @@ describe("VisitaConfirmacaoService.atualizarEndereco", () => {
 
       expect(resultado).toMatchObject({ state: "CONFIRMED", enderecoAtualizado: true });
       expect(empresaRepo.update).not.toHaveBeenCalled();
-      expect(oficinaRepo.update).toHaveBeenCalledWith({ ID_OFICINA }, enderecoCorrigido);
+      expect(oficinaRepo.update).toHaveBeenCalledWith(
+        { ID_OFICINA },
+        { ...enderecoCorrigido, DATA_ATUALIZACAO_ENDERECO: AGORA }
+      );
       expect(console.warn).toHaveBeenCalledWith(
         "[visitaConfirmacao] dw.cadastro_empresa não atualizado",
         expect.objectContaining({ ID_OFICINA })
