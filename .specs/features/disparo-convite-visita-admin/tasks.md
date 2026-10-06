@@ -1701,6 +1701,28 @@ T35
 **Tests**: unit
 **Gate**: build
 **Commit**: `feat(admin): rótulo de aceite por endereço atualizado`
+---
+
+### T52: Estado `aceita_endereco_recente` no painel do admin
+
+**What**: `ESTADOS_CONVITE` passa a incluir `aceita_endereco_recente`. Sem ele, `totaisPorEstado` virava `NaN` (`null` no JSON) e `?estado=aceita_endereco_recente` respondia 400. Achado G-1 do Verifier (2026-10-06).
+**Where**: `backend-promotor/service/adminDisparoService.ts`
+**Depends on**: T49
+**Reuses**: lista `ESTADOS_CONVITE`
+**Requirement**: CONV-49, CONV-42
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [x] Teste de completude com `Record<EstadoConvite, true>`, mais contagem e filtro do estado novo (vermelhos antes do conserto)
+- [x] Gate quick passa (920 testes)
+
+**Tests**: unit
+**Gate**: quick
+**Commit**: `fix(admin): estado de aceite por endereço no painel de convites`
+
 
 ---
 
@@ -1721,6 +1743,7 @@ T37 → T38 → T39 → T40 → T41
 T41 → T47
 T47 → T48
 T49 → T50
+T49 → T52
 T42 → T44
 T43 → T44
 T44 → T46

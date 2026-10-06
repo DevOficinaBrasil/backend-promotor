@@ -1,5 +1,23 @@
 import { AppDataSourceSync } from "../../data-source";
 import AdminDisparoService, { ESTADOS_CONVITE } from "../../service/adminDisparoService";
+import { EstadoConvite } from "../../utils/statusNotificacaoVisita";
+
+// Lista fechada de todos os EstadoConvite: falha de compilação se faltar ou sobrar um.
+const TODOS_OS_ESTADOS: Record<EstadoConvite, true> = {
+  nao_disparada: true,
+  agendada: true,
+  enviada: true,
+  aceita: true,
+  aceita_confirmacao_recente: true,
+  aceita_convite_vinculado: true,
+  aceita_importada: true,
+  aceita_endereco_recente: true,
+  recusada: true,
+  expirada: true,
+  falhou: true,
+  dispensada: true,
+  aguardando: true,
+};
 
 jest.mock("../../data-source");
 
@@ -51,6 +69,7 @@ describe("AdminDisparoService.listarRotasComEstado", () => {
       rota({ STATUS: "DISPENSADO" }),
       rota({ STATUS: "AGUARDANDO" }),
       rota(null), // segunda não disparada
+      rota({ STATUS: "CONFIRMADO", ORIGEM_ACEITE: "ENDERECO_RECENTE" }), // CONV-49
     ];
     queryMock.mockReset();
     queryMock.mockImplementation(async (sql: string) => {
@@ -80,6 +99,7 @@ describe("AdminDisparoService.listarRotasComEstado", () => {
       "dispensada",
       "aguardando",
       "nao_disparada",
+      "aceita_endereco_recente",
     ]);
   });
 
@@ -109,7 +129,8 @@ describe("AdminDisparoService.listarRotasComEstado", () => {
 
     const r = await AdminDisparoService.listarRotasComEstado(77, undefined, agora);
 
-    expect(Object.keys(r.totaisPorEstado).sort()).toEqual([...ESTADOS_CONVITE].sort());
+    expect([...ESTADOS_CONVITE].sort()).toEqual(Object.keys(TODOS_OS_ESTADOS).sort());
+    expect(Object.keys(r.totaisPorEstado).sort()).toEqual(Object.keys(TODOS_OS_ESTADOS).sort());
     expect(r.totaisPorEstado).toEqual({
       nao_disparada: 1,
       agendada: 1,
@@ -118,12 +139,21 @@ describe("AdminDisparoService.listarRotasComEstado", () => {
       aceita_confirmacao_recente: 0,
       aceita_convite_vinculado: 0,
       aceita_importada: 0,
+      aceita_endereco_recente: 0,
       recusada: 0,
       expirada: 0,
       falhou: 0,
       dispensada: 0,
       aguardando: 0,
     });
+  });
+
+  // CONV-49 + CONV-42: o estado novo conta nos totais e aceita filtro.
+  it("conta e filtra aceita_endereco_recente", async () => {
+    const r = await AdminDisparoService.listarRotasComEstado(77, "aceita_endereco_recente", agora);
+
+    expect(r.rotas.map((x) => x.estado)).toEqual(["aceita_endereco_recente"]);
+    expect(r.totaisPorEstado.aceita_endereco_recente).toBe(1);
   });
 
   it("filtro por estado devolve só aquele estado, mas os totais continuam de todos (CONV-42)", async () => {
@@ -133,7 +163,7 @@ describe("AdminDisparoService.listarRotasComEstado", () => {
     expect(r.totaisPorEstado.nao_disparada).toBe(2);
     expect(r.totaisPorEstado.recusada).toBe(1);
     expect(r.totaisPorEstado.aceita_importada).toBe(1);
-    expect(Object.values(r.totaisPorEstado).reduce((a, b) => a + b, 0)).toBe(13);
+    expect(Object.values(r.totaisPorEstado).reduce((a, b) => a + b, 0)).toBe(14);
   });
 
   it("estado desconhecido → 400", async () => {

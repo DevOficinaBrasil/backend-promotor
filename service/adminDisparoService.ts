@@ -67,6 +67,7 @@ export const ESTADOS_CONVITE: readonly EstadoConvite[] = [
   "aceita_confirmacao_recente",
   "aceita_convite_vinculado",
   "aceita_importada",
+  "aceita_endereco_recente",
   "recusada",
   "expirada",
   "falhou",
