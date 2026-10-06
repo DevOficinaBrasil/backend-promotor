@@ -74,7 +74,9 @@ A Oficina Brasil quer inverter isso:
 | Oficina importada | Rota de oficina com linha ativa em `OFICINA_IMPORTADA` para o `EMPRESA_SLUG` da campanha nasce aceita (origem `IMPORTADA`), sem mensagem, em todos os fluxos. As rotas que já existem são ajustadas pela migration | Decisão do usuário (2026-09-28): "Oficina importada não precisa de convite". A oficina importada que já era membro da comunidade (`garantirVinculo` → `ja_vinculada`) não tem linha em `OFICINA_IMPORTADA` e continua recebendo convite | y (regra) / n (caso ja_vinculada) |
 | Chave da guarda "convite em aberto" | Por `ID_OFICINA` | "Aceitou lá, vale aqui" só faz sentido para a mesma oficina. | n |
 | Chave da guarda "confirmou há menos de 3 meses" | Continua por `ID_USUARIO`, como hoje | O usuário mandou manter a guarda; só muda o efeito (aceita em vez de dispensada). | n |
-| Guarda "endereço recente" | Deixa de suprimir o envio em todos os fluxos | Decisão do usuário. | y |
+| Guarda "endereço recente" | A guarda antiga, por `OFICINA.DATA_ALTERACAO`, deixa de suprimir o envio. **Revisado em 2026-10-06**: entra uma guarda nova pela coluna `OFICINA.DATA_ATUALIZACAO_ENDERECO` (criada pelo backend-communities, `timestamptz`). Se ela tiver menos de 3 meses, a mensagem não sai e a rota entra aceita com origem `ENDERECO_RECENTE` | Decisão do usuário. `DATA_ALTERACAO` muda com qualquer edição da oficina; a coluna nova só muda quando o endereço é confirmado. | y |
+| Quem grava `DATA_ATUALIZACAO_ENDERECO` | O modal de atualização cadastral (backend-communities) e, a partir desta revisão, a correção de endereço pelo link (`PUT /visita/endereco`) | Decisão do usuário (2026-10-06). | y |
+| Dependência de deploy | A coluna precisa existir antes do deploy do backend-promotor: a migration `backend-communities/SQL/migrations/2026-10-modal-aquisicao-oficina-data-atualizacao-endereco.sql` vai antes. No dev ela já existe | Sem a coluna, o despacho e a correção de endereço quebram. | y |
 | Agendamento além do fim da campanha | O disparo é recusado (422) e a resposta traz o teto mínimo necessário | Convite agendado para depois do fim vira `DISPENSADO` e desperdiça a seleção; recusar deixa o admin corrigir o teto. | n |
 | Rota criada pela tela de admin | Não enfileira nada até "Disparar comunicação" | O disparo é o gatilho explícito pedido; enfileirar na criação mandaria convite antes do admin terminar a rota. | y |
 | Página pública do link | `jornalOficinaBrasil/app/(visita)/visita/confirmacao/`. O botão Recusar entra na tela pendente, ao lado de "Próximo passo" | Informado pelo usuário em 2026-09-28 e confirmado no código. | y |
@@ -190,13 +192,16 @@ A Oficina Brasil quer inverter isso:
 
 **Acceptance Criteria** (valem para todo envio da fila, de qualquer fluxo):
 
-1. The system SHALL não usar mais a atualização recente do endereço (`OFICINA.DATA_ALTERACAO`) como motivo para suprimir envio.
+1. The system SHALL não usar `OFICINA.DATA_ALTERACAO` como motivo para suprimir envio.
 2. WHEN chega a hora de envio de uma notificação e a mesma oficina já tem um convite `ENVIADO` não expirado THEN the system SHALL não enviar mensagem e SHALL deixar a notificação aguardando aquele convite.
 3. WHEN um convite é confirmado THEN the system SHALL marcar como aceitas todas as notificações que aguardavam aquele convite.
 4. WHEN um convite é recusado THEN the system SHALL marcar como recusadas todas as notificações que aguardavam aquele convite.
 5. WHEN um convite expira THEN the system SHALL reenfileirar as notificações que aguardavam por ele para a janela do dia seguinte.
 6. WHEN chega a hora de envio de uma notificação e o destinatário (`ID_USUARIO`) confirmou algum convite nos últimos 3 meses THEN the system SHALL não enviar mensagem e SHALL marcar a notificação como aceita por confirmação recente.
-7. The system SHALL distinguir, para o admin, "aceita pelo reparador" de "aceita por confirmação recente".
+7. The system SHALL distinguir, para o admin, "aceita pelo reparador", "aceita por confirmação recente" e "aceita por endereço atualizado".
+8. WHEN chega a hora de envio de uma notificação e `OFICINA.DATA_ATUALIZACAO_ENDERECO` da oficina da rota é posterior ou igual a agora menos 3 meses THEN the system SHALL não enviar mensagem e SHALL marcar a notificação como `CONFIRMADO` com `ORIGEM_ACEITE = 'ENDERECO_RECENTE'`.
+9. IF `OFICINA.DATA_ATUALIZACAO_ENDERECO` for nula ou anterior a agora menos 3 meses THEN the system SHALL seguir as demais guardas e enviar normalmente.
+10. WHEN o reparador corrige o endereço por `PUT /visita/endereco` THEN the system SHALL gravar `OFICINA.DATA_ATUALIZACAO_ENDERECO` com o instante da correção, na mesma escrita do endereço.
 
 **Independent Test**: com a oficina X tendo um convite `ENVIADO` em aberto, uma segunda rota de X não gera mensagem; confirmar o primeiro link torna as duas rotas visíveis para os promotores.
 
@@ -351,8 +356,10 @@ A Oficina Brasil quer inverter isso:
 | CONV-46 | P1: Telefone/importada - AC5 | Design | Implementing |
 | CONV-47 | P1: Telefone/importada - AC6 | Design | Implementing |
 | CONV-48 | P1: Rotas - AC8 | Design | Implementing |
+| CONV-49 | P1: Guardas - AC8, AC9, AC7 | Design | Implementing |
+| CONV-50 | P1: Guardas - AC10 | Design | Implementing |
 
-**Coverage:** 48 total ⚠️ (Tasks phase pending)
+**Coverage:** 50 total ⚠️ (Tasks phase pending)
 
 ---
 

@@ -1631,6 +1631,79 @@ T35
 
 ---
 
+---
+
+### Phase 11: Endereço atualizado recentemente (revisão 2026-10-06) (tasks)
+
+### T49: Guarda de endereço atualizado e aceite `ENDERECO_RECENTE`
+
+**What**: No despacho, `OFICINA.DATA_ATUALIZACAO_ENDERECO` com menos de 3 meses dispensa a mensagem e grava `CONFIRMADO` com origem `ENDERECO_RECENTE`, antes das demais guardas. Inclui a coluna na entity `Oficina`, o valor no enum e no CHK da migration, e o estado `aceita_endereco_recente`.
+**Where**: `backend-promotor/service/notificacaoVisitaService.ts`
+**Depends on**: None
+**Reuses**: `mesesAtras` de `service/envioGuards.ts`, padrão do aceite por confirmação recente
+**Requirement**: CONV-49
+
+**Tools**:
+- MCP: NONE
+- Skill: `anthropic-skills:dba-rules` (CHK da migration)
+
+**Done when**:
+- [x] `enderecoAtualizadoRecente`: nula → falso; dentro de 3 meses → verdadeiro; limite exato → verdadeiro; um instante antes do limite → falso
+- [x] Endereço recente → `ACEITO`/`ENDERECO_RECENTE`, sem canal, sem token, sem consultar convite aberto nem destinatário
+- [x] Endereço com mais de 3 meses → envia normalmente
+- [x] `estadoConvite` devolve `aceita_endereco_recente`; CHK `ORIGEM_ACEITE` aceita o valor novo
+- [x] Gate quick passa (919 testes)
+
+**Tests**: unit
+**Gate**: quick
+**Commit**: `feat(guardas): aceite por endereço atualizado nos últimos 3 meses`
+
+---
+
+### T50: Correção pelo link grava `DATA_ATUALIZACAO_ENDERECO`
+
+**What**: `PUT /visita/endereco` grava `OFICINA.DATA_ATUALIZACAO_ENDERECO` com o instante da correção, na mesma escrita do endereço.
+**Where**: `backend-promotor/service/visitaConfirmacaoService.ts`
+**Depends on**: T49
+**Reuses**: `agora` injetável de `atualizarEndereco`
+**Requirement**: CONV-50
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [x] O update da oficina leva os 7 campos de endereço mais `DATA_ATUALIZACAO_ENDERECO = agora`; os dois testes que afirmavam só os 7 campos foram atualizados para a regra nova
+- [x] Gate quick passa
+
+**Tests**: unit
+**Gate**: quick
+**Commit**: `feat(visita): correção de endereço grava DATA_ATUALIZACAO_ENDERECO`
+
+---
+
+### T51: Rótulo "Aceita (endereço atualizado)" no ob-ads
+
+**What**: O tipo `EstadoConvite` e `rotulosEstadoConvite` ganham `aceita_endereco_recente`.
+**Where**: `ob-ads/lib/disparoVisitas.ts`
+**Depends on**: T49
+**Reuses**: mapa de rótulos existente
+**Requirement**: CONV-49
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [x] Teste do rótulo vermelho antes e verde depois; `npx jest lib/__tests__` passa (20)
+- [x] `npx tsc --noEmit` sem erros novos (49 de base)
+
+**Tests**: unit
+**Gate**: build
+**Commit**: `feat(admin): rótulo de aceite por endereço atualizado`
+
+---
+
 ## Phase Execution Map
 
 Fases em sequência (Phase 1 → 8). Cadeias dentro de cada fase:
@@ -1647,11 +1720,13 @@ T32 → T33 → T34
 T37 → T38 → T39 → T40 → T41
 T41 → T47
 T47 → T48
+T49 → T50
 T42 → T44
 T43 → T44
 T44 → T46
 T42 → T45
 T45 → T46
+T49 → T51
 ```
 
 Tasks sem seta (T3, T4, T5, T6, T16, T24, T27, T35, T36) não dependem de ninguém da própria fase. Execução estritamente sequencial dentro de cada fase.

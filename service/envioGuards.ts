@@ -18,6 +18,18 @@ function mesesAtras(agora: Date, meses: number): Date {
 }
 
 /**
+ * Endereço confirmado recentemente (CONV-49): `OFICINA.DATA_ATUALIZACAO_ENDERECO`
+ * dentro dos últimos 3 meses de calendário. Nula = nunca confirmado.
+ */
+export function enderecoAtualizadoRecente(
+  dataAtualizacao: Date | null | undefined,
+  agora: Date
+): boolean {
+  if (dataAtualizacao == null) return false;
+  return new Date(dataAtualizacao).getTime() >= mesesAtras(agora, MESES_CONFIRMACAO_RECENTE).getTime();
+}
+
+/**
  * Convite em aberto da mesma oficina (CONV-26): devolve o id de uma
  * notificação `ENVIADO` ainda não expirada, em qualquer outra rota da oficina,
  * ou `null`. A notificação que está sendo despachada (`idNotificacao`) nunca

@@ -252,6 +252,10 @@ describe('estadoConvite', () => {
       'aceita_convite_vinculado',
     ],
     [{ STATUS: StatusNotificacaoVisita.CONFIRMADO, ORIGEM_ACEITE: OrigemAceite.IMPORTADA }, 'aceita_importada'],
+    [
+      { STATUS: StatusNotificacaoVisita.CONFIRMADO, ORIGEM_ACEITE: OrigemAceite.ENDERECO_RECENTE },
+      'aceita_endereco_recente',
+    ],
     [{ STATUS: StatusNotificacaoVisita.RECUSADO }, 'recusada'],
     [{ STATUS: StatusNotificacaoVisita.EXPIRADO }, 'expirada'],
     [{ STATUS: StatusNotificacaoVisita.FALHOU }, 'falhou'],

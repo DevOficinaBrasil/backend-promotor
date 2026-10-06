@@ -20,7 +20,12 @@ import { confirmacaoRecente, convitePendenteDaOficina } from "../../service/envi
 
 jest.mock("../../data-source");
 jest.mock("../../channels/channelRegistry");
-jest.mock("../../service/envioGuards");
+// As guardas com consulta são mockadas; a de endereço é pura e roda de verdade.
+jest.mock("../../service/envioGuards", () => ({
+  ...jest.requireActual("../../service/envioGuards"),
+  convitePendenteDaOficina: jest.fn(),
+  confirmacaoRecente: jest.fn(),
+}));
 
 // AGND-09: dispatch runs the existing flow against state as of the send, and
 // returns a verdict instead of deciding retry policy. The queue owns retries.
@@ -154,6 +159,58 @@ describe("NotificacaoVisitaService.despacharNotificacao", () => {
       ID_OFICINA,
       NOME_FANTASIA: "Auto Center",
       DATA_ALTERACAO: new Date(),
+    } as Oficina);
+
+    const desfecho = await NotificacaoVisitaService.despacharNotificacao(ID_NOTIFICACAO);
+
+    expect(desfecho).toMatchObject({ desfecho: "ENVIADO" });
+    expect(sendMock).toHaveBeenCalledTimes(1);
+  });
+
+  // CONV-49: OFICINA.DATA_ATUALIZACAO_ENDERECO com menos de 3 meses → aceita
+  // por endereço atualizado, sem mensagem.
+  describe("endereço atualizado nos últimos 3 meses", () => {
+    const umMesAtras = () => {
+      const d = new Date();
+      d.setMonth(d.getMonth() - 1);
+      return d;
+    };
+
+    beforeEach(() => {
+      oficinaRepo.findOne.mockResolvedValue({
+        ID_OFICINA,
+        NOME_FANTASIA: "Auto Center",
+        DATA_ATUALIZACAO_ENDERECO: umMesAtras(),
+      } as Oficina);
+    });
+
+    it("grava CONFIRMADO/ENDERECO_RECENTE sem token e sem chamar o canal", async () => {
+      const desfecho = await NotificacaoVisitaService.despacharNotificacao(ID_NOTIFICACAO);
+
+      expect(desfecho).toEqual({ desfecho: "ACEITO", origem: OrigemAceite.ENDERECO_RECENTE });
+      expect(sendMock).not.toHaveBeenCalled();
+      const gravado = notifRepo.save.mock.calls[notifRepo.save.mock.calls.length - 1][0];
+      expect(gravado.STATUS).toBe(StatusNotificacaoVisita.CONFIRMADO);
+      expect(gravado.ORIGEM_ACEITE).toBe(OrigemAceite.ENDERECO_RECENTE);
+      expect(gravado.CONFIRMADO_EM).toBeInstanceOf(Date);
+      expect(gravado.TOKEN_HASH).toBeUndefined();
+    });
+
+    it("decide antes da guarda de convite em aberto e da busca do destinatário", async () => {
+      await NotificacaoVisitaService.despacharNotificacao(ID_NOTIFICACAO);
+
+      expect(convitePendenteDaOficina).not.toHaveBeenCalled();
+      expect(usuarioRepo.find).not.toHaveBeenCalled();
+    });
+  });
+
+  it("envia normalmente quando DATA_ATUALIZACAO_ENDERECO tem mais de 3 meses", async () => {
+    const quatroMeses = new Date();
+    quatroMeses.setMonth(quatroMeses.getMonth() - 4);
+    oficinaRepo.findOne.mockResolvedValue({
+      ID_OFICINA,
+      NOME_FANTASIA: "Auto Center",
+      DATA_ATUALIZACAO_ENDERECO: quatroMeses,
     } as Oficina);
 
     const desfecho = await NotificacaoVisitaService.despacharNotificacao(ID_NOTIFICACAO);

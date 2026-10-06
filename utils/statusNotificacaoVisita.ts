@@ -81,6 +81,7 @@ export type EstadoConvite =
   | "aceita_confirmacao_recente"
   | "aceita_convite_vinculado"
   | "aceita_importada"
+  | "aceita_endereco_recente"
   | "recusada"
   | "expirada"
   | "falhou"
@@ -96,6 +97,7 @@ const ESTADO_POR_ORIGEM: Record<OrigemAceite, EstadoConvite> = {
   [OrigemAceite.CONFIRMACAO_RECENTE]: "aceita_confirmacao_recente",
   [OrigemAceite.CONVITE_VINCULADO]: "aceita_convite_vinculado",
   [OrigemAceite.IMPORTADA]: "aceita_importada",
+  [OrigemAceite.ENDERECO_RECENTE]: "aceita_endereco_recente",
 };
 
 /**

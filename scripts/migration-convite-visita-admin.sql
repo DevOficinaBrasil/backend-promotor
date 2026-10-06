@@ -20,6 +20,10 @@
 --   7. CHKs de consistência que dependem dos backfills.
 --   8. Índice parcial das AGUARDANDO por referência.
 --
+-- Pré-requisito: a coluna MAIN_REGISTER.OFICINA.DATA_ATUALIZACAO_ENDERECO, criada
+-- por backend-communities/SQL/migrations/2026-10-modal-aquisicao-oficina-data-
+-- atualizacao-endereco.sql, precisa existir antes do deploy do backend-promotor.
+--
 -- Impacto dos UPDATE/INSERT (dba-rules regra 6, conferir antes de aplicar):
 --   Backfill 1 toca toda linha CONFIRMADO com ORIGEM_ACEITE nulo. Só grava a
 --   origem, não muda STATUS.
@@ -86,8 +90,8 @@
 -- Notas mantidas aqui fora para o statement ficar sem comentário no meio:
 --
 --   ORIGEM_ACEITE              Por que a linha está CONFIRMADO: REPARADOR,
---                              CONFIRMACAO_RECENTE, CONVITE_VINCULADO ou
---                              IMPORTADA. "Aceito" continua sendo um status só.
+--                              CONFIRMACAO_RECENTE, CONVITE_VINCULADO,
+--                              IMPORTADA ou ENDERECO_RECENTE. "Aceito" continua sendo um status só.
 --   ID_NOTIFICACAO_REFERENCIA  Notificação cujo desfecho esta segue (AGUARDANDO)
 --                              ou que justificou o aceite automático
 --                              (CONFIRMACAO_RECENTE, CONVITE_VINCULADO). SEM FK:
@@ -130,7 +134,7 @@ ALTER TABLE "CAMPANHAS_OB"."NOTIFICACAO_VISITA"
 ALTER TABLE "CAMPANHAS_OB"."NOTIFICACAO_VISITA"
   DROP CONSTRAINT IF EXISTS "CHK_NOTIFICACAO_VISITA_ORIGEM_ACEITE",
   ADD CONSTRAINT "CHK_NOTIFICACAO_VISITA_ORIGEM_ACEITE"
-    CHECK ("ORIGEM_ACEITE" IS NULL OR "ORIGEM_ACEITE" IN ('REPARADOR', 'CONFIRMACAO_RECENTE', 'CONVITE_VINCULADO', 'IMPORTADA')),
+    CHECK ("ORIGEM_ACEITE" IS NULL OR "ORIGEM_ACEITE" IN ('REPARADOR', 'CONFIRMACAO_RECENTE', 'CONVITE_VINCULADO', 'IMPORTADA', 'ENDERECO_RECENTE')),
   DROP CONSTRAINT IF EXISTS "CHK_NOTIFICACAO_VISITA_TELEFONE_ORIGEM",
   ADD CONSTRAINT "CHK_NOTIFICACAO_VISITA_TELEFONE_ORIGEM"
     CHECK ("TELEFONE_ORIGEM" IS NULL OR "TELEFONE_ORIGEM" IN ('USUARIO_CELULAR', 'USUARIO_TELEFONE', 'OFICINA_TELEFONE', 'CADASTRO_EMPRESA_TELEFONE'));
@@ -248,7 +252,7 @@ COMMENT ON COLUMN "CAMPANHAS_OB"."NOTIFICACAO_VISITA"."STATUS" IS
   'Estado do fluxo: PENDENTE, ENVIADO, CONFIRMADO (aceito, origem em ORIGEM_ACEITE), FALHOU, DISPENSADO (envio suprimido de propósito, não é falha), EXPIRADO, REAGENDADO (reservado, sem code path), AGUARDANDO (segue o convite em ID_NOTIFICACAO_REFERENCIA), RECUSADO (reparador recusou pelo link).';
 
 COMMENT ON COLUMN "CAMPANHAS_OB"."NOTIFICACAO_VISITA"."ORIGEM_ACEITE" IS
-  'Origem do aceite quando STATUS = CONFIRMADO: REPARADOR (link), CONFIRMACAO_RECENTE (destinatário confirmou há menos de 3 meses), CONVITE_VINCULADO (seguiu o convite de referência), IMPORTADA (oficina em OFICINA_IMPORTADA para o slug da campanha). Obrigatória em CONFIRMADO.';
+  'Origem do aceite quando STATUS = CONFIRMADO: REPARADOR (link), CONFIRMACAO_RECENTE (destinatário confirmou há menos de 3 meses), CONVITE_VINCULADO (seguiu o convite de referência), IMPORTADA (oficina em OFICINA_IMPORTADA para o slug da campanha), ENDERECO_RECENTE (OFICINA.DATA_ATUALIZACAO_ENDERECO com menos de 3 meses). Obrigatória em CONFIRMADO.';
 
 COMMENT ON COLUMN "CAMPANHAS_OB"."NOTIFICACAO_VISITA"."ID_NOTIFICACAO_REFERENCIA" IS
   'Notificação de referência: o convite ENVIADO que uma linha AGUARDANDO segue, ou o aceite que justificou CONFIRMACAO_RECENTE/CONVITE_VINCULADO. Relacionamento implícito com esta mesma tabela (sem FK, padrão da casa e dba-rules regra 8). Integridade garantida pela aplicação.';

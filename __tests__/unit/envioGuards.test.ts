@@ -1,5 +1,9 @@
 import { FindOperator } from "typeorm";
-import { confirmacaoRecente, convitePendenteDaOficina } from "../../service/envioGuards";
+import {
+  confirmacaoRecente,
+  convitePendenteDaOficina,
+  enderecoAtualizadoRecente,
+} from "../../service/envioGuards";
 import { AppDataSourceSync } from "../../data-source";
 import { OrigemAceite, StatusNotificacaoVisita } from "../../entities/NotificacaoVisita";
 
@@ -290,5 +294,28 @@ describe("confirmacaoRecente", () => {
     expect(janela.type).toBe("moreThanOrEqual");
     expect(janela.value).toEqual(new Date("2026-06-28T12:00:00.000Z"));
     expect(order).toEqual({ CONFIRMADO_EM: "DESC" });
+  });
+});
+
+// CONV-49: OFICINA.DATA_ATUALIZACAO_ENDERECO com menos de 3 meses → a oficina
+// não precisa receber a mensagem.
+describe("enderecoAtualizadoRecente", () => {
+  const AGORA = new Date("2026-10-06T12:00:00.000Z");
+
+  it("é falso quando a oficina nunca confirmou o endereço", () => {
+    expect(enderecoAtualizadoRecente(null, AGORA)).toBe(false);
+    expect(enderecoAtualizadoRecente(undefined, AGORA)).toBe(false);
+  });
+
+  it("é verdadeiro com atualização dentro de 3 meses", () => {
+    expect(enderecoAtualizadoRecente(new Date("2026-09-01T12:00:00.000Z"), AGORA)).toBe(true);
+  });
+
+  it("é verdadeiro exatamente no limite de 3 meses de calendário", () => {
+    expect(enderecoAtualizadoRecente(new Date("2026-07-06T12:00:00.000Z"), AGORA)).toBe(true);
+  });
+
+  it("é falso um instante antes do limite", () => {
+    expect(enderecoAtualizadoRecente(new Date("2026-07-06T11:59:59.999Z"), AGORA)).toBe(false);
   });
 });

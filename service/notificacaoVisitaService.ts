@@ -12,7 +12,11 @@ import RotaPromotor from "../entities/RotaPromotor";
 import Usuario from "../entities/Usuario";
 import { getChannel } from "../channels/channelRegistry";
 import { LIMITE_DESTINATARIO } from "../channels/whatsappChannel";
-import { confirmacaoRecente, convitePendenteDaOficina } from "./envioGuards";
+import {
+  confirmacaoRecente,
+  convitePendenteDaOficina,
+  enderecoAtualizadoRecente,
+} from "./envioGuards";
 import { resolverTelefone } from "../utils/telefone";
 import { ligacaoCadastroEmpresa } from "../utils/sqlCadastroEmpresa";
 import { gerarLinkToken } from "../utils/visitaToken";
@@ -69,7 +73,7 @@ export type DesfechoDespacho =
   // Resolvidas sem mensagem pelas guardas de aceite: a linha já foi gravada
   // AGUARDANDO (CONV-26) ou CONFIRMADO/CONFIRMACAO_RECENTE (CONV-30).
   | { desfecho: "AGUARDANDO"; idReferencia: number }
-  | { desfecho: "ACEITO"; origem: OrigemAceite; idReferencia: number }
+  | { desfecho: "ACEITO"; origem: OrigemAceite; idReferencia?: number }
   | { desfecho: "FALHOU_TERMINAL"; erro: string }
   | { desfecho: "FALHOU_TRANSITORIO"; erro: string };
 
@@ -526,6 +530,18 @@ export default class NotificacaoVisitaService {
       }
 
       const agora = new Date();
+
+      // CONV-49: endereço confirmado nos últimos 3 meses. Não manda mensagem e a
+      // visita conta como aceita. Decide pela oficina, antes de qualquer
+      // consulta ao destinatário ou aos convites em aberto.
+      if (enderecoAtualizadoRecente(oficina.DATA_ATUALIZACAO_ENDERECO, agora)) {
+        await this.finalizar(repo, notificacao, {
+          STATUS: StatusNotificacaoVisita.CONFIRMADO,
+          ORIGEM_ACEITE: OrigemAceite.ENDERECO_RECENTE,
+          CONFIRMADO_EM: agora,
+        });
+        return { desfecho: "ACEITO", origem: OrigemAceite.ENDERECO_RECENTE };
+      }
 
       // CONV-26: a oficina já tem um convite ENVIADO em aberto noutra rota. Não
       // manda mensagem; a linha segue o desfecho daquele convite. AVAILABLE_AT
