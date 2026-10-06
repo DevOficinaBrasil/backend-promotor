@@ -4,7 +4,7 @@
 **Spec**: `.specs/features/disparo-convite-visita-admin/spec.md` (47 requirements, CONV-01..CONV-47)
 **Verifier**: independent sub-agent (author ≠ verifier), evidence-or-zero
 
-## Validation verdict: PASS ✅
+## Validation verdict: PASS ✅ (histórico, 2026-09-29; o veredito atual está na última seção, "Re-verificação 2026-10-06 (endereço atualizado)", iteração 2)
 
 > **2026-09-29, busca por WHERE:** the user replaced the CRM segmentation with a plain `WHERE` over `MAIN_REGISTER.OFICINA`. The parts of this report about segmentation are **superseded**: the CONV-06..CONV-12 table, SPG-3 wording, SPG-5, sensor row M22, and UAT items 1 (segmentation copy and 502) and 4 (tenant 15). See the section **Re-verificação 2026-09-29 (busca por WHERE)** at the end of this file. Everything else still holds.
 
@@ -319,7 +319,7 @@ Risk noted, not a gap: `ob-ads/service/api.ts:32-42` now attaches the ob-ads JWT
 
 ## Re-verificação 2026-09-29 (busca por WHERE)
 
-### Validation (revisão 2026-09-29): PASS ✅
+### Validation (revisão 2026-09-29, histórico): PASS ✅
 
 **Date**: 2026-09-29
 **Verifier**: independent sub-agent (author ≠ verifier), evidence-or-zero. I re-derived this from `spec.md` (CONV-06..CONV-12 rewritten, CONV-48 new), from `design.md` "Revisão 2026-09-29" and from the diff. I did not reuse the author's per-task notes or scratch scripts.
@@ -472,3 +472,163 @@ Test integrity: `adminDisparoSegmentacao.test.ts` (-182) and `oficinaServiceBase
 **Spec-anchored check**: 11/11 revised requirements traced to evidence (CONV-06..12, 16, 18, 48, plus auth on the 3 new routes). 4 spec-precision gaps (SPG-6..9). 1 runtime risk found by reading (R-1).
 **Sensor**: 21/21 valid mutations killed (P0 depth; 2 invalid compile-failing drafts discarded)
 **Gate**: BP unit 911/911 tests (1 pre-existing compile-red suite); BP integration 84/84; BP tsc baseline (2); OB jest 20/20; OB tsc baseline (49)
+
+---
+
+## Re-verificação 2026-10-06 (endereço atualizado)
+
+### Iteração 1 (histórico, superada pela iteração 2 no fim desta seção): FAIL ❌
+
+**Date**: 2026-10-06
+**Scope**: CONV-49 (Guardas AC7, AC8, AC9) and CONV-50 (Guardas AC10), plus the assumptions rows "Guarda endereço recente", "Quem grava `DATA_ATUALIZACAO_ENDERECO`" and "Dependência de deploy".
+**Verifier**: independent sub-agent (author ≠ verifier), evidence-or-zero. I re-derived this from `spec.md` and the diffs. I did not reuse the author's notes.
+
+The verdict is FAIL for one reason: AC7 ("distinguir, para o admin") breaks in the admin panel totals and in the API filter. The new state `aceita_endereco_recente` is missing from `ESTADOS_CONVITE` (`service/adminDisparoService.ts:62-75`). The dispatch guard (AC8/AC9) and the address write (AC10) pass, and the sensor killed every mutant.
+
+**Diff ranges**
+
+| Repo | Range | Commits |
+| --- | --- | --- |
+| backend-promotor | `cea0fa4..d9c6463` | T49 `648e2e1` (11 files, +222/-12), T50 `d9c6463` (2 files, +18/-4) |
+| ob-ads (worktree `ob-ads-disparo-convite`) | `24813856..42b831d9` | T51 `42b831d9` (3 files, +3) |
+
+### Task completion
+
+| Task | Status | Notes |
+| --- | --- | --- |
+| T49 | ⚠️ Partial | Guard, enum, CHK, entity and `estadoConvite` are done. `ESTADOS_CONVITE` in the admin panel was not updated (gap G-1). |
+| T50 | ✅ Done | - |
+| T51 | ✅ Done | Label is correct. (Correção na iteração 2: o chip do ob-ads conta no cliente a partir de `rotulosEstadoConvite`, então ele não ficava vazio. G-1 afetava só a API.) |
+
+### Spec-anchored acceptance criteria
+
+| Criterion | Spec-defined outcome | `file:line` + assertion | Result |
+| --- | --- | --- | --- |
+| AC8: `DATA_ATUALIZACAO_ENDERECO >= agora - 3 meses` → no message, `CONFIRMADO` + `ORIGEM_ACEITE='ENDERECO_RECENTE'` | No send; STATUS `CONFIRMADO`; origin `ENDERECO_RECENTE` | Impl `service/notificacaoVisitaService.ts:537-544`. Test `__tests__/unit/despacharNotificacao.test.ts:190` `toEqual({desfecho:"ACEITO",origem:ENDERECO_RECENTE})`; `:191` `sendMock not.toHaveBeenCalled()`; `:193` `gravado.STATUS toBe(CONFIRMADO)`; `:194` `gravado.ORIGEM_ACEITE toBe(ENDERECO_RECENTE)`; `:196` `TOKEN_HASH toBeUndefined()` | ✅ PASS |
+| AC8 boundary ("posterior ou igual") | Exactly 3 calendar months ago counts as recent | `__tests__/unit/envioGuards.test.ts:315` `enderecoAtualizadoRecente(2026-07-06T12:00Z, AGORA) toBe(true)`; `:319` one ms earlier `toBe(false)`; `:311` within the window `toBe(true)` | ✅ PASS |
+| AC8 ordering (decides before the other guards; T49 Done-when) | Does not look up the open invite or the recipient | `__tests__/unit/despacharNotificacao.test.ts:202` `convitePendenteDaOficina not.toHaveBeenCalled()`; `:203` `usuarioRepo.find not.toHaveBeenCalled()` | ✅ PASS |
+| AC9: null → follows the other guards and sends | Send happens normally | `__tests__/unit/envioGuards.test.ts:306-307` null/undefined `toBe(false)`. Dispatch with null: the existing ENVIADO happy path (`despacharNotificacao.test.ts:123` `sendMock toHaveBeenCalledTimes(1)`, oficina fixture has no column = undefined) | ✅ PASS |
+| AC9: older than 3 months → sends normally | Send happens normally | `__tests__/unit/despacharNotificacao.test.ts:218` `toMatchObject({desfecho:"ENVIADO"})`; `:219` `sendMock toHaveBeenCalledTimes(1)` (4 months) | ✅ PASS |
+| AC7: admin tells apart "aceita pelo reparador", "por confirmação recente" and "por endereço atualizado" (per-row state) | `estadoConvite` → `aceita_endereco_recente`; label "Aceita (endereço atualizado)" | `__tests__/unit/statusNotificacaoVisita.test.ts:255-258` table row `ENDERECO_RECENTE → 'aceita_endereco_recente'`; ob-ads `lib/__tests__/disparoVisitas.test.ts:83` + `:92` `rotulosEstadoConvite toEqual(esperado)` | ✅ PASS |
+| AC7: admin panel totals and filter (`GET /admin/campanhas/:id/rotas`, CONV-41/42 contract: "totais de todos os estados") | `totaisPorEstado.aceita_endereco_recente` = count; `?estado=aceita_endereco_recente` is accepted | **No evidence.** A scratch probe (not committed) showed `totaisPorEstado.aceita_endereco_recente = NaN` (JSON `null`) for 1 ENDERECO_RECENTE row, and `listarRotasComEstado(77,"aceita_endereco_recente")` rejecting with `AdminDisparoErro: Estado de convite inválido` (400). Root cause: `service/adminDisparoService.ts:62-75` `ESTADOS_CONVITE` lacks the new state, so `:691` seeds no key and `:707` does `undefined += 1`. `__tests__/unit/adminDisparoEstado.test.ts:112` compares the keys with `ESTADOS_CONVITE` itself (tautological), and `:113-126` lists the 12 old states, so it cannot catch the gap. (Correção na iteração 2: a frase original dizia que o chip do ob-ads ficava vazio. Está errada. `StepDisparo.tsx:83-89` calcula os totais no cliente a partir de `ESTADOS = Object.keys(rotulosEstadoConvite)`, e o filtro em `:91` também roda no cliente. O defeito estava só na resposta da API: `totaisPorEstado` e `?estado=`.) | ❌ GAP (G-1) |
+| AC10: `PUT /visita/endereco` writes `DATA_ATUALIZACAO_ENDERECO` with the instant of the correction, in the same write | Same `update` as the 7 address fields, value = `agora` | Impl `service/visitaConfirmacaoService.ts:385-391` (single `manager.update` inside `AppDataSourceSync.transaction`). Test `__tests__/unit/visitaConfirmacaoService.test.ts:743-746` `oficinaRepo.update toHaveBeenCalledWith({ID_OFICINA}, {...enderecoCorrigido, DATA_ATUALIZACAO_ENDERECO: AGORA})`; `:748-759` keys = 7 + `DATA_ATUALIZACAO_ENDERECO`; `:1009-1012` same on the dw-failure path | ✅ PASS |
+| AC1 (unchanged, regression): `DATA_ALTERACAO` does not suppress | Sends | `__tests__/unit/despacharNotificacao.test.ts:157-167` `sendMock toHaveBeenCalledTimes(1)` | ✅ PASS |
+
+**Assumptions rows**
+
+| Row | Evidence | Result |
+| --- | --- | --- |
+| Guarda endereço recente (`timestamptz`, new column, `ENDERECO_RECENTE`) | `entities/Oficina.ts:97-98` `timestamp with time zone`, nullable; `entities/NotificacaoVisita.ts:36` enum `ENDERECO_RECENTE`; `scripts/migration-convite-visita-admin.sql:137` CHK includes `'ENDERECO_RECENTE'`, `:255` COMMENT updated. CHK not applied, as instructed (DB UAT) | ✅ (static) |
+| Quem grava `DATA_ATUALIZACAO_ENDERECO` | Promotor side: AC10 above. The communities modal is outside this diff | ✅ |
+| Dependência de deploy | `backend-communities/SQL/migrations/2026-10-modal-aquisicao-oficina-data-atualizacao-endereco.sql:74` `ADD COLUMN IF NOT EXISTS "DATA_ATUALIZACAO_ENDERECO" TIMESTAMPTZ NULL`; prerequisite documented in `scripts/migration-convite-visita-admin.sql:23-25` and in the T49 commit message. Not executable as a test | ✅ documented / deploy-order item for UAT |
+
+**Observations (not gaps)**
+
+- The new guard runs **after** "campanha encerrada" (`notificacaoVisitaService.ts:527-529`). A row of an ended campaign becomes `DISPENSADO`, not `ENDERECO_RECENTE`. The spec does not order these two. This is consistent with the guard-3 rationale. It is not tested in combination.
+- There is no test that combines "endereço recente" with "convite aberto". The ordering is pinned only by the not-called assertions at `:202-203` (sensor M8 killed).
+
+### Discrimination sensor (scratch `git worktree add --detach <scratchpad>/bp-sensor HEAD` + `<scratchpad>/ob-sensor`, node_modules junctions)
+
+| # | File:line | Mutation | Tests run | Killed? |
+| --- | --- | --- | --- | --- |
+| M1 | `service/envioGuards.ts:29` | `>=` → `>` at the 3-month limit | envioGuards + despacharNotificacao | ✅ Killed (`envioGuards.test.ts:315`) |
+| M2 | `service/envioGuards.ts:28` | null → `return true` | same | ✅ Killed (27 failures) |
+| M3 | `service/notificacaoVisitaService.ts:540` | `ORIGEM_ACEITE` `ENDERECO_RECENTE` → `CONFIRMACAO_RECENTE` | despacharNotificacao | ✅ Killed (`:194`) |
+| M4 | `service/visitaConfirmacaoService.ts:390` | `DATA_ATUALIZACAO_ENDERECO` not written (`endereco` only) | visitaConfirmacaoService | ✅ Killed (2 tests) |
+| M5 | `utils/statusNotificacaoVisita.ts:100` | `ENDERECO_RECENTE` → `"aceita"` in `estadoConvite` | statusNotificacaoVisita | ✅ Killed |
+| M6 | `service/notificacaoVisitaService.ts:539` | `STATUS CONFIRMADO` → `DISPENSADO` | despacharNotificacao | ✅ Killed (`:193`) |
+| M7 | `service/visitaConfirmacaoService.ts:390` | `agora` → `new Date()` (not the instant of the correction) | visitaConfirmacaoService | ✅ Killed (2 tests) |
+| M8 | `service/notificacaoVisitaService.ts:534-544` | guard block moved after the convite-aberto guard | despacharNotificacao | ✅ Killed (`:202`) |
+| M9 | `service/envioGuards.ts:29` | window 3 → 2 months | envioGuards + despacharNotificacao | ✅ Killed (`:315`) |
+| M10 | ob-ads `lib/disparoVisitas.ts:47` | label → `'Aceita'` (same as reparador) | ob-ads `lib/__tests__` | ✅ Killed (`disparoVisitas.test.ts:92`) |
+| Probe | `service/adminDisparoService.ts:62` (no mutation; unmodified HEAD) | ENDERECO_RECENTE row through `listarRotasComEstado` | throwaway probe test | ❌ Defect confirmed: totals `NaN`, filter 400 (G-1) |
+
+**Sensor depth**: expanded (≥5 behavior mutations). **Sensor outcome**: 10/10 killed, 0 survived. The sensor itself passes. G-1 is a coverage gap in code the diff did not touch, not a surviving mutant.
+**Isolation**: both scratch worktrees were removed (junction removed first with `rmdir`, then `git worktree remove --force`). `git status --porcelain` matches the pre-sensor baseline in backend-promotor (8 user WIP entries) and in the ob-ads worktree (clean).
+
+### Gate check
+
+| Gate | Result |
+| --- | --- |
+| BP `npm run test:unit` | 919/919 tests passed; 48/49 suites. The only red suite is `segmentacaoCampanhaPromotor.test.ts` (TS2307, pre-existing) |
+| BP integration subset (visitaRecusar, visitaConfirmar, visitaExchange, adminDisparo) | 84/84 passed (4 suites) |
+| BP `npx tsc --noEmit` | exit 2, only the 2 pre-existing TS2307 errors in `segmentacaoCampanhaPromotor.test.ts` |
+| OB worktree `npx jest lib/__tests__` | 20/20 passed |
+| OB worktree `npx tsc --noEmit` | 49 errors = baseline (all under `app/`, untouched training tests) |
+| DB-backed tests / migrations | Not run (`visitaEndereco.test.ts`, `npm run test:integration`), as instructed |
+
+### Code quality
+
+| Check | Status |
+| --- | --- |
+| Minimum code / surgical | ✅ (+20 lines of service code, a pure helper that reuses `mesesAtras`) |
+| Matches patterns | ✅ (same shape as the CONFIRMACAO_RECENTE branch; `idReferencia` became optional, which is a justified type widening) |
+| Completeness of the enum fan-out | ❌ `ESTADOS_CONVITE` (backend) missed. The ob-ads `EstadoConvite` and labels were updated |
+| Tests map to ACs, non-shallow | ✅ except the tautological key check at `adminDisparoEstado.test.ts:112` |
+
+### Fix plans
+
+- **Fix G-1 (Major, blocks AC7 in the panel):** add `"aceita_endereco_recente"` to `ESTADOS_CONVITE` (`backend-promotor/service/adminDisparoService.ts:62-75`, after `aceita_importada` so the order matches the ob-ads labels). In `__tests__/unit/adminDisparoEstado.test.ts`, add a `CONFIRMADO/ENDERECO_RECENTE` row to the fixture (`:41-53`) and to the expected states (`:68+`). Add `aceita_endereco_recente: 0` to the literal totals at `:113-126`. Replace the tautological `:112` with a check against the `EstadoConvite` union, for example a `Record<EstadoConvite, true>` literal, so a future enum value fails at compile time. Verify that `?estado=aceita_endereco_recente` returns 200.
+
+### Requirement traceability update
+
+| Requirement | Previous | New |
+| --- | --- | --- |
+| CONV-49 | Implementing | ❌ Needs fix (AC8/AC9 ✅ verified; AC7 panel totals/filter G-1) |
+| CONV-50 | Implementing | ✅ Verified (unit). DB UAT: column must exist (deploy order) |
+
+### Summary (iteração 1, histórico)
+
+**Overall**: ❌ Not ready. One Major gap with a one-line fix.
+**Spec-anchored check**: 8/9 criteria rows matched the spec outcome. AC7 is partial (G-1). No new spec-precision gaps.
+**Sensor**: 10/10 mutations killed, 0 survived.
+**Gate**: BP unit 919/919 (1 pre-existing compile-red suite); BP integration 84/84; BP tsc baseline (2); OB jest 20/20; OB tsc baseline (49).
+
+### Validation (re-verificação 2026-10-06, iteração 2 - veredito atual): PASS ✅
+
+**Date**: 2026-10-06
+**Diff range**: backend-promotor `d9c6463..aa07431` (T52 `aa07431`: `service/adminDisparoService.ts` +1, `__tests__/unit/adminDisparoEstado.test.ts` +34/-2, tasks.md). ob-ads is unchanged (`42b831d9`).
+**Verifier**: the same independent sub-agent (author ≠ verifier), evidence-or-zero.
+
+**G-1 closed**
+
+| Criterion | Spec-defined outcome | `file:line` + assertion | Result |
+| --- | --- | --- | --- |
+| AC7 (admin panel): the API totals count the new state | `totaisPorEstado.aceita_endereco_recente` = 1 for one ENDERECO_RECENTE row | Impl `service/adminDisparoService.ts:70` (state in `ESTADOS_CONVITE`). Fixture row `__tests__/unit/adminDisparoEstado.test.ts:72`. Test `:156` `r.totaisPorEstado.aceita_endereco_recente toBe(1)`; `:166` sum of totals `toBe(14)` | ✅ PASS |
+| AC7 (admin panel): `?estado=aceita_endereco_recente` is accepted and filters | Only that row is returned, with no 400 | `adminDisparoEstado.test.ts:153` `listarRotasComEstado(77,"aceita_endereco_recente")`; `:155` `r.rotas.map(estado) toEqual(["aceita_endereco_recente"])` | ✅ PASS |
+| AC7: the state list cannot drift from the `EstadoConvite` union | Every union member is listed | `adminDisparoEstado.test.ts:6-20` `TODOS_OS_ESTADOS: Record<EstadoConvite, true>` (a compile error if a member is missing or extra); `:132` `[...ESTADOS_CONVITE].sort() toEqual(Object.keys(TODOS_OS_ESTADOS).sort())`; `:133` same for the keys of `totaisPorEstado`; `:142` `aceita_endereco_recente: 0` in the literal totals | ✅ PASS |
+| AC7 (ob-ads screen) | A distinct chip and label | Coordinator's claim confirmed by reading the code: `StepDisparo.tsx:24` `ESTADOS = Object.keys(rotulosEstadoConvite)`; `:83-89` totals counted on the client; `:91` filter on the client; label `lib/disparoVisitas.ts:47`, test `lib/__tests__/disparoVisitas.test.ts:92` | ✅ PASS |
+
+All other rows from iteration 1 (AC1, AC8, AC9, AC10 and the assumptions rows) still hold. T52 does not touch those files.
+
+**Sensor, iteration 2** (scratch `git -c core.longpaths=true worktree add --detach <scratchpad>/b2 HEAD`, node_modules junction; `adminDisparoEstado.test.ts`)
+
+| # | File:line | Mutation | Killed? |
+| --- | --- | --- | --- |
+| G1a | `service/adminDisparoService.ts:70` | `"aceita_endereco_recente"` removed from `ESTADOS_CONVITE` | ✅ Killed (3 tests: `:132`, `:155-156`, `:166`) |
+| G1b | `service/adminDisparoService.ts:708` | totals `+= 1` → `= 1` | ✅ Killed (`:166` sum) |
+| G1c | `service/adminDisparoService.ts` return | `?estado` filter ignored (returns all rows) | ✅ Killed (2 tests) |
+| G1d | `service/adminDisparoService.ts:692` | totals seeded without `aceita_endereco_recente` | ✅ Killed (3 tests) |
+
+**Sensor total (iterations 1 + 2)**: 14/14 killed, 0 survived. The first scratch attempt (`bp-sensor2`) failed on a too-long path during checkout and never registered as a worktree. I deleted the partial directory before creating the junction, and `git worktree prune` left only the real tree. `b2` was cleaned up as before (junction removed with `rmdir`, then `git worktree remove --force`). `git status --porcelain` matches the pre-sensor baseline.
+
+**Gate, iteration 2**
+
+| Gate | Result |
+| --- | --- |
+| BP `npm run test:unit` | 920/920 passed (+1 test, the new count-and-filter test); 48/49 suites. The only red suite is `segmentacaoCampanhaPromotor.test.ts` (pre-existing) |
+| BP integration subset (4 suites) | 84/84 |
+| BP `npx tsc --noEmit` | only the 2 pre-existing TS2307 errors (`segmentacaoCampanhaPromotor.test.ts`) |
+| OB worktree `npx jest lib/__tests__` | 20/20 |
+| OB worktree `npx tsc --noEmit` | 49 = baseline |
+
+**Requirement traceability update (current)**
+
+| Requirement | Previous | New |
+| --- | --- | --- |
+| CONV-49 | ❌ Needs fix (G-1) | ✅ Verified (unit). DB UAT: the CHK with `ENDERECO_RECENTE` must be applied |
+| CONV-50 | ✅ Verified (unit) | ✅ Verified (unit). DB UAT: the column must exist (deploy order: the backend-communities migration goes first) |
+
+**Remaining (non-blocking)**: no test combines "endereço recente" with "convite aberto" or with "campanha encerrada". The spec does not order the guard relative to "campanha encerrada". UAT: apply the migrations in order (backend-communities column first, then the promotor CHK) before the deploy.
+
+**Summary (current)**: ✅ Ready for UAT. Spec-anchored check: 10/10 rows matched (AC1, AC7 ×2, AC8 ×3, AC9 ×2, AC10, plus the assumptions). Sensor: 14/14 killed. Gate: BP unit 920/920, integration 84/84, tsc baseline; OB jest 20/20, tsc baseline 49.
