@@ -37,8 +37,9 @@ export const freelancerRoleMiddleware = async (req: Request, res: Response, next
 
     (req as FreelancerRequest).freelancerId = idUsuario;
     return next();
-  } catch {
-    console.error("[freelancerRole] falha ao validar a role");
+  } catch (erro) {
+    const e = erro as { message?: string; code?: string };
+    console.error("[freelancerRole] falha ao validar a role", { erro: e?.message, codigo: e?.code });
     return res.status(500).json({ message: "Erro ao validar permissão." });
   }
 };

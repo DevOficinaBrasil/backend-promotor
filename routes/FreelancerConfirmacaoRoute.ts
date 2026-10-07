@@ -31,7 +31,14 @@ const responder =
       if (erro instanceof FreelancerConfirmacaoErro) {
         return res.status(erro.status).json({ message: erro.message });
       }
-      console.error("[freelancerConfirmacao] erro inesperado", { rota: req.method + " " + req.route?.path });
+      // Só mensagem e código do erro (ex.: "column x does not exist", 42703): é o que
+      // diz por que deu 500 sem vazar nada na resposta nem valores de dados.
+      const e = erro as { message?: string; code?: string };
+      console.error("[freelancerConfirmacao] erro inesperado", {
+        rota: req.method + " " + req.route?.path,
+        erro: e?.message,
+        codigo: e?.code,
+      });
       return res.status(500).json({ message: "Erro interno." });
     }
   };
