@@ -23,6 +23,19 @@ export enum StatusNotificacaoVisita {
   REAGENDADO = "REAGENDADO", // reserved — NOTIF-26, no code path sets/reads this yet
 }
 
+// Por que a linha está CONFIRMADO. "Aceito" é um status só, e a origem diz de
+// onde veio. CHK_NOTIFICACAO_VISITA_ORIGEM_ACEITE lista os mesmos valores
+// (scripts/migration-convite-visita-admin.sql cria a coluna e a CHK;
+// scripts/migration-freelancer-origem-aceite.sql acrescenta FREELANCER).
+export enum OrigemAceite {
+  REPARADOR = "REPARADOR",
+  CONFIRMACAO_RECENTE = "CONFIRMACAO_RECENTE",
+  CONVITE_VINCULADO = "CONVITE_VINCULADO",
+  IMPORTADA = "IMPORTADA",
+  ENDERECO_RECENTE = "ENDERECO_RECENTE",
+  FREELANCER = "FREELANCER", // confirmado por telefone pelo painel de freelancers
+}
+
 @Entity({ schema: "CAMPANHAS_OB", name: "NOTIFICACAO_VISITA" })
 export default class NotificacaoVisita {
   @PrimaryGeneratedColumn({ type: "int", name: "ID_NOTIFICACAO_VISITA" })
@@ -122,6 +135,11 @@ export default class NotificacaoVisita {
 
   @Column({ type: "boolean", default: false, name: "ENDERECO_ATUALIZADO" })
   ENDERECO_ATUALIZADO?: boolean;
+
+  // Coluna de scripts/migration-convite-visita-admin.sql. Obrigatória quando
+  // STATUS = CONFIRMADO (CHK_NOTIFICACAO_VISITA_CONFIRMADO_ORIGEM).
+  @Column({ type: "text", enum: OrigemAceite, nullable: true, name: "ORIGEM_ACEITE" })
+  ORIGEM_ACEITE?: OrigemAceite | null;
 
   @CreateDateColumn({
     type: "timestamptz",
