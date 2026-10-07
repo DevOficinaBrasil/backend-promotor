@@ -35,8 +35,9 @@ function mockQuery(handler: (sql: string, params: unknown[]) => unknown, comRole
 }
 
 beforeAll(() => {
-  process.env.JWT_SECRET = SEGREDO;
-  // JWT_SECRET é lido na carga do authMiddleware, por isso o require tardio.
+  // O segredo do promotor é outro: o token do portal só vale com PORTAL_JWT_SECRET.
+  process.env.JWT_SECRET = "segredo-do-promotor";
+  process.env.PORTAL_JWT_SECRET = SEGREDO;
   const router = require("../../routes/FreelancerConfirmacaoRoute").default;
   app = express();
   app.use(express.json());
@@ -61,9 +62,33 @@ describe("auth e role", () => {
     expect(query).not.toHaveBeenCalled();
   });
 
-  it("responde 403 para token inválido", async () => {
+  it("responde 401 para token inválido", async () => {
     const res = await request(app).get(`${BASE}/oficinas`).set("Authorization", "Bearer lixo");
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
+  });
+
+  it("rejeita token assinado com o JWT_SECRET do promotor (segredo diferente do portal)", async () => {
+    const doPromotor = jwt.sign({ user: { ID_USUARIO: ID_FREELANCER } }, "segredo-do-promotor");
+    const res = await request(app).get(`${BASE}/oficinas`).set("Authorization", `Bearer ${doPromotor}`);
+    expect(res.status).toBe(401);
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it("responde 401 para token sem ID_USUARIO no payload", async () => {
+    const semId = jwt.sign({ user: { EMAIL: "f@x.com" } }, SEGREDO);
+    const res = await request(app).get(`${BASE}/oficinas`).set("Authorization", `Bearer ${semId}`);
+    expect(res.status).toBe(401);
+  });
+
+  it("responde 500 sem PORTAL_JWT_SECRET configurado (nunca abre a rota)", async () => {
+    delete process.env.PORTAL_JWT_SECRET;
+    try {
+      const res = await request(app).get(`${BASE}/oficinas`).set(auth());
+      expect(res.status).toBe(500);
+      expect(query).not.toHaveBeenCalled();
+    } finally {
+      process.env.PORTAL_JWT_SECRET = SEGREDO;
+    }
   });
 
   it("responde 403 quando o usuário não tem a role FREELANCER", async () => {

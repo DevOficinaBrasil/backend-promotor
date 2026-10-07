@@ -1,6 +1,6 @@
 import { Request, Response, Router } from "express";
 import { createDocumentedRoute } from "../utils/routeDocumentation";
-import { authMiddleware } from "../middlewares/authMiddleware";
+import { portalAuthMiddleware } from "../middlewares/portalAuthMiddleware";
 import { freelancerRoleMiddleware, FreelancerRequest } from "../middlewares/freelancerRoleMiddleware";
 import FreelancerConfirmacaoService, { FreelancerConfirmacaoErro } from "../service/freelancerConfirmacaoService";
 import { ConfirmarOficinaBody, IdParams, ListarOficinasQuery } from "../schemas/freelancerConfirmacao";
@@ -13,7 +13,7 @@ const router = Router();
  * rota (L-016): uma chamada sem token com id inválido receberia 400 em vez de
  * 401.
  */
-router.use(authMiddleware, freelancerRoleMiddleware);
+router.use(portalAuthMiddleware, freelancerRoleMiddleware);
 
 const BASE = "/freelancer/confirmacao-dados";
 const SEGURANCA = [{ bearerAuth: [] }];
