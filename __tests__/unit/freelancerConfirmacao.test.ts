@@ -181,6 +181,9 @@ describe("GET /oficinas", () => {
     expect(sql).toContain('"CAMPANHAS_OB"."NOTIFICACAO_VISITA"');
     expect(sql).toContain('rp."DELETED_AT" IS NULL');
     expect(sql).toContain("NOT IN ('FINALIZADO', 'CANCELADO')");
+    // STATUS é enum (status_rota): COALESCE com '' falha em runtime com 22P02.
+    expect(sql).not.toMatch(/COALESCE\(rp\."STATUS"/);
+    expect(sql).toContain('rp."STATUS" IS NULL OR');
     expect(sql).toContain(`nv."STATUS" <> 'CONFIRMADO'`);
     expect(sql).toContain('nv."ID_NOTIFICACAO_VISITA" IS NULL');
     expect(sql).toContain('ORDER BY "NOME_FANTASIA", "ID_OFICINA"');
