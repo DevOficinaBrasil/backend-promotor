@@ -1,6 +1,8 @@
 import { AppDataSourceSync } from "../../data-source";
 import NotificacaoVisita, {
+  OrigemAceite,
   StatusNotificacaoVisita,
+  TelefoneOrigem,
 } from "../../entities/NotificacaoVisita";
 import Oficina from "../../entities/Oficina";
 import RotaPromotor from "../../entities/RotaPromotor";
@@ -8,18 +10,22 @@ import Usuario from "../../entities/Usuario";
 import Community from "../../entities/Community";
 import CampanhaPromotor from "../../entities/CampanhaPromotor";
 import NotificacaoVisitaService, {
-  MOTIVO_ENDERECO_RECENTE,
   MOTIVO_OFICINA_INEXISTENTE,
   MOTIVO_SEM_TELEFONE,
   MOTIVO_TELEFONE_INVALIDO,
   MOTIVO_LINK_NAO_CONFIGURADO,
 } from "../../service/notificacaoVisitaService";
 import { getChannel } from "../../channels/channelRegistry";
-import { avaliarGuardas, enderecoRecente } from "../../service/envioGuards";
+import { confirmacaoRecente, convitePendenteDaOficina } from "../../service/envioGuards";
 
 jest.mock("../../data-source");
 jest.mock("../../channels/channelRegistry");
-jest.mock("../../service/envioGuards");
+// As guardas com consulta são mockadas; a de endereço é pura e roda de verdade.
+jest.mock("../../service/envioGuards", () => ({
+  ...jest.requireActual("../../service/envioGuards"),
+  convitePendenteDaOficina: jest.fn(),
+  confirmacaoRecente: jest.fn(),
+}));
 
 // AGND-09: dispatch runs the existing flow against state as of the send, and
 // returns a verdict instead of deciding retry policy. The queue owns retries.
@@ -84,8 +90,10 @@ describe("NotificacaoVisitaService.despacharNotificacao", () => {
       };
     });
 
-    (enderecoRecente as jest.Mock).mockReturnValue(false);
-    (avaliarGuardas as jest.Mock).mockResolvedValue({ bloqueado: false });
+    (convitePendenteDaOficina as jest.Mock).mockResolvedValue(null);
+    (confirmacaoRecente as jest.Mock).mockResolvedValue(null);
+    (AppDataSourceSync.query as jest.Mock).mockReset();
+    (AppDataSourceSync.query as jest.Mock).mockResolvedValue([]);
 
     sendMock = jest.fn(async () => ({
       success: true,
@@ -145,31 +153,231 @@ describe("NotificacaoVisitaService.despacharNotificacao", () => {
     expect(variaveis[2]).toContain("https://app.example.com/visita/confirmacao?token=");
   });
 
-  it("reports DISPENSADO when a guard blocks the send", async () => {
-    (enderecoRecente as jest.Mock).mockReturnValue(true);
+  // CONV-25: a atualização recente do endereço não suprime mais o envio.
+  it("envia normalmente para oficina com DATA_ALTERACAO recente", async () => {
+    oficinaRepo.findOne.mockResolvedValue({
+      ID_OFICINA,
+      NOME_FANTASIA: "Auto Center",
+      DATA_ALTERACAO: new Date(),
+    } as Oficina);
 
     const desfecho = await NotificacaoVisitaService.despacharNotificacao(ID_NOTIFICACAO);
 
-    expect(desfecho).toEqual({ desfecho: "DISPENSADO", motivo: MOTIVO_ENDERECO_RECENTE });
-    expect(sendMock).not.toHaveBeenCalled();
-    expect(notifRepo.save).toHaveBeenCalledWith(
-      expect.objectContaining({ STATUS: StatusNotificacaoVisita.DISPENSADO })
-    );
+    expect(desfecho).toMatchObject({ desfecho: "ENVIADO" });
+    expect(sendMock).toHaveBeenCalledTimes(1);
   });
 
-  it("reports DISPENSADO when the recipient anti-spam guard blocks", async () => {
-    (avaliarGuardas as jest.Mock).mockResolvedValue({
-      bloqueado: true,
-      motivo: "recipient has outstanding notification",
+  // CONV-49: OFICINA.DATA_ATUALIZACAO_ENDERECO com menos de 3 meses → aceita
+  // por endereço atualizado, sem mensagem.
+  describe("endereço atualizado nos últimos 3 meses", () => {
+    const umMesAtras = () => {
+      const d = new Date();
+      d.setMonth(d.getMonth() - 1);
+      return d;
+    };
+
+    beforeEach(() => {
+      oficinaRepo.findOne.mockResolvedValue({
+        ID_OFICINA,
+        NOME_FANTASIA: "Auto Center",
+        DATA_ATUALIZACAO_ENDERECO: umMesAtras(),
+      } as Oficina);
     });
+
+    it("grava CONFIRMADO/ENDERECO_RECENTE sem token e sem chamar o canal", async () => {
+      const desfecho = await NotificacaoVisitaService.despacharNotificacao(ID_NOTIFICACAO);
+
+      expect(desfecho).toEqual({ desfecho: "ACEITO", origem: OrigemAceite.ENDERECO_RECENTE });
+      expect(sendMock).not.toHaveBeenCalled();
+      const gravado = notifRepo.save.mock.calls[notifRepo.save.mock.calls.length - 1][0];
+      expect(gravado.STATUS).toBe(StatusNotificacaoVisita.CONFIRMADO);
+      expect(gravado.ORIGEM_ACEITE).toBe(OrigemAceite.ENDERECO_RECENTE);
+      expect(gravado.CONFIRMADO_EM).toBeInstanceOf(Date);
+      expect(gravado.TOKEN_HASH).toBeUndefined();
+    });
+
+    it("decide antes da guarda de convite em aberto e da busca do destinatário", async () => {
+      await NotificacaoVisitaService.despacharNotificacao(ID_NOTIFICACAO);
+
+      expect(convitePendenteDaOficina).not.toHaveBeenCalled();
+      expect(usuarioRepo.find).not.toHaveBeenCalled();
+    });
+  });
+
+  it("envia normalmente quando DATA_ATUALIZACAO_ENDERECO tem mais de 3 meses", async () => {
+    const quatroMeses = new Date();
+    quatroMeses.setMonth(quatroMeses.getMonth() - 4);
+    oficinaRepo.findOne.mockResolvedValue({
+      ID_OFICINA,
+      NOME_FANTASIA: "Auto Center",
+      DATA_ATUALIZACAO_ENDERECO: quatroMeses,
+    } as Oficina);
 
     const desfecho = await NotificacaoVisitaService.despacharNotificacao(ID_NOTIFICACAO);
 
-    expect(desfecho).toEqual({
-      desfecho: "DISPENSADO",
-      motivo: "recipient has outstanding notification",
+    expect(desfecho).toMatchObject({ desfecho: "ENVIADO" });
+    expect(sendMock).toHaveBeenCalledTimes(1);
+  });
+
+  // CONV-26: convite ENVIADO em aberto na mesma oficina → AGUARDANDO.
+  describe("convite em aberto na mesma oficina", () => {
+    const ID_REFERENCIA = 333;
+
+    beforeEach(() => {
+      (convitePendenteDaOficina as jest.Mock).mockResolvedValue(ID_REFERENCIA);
     });
-    expect(sendMock).not.toHaveBeenCalled();
+
+    it("grava AGUARDANDO com a referência e AVAILABLE_AT nulo, sem chamar o canal", async () => {
+      const desfecho = await NotificacaoVisitaService.despacharNotificacao(ID_NOTIFICACAO);
+
+      expect(desfecho).toEqual({ desfecho: "AGUARDANDO", idReferencia: ID_REFERENCIA });
+      expect(sendMock).not.toHaveBeenCalled();
+      const gravado = notifRepo.save.mock.calls[notifRepo.save.mock.calls.length - 1][0];
+      expect(gravado.STATUS).toBe(StatusNotificacaoVisita.AGUARDANDO);
+      expect(gravado.ID_NOTIFICACAO_REFERENCIA).toBe(ID_REFERENCIA);
+      expect(gravado.AVAILABLE_AT).toBeNull();
+      expect(gravado.TOKEN_HASH).toBeUndefined();
+    });
+
+    it("consulta a guarda pela oficina da rota, excluindo a própria notificação", async () => {
+      await NotificacaoVisitaService.despacharNotificacao(ID_NOTIFICACAO);
+
+      expect(convitePendenteDaOficina).toHaveBeenCalledWith(
+        ID_OFICINA,
+        ID_NOTIFICACAO,
+        expect.any(Date)
+      );
+    });
+  });
+
+  // CONV-30: destinatário confirmou há menos de 3 meses → aceita por
+  // confirmação recente, sem mensagem.
+  describe("confirmação recente do destinatário", () => {
+    const ID_CONFIRMACAO = 444;
+
+    beforeEach(() => {
+      (confirmacaoRecente as jest.Mock).mockResolvedValue(ID_CONFIRMACAO);
+    });
+
+    it("grava CONFIRMADO/CONFIRMACAO_RECENTE com a referência, sem chamar o canal", async () => {
+      const desfecho = await NotificacaoVisitaService.despacharNotificacao(ID_NOTIFICACAO);
+
+      expect(desfecho).toEqual({
+        desfecho: "ACEITO",
+        origem: OrigemAceite.CONFIRMACAO_RECENTE,
+        idReferencia: ID_CONFIRMACAO,
+      });
+      expect(sendMock).not.toHaveBeenCalled();
+      const gravado = notifRepo.save.mock.calls[notifRepo.save.mock.calls.length - 1][0];
+      expect(gravado.STATUS).toBe(StatusNotificacaoVisita.CONFIRMADO);
+      expect(gravado.ORIGEM_ACEITE).toBe(OrigemAceite.CONFIRMACAO_RECENTE);
+      expect(gravado.ID_NOTIFICACAO_REFERENCIA).toBe(ID_CONFIRMACAO);
+      expect(gravado.CONFIRMADO_EM).toBeInstanceOf(Date);
+      expect(gravado.ID_USUARIO).toBe(ID_USUARIO);
+      expect(gravado.TOKEN_HASH).toBeUndefined();
+    });
+
+    it("consulta a guarda pelo usuário do número resolvido", async () => {
+      await NotificacaoVisitaService.despacharNotificacao(ID_NOTIFICACAO);
+
+      expect(confirmacaoRecente).toHaveBeenCalledWith(ID_USUARIO, expect.any(Date));
+    });
+  });
+
+  // CONV-43 / CONV-44: fallback de telefone e origem gravada.
+  describe("telefone alternativo", () => {
+    const semCelular = () =>
+      usuarioRepo.find.mockResolvedValue([
+        { ID_USUARIO, NOME: "Maria Souza", CELULAR: "", TELEFONE: null } as unknown as Usuario,
+      ]);
+
+    const escritaComToken = () =>
+      notifRepo.save.mock.calls.map((c) => c[0]).find((l) => l.TOKEN_HASH != null);
+
+    it("grava TELEFONE_ORIGEM USUARIO_CELULAR no caminho de hoje", async () => {
+      await NotificacaoVisitaService.despacharNotificacao(ID_NOTIFICACAO);
+
+      expect(escritaComToken().TELEFONE_ORIGEM).toBe(TelefoneOrigem.USUARIO_CELULAR);
+    });
+
+    it("sem celular, usa OFICINA.TELEFONE com formato de celular e grava OFICINA_TELEFONE", async () => {
+      semCelular();
+      oficinaRepo.findOne.mockResolvedValue({
+        ID_OFICINA,
+        TELEFONE: "(19) 98877-6655",
+      } as Oficina);
+
+      const desfecho = await NotificacaoVisitaService.despacharNotificacao(ID_NOTIFICACAO);
+
+      expect(desfecho).toMatchObject({ desfecho: "ENVIADO" });
+      expect(sendMock.mock.calls[0][0].toPhone).toBe("5519988776655");
+      const gravado = escritaComToken();
+      expect(gravado.TELEFONE_ORIGEM).toBe(TelefoneOrigem.OFICINA_TELEFONE);
+      expect(gravado.TELEFONE_NORMALIZADO).toBe("5519988776655");
+      expect(gravado.ID_USUARIO).toBe(ID_USUARIO);
+    });
+
+    it("sem celular, usa USUARIO.TELEFONE antes do telefone da oficina", async () => {
+      usuarioRepo.find.mockResolvedValue([
+        { ID_USUARIO, NOME: "Maria", CELULAR: null, TELEFONE: "11 97766-5544" } as unknown as Usuario,
+      ]);
+      oficinaRepo.findOne.mockResolvedValue({ ID_OFICINA, TELEFONE: "19988776655" } as Oficina);
+
+      await NotificacaoVisitaService.despacharNotificacao(ID_NOTIFICACAO);
+
+      expect(sendMock.mock.calls[0][0].toPhone).toBe("5511977665544");
+      expect(escritaComToken().TELEFONE_ORIGEM).toBe(TelefoneOrigem.USUARIO_TELEFONE);
+    });
+
+    it("sem celular nem telefone de usuário/oficina, usa dw.cadastro_empresa.telefone pela ligação canônica", async () => {
+      semCelular();
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([{ telefone: "31 99123-4567" }]);
+
+      await NotificacaoVisitaService.despacharNotificacao(ID_NOTIFICACAO);
+
+      expect(sendMock.mock.calls[0][0].toPhone).toBe("5531991234567");
+      expect(escritaComToken().TELEFONE_ORIGEM).toBe(TelefoneOrigem.CADASTRO_EMPRESA_TELEFONE);
+      const [sql, params] = (AppDataSourceSync.query as jest.Mock).mock.calls[0];
+      const normalizada = (sql as string).replace(/\s+/g, " ");
+      expect(normalizada).toContain(`SELECT ce.telefone FROM "MAIN_REGISTER"."OFICINA" o`);
+      expect(normalizada).toContain("LEFT JOIN dw.cadastro_empresa ce_por_cnpj");
+      expect(normalizada).toContain(`ce_por_id.id_oficina = o."ID_OFICINA"`);
+      expect(normalizada).toContain(`WHERE o."ID_OFICINA" = $1`);
+      expect(params).toEqual([ID_OFICINA]);
+    });
+
+    it("não consulta o dw quando o celular do usuário resolve", async () => {
+      await NotificacaoVisitaService.despacharNotificacao(ID_NOTIFICACAO);
+
+      expect(AppDataSourceSync.query).not.toHaveBeenCalled();
+    });
+
+    it("descarta fixo em todas as fontes e marca FALHOU com o motivo de hoje", async () => {
+      usuarioRepo.find.mockResolvedValue([
+        { ID_USUARIO, NOME: "Maria", CELULAR: "", TELEFONE: "11 3344-5566" } as unknown as Usuario,
+      ]);
+      oficinaRepo.findOne.mockResolvedValue({ ID_OFICINA, TELEFONE: "1933445566" } as Oficina);
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([{ telefone: "3133445566" }]);
+
+      const desfecho = await NotificacaoVisitaService.despacharNotificacao(ID_NOTIFICACAO);
+
+      expect(desfecho).toEqual({ desfecho: "FALHOU_TERMINAL", erro: MOTIVO_SEM_TELEFONE });
+      expect(sendMock).not.toHaveBeenCalled();
+      const gravado = notifRepo.save.mock.calls[notifRepo.save.mock.calls.length - 1][0];
+      expect(gravado.STATUS).toBe(StatusNotificacaoVisita.FALHOU);
+      expect(gravado.ERRO_ENVIO).toBe(MOTIVO_SEM_TELEFONE);
+    });
+
+    it("CELULAR preenchido e inválido não cai para o fallback", async () => {
+      usuarioRepo.find.mockResolvedValue([
+        { ID_USUARIO, NOME: "Maria", CELULAR: "(00) 1234", TELEFONE: "11977665544" } as unknown as Usuario,
+      ]);
+
+      const desfecho = await NotificacaoVisitaService.despacharNotificacao(ID_NOTIFICACAO);
+
+      expect(desfecho).toEqual({ desfecho: "FALHOU_TERMINAL", erro: MOTIVO_TELEFONE_INVALIDO });
+      expect(sendMock).not.toHaveBeenCalled();
+    });
   });
 
   it("reports FALHOU_TERMINAL when the oficina no longer exists", async () => {

@@ -1,4 +1,4 @@
-import { fromZonedTime, toZonedTime } from "date-fns-tz";
+import { formatInTimeZone, fromZonedTime, toZonedTime } from "date-fns-tz";
 
 /**
  * Quando uma notificação de visita fica elegível para envio.
@@ -98,18 +98,26 @@ export function dentroDaJanelaDeEnvio(agora: Date): boolean {
 }
 
 export function proximoHorarioEnvio(agora: Date, posicao = 0, total = 1): Date {
+  return horarioNoDia(agora, 1, posicao, total);
+}
+
+/**
+ * `proximoHorarioEnvio` generalizado para qualquer dia à frente (CONV-21).
+ * `horarioNoDia(a, 1, p, t)` é exatamente `proximoHorarioEnvio(a, p, t)`.
+ */
+export function horarioNoDia(agora: Date, diasAFrente: number, posicao = 0, total = 1): Date {
   if (process.env.OUTBOX_VISITA_ENVIO_IMEDIATO === "1") {
     return agora;
   }
 
   const { inicio, fim } = janela();
 
-  // Converte para a parede de São Paulo, avança um dia e ancora no início da
+  // Converte para a parede de São Paulo, avança os dias e ancora no início da
   // janela. O ida-e-volta pelo fuso é o que impede o resultado de depender do
   // TZ do processo.
   const local = toZonedTime(agora, FUSO);
   const inicioLocal = new Date(local);
-  inicioLocal.setDate(inicioLocal.getDate() + 1);
+  inicioLocal.setDate(inicioLocal.getDate() + diasAFrente);
   inicioLocal.setHours(inicio, 0, 0, 0);
   const inicioAbs = fromZonedTime(inicioLocal, FUSO);
 
@@ -128,4 +136,72 @@ export function proximoHorarioEnvio(agora: Date, posicao = 0, total = 1): Date {
   const passo = (fimAbs.getTime() - inicioAbs.getTime()) / total;
 
   return new Date(inicioAbs.getTime() + passo * posicaoSegura);
+}
+
+export interface PlanoDisparo {
+  slots: Date[];
+  // data em YYYY-MM-DD, America/Sao_Paulo, em ordem cronológica
+  porDia: { data: string; quantidade: number }[];
+  // null só quando não há nada a agendar
+  ultimoDia: string | null;
+}
+
+// Dia de envio (0 = amanhã) e posição do item i dentro dele.
+function posicaoNoPlano(i: number, n: number, teto: number) {
+  const dia = Math.floor(i / teto);
+  return { dia, posicao: i % teto, totalNoDia: Math.min(teto, n - dia * teto) };
+}
+
+/**
+ * Plano de um disparo com teto diário (CONV-21). O item `i` vai para o dia
+ * `1 + floor(i / teto)`, na posição `i % teto` entre os itens daquele dia,
+ * espaçado pela janela. Nenhum dia recebe mais que `teto`.
+ *
+ * `porDia` sai do plano, não dos horários: com OUTBOX_VISITA_ENVIO_IMEDIATO os
+ * horários colapsam em `agora`, e a prévia continua mostrando o teto por dia.
+ */
+export function planejarDisparo(agora: Date, n: number, teto: number): PlanoDisparo {
+  const slots: Date[] = [];
+  const porDia: { data: string; quantidade: number }[] = [];
+
+  for (let i = 0; i < n; i++) {
+    const { dia, posicao, totalNoDia } = posicaoNoPlano(i, n, teto);
+    slots.push(horarioNoDia(agora, 1 + dia, posicao, totalNoDia));
+    if (posicao === 0) {
+      porDia.push({ data: dataEnvio(agora, 1 + dia), quantidade: totalNoDia });
+    }
+  }
+
+  return { slots, porDia, ultimoDia: porDia.length > 0 ? porDia[porDia.length - 1].data : null };
+}
+
+// Data local (São Paulo) do dia de envio `diasAFrente`, ancorada no início da janela.
+function dataEnvio(agora: Date, diasAFrente: number): string {
+  const { inicio } = janela();
+  const local = toZonedTime(agora, FUSO);
+  local.setDate(local.getDate() + diasAFrente);
+  local.setHours(inicio, 0, 0, 0);
+  return formatInTimeZone(fromZonedTime(local, FUSO), FUSO, "yyyy-MM-dd");
+}
+
+export const TETO_DIARIO_MAXIMO = 1000;
+
+/**
+ * Menor teto cujo último envio cai até `fimCampanha` (inclusive). `null` quando
+ * nem o teto máximo cabe. O último horário só recua quando o teto sobe, então a
+ * primeira solução encontrada é a menor.
+ */
+export function tetoMinimo(agora: Date, n: number, fimCampanha: Date): number | null {
+  if (n <= 0) {
+    return 1;
+  }
+
+  for (let teto = 1; teto <= TETO_DIARIO_MAXIMO; teto++) {
+    const { dia, posicao, totalNoDia } = posicaoNoPlano(n - 1, n, teto);
+    if (horarioNoDia(agora, 1 + dia, posicao, totalNoDia).getTime() <= fimCampanha.getTime()) {
+      return teto;
+    }
+  }
+
+  return null;
 }

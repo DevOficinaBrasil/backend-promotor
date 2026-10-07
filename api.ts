@@ -7,6 +7,7 @@ import rotaRoutes from "./routes/RotaRoute";
 import oficinaRoutes from "./routes/OficinaRoute";
 import visitaRoutes from "./routes/VisitaRoute";
 import segmentacaoRoutes from "./routes/SegmentacaoRoute";
+import adminDisparoRoutes from "./routes/AdminDisparoRoute";
 import freelancerConfirmacaoRoutes from "./routes/FreelancerConfirmacaoRoute";
 
 const routes = (app: express.Application) => {
@@ -18,6 +19,7 @@ const routes = (app: express.Application) => {
   app.use("/oficina", oficinaRoutes);
   app.use("/visita", visitaRoutes);
   app.use("/segmentacao", segmentacaoRoutes);
+  app.use("/admin", adminDisparoRoutes);
   app.use("/freelancer/confirmacao-dados", freelancerConfirmacaoRoutes);
 };
 

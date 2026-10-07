@@ -19,9 +19,11 @@ jest.mock('../../service/notificacaoVisitaService');
 
 describe('RotaService visit notification hook', () => {
   const agendarVisitaMock = NotificacaoVisitaService.agendarVisita as jest.Mock;
-  // A criação de rota enfileira o lote inteiro numa ida ao banco; o caminho por
-  // rota continua existindo para a rota única e para o fallback do lote.
-  const agendarLoteMock = NotificacaoVisitaService.agendarVisitasEmLote as jest.Mock;
+  // A criação de rota passa pelo ponto único registrarRotasCriadas (CONV-45),
+  // que decide importada x agendar e chama agendarVisitasEmLote com o lote
+  // inteiro (provado em registrarRotasCriadas.test.ts). Os fluxos que já
+  // existiam passam agendar: true.
+  const agendarLoteMock = NotificacaoVisitaService.registrarRotasCriadas as jest.Mock;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -45,7 +47,7 @@ describe('RotaService visit notification hook', () => {
       await RotaService.createRotas(5, 100);
 
       expect(agendarLoteMock).toHaveBeenCalledTimes(1);
-      expect(agendarLoteMock).toHaveBeenCalledWith([mockRota]);
+      expect(agendarLoteMock).toHaveBeenCalledWith([mockRota], { agendar: true });
     });
 
     it('queues once per route created in a batch', async () => {
@@ -64,7 +66,7 @@ describe('RotaService visit notification hook', () => {
       // Uma chamada com o lote inteiro: a posição de cada rota na janela é
       // decidida lá dentro, não por chamada.
       expect(agendarLoteMock).toHaveBeenCalledTimes(1);
-      expect(agendarLoteMock).toHaveBeenCalledWith(mockRotas);
+      expect(agendarLoteMock).toHaveBeenCalledWith(mockRotas, { agendar: true });
     });
 
     // Every route of a large batch is queued, with no pool bounding the work:
@@ -83,7 +85,36 @@ describe('RotaService visit notification hook', () => {
       await RotaService.createRotas(5, mockRotas.map((r) => r.ID_OFICINA));
 
       expect(agendarLoteMock).toHaveBeenCalledTimes(1);
-      expect(agendarLoteMock).toHaveBeenCalledWith(mockRotas);
+      expect(agendarLoteMock).toHaveBeenCalledWith(mockRotas, { agendar: true });
+    });
+
+    // CONV-15: rota criada pela tela de admin não enfileira nada.
+    it('passes agendar: false through when asked not to queue', async () => {
+      const mockRotas = [
+        { ID_ROTA_PROMOTOR: 1, ID_OFICINA: 100 },
+        { ID_ROTA_PROMOTOR: 2, ID_OFICINA: 200 },
+      ];
+      (AppDataSourceSync.getRepository as jest.Mock).mockReturnValue({
+        create: jest.fn((data) => data),
+        save: jest.fn().mockResolvedValue(mockRotas),
+      });
+
+      await RotaService.createRotas(5, [100, 200], 9, { agendar: false });
+
+      expect(agendarLoteMock).toHaveBeenCalledTimes(1);
+      expect(agendarLoteMock).toHaveBeenCalledWith(mockRotas, { agendar: false });
+    });
+
+    it('passes agendar: false through for a single route too', async () => {
+      const mockRota = { ID_ROTA_PROMOTOR: 11, ID_CAMPANHA_PROMOTOR: 5, ID_OFICINA: 100 };
+      (AppDataSourceSync.getRepository as jest.Mock).mockReturnValue({
+        create: jest.fn().mockReturnValue(mockRota),
+        save: jest.fn().mockResolvedValue(mockRota),
+      });
+
+      await RotaService.createRotas(5, 100, undefined, { agendar: false });
+
+      expect(agendarLoteMock).toHaveBeenCalledWith([mockRota], { agendar: false });
     });
 
     it('still returns the created route when the notification rejects', async () => {
@@ -127,7 +158,7 @@ describe('RotaService visit notification hook', () => {
       await RotaService.createRotaWithCampanhaPromotor(10, 20, [100, 200]);
 
       expect(agendarLoteMock).toHaveBeenCalledTimes(1);
-      expect(agendarLoteMock).toHaveBeenCalledWith(mockRotas);
+      expect(agendarLoteMock).toHaveBeenCalledWith(mockRotas, { agendar: true });
     });
 
     it('still returns the created routes when the notification rejects', async () => {
@@ -164,7 +195,7 @@ describe('RotaService visit notification hook', () => {
 
       expect(resultado.created).toEqual([novaRota]);
       expect(agendarLoteMock).toHaveBeenCalledTimes(1);
-      expect(agendarLoteMock).toHaveBeenCalledWith([novaRota]);
+      expect(agendarLoteMock).toHaveBeenCalledWith([novaRota], { agendar: true });
     });
 
     it('does not queue when no new workshop was added', async () => {

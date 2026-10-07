@@ -92,6 +92,11 @@ export default class Oficina {
   @Column({ type: "timestamp with time zone", nullable: true, name: "DATA_FUNDACAO" })
   DATA_FUNDACAO?: Date;
 
+  // Criada pelo backend-communities (migration 2026-10-modal-aquisicao-oficina-
+  // data-atualizacao-endereco). Último ponto em que o endereço foi confirmado.
+  @Column({ type: "timestamp with time zone", nullable: true, name: "DATA_ATUALIZACAO_ENDERECO" })
+  DATA_ATUALIZACAO_ENDERECO?: Date | null;
+
   @CreateDateColumn({
     type: "timestamp with time zone",
     default: () => "CURRENT_TIMESTAMP",

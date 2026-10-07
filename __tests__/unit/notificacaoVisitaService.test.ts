@@ -1,7 +1,6 @@
 import NotificacaoVisitaService, {
   criarCacheCampanha,
   MOTIVO_CAMPANHA_ENCERRADA,
-  MOTIVO_ENDERECO_RECENTE,
   MOTIVO_SEM_TELEFONE,
   MOTIVO_SEM_USUARIO,
   MOTIVO_TELEFONE_INVALIDO,
@@ -17,7 +16,7 @@ import Community from "../../entities/Community";
 import Oficina from "../../entities/Oficina";
 import Usuario from "../../entities/Usuario";
 import RotaPromotor from "../../entities/RotaPromotor";
-import { avaliarGuardas, enderecoRecente } from "../../service/envioGuards";
+import { confirmacaoRecente, convitePendenteDaOficina } from "../../service/envioGuards";
 import { getChannel } from "../../channels/channelRegistry";
 import { hashToken } from "../../utils/visitaToken";
 
@@ -25,8 +24,10 @@ jest.mock("../../data-source");
 jest.mock("../../service/envioGuards");
 jest.mock("../../channels/channelRegistry");
 
-const enderecoRecenteMock = enderecoRecente as jest.MockedFunction<typeof enderecoRecente>;
-const avaliarGuardasMock = avaliarGuardas as jest.MockedFunction<typeof avaliarGuardas>;
+const convitePendenteMock = convitePendenteDaOficina as jest.MockedFunction<
+  typeof convitePendenteDaOficina
+>;
+const confirmacaoRecenteMock = confirmacaoRecente as jest.MockedFunction<typeof confirmacaoRecente>;
 const getChannelMock = getChannel as jest.MockedFunction<typeof getChannel>;
 
 const ID_ROTA = 42;
@@ -125,8 +126,8 @@ describe("NotificacaoVisitaService.notificarVisita", () => {
       throw new Error("repositório inesperado no teste");
     });
 
-    enderecoRecenteMock.mockReturnValue(false);
-    avaliarGuardasMock.mockResolvedValue({ bloqueado: false });
+    convitePendenteMock.mockResolvedValue(null);
+    confirmacaoRecenteMock.mockResolvedValue(null);
 
     sendMock = jest.fn(async () => ({
       success: true as const,
@@ -163,17 +164,15 @@ describe("NotificacaoVisitaService.notificarVisita", () => {
     expect(persistidos[0].ID_ROTA_PROMOTOR).toBe(ID_ROTA);
   });
 
-  // AC26
-  it("marks DISPENSADO with address recently updated and never resolves a recipient", async () => {
-    enderecoRecenteMock.mockReturnValue(true);
+  // Era AC26 (endereço recente → DISPENSADO). CONV-25 tirou essa supressão:
+  // oficina atualizada há pouco recebe o convite como qualquer outra.
+  it("sends to a workshop whose address was updated recently", async () => {
+    oficinaRepo.findOne.mockResolvedValue({ ...oficinaPadrao, DATA_ALTERACAO: new Date() });
 
     const resultado = await NotificacaoVisitaService.notificarVisita(rota);
 
-    expect(resultado.STATUS).toBe(StatusNotificacaoVisita.DISPENSADO);
-    expect(resultado.ERRO_ENVIO).toBe("address recently updated");
-    expect(MOTIVO_ENDERECO_RECENTE).toBe("address recently updated");
-    expect(usuarioRepo.find).not.toHaveBeenCalled();
-    expect(sendMock).not.toHaveBeenCalled();
+    expect(resultado.STATUS).toBe(StatusNotificacaoVisita.ENVIADO);
+    expect(sendMock).toHaveBeenCalledTimes(1);
   });
 
   // Spec edge case: "IF the route's Oficina has zero linked Usuario records
@@ -228,10 +227,12 @@ describe("NotificacaoVisitaService.notificarVisita", () => {
 
     expect(usuarioRepo.find).toHaveBeenCalledWith(
       expect.objectContaining({
+        // TELEFONE entrou com o fallback de telefone (CONV-43).
         select: {
           ID_USUARIO: true,
           NOME: true,
           CELULAR: true,
+          TELEFONE: true,
           DATA_ALTERACAO: true,
         },
       })
@@ -250,20 +251,31 @@ describe("NotificacaoVisitaService.notificarVisita", () => {
 
     expect(resultado.ID_USUARIO).toBe(4);
     expect(resultado.TELEFONE_NORMALIZADO).toBe("5511988887777");
-    expect(avaliarGuardasMock).toHaveBeenCalledWith(4);
+    expect(confirmacaoRecenteMock).toHaveBeenCalledWith(4, expect.any(Date));
   });
 
-  // AC28 / AC29 via the guard
-  it("marks DISPENSADO with the guard reason when the anti-spam guard blocks", async () => {
-    avaliarGuardasMock.mockResolvedValue({
-      bloqueado: true,
-      motivo: "recipient has outstanding notification",
-    });
+  // Era AC28/AC29 (guarda por usuário → DISPENSADO). CONV-26 e CONV-30
+  // trocaram o efeito: convite aberto da oficina → AGUARDANDO; confirmação
+  // recente → CONFIRMADO. Nenhuma das duas manda mensagem.
+  it("marks AGUARDANDO with the reference when the workshop has an open invitation", async () => {
+    convitePendenteMock.mockResolvedValue(77);
 
     const resultado = await NotificacaoVisitaService.notificarVisita(rota);
 
-    expect(resultado.STATUS).toBe(StatusNotificacaoVisita.DISPENSADO);
-    expect(resultado.ERRO_ENVIO).toBe("recipient has outstanding notification");
+    expect(resultado.STATUS).toBe(StatusNotificacaoVisita.AGUARDANDO);
+    expect(resultado.ID_NOTIFICACAO_REFERENCIA).toBe(77);
+    expect(resultado.AVAILABLE_AT).toBeNull();
+    expect(sendMock).not.toHaveBeenCalled();
+  });
+
+  it("marks CONFIRMADO by recent confirmation when the recipient confirmed recently", async () => {
+    confirmacaoRecenteMock.mockResolvedValue(88);
+
+    const resultado = await NotificacaoVisitaService.notificarVisita(rota);
+
+    expect(resultado.STATUS).toBe(StatusNotificacaoVisita.CONFIRMADO);
+    expect(resultado.ORIGEM_ACEITE).toBe("CONFIRMACAO_RECENTE");
+    expect(resultado.ID_NOTIFICACAO_REFERENCIA).toBe(88);
     expect(resultado.ID_USUARIO).toBe(ID_USUARIO);
     expect(sendMock).not.toHaveBeenCalled();
   });
@@ -400,7 +412,8 @@ describe("NotificacaoVisitaService.notificarVisita", () => {
       // The dead campaign is ruled out before the recipient is resolved, so the
       // per-recipient anti-spam state is never touched.
       expect(usuarioRepo.find).not.toHaveBeenCalled();
-      expect(avaliarGuardasMock).not.toHaveBeenCalled();
+      expect(convitePendenteMock).not.toHaveBeenCalled();
+      expect(confirmacaoRecenteMock).not.toHaveBeenCalled();
     });
 
     it("treats an END_TIME exactly at now as ended", async () => {

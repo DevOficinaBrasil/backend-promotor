@@ -21,12 +21,24 @@ export enum StatusNotificacaoVisita {
   CONFIRMADO = "CONFIRMADO",
   EXPIRADO = "EXPIRADO",
   REAGENDADO = "REAGENDADO", // reserved — NOTIF-26, no code path sets/reads this yet
+  AGUARDANDO = "AGUARDANDO", // segue o desfecho do convite em ID_NOTIFICACAO_REFERENCIA
+  RECUSADO = "RECUSADO", // o reparador recusou pelo link
+}
+
+// Fonte do número usado no envio. CHK_NOTIFICACAO_VISITA_TELEFONE_ORIGEM lista
+// os mesmos valores.
+export enum TelefoneOrigem {
+  USUARIO_CELULAR = "USUARIO_CELULAR",
+  USUARIO_TELEFONE = "USUARIO_TELEFONE",
+  OFICINA_TELEFONE = "OFICINA_TELEFONE",
+  CADASTRO_EMPRESA_TELEFONE = "CADASTRO_EMPRESA_TELEFONE",
 }
 
 // Por que a linha está CONFIRMADO. "Aceito" é um status só, e a origem diz de
 // onde veio. CHK_NOTIFICACAO_VISITA_ORIGEM_ACEITE lista os mesmos valores
-// (scripts/migration-convite-visita-admin.sql cria a coluna e a CHK;
-// scripts/migration-freelancer-origem-aceite.sql acrescenta FREELANCER).
+// (scripts/migration-convite-visita-admin.sql cria a coluna e a CHK, já com
+// FREELANCER; scripts/migration-freelancer-origem-aceite.sql repete a CHK para
+// bancos onde a do convite já rodou sem ele).
 export enum OrigemAceite {
   REPARADOR = "REPARADOR",
   CONFIRMACAO_RECENTE = "CONFIRMACAO_RECENTE",
@@ -60,7 +72,8 @@ export default class NotificacaoVisita {
   CANAL?: CanalNotificacao;
 
   // The column is constrained by CHK_NOTIFICACAO_VISITA_STATUS, which must list
-  // every member of StatusNotificacaoVisita — DISPENSADO and EXPIRADO included.
+  // every member of StatusNotificacaoVisita — DISPENSADO, EXPIRADO, AGUARDANDO
+  // and RECUSADO included.
   @Column({
     type: "text",
     enum: StatusNotificacaoVisita,
@@ -136,10 +149,31 @@ export default class NotificacaoVisita {
   @Column({ type: "boolean", default: false, name: "ENDERECO_ATUALIZADO" })
   ENDERECO_ATUALIZADO?: boolean;
 
-  // Coluna de scripts/migration-convite-visita-admin.sql. Obrigatória quando
-  // STATUS = CONFIRMADO (CHK_NOTIFICACAO_VISITA_CONFIRMADO_ORIGEM).
+  // Colunas de scripts/migration-convite-visita-admin.sql.
+
+  // Obrigatória quando STATUS = CONFIRMADO (CHK_NOTIFICACAO_VISITA_CONFIRMADO_ORIGEM).
   @Column({ type: "text", enum: OrigemAceite, nullable: true, name: "ORIGEM_ACEITE" })
   ORIGEM_ACEITE?: OrigemAceite | null;
+
+  // Convite que uma AGUARDANDO segue, ou o aceite que justificou
+  // CONFIRMACAO_RECENTE/CONVITE_VINCULADO. Mesma tabela, sem FK no banco
+  // (padrão da casa), então é coluna simples. Obrigatória em AGUARDANDO.
+  @Column({ type: "int", nullable: true, name: "ID_NOTIFICACAO_REFERENCIA" })
+  ID_NOTIFICACAO_REFERENCIA?: number | null;
+
+  // Gravado no mesmo UPDATE que seta RECUSADO (CHK_NOTIFICACAO_VISITA_RECUSADO_EM).
+  @Column({ type: "timestamptz", nullable: true, name: "RECUSADO_EM" })
+  RECUSADO_EM?: Date | null;
+
+  // = sub do JWT de visita no momento da recusa, como CONFIRMADO_POR.
+  @Column({ type: "int", nullable: true, name: "RECUSADO_POR" })
+  RECUSADO_POR?: number | null;
+
+  @Column({ type: "text", nullable: true, name: "RECUSADO_IP" })
+  RECUSADO_IP?: string | null;
+
+  @Column({ type: "text", enum: TelefoneOrigem, nullable: true, name: "TELEFONE_ORIGEM" })
+  TELEFONE_ORIGEM?: TelefoneOrigem | null;
 
   @CreateDateColumn({
     type: "timestamptz",

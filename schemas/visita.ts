@@ -87,9 +87,24 @@ export const ExchangeAlreadyConfirmedResponseSchema = z.object({
   }),
 });
 
+/**
+ * GET /visita/{token} - convite já recusado (CONV-37). Sem JWT, como o já
+ * confirmado; carrega só quem convidou e a data da recusa.
+ */
+export const ExchangeAlreadyDeclinedResponseSchema = z.object({
+  message: z.string(),
+  data: z.object({
+    state: z.literal('ALREADY_DECLINED'),
+    empresaNome: z.string().nullable(),
+    empresaLogoUrl: z.string().nullable(),
+    recusadoEm: z.string().datetime().nullable(),
+  }),
+});
+
 export const ExchangeResponseSchema = z.union([
   ExchangePendingResponseSchema,
   ExchangeAlreadyConfirmedResponseSchema,
+  ExchangeAlreadyDeclinedResponseSchema,
 ]);
 
 /**
@@ -118,6 +133,17 @@ export const ConfirmarResponseSchema = z.object({
   data: z.object({
     state: z.literal('CONFIRMED'),
     confirmadoEm: z.string().datetime(),
+  }),
+});
+
+/**
+ * POST /visita/recusar - success response
+ */
+export const RecusarResponseSchema = z.object({
+  message: z.string(),
+  data: z.object({
+    state: z.literal('DECLINED'),
+    recusadoEm: z.string().datetime(),
   }),
 });
 

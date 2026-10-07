@@ -1,6 +1,7 @@
 import { AppDataSourceSync } from "../data-source";
 import NotificacaoVisita, {
   CanalNotificacao,
+  OrigemAceite,
   StatusNotificacaoVisita,
 } from "../entities/NotificacaoVisita";
 import Campanha from "../entities/Campanha";
@@ -11,8 +12,13 @@ import RotaPromotor from "../entities/RotaPromotor";
 import Usuario from "../entities/Usuario";
 import { getChannel } from "../channels/channelRegistry";
 import { LIMITE_DESTINATARIO } from "../channels/whatsappChannel";
-import { avaliarGuardas, enderecoRecente } from "./envioGuards";
-import { normalizarTelefone } from "../utils/telefone";
+import {
+  confirmacaoRecente,
+  convitePendenteDaOficina,
+  enderecoAtualizadoRecente,
+} from "./envioGuards";
+import { resolverTelefone } from "../utils/telefone";
+import { ligacaoCadastroEmpresa } from "../utils/sqlCadastroEmpresa";
 import { gerarLinkToken } from "../utils/visitaToken";
 import { proximoHorarioEnvio } from "../utils/agendamento";
 
@@ -21,7 +27,6 @@ import { proximoHorarioEnvio } from "../utils/agendamento";
 // falls back to, so a data gap never costs a send.
 const HORAS_VALIDADE_TOKEN = 168;
 
-export const MOTIVO_ENDERECO_RECENTE = "address recently updated";
 export const MOTIVO_SEM_USUARIO = "no usuario linked to oficina";
 export const MOTIVO_SEM_TELEFONE = "no recipient with phone";
 export const MOTIVO_TELEFONE_INVALIDO = "invalid phone";
@@ -65,6 +70,10 @@ function ehFalhaTransitoria(reason: string): boolean {
 export type DesfechoDespacho =
   | { desfecho: "ENVIADO"; messageId: string | null; providerMessageId: string | null }
   | { desfecho: "DISPENSADO"; motivo: string }
+  // Resolvidas sem mensagem pelas guardas de aceite: a linha já foi gravada
+  // AGUARDANDO (CONV-26) ou CONFIRMADO/CONFIRMACAO_RECENTE (CONV-30).
+  | { desfecho: "AGUARDANDO"; idReferencia: number }
+  | { desfecho: "ACEITO"; origem: OrigemAceite; idReferencia?: number }
   | { desfecho: "FALHOU_TERMINAL"; erro: string }
   | { desfecho: "FALHOU_TRANSITORIO"; erro: string };
 
@@ -223,6 +232,23 @@ async function resolverNomeEmpresa(
   return nome;
 }
 
+/**
+ * `dw.cadastro_empresa.telefone` da oficina, pela ligação canônica (CNPJ, depois
+ * `id_oficina`, que não é único no dw). `null` sem cadastro.
+ */
+async function telefoneDoCadastroEmpresa(idOficina: number): Promise<string | null> {
+  const linhas: { telefone: string | null }[] | undefined = await AppDataSourceSync.query(
+    `SELECT ce.telefone
+       FROM "MAIN_REGISTER"."OFICINA" o
+       ${ligacaoCadastroEmpresa("o")}
+      WHERE o."ID_OFICINA" = $1
+        AND ce.cnpj_int IS NOT NULL
+      LIMIT 1`,
+    [idOficina]
+  );
+  return linhas?.[0]?.telefone ?? null;
+}
+
 /** Composes ERRO_ENVIO so the provider's code is kept alongside the reason (AC8, AC9). */
 function comporErroEnvio(reason: string, providerCode: string | null): string {
   return providerCode === null ? reason : `${reason}: ${providerCode}`;
@@ -349,16 +375,103 @@ export default class NotificacaoVisitaService {
   }
 
   /**
+   * Ponto único depois de criar rotas, em qualquer fluxo (CONV-15, CONV-45).
+   *
+   * - Rota de oficina com `OFICINA_IMPORTADA` ativa para o `EMPRESA_SLUG` da
+   *   campanha nasce aceita: uma linha `CONFIRMADO`/`IMPORTADA`, sem token e
+   *   sem `AVAILABLE_AT`, então nada é enviado.
+   * - As demais vão para `agendarVisitasEmLote` se `agendar`; sem `agendar`
+   *   (tela de admin) nada é enfileirado até o disparo.
+   *
+   * Nunca lança: criação de rota não falha por causa de notificação. Se a
+   * detecção de importada falhar, as rotas seguem o fluxo de hoje (agendar).
+   */
+  static async registrarRotasCriadas(
+    rotas: RotaPromotor[],
+    { agendar }: { agendar: boolean },
+    agora: Date = new Date()
+  ): Promise<void> {
+    const comId = rotas.filter((rota) => rota.ID_ROTA_PROMOTOR != null);
+    if (comId.length === 0) {
+      return;
+    }
+
+    let importadas = new Set<number>();
+    try {
+      importadas = await this.rotasDeOficinaImportada(comId.map((r) => r.ID_ROTA_PROMOTOR!));
+    } catch (erro) {
+      console.error("[notificacaoVisita] falha ao detectar oficinas importadas", {
+        quantidade: comId.length,
+        erro: (erro as Error)?.message,
+      });
+    }
+
+    if (importadas.size > 0) {
+      try {
+        await AppDataSourceSync.getRepository(NotificacaoVisita)
+          .createQueryBuilder()
+          .insert()
+          .into(NotificacaoVisita)
+          .values(
+            [...importadas].map((idRota) => ({
+              ID_ROTA_PROMOTOR: idRota,
+              CANAL: CanalNotificacao.WHATSAPP,
+              STATUS: StatusNotificacaoVisita.CONFIRMADO,
+              ORIGEM_ACEITE: OrigemAceite.IMPORTADA,
+              CONFIRMADO_EM: agora,
+              ATTEMPTS: 0,
+            }))
+          )
+          .orIgnore()
+          .execute();
+      } catch (erro) {
+        console.error("[notificacaoVisita] falha ao registrar rotas importadas como aceitas", {
+          quantidade: importadas.size,
+          erro: (erro as Error)?.message,
+        });
+      }
+    }
+
+    if (!agendar) {
+      return;
+    }
+
+    const aAgendar = comId.filter((rota) => !importadas.has(rota.ID_ROTA_PROMOTOR!));
+    await this.agendarVisitasEmLote(aAgendar, agora);
+  }
+
+  /** Ids das rotas cuja oficina é importada para o slug da campanha da rota. */
+  private static async rotasDeOficinaImportada(idsRota: number[]): Promise<Set<number>> {
+    const linhas: { ID_ROTA_PROMOTOR: number | string }[] | undefined =
+      await AppDataSourceSync.query(
+        `SELECT rp."ID_ROTA_PROMOTOR"
+           FROM "CAMPANHAS_OB"."ROTA_PROMOTOR" rp
+           JOIN "CAMPANHAS_OB"."CAMPANHA_PROMOTOR" cp
+             ON cp."ID_CAMPANHA_PROMOTOR" = rp."ID_CAMPANHA_PROMOTOR"
+           JOIN "CAMPANHAS_OB"."CAMPANHA" c
+             ON c."ID_CAMPANHA" = cp."ID_CAMPANHA"
+           JOIN "CAMPANHAS_OB"."OFICINA_IMPORTADA" oi
+             ON oi."ID_OFICINA" = rp."ID_OFICINA"
+            AND oi."EMPRESA_SLUG" = c."EMPRESA_SLUG"
+            AND oi."DELETED_AT" IS NULL
+          WHERE rp."ID_ROTA_PROMOTOR" = ANY($1)`,
+        [idsRota]
+      );
+    return new Set((linhas ?? []).map((linha) => Number(linha.ID_ROTA_PROMOTOR)));
+  }
+
+  /**
    * Dispatches one already-queued notification (AGND-09).
    *
    * Runs the flow against state as of *now*, not as of route creation: the
-   * guards it depends on (endereço recente, campanha encerrada, antispam) are
-   * all time-dependent, so a row queued yesterday can legitimately resolve to
-   * DISPENSADO today.
+   * guards it depends on (campanha encerrada, convite aberto da oficina,
+   * confirmação recente) are all time-dependent, so a row queued yesterday can
+   * legitimately resolve to DISPENSADO, AGUARDANDO or CONFIRMADO today.
    *
    * Returns a verdict and persists only the domain status — ENVIADO,
-   * DISPENSADO, or a terminal FALHOU. It never writes ATTEMPTS, the lease, or
-   * AVAILABLE_AT: whoever owns the queue decides whether a transient failure is
+   * DISPENSADO, AGUARDANDO, CONFIRMADO or a terminal FALHOU. It never writes ATTEMPTS or the lease, and
+   * writes AVAILABLE_AT only to park an AGUARDANDO row (NULL): whoever owns
+   * the queue decides whether a transient failure is
    * retried, and that separation is what lets the shared delivery system take
    * over scheduling later without inheriting this service's retry policy.
    *
@@ -404,10 +517,7 @@ export default class NotificacaoVisitaService {
         return await this.encerrarTerminal(repo, notificacao, MOTIVO_OFICINA_INEXISTENTE);
       }
 
-      // Guard 1 (AC26): a workshop updated recently is not asked to re-confirm.
-      if (enderecoRecente(oficina)) {
-        return await this.encerrarDispensado(repo, notificacao, MOTIVO_ENDERECO_RECENTE);
-      }
+      // A atualização recente do endereço deixou de suprimir o envio (CONV-25).
 
       // Guard 3: the link cannot outlive its campaign, so a campaign that has
       // already ended has nothing to confirm — the message would arrive with a
@@ -419,16 +529,48 @@ export default class NotificacaoVisitaService {
         return await this.encerrarDispensado(repo, notificacao, MOTIVO_CAMPANHA_ENCERRADA);
       }
 
+      const agora = new Date();
+
+      // CONV-49: endereço confirmado nos últimos 3 meses. Não manda mensagem e a
+      // visita conta como aceita. Decide pela oficina, antes de qualquer
+      // consulta ao destinatário ou aos convites em aberto.
+      if (enderecoAtualizadoRecente(oficina.DATA_ATUALIZACAO_ENDERECO, agora)) {
+        await this.finalizar(repo, notificacao, {
+          STATUS: StatusNotificacaoVisita.CONFIRMADO,
+          ORIGEM_ACEITE: OrigemAceite.ENDERECO_RECENTE,
+          CONFIRMADO_EM: agora,
+        });
+        return { desfecho: "ACEITO", origem: OrigemAceite.ENDERECO_RECENTE };
+      }
+
+      // CONV-26: a oficina já tem um convite ENVIADO em aberto noutra rota. Não
+      // manda mensagem; a linha segue o desfecho daquele convite. AVAILABLE_AT
+      // nulo tira a linha da fila até a reconciliação (liberarAguardando).
+      const idConviteAberto = await convitePendenteDaOficina(
+        rota.ID_OFICINA!,
+        notificacao.ID_NOTIFICACAO_VISITA!,
+        agora
+      );
+      if (idConviteAberto != null) {
+        await this.finalizar(repo, notificacao, {
+          STATUS: StatusNotificacaoVisita.AGUARDANDO,
+          ID_NOTIFICACAO_REFERENCIA: idConviteAberto,
+          AVAILABLE_AT: null,
+        });
+        return { desfecho: "AGUARDANDO", idReferencia: idConviteAberto };
+      }
+
       // AC2: most recently touched Usuario first, nulls last, lowest ID as tiebreak.
-      // Only the four columns this flow reads are selected: USUARIO is a ~35
-      // column table in a read-only schema and every row of the workshop is
-      // loaded here, so there is no reason to pull SENHA and the rest across.
+      // Only the columns this flow reads are selected: USUARIO is a ~35 column
+      // table in a read-only schema and every row of the workshop is loaded
+      // here, so there is no reason to pull SENHA and the rest across.
       const usuarios = await AppDataSourceSync.getRepository(Usuario).find({
         where: { ID_OFICINA: rota.ID_OFICINA },
         select: {
           ID_USUARIO: true,
           NOME: true,
           CELULAR: true,
+          TELEFONE: true,
           DATA_ALTERACAO: true,
         },
         order: {
@@ -441,23 +583,54 @@ export default class NotificacaoVisitaService {
         return await this.encerrarTerminal(repo, notificacao, MOTIVO_SEM_USUARIO);
       }
 
-      const destinatario = usuarios.find((usuario) => (usuario.CELULAR ?? "").trim() !== "");
+      // CONV-43: CELULAR como hoje; sem nenhum CELULAR, o primeiro número com
+      // formato de celular em USUARIO.TELEFONE, OFICINA.TELEFONE e, por último,
+      // dw.cadastro_empresa.telefone. O dw só é lido quando as fontes anteriores
+      // não resolvem, porque é a consulta mais cara e a última da ordem.
+      const candidatos = {
+        usuarios: usuarios.map((usuario) => ({
+          ID_USUARIO: usuario.ID_USUARIO!,
+          CELULAR: usuario.CELULAR,
+          TELEFONE: usuario.TELEFONE,
+        })),
+        oficinaTelefone: oficina.TELEFONE,
+        cadastroTelefone: null as string | null,
+      };
+      const resolvido =
+        resolverTelefone(candidatos) ??
+        resolverTelefone({
+          ...candidatos,
+          cadastroTelefone: await telefoneDoCadastroEmpresa(rota.ID_OFICINA!),
+        });
 
       // AC3
-      if (destinatario === undefined) {
+      if (resolvido === null) {
         return await this.encerrarTerminal(repo, notificacao, MOTIVO_SEM_TELEFONE);
       }
 
-      // Guard 2 (AC27-AC29): per-recipient anti-spam.
-      const guarda = await avaliarGuardas(destinatario.ID_USUARIO!);
-      if (guarda.bloqueado) {
-        return await this.encerrarDispensado(repo, notificacao, guarda.motivo!, {
-          ID_USUARIO: destinatario.ID_USUARIO,
+      const destinatario = usuarios.find((usuario) => usuario.ID_USUARIO === resolvido.idUsuario)!;
+
+      // CONV-30: o destinatário confirmou um convite, ele mesmo, nos últimos 3
+      // meses. Não manda mensagem e a visita conta como aceita.
+      const idConfirmacao = await confirmacaoRecente(resolvido.idUsuario, agora);
+      if (idConfirmacao != null) {
+        await this.finalizar(repo, notificacao, {
+          ID_USUARIO: resolvido.idUsuario,
+          STATUS: StatusNotificacaoVisita.CONFIRMADO,
+          ORIGEM_ACEITE: OrigemAceite.CONFIRMACAO_RECENTE,
+          CONFIRMADO_EM: agora,
+          ID_NOTIFICACAO_REFERENCIA: idConfirmacao,
         });
+        return {
+          desfecho: "ACEITO",
+          origem: OrigemAceite.CONFIRMACAO_RECENTE,
+          idReferencia: idConfirmacao,
+        };
       }
 
-      // AC4: fail closed on a number that does not normalize.
-      const telefone = normalizarTelefone(destinatario.CELULAR);
+      // AC4: fail closed on a CELULAR that does not normalize. The fallback only
+      // applies when no CELULAR is filled, so this still retires the row.
+      const telefone = resolvido.telefone;
       if (telefone === null) {
         return await this.encerrarTerminal(repo, notificacao, MOTIVO_TELEFONE_INVALIDO, {
           ID_USUARIO: destinatario.ID_USUARIO,
@@ -489,6 +662,8 @@ export default class NotificacaoVisitaService {
       notificacao = await this.finalizar(repo, notificacao, {
         ID_USUARIO: destinatario.ID_USUARIO,
         TELEFONE_NORMALIZADO: telefone,
+        // CONV-44: de onde veio o número usado.
+        TELEFONE_ORIGEM: resolvido.origem,
         TOKEN_HASH: hash,
         EXPIRA_EM: expiraEm,
       });

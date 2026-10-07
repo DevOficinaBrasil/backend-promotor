@@ -6,7 +6,7 @@ import NotificacaoVisitaService, {
   DesfechoDespacho,
 } from "./notificacaoVisitaService";
 import { TIMEOUT_ENVIO_MS } from "../channels/whatsappChannel";
-import { dentroDaJanelaDeEnvio } from "../utils/agendamento";
+import { dentroDaJanelaDeEnvio, horarioNoDia } from "../utils/agendamento";
 
 /**
  * Fila de envio das notificações de visita.
@@ -156,8 +156,8 @@ export type AcaoFila =
  * permite o sistema de entrega compartilhado assumir o agendamento depois sem
  * herdar a política daqui.
  *
- * `DISPENSADO` e `FALHOU_TERMINAL` já foram persistidos pelo despacho, então
- * para a fila os dois são só "acabou, solta o lease".
+ * `DISPENSADO`, `FALHOU_TERMINAL`, `AGUARDANDO` e `ACEITO` já foram persistidos
+ * pelo despacho, então para a fila todos são só "acabou, solta o lease".
  */
 export function acaoDaFila(desfecho: DesfechoDespacho, tentativas: number): AcaoFila {
   if (desfecho.desfecho === "ENVIADO") {
@@ -168,7 +168,12 @@ export function acaoDaFila(desfecho: DesfechoDespacho, tentativas: number): Acao
     };
   }
 
-  if (desfecho.desfecho === "DISPENSADO" || desfecho.desfecho === "FALHOU_TERMINAL") {
+  if (
+    desfecho.desfecho === "DISPENSADO" ||
+    desfecho.desfecho === "FALHOU_TERMINAL" ||
+    desfecho.desfecho === "AGUARDANDO" ||
+    desfecho.desfecho === "ACEITO"
+  ) {
     return { acao: "CONCLUIDO" };
   }
 
@@ -215,6 +220,17 @@ export default class OutboxNotificacaoService {
    */
   static async tick(sufixoWorker = "", agora: Date = new Date()): Promise<void> {
     const workerId = idDoWorker(sufixoWorker);
+
+    // Antes do claim e da guarda de horário: reconciliar não envia nada, e uma
+    // AGUARDANDO liberada para PENDENTE já nasce com AVAILABLE_AT na janela.
+    try {
+      await OutboxNotificacaoService.liberarAguardando(agora);
+    } catch (erro) {
+      console.error("[outboxNotificacao] falha ao reconciliar notificações aguardando", {
+        workerId,
+        erro: (erro as Error)?.message,
+      });
+    }
 
     // Fora do horário comercial não se despacha nada, mesmo com linha vencida na
     // fila: mensagem de madrugada é o que gera bloqueio e denúncia, e é isso que
@@ -391,6 +407,59 @@ export default class OutboxNotificacaoService {
         LOCKED_BY: null,
       }
     );
+  }
+
+  /**
+   * Reconcilia as notificações `AGUARDANDO` com o desfecho do convite que elas
+   * seguem (`ID_NOTIFICACAO_REFERENCIA`), CONV-27 a CONV-29:
+   *
+   * - referência `CONFIRMADO` → `CONFIRMADO` / `CONVITE_VINCULADO`, `CONFIRMADO_EM = now()`;
+   * - referência `RECUSADO` → `RECUSADO`, `RECUSADO_EM = now()`;
+   * - referência `EXPIRADO`, `FALHOU`, `DISPENSADO`, ou `ENVIADO` com
+   *   `EXPIRA_EM < now()` → `PENDENTE` na próxima janela, com a referência limpa.
+   *
+   * Rede de segurança da propagação síncrona de `transicionar`. Um `UPDATE`
+   * só, idempotente: depois de rodar, nenhuma linha atingida continua
+   * `AGUARDANDO`, então N cópias do servidor rodando juntas não duplicam nada.
+   * `now()` do banco decide a expiração, como no claim.
+   */
+  static async liberarAguardando(agora: Date = new Date()): Promise<number> {
+    const resultado = await AppDataSourceSync.query(
+      `
+      UPDATE "CAMPANHAS_OB"."NOTIFICACAO_VISITA" n
+         SET "STATUS" = CASE ref."STATUS"
+                          WHEN 'CONFIRMADO' THEN 'CONFIRMADO'
+                          WHEN 'RECUSADO' THEN 'RECUSADO'
+                          ELSE 'PENDENTE'
+                        END,
+             "ORIGEM_ACEITE" = CASE WHEN ref."STATUS" = 'CONFIRMADO'
+                                    THEN 'CONVITE_VINCULADO' ELSE n."ORIGEM_ACEITE" END,
+             "CONFIRMADO_EM" = CASE WHEN ref."STATUS" = 'CONFIRMADO'
+                                    THEN now() ELSE n."CONFIRMADO_EM" END,
+             "RECUSADO_EM" = CASE WHEN ref."STATUS" = 'RECUSADO'
+                                  THEN now() ELSE n."RECUSADO_EM" END,
+             "AVAILABLE_AT" = CASE WHEN ref."STATUS" IN ('CONFIRMADO', 'RECUSADO')
+                                   THEN NULL ELSE $1::timestamptz END,
+             "ID_NOTIFICACAO_REFERENCIA" = CASE WHEN ref."STATUS" IN ('CONFIRMADO', 'RECUSADO')
+                                                THEN n."ID_NOTIFICACAO_REFERENCIA" ELSE NULL END,
+             "UPDATED_AT" = now()
+        FROM "CAMPANHAS_OB"."NOTIFICACAO_VISITA" ref
+       WHERE n."STATUS" = 'AGUARDANDO'
+         AND ref."ID_NOTIFICACAO_VISITA" = n."ID_NOTIFICACAO_REFERENCIA"
+         AND (
+               ref."STATUS" IN ('CONFIRMADO', 'RECUSADO', 'EXPIRADO', 'FALHOU', 'DISPENSADO')
+               OR (ref."STATUS" = 'ENVIADO' AND ref."EXPIRA_EM" < now())
+             )
+      `,
+      [horarioNoDia(agora, 1, 0, 1)]
+    );
+
+    // UPDATE sem RETURNING volta como [linhas, contagem] no driver pg.
+    const afetadas = Array.isArray(resultado) && typeof resultado[1] === "number" ? resultado[1] : 0;
+    if (afetadas > 0) {
+      console.log("[outboxNotificacao] notificações aguardando reconciliadas", { afetadas });
+    }
+    return afetadas;
   }
 
   /**

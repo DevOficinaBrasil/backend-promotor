@@ -1,4 +1,4 @@
-import { StatusNotificacaoVisita } from "../entities/NotificacaoVisita";
+import { OrigemAceite, StatusNotificacaoVisita } from "../entities/NotificacaoVisita";
 import { StatusRota } from "../entities/RotaPromotor";
 
 type NotificacaoVisitaStatusFields = {
@@ -35,35 +35,21 @@ export function statusEfetivo(
 
 type RotaListavelFields = {
   STATUS?: StatusRota | string | null;
-  notificacao?: NotificacaoVisitaStatusFields | null;
+  // ORIGEM_ACEITE não muda a decisão: CONFIRMADO de qualquer origem aparece.
+  notificacao?: (NotificacaoVisitaStatusFields & { ORIGEM_ACEITE?: OrigemAceite | null }) | null;
 };
 
 /**
- * Status de confirmação que liberam a rota para a lista do app de campo
- * (FILT-01). Nos três não há mais resposta a esperar: a oficina confirmou, o
- * envio foi deliberadamente suprimido, ou a entrega falhou em definitivo.
- */
-const CONFIRMACAO_RESOLVIDA: ReadonlySet<StatusNotificacaoVisita> = new Set([
-  StatusNotificacaoVisita.CONFIRMADO,
-  StatusNotificacaoVisita.DISPENSADO,
-  StatusNotificacaoVisita.FALHOU,
-]);
-
-/**
- * Decide se uma rota entra na lista do app do promotor (FILT-01 a FILT-05).
- *
- * Regra, na ordem em que é aplicada:
+ * Decide se uma rota entra na lista do app do promotor (CONV-31 a CONV-33,
+ * AD-003, que substitui a regra FILT-01 a FILT-05 de CONFIRMACAO_RESOLVIDA).
  *
  * 1. Rota já trabalhada (`STATUS` diferente de `BACKLOG`) sempre aparece. Sem
  *    isso o promotor faz check-in, dá refresh e a oficina desaparece no meio da
  *    visita, e visitas concluídas sairiam do histórico.
- * 2. Rota sem linha em `NOTIFICACAO_VISITA` aparece: nunca houve pedido de
- *    confirmação, logo não há nada a aguardar.
- * 3. O resto é decidido pelo status **efetivo** — `ENVIADO` vencido lê como
- *    `EXPIRADO` aqui, igual em toda outra leitura.
- *
- * `REAGENDADO` e qualquer valor fora do enum não aparecem: erra para o lado de
- * não mandar o promotor a uma visita cujo estado o sistema não interpreta.
+ * 2. Rota em `BACKLOG` só aparece com o convite aceito: status **efetivo**
+ *    `CONFIRMADO`, de qualquer `ORIGEM_ACEITE`. Sem notificação, `PENDENTE`,
+ *    `ENVIADO`, `EXPIRADO`, `FALHOU`, `DISPENSADO`, `RECUSADO`, `AGUARDANDO`,
+ *    `REAGENDADO` ou valor fora do enum ficam fora.
  *
  * `STATUS` nulo ou ausente conta como `BACKLOG` — a coluna tem esse default no
  * banco, então linha sem status é rota que ninguém começou.
@@ -81,9 +67,77 @@ export function rotaListavelParaPromotor(
   }
 
   if (!rota.notificacao?.STATUS) {
-    return true;
+    return false;
   }
 
-  const status = statusEfetivo(rota.notificacao, agora);
-  return status != null && CONFIRMACAO_RESOLVIDA.has(status);
+  return statusEfetivo(rota.notificacao, agora) === StatusNotificacaoVisita.CONFIRMADO;
+}
+
+export type EstadoConvite =
+  | "nao_disparada"
+  | "agendada"
+  | "enviada"
+  | "aceita"
+  | "aceita_confirmacao_recente"
+  | "aceita_convite_vinculado"
+  | "aceita_importada"
+  | "aceita_endereco_recente"
+  | "recusada"
+  | "expirada"
+  | "falhou"
+  | "dispensada"
+  | "aguardando";
+
+type EstadoConviteFields = NotificacaoVisitaStatusFields & {
+  ORIGEM_ACEITE?: OrigemAceite | null;
+};
+
+const ESTADO_POR_ORIGEM: Record<OrigemAceite, EstadoConvite> = {
+  [OrigemAceite.REPARADOR]: "aceita",
+  [OrigemAceite.CONFIRMACAO_RECENTE]: "aceita_confirmacao_recente",
+  [OrigemAceite.CONVITE_VINCULADO]: "aceita_convite_vinculado",
+  [OrigemAceite.IMPORTADA]: "aceita_importada",
+  [OrigemAceite.ENDERECO_RECENTE]: "aceita_endereco_recente",
+  // Confirmada por telefone pelo freelancer: para o painel é um aceite comum.
+  // Estado novo exigiria o ob-ads conhecê-lo; "aceita" já é tratado lá.
+  [OrigemAceite.FREELANCER]: "aceita",
+};
+
+/**
+ * Estado do convite de uma rota para o painel do admin (CONV-41). Usa o status
+ * efetivo, então `ENVIADO` vencido é `expirada`.
+ *
+ * `CONFIRMADO` sem origem é linha anterior à migration, que só o reparador
+ * gerava. `REAGENDADO` (reservado) conta como agendada, e valor fora do enum
+ * aparece como falhou, para o admin investigar.
+ */
+export function estadoConvite(
+  n: EstadoConviteFields | null | undefined,
+  agora: Date = new Date()
+): EstadoConvite {
+  if (!n?.STATUS) {
+    return "nao_disparada";
+  }
+
+  switch (statusEfetivo(n, agora)) {
+    case StatusNotificacaoVisita.PENDENTE:
+    case StatusNotificacaoVisita.REAGENDADO:
+      return "agendada";
+    case StatusNotificacaoVisita.ENVIADO:
+      return "enviada";
+    case StatusNotificacaoVisita.CONFIRMADO:
+      return (n.ORIGEM_ACEITE && ESTADO_POR_ORIGEM[n.ORIGEM_ACEITE]) || "aceita";
+    case StatusNotificacaoVisita.RECUSADO:
+      return "recusada";
+    case StatusNotificacaoVisita.EXPIRADO:
+      return "expirada";
+    case StatusNotificacaoVisita.DISPENSADO:
+      return "dispensada";
+    case StatusNotificacaoVisita.FALHOU:
+      return "falhou";
+    case StatusNotificacaoVisita.AGUARDANDO:
+      return "aguardando";
+    default:
+      return "falhou";
+  }
 }

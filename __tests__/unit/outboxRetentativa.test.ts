@@ -3,6 +3,7 @@ import {
   shouldMarkFailed,
   acaoDaFila,
 } from "../../service/outboxNotificacaoService";
+import { OrigemAceite } from "../../entities/NotificacaoVisita";
 
 // AGND-11: transient failures retry with the ladder copied from
 // OutboxService.computeBackoffMs; everything else retires on the first attempt.
@@ -87,6 +88,23 @@ describe("outbox retry policy", () => {
       expect(acaoDaFila({ desfecho: "DISPENSADO", motivo: "address recently updated" }, 1)).toEqual(
         { acao: "CONCLUIDO" }
       );
+    });
+
+    // CONV-26 / CONV-30: o despacho já gravou AGUARDANDO ou CONFIRMADO; a fila
+    // só solta o lease, sem retentar nem marcar FALHOU.
+    it("finishes a notification parked as AGUARDANDO", () => {
+      expect(acaoDaFila({ desfecho: "AGUARDANDO", idReferencia: 9 }, 1)).toEqual({
+        acao: "CONCLUIDO",
+      });
+    });
+
+    it("finishes a notification accepted by recent confirmation", () => {
+      expect(
+        acaoDaFila(
+          { desfecho: "ACEITO", origem: OrigemAceite.CONFIRMACAO_RECENTE, idReferencia: 9 },
+          3
+        )
+      ).toEqual({ acao: "CONCLUIDO" });
     });
 
     it("finishes a terminal failure without retrying", () => {

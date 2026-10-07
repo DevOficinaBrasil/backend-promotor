@@ -30,6 +30,27 @@ interface ReassignResult {
   resumo: { mantidas: number; reatribuidas: number; sem_promotor_disponivel: number };
 }
 
+/**
+ * Promotor vinculado mais próximo cujo raio alcança a oficina (CONV-18).
+ *
+ * Mesma regra do auto-assign: distância haversine até a base do promotor,
+ * `RAIO` nulo vale 20 km, desempate pelo menor `ID_CAMPANHA_PROMOTOR`. `null`
+ * quando nenhum raio alcança.
+ */
+export function escolherPromotorMaisProximo<
+  T extends { lat: number; lon: number; RAIO: number | null; ID_CAMPANHA_PROMOTOR: number }
+>(oficina: { lat: number; lon: number }, candidatos: T[]): (T & { distancia: number }) | null {
+  const elegiveis = candidatos
+    .map((c) => ({
+      ...c,
+      distancia: haversineDistanceKm(c.lat, c.lon, oficina.lat, oficina.lon),
+    }))
+    .filter((c) => c.distancia <= (c.RAIO ?? 20))
+    .sort((a, b) => a.distancia - b.distancia || a.ID_CAMPANHA_PROMOTOR - b.ID_CAMPANHA_PROMOTOR);
+
+  return elegiveis[0] ?? null;
+}
+
 export default class RotaService {
   private static getRotaRepo() {
     return AppDataSourceSync.getRepository(RotaPromotor);
@@ -52,9 +73,14 @@ export default class RotaService {
    * route creation always returns successfully (spec AC10). Belt and braces on
    * top of agendarVisita's own internal handling.
    */
-  private static async notificarRotasCriadas(rotas: RotaPromotor[]): Promise<void> {
+  private static async notificarRotasCriadas(
+    rotas: RotaPromotor[],
+    agendar = true
+  ): Promise<void> {
     try {
-      await NotificacaoVisitaService.agendarVisitasEmLote(rotas);
+      // Ponto único: importada nasce aceita; as demais só são agendadas
+      // quando `agendar` (a tela de admin cria sem agendar, CONV-15).
+      await NotificacaoVisitaService.registrarRotasCriadas(rotas, { agendar });
     } catch (erro) {
       // agendarVisitasEmLote já promete não lançar e tem seu próprio fallback
       // rota a rota; este catch é cinto e suspensório para a promessa do AC10:
@@ -72,8 +98,10 @@ export default class RotaService {
   static async createRotas(
     ID_CAMPANHA_PROMOTOR: number,
     ID_OFICINA: number | number[],
-    CREATED_BY?: number
+    CREATED_BY?: number,
+    opts: { agendar?: boolean } = {}
   ): Promise<RotaPromotor | RotaPromotor[]> {
+    const agendar = opts.agendar ?? true;
     const repo = this.getRotaRepo();
 
     // If single ID_OFICINA, create one route
@@ -85,7 +113,7 @@ export default class RotaService {
       });
       const rotaSalva = await repo.save(novaRota);
 
-      await this.notificarRotasCriadas([rotaSalva]);
+      await this.notificarRotasCriadas([rotaSalva], agendar);
       
       return rotaSalva;
     }
@@ -100,7 +128,7 @@ export default class RotaService {
     );
     const rotasSalvas = await repo.save(novasRotas);
 
-    await this.notificarRotasCriadas(rotasSalvas);
+    await this.notificarRotasCriadas(rotasSalvas, agendar);
 
     return rotasSalvas;
   }
@@ -843,15 +871,9 @@ export default class RotaService {
 
       const candidatosCampanha = candidatos.get(campanha.ID_CAMPANHA) ?? [];
 
-      const candidatosElegiveis = candidatosCampanha
-        .map(c => ({
-          ...c,
-          distancia: haversineDistanceKm(c.lat, c.lon, lat, lon),
-        }))
-        .filter(c => c.distancia <= (c.RAIO ?? 20))
-        .sort((a, b) => a.distancia - b.distancia || a.ID_CAMPANHA_PROMOTOR - b.ID_CAMPANHA_PROMOTOR);
+      const melhor = escolherPromotorMaisProximo({ lat, lon }, candidatosCampanha);
 
-      if (candidatosElegiveis.length === 0) {
+      if (melhor === null) {
         atribuicoes.push({
           ID_CAMPANHA: campanha.ID_CAMPANHA,
           NOME_CAMPANHA: campanha.NOME,
@@ -862,7 +884,6 @@ export default class RotaService {
         continue;
       }
 
-      const melhor = candidatosElegiveis[0];
       const rota = await this.createRotas(melhor.ID_CAMPANHA_PROMOTOR, idOficina);
       const rotaCriada = Array.isArray(rota) ? rota[0] : rota;
 
@@ -970,20 +991,13 @@ export default class RotaService {
 
       const candidatosCampanha = contexto.candidatosPorCampanha.get(campanha.ID_CAMPANHA) ?? [];
 
-      const candidatosElegiveis = candidatosCampanha
-        .map((c) => ({
-          ...c,
-          distancia: haversineDistanceKm(c.lat, c.lon, lat, lon),
-        }))
-        .filter((c) => c.distancia <= (c.RAIO ?? 20))
-        .sort((a, b) => a.distancia - b.distancia || a.ID_CAMPANHA_PROMOTOR - b.ID_CAMPANHA_PROMOTOR);
+      const melhor = escolherPromotorMaisProximo({ lat, lon }, candidatosCampanha);
 
-      if (candidatosElegiveis.length === 0) {
+      if (melhor === null) {
         semPromotorDisponivel++;
         continue;
       }
 
-      const melhor = candidatosElegiveis[0];
       await this.createRotas(melhor.ID_CAMPANHA_PROMOTOR, idOficina);
       atribuidosNaCampanha.add(idOficina);
       atribuidas++;

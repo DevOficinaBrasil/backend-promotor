@@ -1,7 +1,10 @@
 import VisitaConfirmacaoService from "../../service/visitaConfirmacaoService";
 import RotaService from "../../service/rotaService";
 import { AppDataSourceSync } from "../../data-source";
-import NotificacaoVisita, { StatusNotificacaoVisita } from "../../entities/NotificacaoVisita";
+import NotificacaoVisita, {
+  OrigemAceite,
+  StatusNotificacaoVisita,
+} from "../../entities/NotificacaoVisita";
 import Oficina from "../../entities/Oficina";
 import Empresa from "../../entities/CadastroEmpresa";
 import RotaPromotor from "../../entities/RotaPromotor";
@@ -486,6 +489,16 @@ describe("VisitaConfirmacaoService.confirmar", () => {
       if (entidade === NotificacaoVisita) return notifRepo;
       throw new Error("repositório inesperado no teste");
     });
+
+    // A transição e a propagação rodam numa transação (CONV-36); o manager do
+    // teste manda cada update para o repositório da entidade.
+    (AppDataSourceSync.transaction as jest.Mock).mockImplementation(
+      async (executar: (manager: unknown) => Promise<unknown>) =>
+        await executar({
+          update: (entidade: unknown, criterio: unknown, valores: unknown) =>
+            (AppDataSourceSync.getRepository as jest.Mock)(entidade).update(criterio, valores),
+        })
+    );
   });
 
   // AC19: "...SHALL atomically transition it to CONFIRMADO, setting on that
@@ -499,8 +512,10 @@ describe("VisitaConfirmacaoService.confirmar", () => {
       confirmadoEm: AGORA,
       enderecoAtualizado: false,
     });
+    // ORIGEM_ACEITE entrou com AD-003: "aceito" é CONFIRMADO + origem.
     expect(notifRepo.update).toHaveBeenCalledWith(expect.anything(), {
       STATUS: StatusNotificacaoVisita.CONFIRMADO,
+      ORIGEM_ACEITE: OrigemAceite.REPARADOR,
       CONFIRMADO_EM: AGORA,
       CONFIRMADO_POR: ID_USUARIO,
       CONFIRMADO_IP: IP,
@@ -710,6 +725,7 @@ describe("VisitaConfirmacaoService.atualizarEndereco", () => {
     });
     expect(notifRepo.update).toHaveBeenCalledWith(expect.anything(), {
       STATUS: StatusNotificacaoVisita.CONFIRMADO,
+      ORIGEM_ACEITE: OrigemAceite.REPARADOR,
       CONFIRMADO_EM: AGORA,
       CONFIRMADO_POR: ID_USUARIO,
       CONFIRMADO_IP: IP,
@@ -719,10 +735,15 @@ describe("VisitaConfirmacaoService.atualizarEndereco", () => {
 
   // AC31: "...SHALL update only the address columns of the linked
   // MAIN_REGISTER.OFICINA row." Coordinates are left as-is by design.
-  it("writes only the seven address columns to the Oficina row", async () => {
+  // CONV-50 (disparo-convite-visita-admin, 2026-10-06): a mesma escrita grava
+  // DATA_ATUALIZACAO_ENDERECO com o instante da correção.
+  it("writes the seven address columns plus DATA_ATUALIZACAO_ENDERECO to the Oficina row", async () => {
     await VisitaConfirmacaoService.atualizarEndereco(payload, enderecoCorrigido, IP, AGORA);
 
-    expect(oficinaRepo.update).toHaveBeenCalledWith({ ID_OFICINA }, enderecoCorrigido);
+    expect(oficinaRepo.update).toHaveBeenCalledWith(
+      { ID_OFICINA },
+      { ...enderecoCorrigido, DATA_ATUALIZACAO_ENDERECO: AGORA }
+    );
 
     const escrito = oficinaRepo.update.mock.calls[0][1] as Record<string, unknown>;
     expect(Object.keys(escrito).sort()).toEqual([
@@ -730,6 +751,7 @@ describe("VisitaConfirmacaoService.atualizarEndereco", () => {
       "CEP",
       "CIDADE",
       "COMPLEMENTO",
+      "DATA_ATUALIZACAO_ENDERECO",
       "ENDERECO",
       "ESTADO",
       "NUMERO",
@@ -800,10 +822,14 @@ describe("VisitaConfirmacaoService.atualizarEndereco", () => {
   it("writes both address rows inside one transaction before transitioning the notification", async () => {
     await VisitaConfirmacaoService.atualizarEndereco(payload, enderecoCorrigido, IP, AGORA);
 
+    // Endereço numa transação; transição e propagação para as AGUARDANDO
+    // (CONV-27) em outra, depois.
     expect(ordemDeChamadas).toEqual([
       "transacao:inicio",
       "oficina",
       "empresa",
+      "transacao:inicio",
+      "notificacao",
       "notificacao",
     ]);
   });
@@ -980,7 +1006,10 @@ describe("VisitaConfirmacaoService.atualizarEndereco", () => {
 
       expect(resultado).toMatchObject({ state: "CONFIRMED", enderecoAtualizado: true });
       expect(empresaRepo.update).not.toHaveBeenCalled();
-      expect(oficinaRepo.update).toHaveBeenCalledWith({ ID_OFICINA }, enderecoCorrigido);
+      expect(oficinaRepo.update).toHaveBeenCalledWith(
+        { ID_OFICINA },
+        { ...enderecoCorrigido, DATA_ATUALIZACAO_ENDERECO: AGORA }
+      );
       expect(console.warn).toHaveBeenCalledWith(
         "[visitaConfirmacao] dw.cadastro_empresa não atualizado",
         expect.objectContaining({ ID_OFICINA })
@@ -1151,6 +1180,8 @@ describe("VisitaConfirmacaoService.atualizarEndereco", () => {
         "transacao:inicio",
         "oficina",
         "empresa",
+        "transacao:inicio",
+        "notificacao",
         "notificacao",
         "reassign",
       ]);
@@ -1243,5 +1274,348 @@ describe("VisitaConfirmacaoService.atualizarEndereco", () => {
 
       expect(resultado).toMatchObject({ state: "CONFIRMED", enderecoAtualizado: true });
     });
+  });
+});
+
+// CONV-27, CONV-28, CONV-35 a CONV-38: confirmação e recusa atômicas, com a
+// propagação para as AGUARDANDO na mesma transação.
+describe("VisitaConfirmacaoService — recusa e propagação", () => {
+  const IP = "203.0.113.7";
+  const payload: VisitaJwtPayload = {
+    sub: ID_USUARIO,
+    ID_NOTIFICACAO_VISITA: ID_NOTIFICACAO,
+    ID_ROTA_PROMOTOR: ID_ROTA,
+    scope: VISITA_SCOPE,
+  };
+
+  let notifRepo: { findOne: jest.Mock; update: jest.Mock };
+  let managerUpdate: jest.Mock;
+  let transacoes: number;
+  // Updates feitos pelo manager, marcados com a transação em que aconteceram.
+  let updatesNaTransacao: { transacao: number; criterio: unknown; valores: unknown }[];
+
+  beforeEach(() => {
+    notifRepo = {
+      findOne: jest.fn(async () => null),
+      update: jest.fn(async () => ({ affected: 1 })),
+    };
+    (AppDataSourceSync.getRepository as jest.Mock).mockImplementation((entidade: unknown) => {
+      if (entidade === NotificacaoVisita) return notifRepo;
+      throw new Error("repositório inesperado no teste");
+    });
+
+    transacoes = 0;
+    updatesNaTransacao = [];
+    managerUpdate = jest.fn();
+    (AppDataSourceSync.transaction as jest.Mock).mockImplementation(
+      async (executar: (manager: unknown) => Promise<unknown>) => {
+        const transacao = ++transacoes;
+        return await executar({
+          update: async (entidade: unknown, criterio: unknown, valores: unknown) => {
+            expect(entidade).toBe(NotificacaoVisita);
+            updatesNaTransacao.push({ transacao, criterio, valores });
+            managerUpdate(criterio, valores);
+            return await notifRepo.update(criterio, valores);
+          },
+        });
+      }
+    );
+  });
+
+  const guardaEnviado = {
+    ID_NOTIFICACAO_VISITA: ID_NOTIFICACAO,
+    STATUS: StatusNotificacaoVisita.ENVIADO,
+    EXPIRA_EM: MoreThan(AGORA),
+  };
+  const aguardandoDeste = {
+    STATUS: StatusNotificacaoVisita.AGUARDANDO,
+    ID_NOTIFICACAO_REFERENCIA: ID_NOTIFICACAO,
+  };
+
+  describe("confirmar", () => {
+    // CONV-27: "WHEN um convite é confirmado THEN ... marcar como aceitas todas
+    // as notificações que aguardavam aquele convite."
+    it("propaga CONFIRMADO/CONVITE_VINCULADO às AGUARDANDO na mesma transação", async () => {
+      await VisitaConfirmacaoService.confirmar(payload, IP, AGORA);
+
+      expect(transacoes).toBe(1);
+      expect(updatesNaTransacao).toEqual([
+        {
+          transacao: 1,
+          criterio: guardaEnviado,
+          valores: {
+            STATUS: StatusNotificacaoVisita.CONFIRMADO,
+            ORIGEM_ACEITE: OrigemAceite.REPARADOR,
+            CONFIRMADO_EM: AGORA,
+            CONFIRMADO_POR: ID_USUARIO,
+            CONFIRMADO_IP: IP,
+          },
+        },
+        {
+          transacao: 1,
+          criterio: aguardandoDeste,
+          valores: {
+            STATUS: StatusNotificacaoVisita.CONFIRMADO,
+            ORIGEM_ACEITE: OrigemAceite.CONVITE_VINCULADO,
+            CONFIRMADO_EM: AGORA,
+            AVAILABLE_AT: null,
+          },
+        },
+      ]);
+    });
+
+    it("não propaga quando a transição não acontece", async () => {
+      notifRepo.update.mockResolvedValue({ affected: 0 });
+
+      await VisitaConfirmacaoService.confirmar(payload, IP, AGORA);
+
+      expect(managerUpdate).toHaveBeenCalledTimes(1);
+      expect(managerUpdate.mock.calls[0][0]).toEqual(guardaEnviado);
+    });
+
+    // CONV-37: confirmar um convite recusado → estado atual, sem mudar nada.
+    it("devolve ALREADY_DECLINED para um convite já recusado", async () => {
+      const recusadoEm = new Date("2026-08-04T10:00:00.000Z");
+      notifRepo.update.mockResolvedValue({ affected: 0 });
+      notifRepo.findOne.mockResolvedValue(
+        new NotificacaoVisita({
+          ID_NOTIFICACAO_VISITA: ID_NOTIFICACAO,
+          STATUS: StatusNotificacaoVisita.RECUSADO,
+          RECUSADO_EM: recusadoEm,
+        })
+      );
+
+      const resultado = await VisitaConfirmacaoService.confirmar(payload, IP, AGORA);
+
+      expect(resultado).toEqual({ state: "ALREADY_DECLINED", recusadoEm });
+    });
+  });
+
+  describe("recusar", () => {
+    // CONV-35 / CONV-36: ENVIADO → RECUSADO atômica, com data, IP e o sub.
+    it("grava RECUSADO com RECUSADO_EM/POR/IP, guardado em ENVIADO não expirado", async () => {
+      const resultado = await VisitaConfirmacaoService.recusar(payload, IP, AGORA);
+
+      expect(resultado).toEqual({ state: "DECLINED", recusadoEm: AGORA });
+      expect(updatesNaTransacao[0]).toEqual({
+        transacao: 1,
+        criterio: guardaEnviado,
+        valores: {
+          STATUS: StatusNotificacaoVisita.RECUSADO,
+          RECUSADO_EM: AGORA,
+          RECUSADO_POR: ID_USUARIO,
+          RECUSADO_IP: IP,
+        },
+      });
+    });
+
+    // CONV-28: "WHEN um convite é recusado THEN ... marcar como recusadas todas
+    // as notificações que aguardavam aquele convite."
+    it("propaga RECUSADO às AGUARDANDO na mesma transação", async () => {
+      await VisitaConfirmacaoService.recusar(payload, IP, AGORA);
+
+      expect(transacoes).toBe(1);
+      expect(updatesNaTransacao[1]).toEqual({
+        transacao: 1,
+        criterio: aguardandoDeste,
+        valores: {
+          STATUS: StatusNotificacaoVisita.RECUSADO,
+          RECUSADO_EM: AGORA,
+          AVAILABLE_AT: null,
+        },
+      });
+    });
+
+    it("não propaga quando a recusa não acontece", async () => {
+      notifRepo.update.mockResolvedValue({ affected: 0 });
+
+      await VisitaConfirmacaoService.recusar(payload, IP, AGORA);
+
+      expect(managerUpdate).toHaveBeenCalledTimes(1);
+    });
+
+    // CONV-37: estado terminal → estado atual, sem mudar nada.
+    it("devolve ALREADY_CONFIRMED com CONFIRMADO_EM para convite já confirmado", async () => {
+      const confirmadoEm = new Date("2026-08-04T10:00:00.000Z");
+      notifRepo.update.mockResolvedValue({ affected: 0 });
+      notifRepo.findOne.mockResolvedValue(
+        new NotificacaoVisita({
+          ID_NOTIFICACAO_VISITA: ID_NOTIFICACAO,
+          STATUS: StatusNotificacaoVisita.CONFIRMADO,
+          CONFIRMADO_EM: confirmadoEm,
+        })
+      );
+
+      await expect(VisitaConfirmacaoService.recusar(payload, IP, AGORA)).resolves.toEqual({
+        state: "ALREADY_CONFIRMED",
+        confirmadoEm,
+      });
+    });
+
+    it("devolve ALREADY_DECLINED com RECUSADO_EM para convite já recusado", async () => {
+      const recusadoEm = new Date("2026-08-04T10:00:00.000Z");
+      notifRepo.update.mockResolvedValue({ affected: 0 });
+      notifRepo.findOne.mockResolvedValue(
+        new NotificacaoVisita({
+          ID_NOTIFICACAO_VISITA: ID_NOTIFICACAO,
+          STATUS: StatusNotificacaoVisita.RECUSADO,
+          RECUSADO_EM: recusadoEm,
+        })
+      );
+
+      await expect(VisitaConfirmacaoService.recusar(payload, IP, AGORA)).resolves.toEqual({
+        state: "ALREADY_DECLINED",
+        recusadoEm,
+      });
+    });
+
+    it("devolve EXPIRED para convite ENVIADO vencido", async () => {
+      notifRepo.update.mockResolvedValue({ affected: 0 });
+      notifRepo.findOne.mockResolvedValue(
+        new NotificacaoVisita({
+          ID_NOTIFICACAO_VISITA: ID_NOTIFICACAO,
+          STATUS: StatusNotificacaoVisita.ENVIADO,
+          EXPIRA_EM: new Date("2026-08-05T11:59:59.999Z"),
+        })
+      );
+
+      await expect(VisitaConfirmacaoService.recusar(payload, IP, AGORA)).resolves.toEqual({
+        state: "EXPIRED",
+      });
+    });
+
+    it("devolve TOKEN_INVALID quando a notificação não existe mais", async () => {
+      notifRepo.update.mockResolvedValue({ affected: 0 });
+      notifRepo.findOne.mockResolvedValue(null);
+
+      await expect(VisitaConfirmacaoService.recusar(payload, IP, AGORA)).resolves.toEqual({
+        state: "TOKEN_INVALID",
+      });
+    });
+
+    it("aplica uma única recusa para duas chamadas concorrentes", async () => {
+      let recusada = false;
+      notifRepo.update.mockImplementation(async (criterio: { STATUS?: string }) => {
+        if (criterio.STATUS !== StatusNotificacaoVisita.ENVIADO) return { affected: 0 };
+        if (recusada) return { affected: 0 };
+        recusada = true;
+        return { affected: 1 };
+      });
+      notifRepo.findOne.mockResolvedValue(
+        new NotificacaoVisita({
+          ID_NOTIFICACAO_VISITA: ID_NOTIFICACAO,
+          STATUS: StatusNotificacaoVisita.RECUSADO,
+          RECUSADO_EM: AGORA,
+        })
+      );
+
+      const estados = (
+        await Promise.all([
+          VisitaConfirmacaoService.recusar(payload, IP, AGORA),
+          VisitaConfirmacaoService.recusar(payload, "198.51.100.9", AGORA),
+        ])
+      )
+        .map((r) => r.state)
+        .sort();
+
+      expect(estados).toEqual(["ALREADY_DECLINED", "DECLINED"]);
+    });
+  });
+});
+
+// CONV-37 / CONV-39: GET /visita/:token de um convite recusado.
+describe("VisitaConfirmacaoService.trocarToken — convite recusado", () => {
+  const recusadoEm = new Date("2026-08-04T10:00:00.000Z");
+  let rotaRepo: { findOne: jest.Mock };
+
+  beforeEach(() => {
+    rotaRepo = {
+      findOne: jest.fn(async () => ({
+        ID_ROTA_PROMOTOR: ID_ROTA,
+        ID_OFICINA,
+        campanhaPromotor: { campanha: { EMPRESA_SLUG } },
+      })),
+    };
+    (AppDataSourceSync.getRepository as jest.Mock).mockImplementation((entidade: unknown) => {
+      if (entidade === NotificacaoVisita) {
+        return {
+          findOne: jest.fn(
+            async () =>
+              new NotificacaoVisita({
+                ID_NOTIFICACAO_VISITA: ID_NOTIFICACAO,
+                ID_ROTA_PROMOTOR: ID_ROTA,
+                ID_USUARIO,
+                STATUS: StatusNotificacaoVisita.RECUSADO,
+                TOKEN_HASH: hashToken(RAW_TOKEN),
+                EXPIRA_EM: new Date("2026-08-07T12:00:00.000Z"),
+                RECUSADO_EM: recusadoEm,
+              })
+          ),
+        };
+      }
+      if (entidade === RotaPromotor) return rotaRepo;
+      if (entidade === Community) return { findOne: jest.fn(async () => ({ Nome: "Authomix", Icon: null })) };
+      throw new Error("repositório inesperado no teste");
+    });
+  });
+
+  it("devolve ALREADY_DECLINED com a empresa e RECUSADO_EM, sem JWT", async () => {
+    const resultado = await VisitaConfirmacaoService.trocarToken(RAW_TOKEN, AGORA);
+
+    expect(resultado).toEqual({
+      state: "ALREADY_DECLINED",
+      empresaNome: "Authomix",
+      empresaLogoUrl: null,
+      recusadoEm,
+    });
+    expect(resultado).not.toHaveProperty("jwt");
+  });
+
+  it("devolve ALREADY_DECLINED mesmo depois do EXPIRA_EM", async () => {
+    const resultado = await VisitaConfirmacaoService.trocarToken(
+      RAW_TOKEN,
+      new Date("2026-08-08T00:00:00.000Z")
+    );
+
+    expect(resultado.state).toBe("ALREADY_DECLINED");
+  });
+});
+
+// CONV-37: PUT /visita/endereco sobre convite recusado não escreve nada.
+describe("VisitaConfirmacaoService.atualizarEndereco — convite recusado", () => {
+  it("devolve ALREADY_DECLINED sem tocar na oficina", async () => {
+    const recusadoEm = new Date("2026-08-04T10:00:00.000Z");
+    const oficinaRepo = { findOne: jest.fn(), update: jest.fn() };
+    (AppDataSourceSync.getRepository as jest.Mock).mockImplementation((entidade: unknown) => {
+      if (entidade === NotificacaoVisita) {
+        return {
+          findOne: jest.fn(
+            async () =>
+              new NotificacaoVisita({
+                ID_NOTIFICACAO_VISITA: ID_NOTIFICACAO,
+                STATUS: StatusNotificacaoVisita.RECUSADO,
+                RECUSADO_EM: recusadoEm,
+              })
+          ),
+        };
+      }
+      if (entidade === Oficina) return oficinaRepo;
+      throw new Error("repositório inesperado no teste");
+    });
+
+    const resultado = await VisitaConfirmacaoService.atualizarEndereco(
+      {
+        sub: ID_USUARIO,
+        ID_NOTIFICACAO_VISITA: ID_NOTIFICACAO,
+        ID_ROTA_PROMOTOR: ID_ROTA,
+        scope: VISITA_SCOPE,
+      },
+      { CEP: "13010-000" },
+      "203.0.113.7",
+      AGORA
+    );
+
+    expect(resultado).toEqual({ state: "ALREADY_DECLINED", recusadoEm });
+    expect(oficinaRepo.update).not.toHaveBeenCalled();
   });
 });

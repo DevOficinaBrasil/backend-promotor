@@ -1,7 +1,10 @@
 import { EntityManager, MoreThan } from "typeorm";
 import { QueryDeepPartialEntity } from "typeorm/query-builder/QueryPartialEntity";
 import { AppDataSourceSync } from "../data-source";
-import NotificacaoVisita, { StatusNotificacaoVisita } from "../entities/NotificacaoVisita";
+import NotificacaoVisita, {
+  OrigemAceite,
+  StatusNotificacaoVisita,
+} from "../entities/NotificacaoVisita";
 import Oficina from "../entities/Oficina";
 import Empresa from "../entities/CadastroEmpresa";
 import { cnpjParaInteiro, dividirLogradouro } from "../utils/logradouro";
@@ -51,13 +54,27 @@ export type ExchangeResult =
   // A tela de expirado atribui o próximo contato à empresa do convite, então o
   // estado morto também carrega quem convidou.
   | { state: "EXPIRED"; empresaNome: string | null; empresaLogoUrl: string | null }
+  // CONV-37: o convite recusado mostra a tela de recusada, com quem convidou.
+  | {
+      state: "ALREADY_DECLINED";
+      empresaNome: string | null;
+      empresaLogoUrl: string | null;
+      recusadoEm: Date | null;
+    }
+  | { state: "TOKEN_INVALID" };
+
+/** Estado terminal ou morto que impede confirmar e recusar. */
+type TransicaoRecusada =
+  | { state: "ALREADY_CONFIRMED"; confirmadoEm: Date | null }
+  | { state: "ALREADY_DECLINED"; recusadoEm: Date | null }
+  | { state: "EXPIRED" }
   | { state: "TOKEN_INVALID" };
 
 export type ConfirmResult =
   | { state: "CONFIRMED"; confirmadoEm: Date; enderecoAtualizado: boolean }
-  | { state: "ALREADY_CONFIRMED"; confirmadoEm: Date | null }
-  | { state: "EXPIRED" }
-  | { state: "TOKEN_INVALID" };
+  | TransicaoRecusada;
+
+export type RecusaResult = { state: "DECLINED"; recusadoEm: Date } | TransicaoRecusada;
 
 export type EnderecoResult =
   | ConfirmResult
@@ -179,6 +196,18 @@ export default class VisitaConfirmacaoService {
       };
     }
 
+    if (status === StatusNotificacaoVisita.RECUSADO) {
+      // CONV-37. Como o expirado, só a empresa: a tela de recusada não mostra
+      // oficina, promotor nem endereço. Sem JWT: não há ação a autorizar.
+      const empresa = await this.carregarEmpresa(notificacao);
+
+      return {
+        state: "ALREADY_DECLINED",
+        ...empresa,
+        recusadoEm: notificacao.RECUSADO_EM ?? null,
+      };
+    }
+
     // Only a live, dispatched notification is exchangeable. PENDENTE, FALHOU
     // and DISPENSADO rows never had a delivered link to open.
     if (status !== StatusNotificacaoVisita.ENVIADO || notificacao.ID_USUARIO == null) {
@@ -225,7 +254,35 @@ export default class VisitaConfirmacaoService {
     ip: string,
     agora: Date = new Date()
   ): Promise<ConfirmResult> {
-    return await this.transicionar(payload, ip, false, agora);
+    return (await this.transicionar(
+      payload,
+      ip,
+      StatusNotificacaoVisita.CONFIRMADO,
+      false,
+      agora
+    )) as ConfirmResult;
+  }
+
+  /**
+   * Recusa a visita pelo link (CONV-35, CONV-36): `ENVIADO → RECUSADO` atômica,
+   * com data, IP e o `sub` do JWT, no mesmo padrão da confirmação. As
+   * notificações que aguardavam este convite viram `RECUSADO` na mesma
+   * transação (CONV-28).
+   *
+   * @param agora - relógio injetável, para testar a fronteira de expiração
+   */
+  static async recusar(
+    payload: VisitaJwtPayload,
+    ip: string,
+    agora: Date = new Date()
+  ): Promise<RecusaResult> {
+    return (await this.transicionar(
+      payload,
+      ip,
+      StatusNotificacaoVisita.RECUSADO,
+      false,
+      agora
+    )) as RecusaResult;
   }
 
   /**
@@ -282,6 +339,10 @@ export default class VisitaConfirmacaoService {
       return { state: "ALREADY_CONFIRMED", confirmadoEm: notificacao.CONFIRMADO_EM ?? null };
     }
 
+    if (status === StatusNotificacaoVisita.RECUSADO) {
+      return { state: "ALREADY_DECLINED", recusadoEm: notificacao.RECUSADO_EM ?? null };
+    }
+
     if (status === StatusNotificacaoVisita.EXPIRADO) {
       return { state: "EXPIRED" };
     }
@@ -322,7 +383,12 @@ export default class VisitaConfirmacaoService {
 
     try {
       await AppDataSourceSync.transaction(async (manager) => {
-        await manager.update(Oficina, { ID_OFICINA: oficina.ID_OFICINA }, endereco);
+        // CONV-50: a correção pelo link conta como atualização de endereço.
+        await manager.update(
+          Oficina,
+          { ID_OFICINA: oficina.ID_OFICINA },
+          { ...endereco, DATA_ATUALIZACAO_ENDERECO: agora }
+        );
 
         // `id_oficina` não identifica uma linha em dw.cadastro_empresa: a chave
         // única é `cnpj_int`, e em PRD 59 ids se repetem sob CNPJs diferentes.
@@ -358,7 +424,13 @@ export default class VisitaConfirmacaoService {
       return { state: "ADDRESS_UPDATE_FAILED" };
     }
 
-    const resultado = await this.transicionar(payload, ip, true, agora);
+    const resultado = (await this.transicionar(
+      payload,
+      ip,
+      StatusNotificacaoVisita.CONFIRMADO,
+      true,
+      agora
+    )) as ConfirmResult;
 
     // Only a CEP change moves the workshop on the map: reassignRotasByAddress
     // geocodes by CEP alone, so correcting a street number or complement would
@@ -411,41 +483,97 @@ export default class VisitaConfirmacaoService {
     }
   }
 
+  /**
+   * `ENVIADO → CONFIRMADO` ou `ENVIADO → RECUSADO`, e a propagação para as
+   * `AGUARDANDO` que seguem este convite, numa transação só (CONV-27, CONV-28,
+   * CONV-36).
+   *
+   * Live state decides, not the JWT's snapshot at issuance: the conditional
+   * UPDATE re-checks STATUS and expiry in the same statement, so a JWT minted
+   * before EXPIRA_EM passed can no longer act on a dead visit.
+   */
   protected static async transicionar(
     payload: VisitaJwtPayload,
     ip: string,
+    destino: StatusNotificacaoVisita.CONFIRMADO | StatusNotificacaoVisita.RECUSADO,
     enderecoAtualizado: boolean,
     agora: Date
-  ): Promise<ConfirmResult> {
-    const repo = AppDataSourceSync.getRepository(NotificacaoVisita);
+  ): Promise<ConfirmResult | RecusaResult> {
     const id = payload.ID_NOTIFICACAO_VISITA;
+    const confirmar = destino === StatusNotificacaoVisita.CONFIRMADO;
 
-    // One guarded statement, so two concurrent confirms produce exactly one
-    // transition (AC21) — the loser simply affects 0 rows. The EXPIRA_EM guard
-    // is required, not decorative: expiry is derived rather than stored, so an
-    // expired row still reads STATUS='ENVIADO' in the database.
-    const resultado = await repo.update(
-      {
-        ID_NOTIFICACAO_VISITA: id,
-        STATUS: StatusNotificacaoVisita.ENVIADO,
-        EXPIRA_EM: MoreThan(agora),
-      },
-      {
-        STATUS: StatusNotificacaoVisita.CONFIRMADO,
-        CONFIRMADO_EM: agora,
-        CONFIRMADO_POR: payload.sub,
-        CONFIRMADO_IP: ip,
-        ...(enderecoAtualizado ? { ENDERECO_ATUALIZADO: true } : {}),
+    const campos: QueryDeepPartialEntity<NotificacaoVisita> = confirmar
+      ? {
+          STATUS: StatusNotificacaoVisita.CONFIRMADO,
+          ORIGEM_ACEITE: OrigemAceite.REPARADOR,
+          CONFIRMADO_EM: agora,
+          CONFIRMADO_POR: payload.sub,
+          CONFIRMADO_IP: ip,
+          ...(enderecoAtualizado ? { ENDERECO_ATUALIZADO: true } : {}),
+        }
+      : {
+          STATUS: StatusNotificacaoVisita.RECUSADO,
+          RECUSADO_EM: agora,
+          RECUSADO_POR: payload.sub,
+          RECUSADO_IP: ip,
+        };
+
+    const propagacao: QueryDeepPartialEntity<NotificacaoVisita> = confirmar
+      ? {
+          STATUS: StatusNotificacaoVisita.CONFIRMADO,
+          ORIGEM_ACEITE: OrigemAceite.CONVITE_VINCULADO,
+          CONFIRMADO_EM: agora,
+          AVAILABLE_AT: null,
+        }
+      : {
+          STATUS: StatusNotificacaoVisita.RECUSADO,
+          RECUSADO_EM: agora,
+          AVAILABLE_AT: null,
+        };
+
+    const transicionou = await AppDataSourceSync.transaction(async (manager) => {
+      // One guarded statement, so two concurrent actions produce exactly one
+      // transition (AC21) — the loser simply affects 0 rows. The EXPIRA_EM
+      // guard is required, not decorative: expiry is derived rather than
+      // stored, so an expired row still reads STATUS='ENVIADO'.
+      const resultado = await manager.update(
+        NotificacaoVisita,
+        {
+          ID_NOTIFICACAO_VISITA: id,
+          STATUS: StatusNotificacaoVisita.ENVIADO,
+          EXPIRA_EM: MoreThan(agora),
+        },
+        campos
+      );
+
+      if ((resultado.affected ?? 0) === 0) {
+        return false;
       }
-    );
 
-    if ((resultado.affected ?? 0) > 0) {
-      return { state: "CONFIRMED", confirmadoEm: agora, enderecoAtualizado };
+      // As AGUARDANDO deste convite seguem o desfecho dele. O tick do outbox
+      // (liberarAguardando) reconcilia se esta escrita não acontecer.
+      await manager.update(
+        NotificacaoVisita,
+        {
+          STATUS: StatusNotificacaoVisita.AGUARDANDO,
+          ID_NOTIFICACAO_REFERENCIA: id,
+        },
+        propagacao
+      );
+      return true;
+    });
+
+    if (transicionou) {
+      return confirmar
+        ? { state: "CONFIRMED", confirmadoEm: agora, enderecoAtualizado }
+        : { state: "DECLINED", recusadoEm: agora };
     }
 
     // Zero rows means somebody or something got there first. Re-read rather
     // than guess, so a lost race is never reported as a success.
-    const linha = await repo.findOne({ where: { ID_NOTIFICACAO_VISITA: id } });
+    const linha = await AppDataSourceSync.getRepository(NotificacaoVisita).findOne({
+      where: { ID_NOTIFICACAO_VISITA: id },
+    });
 
     if (linha === null) {
       return { state: "TOKEN_INVALID" };
@@ -455,6 +583,10 @@ export default class VisitaConfirmacaoService {
 
     if (status === StatusNotificacaoVisita.CONFIRMADO) {
       return { state: "ALREADY_CONFIRMED", confirmadoEm: linha.CONFIRMADO_EM ?? null };
+    }
+
+    if (status === StatusNotificacaoVisita.RECUSADO) {
+      return { state: "ALREADY_DECLINED", recusadoEm: linha.RECUSADO_EM ?? null };
     }
 
     if (status === StatusNotificacaoVisita.EXPIRADO) {
