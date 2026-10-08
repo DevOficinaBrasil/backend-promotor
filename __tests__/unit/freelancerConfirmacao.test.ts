@@ -180,7 +180,9 @@ describe("GET /oficinas", () => {
     expect(sql).toContain('"CAMPANHAS_OB"."ROTA_PROMOTOR"');
     expect(sql).toContain('"CAMPANHAS_OB"."NOTIFICACAO_VISITA"');
     expect(sql).toContain('rp."DELETED_AT" IS NULL');
-    expect(sql).toContain("NOT IN ('FINALIZADO', 'CANCELADO', 'AGUARDANDO')");
+    expect(sql).toContain("NOT IN ('FINALIZADO', 'CANCELADO')");
+    // Rota AGUARDANDO (estacionada) continua pendente para o freela confirmar.
+    expect(sql).not.toContain("'AGUARDANDO'");
     // STATUS é enum (status_rota): COALESCE com '' falha em runtime com 22P02.
     expect(sql).not.toMatch(/COALESCE\(rp\."STATUS"/);
     expect(sql).toContain('rp."STATUS" IS NULL OR');
