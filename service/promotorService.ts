@@ -13,6 +13,7 @@ import SegmentacaoService from "./segmentacaoService";
 import { haversineDistanceKm } from "../utils/haversine";
 import Oficina from "../entities/Oficina";
 import RotaPromotor from "../entities/RotaPromotor";
+import { sqlRotaNaoEstacionada } from "../utils/rotaAguardando";
 
 export default class PromotorService {
   private static getPromotorRepo() {
@@ -268,15 +269,20 @@ export default class PromotorService {
     for (const cp of campanhaPromotores) {
       const rotas = await AppDataSourceSync.query(
         `SELECT "ID_OFICINA" FROM "CAMPANHAS_OB"."ROTA_PROMOTOR" 
-         WHERE "ID_CAMPANHA_PROMOTOR" = $1 AND "DELETED_AT" IS NULL`,
+         WHERE "ID_CAMPANHA_PROMOTOR" = $1 AND "DELETED_AT" IS NULL
+           AND ${sqlRotaNaoEstacionada('"ROTA_PROMOTOR"')}`,
         [cp.ID_CAMPANHA_PROMOTOR]
       );
       freedOficinasPorCampanha.set(cp.ID_CAMPANHA!, rotas.map((r: any) => r.ID_OFICINA));
     }
 
-    // Remove existing routes for all campaign associations
+    // Remove existing routes for all campaign associations. Rotas estacionadas
+    // (AGUARDANDO) ficam com o promotor: não foram capturadas acima, então
+    // também não são redistribuídas.
     for (const cp of campanhaPromotores) {
-      await RotaService.removeCampanhaPromotorRota(cp.ID_CAMPANHA_PROMOTOR!);
+      await RotaService.removeCampanhaPromotorRota(cp.ID_CAMPANHA_PROMOTOR!, {
+        preservarEstacionadas: true,
+      });
     }
 
     // Resolve empresaSlug from existing campaign data if not provided
@@ -599,7 +605,8 @@ export default class PromotorService {
     const totalRows = await AppDataSourceSync.query(
       `SELECT COUNT(*)::int AS total
        FROM "CAMPANHAS_OB"."ROTA_PROMOTOR"
-       WHERE "ID_CAMPANHA_PROMOTOR" = $1 AND "DELETED_AT" IS NULL`,
+       WHERE "ID_CAMPANHA_PROMOTOR" = $1 AND "DELETED_AT" IS NULL
+         AND ${sqlRotaNaoEstacionada('"ROTA_PROMOTOR"')}`,
       [idCampanhaPromotor]
     );
 

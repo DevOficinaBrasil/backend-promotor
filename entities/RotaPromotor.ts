@@ -22,6 +22,12 @@ export enum StatusRota {
   EM_ANDAMENTO = "EM ANDAMENTO",
   FINALIZADO = "FINALIZADO",
   CANCELADO = "CANCELADO",
+  /**
+   * Rota estacionada: reserva a oficina para o promotor, mas é ignorada pelo
+   * app do promotor, pelo dashboard do cliente e pelo despacho de notificação
+   * até voltar para BACKLOG. Ver scripts/migration-status-rota-aguardando.sql.
+   */
+  AGUARDANDO = "AGUARDANDO",
 }
 
 export enum RedirectRota {

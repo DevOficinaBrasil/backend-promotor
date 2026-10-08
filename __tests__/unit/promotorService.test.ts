@@ -209,7 +209,7 @@ describe('PromotorService', () => {
 
       const result = await PromotorService.updatePromotor(1, { CEP: '02002-000' }, 'empresa-x');
 
-      expect(RotaService.removeCampanhaPromotorRota).toHaveBeenCalledWith(10);
+      expect(RotaService.removeCampanhaPromotorRota).toHaveBeenCalledWith(10, { preservarEstacionadas: true });
       expect(RotaService.createRotas).toHaveBeenCalledWith(10, [300, 400]);
       expect(result!.autoAssignResult).toEqual({ rotasCriadas: 2 });
     });
@@ -312,7 +312,7 @@ describe('PromotorService', () => {
 
       const result = await PromotorService.updatePromotor(1, { CEP: '09999-000' }, 'empresa-x');
 
-      expect(RotaService.removeCampanhaPromotorRota).toHaveBeenCalledWith(10);
+      expect(RotaService.removeCampanhaPromotorRota).toHaveBeenCalledWith(10, { preservarEstacionadas: true });
       // Oficinas 100 and 200 should be redistributed to promotor 2 (CP 20)
       expect(RotaService.createRotas).toHaveBeenCalledWith(20, [100, 200]);
       expect(result!.autoAssignResult).toEqual({ rotasCriadas: 0 });

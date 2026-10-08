@@ -22,13 +22,13 @@ const ACENTOS = "'áàâãäéèêëíìîïóòôõöúùûüçñ'";
 const SEM_ACENTOS = "'aaaaaeeeeiiiiooooouuuucn'";
 
 /**
- * Rota viva (sem DELETED_AT, fora de FINALIZADO/CANCELADO) cuja notificação não
+ * Rota viva (sem DELETED_AT, fora de FINALIZADO/CANCELADO/AGUARDANDO) cuja notificação não
  * existe ou não está CONFIRMADO. NOTIFICACAO_VISITA é UNIQUE por rota, então o
  * LEFT JOIN é 1:1. `rp` e `nv` são os aliases esperados pelo chamador.
  */
 const ROTA_PENDENTE = `
   rp."DELETED_AT" IS NULL
-  AND (rp."STATUS" IS NULL OR rp."STATUS" NOT IN ('FINALIZADO', 'CANCELADO'))
+  AND (rp."STATUS" IS NULL OR rp."STATUS"::text NOT IN ('FINALIZADO', 'CANCELADO', 'AGUARDANDO'))
   AND (nv."ID_NOTIFICACAO_VISITA" IS NULL OR nv."STATUS" <> '${StatusNotificacaoVisita.CONFIRMADO}')`;
 
 const JOIN_NOTIFICACAO = `LEFT JOIN "CAMPANHAS_OB"."NOTIFICACAO_VISITA" nv ON nv."ID_ROTA_PROMOTOR" = rp."ID_ROTA_PROMOTOR"`;

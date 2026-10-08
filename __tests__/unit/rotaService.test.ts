@@ -633,6 +633,19 @@ describe('RotaService', () => {
       assigned?: any[];
     } = {}) {
       (AppDataSourceSync.query as jest.Mock).mockImplementation((sql: string) => {
+        // getOficinaCoordinates: uma query só, OFICINA antes do dw (sqlEnderecoOficina).
+        if (sql.includes('AS "EXISTE"')) {
+          const o = (overrides.oficina ?? [])[0];
+          const ce = (overrides.cadastroEmpresa ?? [])[0];
+          if (!o && !ce) return Promise.resolve([{ LATITUDE: null, LONGITUDE: null, CEP: null, EXISTE: false }]);
+          const oTemPar = o?.LATITUDE != null && o?.LONGITUDE != null;
+          return Promise.resolve([{
+            LATITUDE: oTemPar ? Number(o.LATITUDE) : ce?.latitude != null ? Number(ce.latitude) : null,
+            LONGITUDE: oTemPar ? Number(o.LONGITUDE) : ce?.longitude != null ? Number(ce.longitude) : null,
+            CEP: o?.CEP ?? ce?.cep ?? null,
+            EXISTE: Boolean(o),
+          }]);
+        }
         if (sql.includes('cadastro_empresa')) return Promise.resolve(overrides.cadastroEmpresa ?? []);
         if (sql.includes('MAIN_REGISTER"."OFICINA"')) return Promise.resolve(overrides.oficina ?? []);
         if (sql.includes('ROTA_PROMOTOR" rp')) return Promise.resolve(overrides.assigned ?? []);

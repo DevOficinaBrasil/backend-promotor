@@ -8,6 +8,8 @@ import { statusEfetivo } from "../utils/statusNotificacaoVisita";
 import { haversineDistanceKm } from "../utils/haversine";
 import GeolocationService from "./geolocationService";
 import { ligacaoCadastroEmpresa } from "../utils/sqlCadastroEmpresa";
+import { sqlParCoordenadasOficinaPrimeiro } from "../utils/sqlEnderecoOficina";
+import { rotaEstacionada } from "../utils/rotaAguardando";
 
 interface ReatribuicaoResult {
   ID_CAMPANHA: number;
@@ -228,9 +230,13 @@ export default class RotaService {
       (id) => !existingOficinaIds.includes(id)
     );
 
-    // Determine which routes to soft delete (existing not in new list)
+    // Determine which routes to soft delete (existing not in new list).
+    // Rota estacionada (AGUARDANDO) não chega ao dashboard, então nunca vem na
+    // lista: fica fora da exclusão, mas continua em existingOficinaIds para não
+    // ganhar uma rota duplicada se a oficina vier na lista.
     const rotasToDelete = existingRotas.filter(
-      (rota) => rota.ID_OFICINA && !ID_OFICINA.includes(rota.ID_OFICINA)
+      (rota) =>
+        rota.ID_OFICINA && !ID_OFICINA.includes(rota.ID_OFICINA) && !rotaEstacionada(rota.STATUS)
     );
 
     // Soft delete routes that are no longer needed (on new DB)
@@ -281,7 +287,9 @@ export default class RotaService {
       where: { ID_ROTA_PROMOTOR },
     });
 
-    if (!rotaExistente) {
+    // Rota estacionada é invisível para quem edita opções (app do promotor e
+    // dashboard): sai dela só por UPDATE direto para BACKLOG.
+    if (!rotaExistente || rotaEstacionada(rotaExistente.STATUS)) {
       return null;
     }
 
@@ -303,7 +311,8 @@ export default class RotaService {
       where: { ID_ROTA_PROMOTOR: id },
     });
 
-    return rota;
+    // Estacionada responde como inexistente (PUT /rota/:id/options devolve 404).
+    return rota && !rotaEstacionada(rota.STATUS) ? rota : null;
   }
 
   /**
@@ -316,6 +325,10 @@ export default class RotaService {
       where: { ID_ROTA_PROMOTOR: id },
       relations: ['campanhaPromotor', 'campanhaPromotor.campanha', 'campanhaPromotor.promotor', 'campanhaResults', 'notificacaoVisita'],
     });
+
+    if (!rota || rotaEstacionada(rota.STATUS)) {
+      return null;
+    }
 
     // Report the *effective* status (NOTIF-19) — a stored ENVIADO whose
     // EXPIRA_EM has silently passed must read EXPIRADO here too, or an
@@ -375,10 +388,12 @@ export default class RotaService {
     const repo = this.getRotaRepo();
     const cpRepo = this.getCampanhaPromotorRepo();
 
-    const rotas = await repo.find({
-      where: { ID_CAMPANHA_PROMOTOR: idCampanhaPromotor, DELETED_AT: IsNull() },
-      relations: ["oficina"],
-    });
+    const rotas = (
+      await repo.find({
+        where: { ID_CAMPANHA_PROMOTOR: idCampanhaPromotor, DELETED_AT: IsNull() },
+        relations: ["oficina"],
+      })
+    ).filter((rota) => !rotaEstacionada(rota.STATUS));
 
     if (rotas.length === 0) {
       throw new Error("Nenhuma rota encontrada para este vínculo.");
@@ -475,7 +490,7 @@ export default class RotaService {
 
     return {
       ESTRATEGIA_ORDENACAO: estrategia,
-      rotas: updatedRotas.map((r) => ({
+      rotas: updatedRotas.filter((r) => !rotaEstacionada(r.STATUS)).map((r) => ({
         ID_ROTA_PROMOTOR: r.ID_ROTA_PROMOTOR!,
         ORDEM: r.ORDEM ?? null,
         ID_OFICINA: r.ID_OFICINA!,
@@ -483,19 +498,33 @@ export default class RotaService {
     };
   }
 
-  public static async removeCampanhaPromotorRota(idCampanhaPromotor: number): Promise<void> 
+  /**
+   * Apaga de vez as rotas do vínculo e suas notificações. Com
+   * `preservarEstacionadas`, rotas vivas em AGUARDANDO ficam: é o caso da
+   * redistribuição após mudança de CEP/raio, que não deve desfazer o que foi
+   * estacionado à mão. O desvínculo explícito apaga tudo.
+   */
+  public static async removeCampanhaPromotorRota(
+    idCampanhaPromotor: number,
+    { preservarEstacionadas = false }: { preservarEstacionadas?: boolean } = {}
+  ): Promise<void>
   {
+    const filtroEstacionada = preservarEstacionadas
+      ? `AND NOT ("STATUS"::text = '${StatusRota.AGUARDANDO}' AND "DELETED_AT" IS NULL)`
+      : "";
+
     // Delete notifications that reference rotas being removed (FK constraint)
     await AppDataSourceSync.query(
       `DELETE FROM "CAMPANHAS_OB"."NOTIFICACAO_VISITA" WHERE "ID_ROTA_PROMOTOR" IN (
-        SELECT "ID_ROTA_PROMOTOR" FROM "CAMPANHAS_OB"."ROTA_PROMOTOR" WHERE "ID_CAMPANHA_PROMOTOR" = $1
+        SELECT "ID_ROTA_PROMOTOR" FROM "CAMPANHAS_OB"."ROTA_PROMOTOR"
+         WHERE "ID_CAMPANHA_PROMOTOR" = $1 ${filtroEstacionada}
       )`,
       [idCampanhaPromotor]
     );
 
     // Hard-delete all rotas including soft-deleted ones
     await AppDataSourceSync.query(
-      `DELETE FROM "CAMPANHAS_OB"."ROTA_PROMOTOR" WHERE "ID_CAMPANHA_PROMOTOR" = $1`,
+      `DELETE FROM "CAMPANHAS_OB"."ROTA_PROMOTOR" WHERE "ID_CAMPANHA_PROMOTOR" = $1 ${filtroEstacionada}`,
       [idCampanhaPromotor]
     );
   }
@@ -741,48 +770,36 @@ export default class RotaService {
   private static async getOficinaCoordinates(
     idOficina: number
   ): Promise<{ lat: number; lon: number; cep: string | null }> {
-    // A oficina é ligada ao dw por CNPJ ou por id_oficina — ver
-    // utils/sqlCadastroEmpresa.ts. A âncora `alvo` mantém o comportamento de
-    // antes para oficina ausente de MAIN_REGISTER.OFICINA: sem CNPJ para
-    // comparar, a ligação cai no id_oficina, como fazia o join direto no dw.
-    const ceResult = await AppDataSourceSync.query(
-      `SELECT ce."latitude", ce."longitude", ce."cep"
+    // MAIN_REGISTER.OFICINA primeiro (é o que o reparador atualiza), dw como
+    // fallback, geocodificação do CEP por último — ver utils/sqlEnderecoOficina.ts.
+    // A âncora `alvo` mantém a ligação com o dw por id_oficina para oficina
+    // ausente de MAIN_REGISTER.OFICINA.
+    const coord = sqlParCoordenadasOficinaPrimeiro("o", "ce");
+    const resultado = await AppDataSourceSync.query(
+      `SELECT ${coord.lat} AS "LATITUDE", ${coord.lon} AS "LONGITUDE",
+              COALESCE(NULLIF(TRIM(o."CEP"), ''), ce.cep) AS "CEP",
+              o."ID_OFICINA" IS NOT NULL AS "EXISTE"
        FROM (SELECT $1::int AS "ID_OFICINA") alvo
        LEFT JOIN "MAIN_REGISTER"."OFICINA" o
          ON o."ID_OFICINA" = alvo."ID_OFICINA"${ligacaoCadastroEmpresa("o", 'alvo."ID_OFICINA"')}
-       WHERE ce.cnpj_int IS NOT NULL
        LIMIT 1`,
       [idOficina]
     );
 
-    if (ceResult.length > 0 && ceResult[0].latitude && ceResult[0].longitude) {
-      return {
-        lat: parseFloat(ceResult[0].latitude),
-        lon: parseFloat(ceResult[0].longitude),
-        cep: ceResult[0].cep ?? null,
-      };
-    }
-
-    const oficinaResult = await AppDataSourceSync.query(
-      `SELECT o."CEP", o."LATITUDE", o."LONGITUDE"
-       FROM "MAIN_REGISTER"."OFICINA" o
-       WHERE o."ID_OFICINA" = $1`,
-      [idOficina]
-    );
-
-    if (oficinaResult.length === 0) {
+    const linha = resultado[0];
+    if (!linha || (!linha.EXISTE && linha.LATITUDE == null)) {
       throw new Error("NOT_FOUND");
     }
 
-    const oficina = oficinaResult[0];
-
-    if (oficina.LATITUDE && oficina.LONGITUDE) {
+    if (linha.LATITUDE != null && linha.LONGITUDE != null) {
       return {
-        lat: parseFloat(oficina.LATITUDE),
-        lon: parseFloat(oficina.LONGITUDE),
-        cep: oficina.CEP ?? null,
+        lat: Number(linha.LATITUDE),
+        lon: Number(linha.LONGITUDE),
+        cep: linha.CEP ?? null,
       };
     }
+
+    const oficina = { CEP: linha.CEP as string | null };
 
     if (!oficina.CEP) {
       throw new Error("UNPROCESSABLE");

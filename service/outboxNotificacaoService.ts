@@ -495,8 +495,16 @@ export default class OutboxNotificacaoService {
       `
       WITH picked AS (
         SELECT "ID_NOTIFICACAO_VISITA"
-          FROM "CAMPANHAS_OB"."NOTIFICACAO_VISITA"
+          FROM "CAMPANHAS_OB"."NOTIFICACAO_VISITA" nv_claim
          WHERE "STATUS" = 'PENDENTE'
+           -- Rota estacionada (ROTA_PROMOTOR.STATUS = AGUARDANDO) não é
+           -- reivindicada: a linha fica PENDENTE, sem gastar ATTEMPTS, e volta a
+           -- ser elegível quando a rota sai do AGUARDANDO.
+           AND NOT EXISTS (
+             SELECT 1 FROM "CAMPANHAS_OB"."ROTA_PROMOTOR" rp_claim
+              WHERE rp_claim."ID_ROTA_PROMOTOR" = nv_claim."ID_ROTA_PROMOTOR"
+                AND rp_claim."STATUS"::text = 'AGUARDANDO'
+           )
            AND "AVAILABLE_AT" IS NOT NULL
            AND "AVAILABLE_AT" <= now()
            AND ("LOCKED_AT" IS NULL OR "LOCKED_AT" < now() - ($2 || ' minutes')::interval)
