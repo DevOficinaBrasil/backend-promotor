@@ -2,6 +2,7 @@ import { AppDataSourceSync } from "../data-source";
 import Campanha from "../entities/Campanha";
 import CampanhaPromotor, { EstrategiaOrdenacao } from "../entities/CampanhaPromotor";
 import RotaPromotor from "../entities/RotaPromotor";
+import RotaService from "./rotaService";
 import Oficina from "../entities/Oficina";
 import { IsNull } from "typeorm";
 import { StatusNotificacaoVisita } from "../entities/NotificacaoVisita";
@@ -10,6 +11,8 @@ import {
   JOIN_CADASTRO_EMPRESA_POR_ROTA,
   ligacaoCadastroEmpresa,
 } from "../utils/sqlCadastroEmpresa";
+import { sqlColunasOficinaRota } from "../utils/sqlEnderecoOficina";
+import { rotaEstacionada, sqlRotaNaoEstacionada } from "../utils/rotaAguardando";
 
 /**
  * Enriquecimento das rotas legadas: lê o dw por lista de ids de oficina. A
@@ -118,10 +121,14 @@ export default class CampanhaService {
     // If promotores data is provided, update the relationships
     if (promotores && promotores.length > 0) {
       // First, soft delete existing relationships for this campaign
-      await this.removePromotoresFromCampanha(id);
+      const estacionadas = await this.removePromotoresFromCampanha(id);
       
       // Then create new relationships
       await this.linkPromotoresToCampanha(id, promotores);
+
+      // Parked routes (AGUARDANDO) are hidden from the dashboard, so they never
+      // come in `promotores`: carry them over to the promoter's new link.
+      await this.reapontarRotasEstacionadas(id, estacionadas);
     }
     
     return campanhaAtualizada;
@@ -260,17 +267,7 @@ export default class CampanhaService {
     const fullRotasQuery = `
       SELECT 
         rp.*,
-        ce.latitude as "LATITUDE",
-        ce.longitude as "LONGITUDE",
-        COALESCE(o."NOME_FANTASIA", ce.razao_social) as "NOME_FANTASIA",
-        TRIM(CONCAT(COALESCE(ce.logradouro,''), ' ', COALESCE(ce.rua,''))) as "ENDERECO",
-        ce.bairro as "BAIRRO",
-        ce.cidade as "CIDADE",
-        ce.estado as "ESTADO",
-        ce.numero as "NUMERO",
-        ce.cep as "CEP",
-        ce.cnpj as "CNPJ",
-        ce.telefone as "TELEFONE",
+        ${sqlColunasOficinaRota("")},
         nv."STATUS" as "NOTIFICACAO_STATUS",
         nv."EXPIRA_EM" as "NOTIFICACAO_EXPIRA_EM",
         nv."CONFIRMADO_EM" as "NOTIFICACAO_CONFIRMADO_EM"
@@ -281,6 +278,7 @@ export default class CampanhaService {
       ON rp."ID_ROTA_PROMOTOR" = nv."ID_ROTA_PROMOTOR"
       WHERE rp."ID_CAMPANHA_PROMOTOR" = $1
       AND rp."DELETED_AT" IS NULL
+      AND ${sqlRotaNaoEstacionada("rp")}
       ORDER BY rp."ORDEM" ASC NULLS LAST, rp."ID_ROTA_PROMOTOR" ASC`;
 
     const rotasPromotor = await AppDataSourceSync.query(fullRotasQuery, [
@@ -313,17 +311,7 @@ export default class CampanhaService {
       const oficinas = await AppDataSourceSync.query(`
         SELECT
           alvo."ID_OFICINA" as "ID_OFICINA",
-          ce.latitude as "LATITUDE",
-          ce.longitude as "LONGITUDE",
-          COALESCE(o."NOME_FANTASIA", ce.razao_social) as "NOME_FANTASIA",
-          TRIM(CONCAT(COALESCE(ce.logradouro,''), ' ', COALESCE(ce.rua,''))) as "ENDERECO",
-          ce.bairro as "BAIRRO",
-          ce.cidade as "CIDADE",
-          ce.estado as "ESTADO",
-          ce.numero as "NUMERO",
-          ce.cep as "CEP",
-          ce.cnpj as "CNPJ",
-          ce.telefone as "TELEFONE"${FROM_CADASTRO_EMPRESA_POR_IDS}
+          ${sqlColunasOficinaRota("")}${FROM_CADASTRO_EMPRESA_POR_IDS}
       `, [oficinaIds]);
       const oficinaMap = new Map(oficinas.map((o: any) => [o.ID_OFICINA, o]));
       for (const rota of rotasSemOficina) {
@@ -428,6 +416,15 @@ export default class CampanhaService {
       relations: ['campanhaPromotores', 'campanhaPromotores.promotor', 'campanhaPromotores.rotasPromotor', 'campanhaPromotores.rotasPromotor.oficina', 'campanhaPromotores.rotasPromotor.notificacaoVisita', 'campanhaPerguntas', 'campanhaPerguntas.opcoes'],
     });
 
+    // Rota estacionada (AGUARDANDO) não vai para o dashboard. O editor de
+    // vínculos devolve esta lista no PUT /rota/workshops, que por isso preserva
+    // as estacionadas em vez de apagá-las (RotaService.updateRotaWorkshops).
+    for (const campanhaPromotor of campanha?.campanhaPromotores ?? []) {
+      campanhaPromotor.rotasPromotor = (campanhaPromotor.rotasPromotor ?? []).filter(
+        (rota) => !rotaEstacionada(rota.STATUS)
+      );
+    }
+
     // P2 AC2: each route in this list reports its *effective* confirmation
     // status, so an expired-but-unopened link never reads as still live.
     for (const campanhaPromotor of campanha?.campanhaPromotores ?? []) {
@@ -491,17 +488,7 @@ export default class CampanhaService {
       const fullQuery = `
         SELECT 
           rp.*,
-          ce.latitude as "oficina_LATITUDE",
-          ce.longitude as "oficina_LONGITUDE",
-          COALESCE(o."NOME_FANTASIA", ce.razao_social) as "oficina_NOME_FANTASIA",
-          TRIM(CONCAT(COALESCE(ce.logradouro,''), ' ', COALESCE(ce.rua,''))) as "oficina_ENDERECO",
-          ce.bairro as "oficina_BAIRRO",
-          ce.cidade as "oficina_CIDADE",
-          ce.estado as "oficina_ESTADO",
-          ce.numero as "oficina_NUMERO",
-          ce.cep as "oficina_CEP",
-          ce.cnpj as "oficina_CNPJ",
-          ce.telefone as "oficina_TELEFONE",
+          ${sqlColunasOficinaRota("oficina_")},
           nv."STATUS" as "NOTIFICACAO_STATUS",
           nv."EXPIRA_EM" as "NOTIFICACAO_EXPIRA_EM",
           nv."CONFIRMADO_EM" as "NOTIFICACAO_CONFIRMADO_EM"
@@ -511,6 +498,7 @@ export default class CampanhaService {
           ON rp."ID_ROTA_PROMOTOR" = nv."ID_ROTA_PROMOTOR"
         WHERE rp."ID_CAMPANHA_PROMOTOR" = ANY($1)
           AND rp."DELETED_AT" IS NULL
+          AND ${sqlRotaNaoEstacionada("rp")}
         ORDER BY rp."ORDEM" ASC NULLS LAST`;
 
       rotasPromotor = await AppDataSourceSync.query(fullQuery, [campanhaPromotorIds]);
@@ -522,17 +510,7 @@ export default class CampanhaService {
         const oficinas = await AppDataSourceSync.query(`
           SELECT
             alvo."ID_OFICINA" as "ID_OFICINA",
-            ce.latitude as "oficina_LATITUDE",
-            ce.longitude as "oficina_LONGITUDE",
-            COALESCE(o."NOME_FANTASIA", ce.razao_social) as "oficina_NOME_FANTASIA",
-            TRIM(CONCAT(COALESCE(ce.logradouro,''), ' ', COALESCE(ce.rua,''))) as "oficina_ENDERECO",
-            ce.bairro as "oficina_BAIRRO",
-            ce.cidade as "oficina_CIDADE",
-            ce.estado as "oficina_ESTADO",
-            ce.numero as "oficina_NUMERO",
-            ce.cep as "oficina_CEP",
-            ce.cnpj as "oficina_CNPJ",
-            ce.telefone as "oficina_TELEFONE"${FROM_CADASTRO_EMPRESA_POR_IDS}
+            ${sqlColunasOficinaRota("oficina_")}${FROM_CADASTRO_EMPRESA_POR_IDS}
         `, [oficinaIds]);
 
         const oficinaMap = new Map(oficinas.map((o: any) => [o.ID_OFICINA, o]));
@@ -708,16 +686,21 @@ export default class CampanhaService {
    * Removes (soft deletes) all promoter relationships for a campaign
    * @param campanhaId - The campaign ID
    */
-  static async removePromotoresFromCampanha(campanhaId: number): Promise<void> {
+  static async removePromotoresFromCampanha(
+    campanhaId: number
+  ): Promise<Array<{ ID_ROTA_PROMOTOR: number; ID_PROMOTOR: number; ID_OFICINA: number }>> {
     const campanhaPromotorRepository = AppDataSourceSync.getRepository(CampanhaPromotor);
     const rotaPromotorRepository = AppDataSourceSync.getRepository(RotaPromotor);
+    const estacionadas: Array<{ ID_ROTA_PROMOTOR: number; ID_PROMOTOR: number; ID_OFICINA: number }> = [];
 
     // Find all CampanhaPromotor relationships for this campaign
     const campanhaPromotores = await campanhaPromotorRepository.find({
       where: { ID_CAMPANHA: campanhaId, DELETED_AT: IsNull() },
     });
 
-    // Soft delete all associated RotaPromotor records
+    // Soft delete all associated RotaPromotor records, except the parked ones
+    // (AGUARDANDO): those are returned so the caller can move them to the
+    // promoter's new link — see reapontarRotasEstacionadas.
     for (const campanhaPromotor of campanhaPromotores) {
       if (campanhaPromotor.ID_CAMPANHA_PROMOTOR) {
         const rotasPromotor = await rotaPromotorRepository.find({
@@ -728,13 +711,57 @@ export default class CampanhaService {
         });
 
         for (const rota of rotasPromotor) {
-          if (rota.ID_ROTA_PROMOTOR) {
-            await rotaPromotorRepository.softDelete(rota.ID_ROTA_PROMOTOR);
+          if (!rota.ID_ROTA_PROMOTOR) continue;
+          if (rotaEstacionada(rota.STATUS) && campanhaPromotor.ID_PROMOTOR && rota.ID_OFICINA) {
+            estacionadas.push({
+              ID_ROTA_PROMOTOR: rota.ID_ROTA_PROMOTOR,
+              ID_PROMOTOR: campanhaPromotor.ID_PROMOTOR,
+              ID_OFICINA: rota.ID_OFICINA,
+            });
+            continue;
           }
+          await rotaPromotorRepository.softDelete(rota.ID_ROTA_PROMOTOR);
         }
-        
+
         // Soft delete the CampanhaPromotor relationship
         await campanhaPromotorRepository.softDelete(campanhaPromotor.ID_CAMPANHA_PROMOTOR);
+      }
+    }
+
+    return estacionadas;
+  }
+
+  /**
+   * Depois de recriar os vínculos da campanha, move cada rota estacionada para o
+   * vínculo novo do mesmo promotor (a notificação vai junto, pois é da rota).
+   * Some com ela (soft delete) quando o promotor saiu da campanha ou quando a
+   * oficina ganhou uma rota ativa no relink — a exclusividade vale.
+   */
+  static async reapontarRotasEstacionadas(
+    campanhaId: number,
+    estacionadas: Array<{ ID_ROTA_PROMOTOR: number; ID_PROMOTOR: number; ID_OFICINA: number }>
+  ): Promise<void> {
+    if (estacionadas.length === 0) return;
+
+    const campanhaPromotorRepository = AppDataSourceSync.getRepository(CampanhaPromotor);
+    const rotaPromotorRepository = AppDataSourceSync.getRepository(RotaPromotor);
+
+    const vinculosNovos = await campanhaPromotorRepository.find({
+      where: { ID_CAMPANHA: campanhaId, DELETED_AT: IsNull() },
+    });
+    const vinculoPorPromotor = new Map(
+      vinculosNovos.map((cp) => [cp.ID_PROMOTOR, cp.ID_CAMPANHA_PROMOTOR])
+    );
+    const jaAtribuidas = new Set(await RotaService.getOficinasAssignedInCampanha(campanhaId));
+
+    for (const rota of estacionadas) {
+      const idVinculoNovo = vinculoPorPromotor.get(rota.ID_PROMOTOR);
+      if (idVinculoNovo && !jaAtribuidas.has(rota.ID_OFICINA)) {
+        await rotaPromotorRepository.update(rota.ID_ROTA_PROMOTOR, {
+          ID_CAMPANHA_PROMOTOR: idVinculoNovo,
+        });
+      } else {
+        await rotaPromotorRepository.softDelete(rota.ID_ROTA_PROMOTOR);
       }
     }
   }

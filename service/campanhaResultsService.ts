@@ -1,6 +1,7 @@
 import { AppDataSourceSync } from "../data-source";
 import CampanhaResults from "../entities/CampanhaResults";
 import RotaPromotor from "../entities/RotaPromotor";
+import { rotaEstacionada, sqlRotaNaoEstacionada } from "../utils/rotaAguardando";
 import CampanhaPerguntas from "../entities/CampanhaPerguntas";
 
 export default class CampanhaResultsService {
@@ -30,7 +31,8 @@ export default class CampanhaResultsService {
         where: { ID_ROTA_PROMOTOR: resultData.ID_ROTA }
       });
       
-      if (!rotaExists) {
+      // Rota estacionada (AGUARDANDO) não recebe resposta: o app nem a mostra.
+      if (!rotaExists || rotaEstacionada(rotaExists.STATUS)) {
         throw new Error("Rota não encontrada.");
       }
     }
@@ -93,7 +95,8 @@ export default class CampanhaResultsService {
         where: { ID_ROTA_PROMOTOR: resultData.ID_ROTA }
       });
       
-      if (!rotaExists) {
+      // Rota estacionada (AGUARDANDO) não recebe resposta: o app nem a mostra.
+      if (!rotaExists || rotaEstacionada(rotaExists.STATUS)) {
         throw new Error("Rota não encontrada.");
       }
     }
@@ -161,6 +164,8 @@ export default class CampanhaResultsService {
       .leftJoinAndSelect('rota.campanhaPromotor', 'campanhaPromotor')
       .leftJoinAndSelect('campanhaPromotor.promotor', 'promotor')
       .where('campanhaPromotor.ID_CAMPANHA = :campanhaId', { campanhaId })
+      // Resultado de rota estacionada (AGUARDANDO) fica fora dos KPIs do dashboard.
+      .andWhere(sqlRotaNaoEstacionada('rota'))
       .orderBy('result.CREATED_AT', 'DESC')
       .getMany();
 

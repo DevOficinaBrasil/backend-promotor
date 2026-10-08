@@ -2,6 +2,7 @@ import { AppDataSourceSync } from "../data-source";
 import Oficina from "../entities/Oficina";
 import { DuckDBClient } from "../utils/duckdbClient";
 import { ligacaoCadastroEmpresa } from "../utils/sqlCadastroEmpresa";
+import { sqlCoordenadaTexto } from "../utils/sqlEnderecoOficina";
 import { resolverTelefone, CandidatoUsuarioTelefone } from "../utils/telefone";
 import { estadoConvite, EstadoConvite } from "../utils/statusNotificacaoVisita";
 import { StatusNotificacaoVisita } from "../entities/NotificacaoVisita";
@@ -42,12 +43,6 @@ export interface OficinaBuscada {
 
 /** Teto de oficinas por busca do admin (CONV-10). */
 export const MAX_OFICINAS_BUSCA = 5000;
-
-/** Texto de coordenada da OFICINA (varchar) como número, ou NULL; aceita vírgula decimal. */
-function sqlCoordenadaTexto(expr: string): string {
-  const t = `replace(trim(${expr}), ',', '.')`;
-  return `(CASE WHEN ${t} ~ '^-?[0-9]{1,3}(\\.[0-9]+)?$' THEN ${t}::double precision END)`;
-}
 
 /**
  * Par de coordenadas de uma oficina: do dw (`double precision`) quando o dw tem o

@@ -43,6 +43,7 @@ type RotaListavelFields = {
  * Decide se uma rota entra na lista do app do promotor (CONV-31 a CONV-33,
  * AD-003, que substitui a regra FILT-01 a FILT-05 de CONFIRMACAO_RESOLVIDA).
  *
+ * 0. Rota estacionada (`STATUS` = `AGUARDANDO`) nunca aparece.
  * 1. Rota já trabalhada (`STATUS` diferente de `BACKLOG`) sempre aparece. Sem
  *    isso o promotor faz check-in, dá refresh e a oficina desaparece no meio da
  *    visita, e visitas concluídas sairiam do histórico.
@@ -62,6 +63,10 @@ export function rotaListavelParaPromotor(
   agora: Date = new Date()
 ): boolean {
   const statusRota = rota.STATUS ?? StatusRota.BACKLOG;
+  // Rota estacionada não aparece para o promotor, mesmo não sendo BACKLOG.
+  if (statusRota === StatusRota.AGUARDANDO) {
+    return false;
+  }
   if (statusRota !== StatusRota.BACKLOG) {
     return true;
   }

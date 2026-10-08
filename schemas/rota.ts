@@ -11,6 +11,7 @@ export const StatusRotaSchema = z.enum([
   'EM ANDAMENTO', // Database has typo - kept for compatibility
   'FINALIZADO',
   'CANCELADO',
+  'AGUARDANDO', // Rota estacionada: ignorada pelo app, pelo dashboard e pelo despacho
 ]);
 
 /**
