@@ -6,7 +6,7 @@ export interface PeriodoRelatorio {
   fim: Date;
 }
 
-const FUSO_RELATORIO = "America/Sao_Paulo";
+export const FUSO_RELATORIO = "America/Sao_Paulo";
 
 /**
  * RELPROM-15. Janela fixa de 7 dias corridos terminando no dia anterior ao
@@ -22,6 +22,21 @@ export function calcularPeriodoSemanal(agora: Date): PeriodoRelatorio {
   const inicio = new Date(inicioDoDiaAtual.getTime() - 7 * 24 * 60 * 60 * 1000);
 
   return { inicio, fim };
+}
+
+/**
+ * Converte um `inicio`/`fim` de período vindo de query string (RELPROM-34).
+ * Uma data "pura" (`YYYY-MM-DD`, sem horário/fuso) é ambígua em `new
+ * Date(...)`: o JS trata como meia-noite UTC, que em America/Sao_Paulo
+ * (UTC-3) cai no dia anterior — a capa do PDF então exibia um dia a menos do
+ * que o pedido. Ancorado em America/Sao_Paulo (início do dia / fim do dia),
+ * igual a `calcularPeriodoSemanal`. Uma string com horário explícito
+ * (`T hh:mm`, com ou sem fuso) passa direto por `new Date(...)`.
+ */
+export function parseDataPeriodoQuery(dataIso: string, ponta: "inicio" | "fim"): Date {
+  if (/T\d{2}:\d{2}/.test(dataIso)) return new Date(dataIso);
+  const sufixo = ponta === "inicio" ? "T00:00:00.000" : "T23:59:59.999";
+  return fromZonedTime(`${dataIso}${sufixo}`, FUSO_RELATORIO);
 }
 
 /**

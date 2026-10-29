@@ -83,6 +83,16 @@ describe("POST /admin/promotor-relatorio/:idCliente/gerar", () => {
     expect(periodo.fim.toISOString()).toBe("2026-01-02T00:00:00.000Z");
   });
 
+  it("data pura (sem horário) é ancorada em America/Sao_Paulo, não UTC — evita exibir o dia anterior na capa", async () => {
+    await request(app)
+      .post("/admin/promotor-relatorio/10/gerar?inicio=2026-10-09&fim=2026-10-22")
+      .set("Authorization", `Bearer ${tokenAdmin()}`);
+
+    const [, periodo] = processarRelatorioCliente.mock.calls[0];
+    expect(periodo.inicio.toISOString()).toBe("2026-10-09T03:00:00.000Z"); // 00:00 em -03:00
+    expect(periodo.fim.toISOString()).toBe("2026-10-23T02:59:59.999Z"); // 23:59:59.999 em -03:00
+  });
+
   it("400 quando o período customizado é inválido (fim antes de inicio)", async () => {
     const res = await request(app)
       .post("/admin/promotor-relatorio/10/gerar?inicio=2026-01-02T00:00:00.000Z&fim=2026-01-01T00:00:00.000Z")

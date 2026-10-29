@@ -134,6 +134,15 @@ describe("PromotorReportService.processarRelatorioCliente", () => {
     expect(saveMock).toHaveBeenCalledWith(expect.objectContaining({ AMBIENTE: "nao-production" }));
   });
 
+  it("falha ao gravar auditoria (ex.: tabela ainda não migrada) não derruba o chamador — e-mail já enviado continua sucesso", async () => {
+    saveMock.mockRejectedValue(new Error('relation "PROMOTOR_RELATORIO_ENVIO" does not exist'));
+
+    const resultado = await PromotorReportService.processarRelatorioCliente(CLIENTE, PERIODO, OrigemRelatorioEnvio.CRON);
+
+    expect(resultado).toEqual({ idCliente: 10, pdf: PDF, enviado: true });
+    expect(enviarEmailComAnexo).toHaveBeenCalled();
+  });
+
   it("ORIGEM=MANUAL na auditoria quando chamado pelo endpoint manual", async () => {
     await PromotorReportService.processarRelatorioCliente(CLIENTE, PERIODO, OrigemRelatorioEnvio.MANUAL);
 

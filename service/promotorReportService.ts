@@ -155,22 +155,34 @@ export default class PromotorReportService {
     motivoFalha?: string;
     destinatarios: string[];
   }): Promise<void> {
-    const repo = AppDataSourceSync.getRepository(PromotorRelatorioEnvio);
-    await repo.save(
-      repo.create({
-        ID_CLIENTE: params.idCliente,
-        PERIODO_INICIO: params.periodo.inicio,
-        PERIODO_FIM: params.periodo.fim,
-        ORIGEM: params.origem,
-        STATUS: params.status,
-        MOTIVO_FALHA: params.motivoFalha,
-        DESTINATARIOS: params.destinatarios,
-        AMBIENTE:
-          process.env.NODE_ENV === "production"
-            ? AmbienteRelatorioEnvio.PRODUCTION
-            : AmbienteRelatorioEnvio.NAO_PRODUCTION,
-      })
-    );
+    // Nunca deixa uma falha de auditoria (ex.: tabela ainda não migrada no
+    // ambiente) derrubar o chamador — o PDF já foi gerado e o e-mail já foi
+    // enviado (ou a falha de negócio já foi decidida) antes desta chamada;
+    // perder só o registro de auditoria não pode virar "Erro interno." pro
+    // endpoint manual nem abortar o lote inteiro do cron (RELPROM-17).
+    try {
+      const repo = AppDataSourceSync.getRepository(PromotorRelatorioEnvio);
+      await repo.save(
+        repo.create({
+          ID_CLIENTE: params.idCliente,
+          PERIODO_INICIO: params.periodo.inicio,
+          PERIODO_FIM: params.periodo.fim,
+          ORIGEM: params.origem,
+          STATUS: params.status,
+          MOTIVO_FALHA: params.motivoFalha,
+          DESTINATARIOS: params.destinatarios,
+          AMBIENTE:
+            process.env.NODE_ENV === "production"
+              ? AmbienteRelatorioEnvio.PRODUCTION
+              : AmbienteRelatorioEnvio.NAO_PRODUCTION,
+        })
+      );
+    } catch (erro) {
+      console.error("[promotorReportService] falha ao registrar auditoria de envio", {
+        idCliente: params.idCliente,
+        erro: (erro as Error)?.message,
+      });
+    }
   }
 
   /**

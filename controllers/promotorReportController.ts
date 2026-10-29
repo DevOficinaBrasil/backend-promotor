@@ -2,7 +2,7 @@ import { Request, Response } from "express";
 import PromotorReportService from "../service/promotorReportService";
 import ObAdsIntegrationClient from "../service/obAdsIntegrationClient";
 import { OrigemRelatorioEnvio } from "../entities/PromotorRelatorioEnvio";
-import { calcularPeriodoSemanal, PeriodoRelatorio } from "../utils/promotorReportCalculos";
+import { calcularPeriodoSemanal, parseDataPeriodoQuery, PeriodoRelatorio } from "../utils/promotorReportCalculos";
 
 interface GerarQueryValidada {
   inicio?: string;
@@ -25,8 +25,8 @@ export class PromotorReportController {
 
       let periodo: PeriodoRelatorio;
       if (query.inicio || query.fim) {
-        const inicio = query.inicio ? new Date(query.inicio) : undefined;
-        const fim = query.fim ? new Date(query.fim) : undefined;
+        const inicio = query.inicio ? parseDataPeriodoQuery(query.inicio, "inicio") : undefined;
+        const fim = query.fim ? parseDataPeriodoQuery(query.fim, "fim") : undefined;
         if (!inicio || !fim || Number.isNaN(inicio.getTime()) || Number.isNaN(fim.getTime()) || inicio > fim) {
           return res.status(400).json({ message: "Período inválido: informe inicio e fim (ISO date) juntos, com inicio <= fim." });
         }

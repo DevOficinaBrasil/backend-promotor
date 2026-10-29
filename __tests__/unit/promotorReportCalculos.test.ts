@@ -8,6 +8,7 @@ import {
   calcularVisaoGeral,
   listarCancelamentos,
   listarDestaquesDeCampo,
+  parseDataPeriodoQuery,
   PeriodoRelatorio,
   RotaPromotorRow,
 } from "../../utils/promotorReportCalculos";
@@ -271,6 +272,20 @@ describe("calcularPeriodoSemanal", () => {
 
     const seteDiasMenos1ms = 7 * 24 * 60 * 60 * 1000 - 1;
     expect(periodo.fim.getTime() - periodo.inicio.getTime()).toBe(seteDiasMenos1ms);
+  });
+});
+
+describe("parseDataPeriodoQuery", () => {
+  it("data pura 'inicio' vira meia-noite em America/Sao_Paulo, nao meia-noite UTC", () => {
+    expect(parseDataPeriodoQuery("2026-10-09", "inicio").toISOString()).toBe("2026-10-09T03:00:00.000Z");
+  });
+
+  it("data pura 'fim' vira fim do dia em America/Sao_Paulo", () => {
+    expect(parseDataPeriodoQuery("2026-10-22", "fim").toISOString()).toBe("2026-10-23T02:59:59.999Z");
+  });
+
+  it("string com horario explicito passa direto, sem reancorar fuso", () => {
+    expect(parseDataPeriodoQuery("2026-10-09T00:00:00.000Z", "inicio").toISOString()).toBe("2026-10-09T00:00:00.000Z");
   });
 });
 
