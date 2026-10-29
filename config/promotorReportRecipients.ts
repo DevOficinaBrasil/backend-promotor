@@ -3,7 +3,7 @@
  * (CON26-325). Pedido explícito do usuário: definida em código, não em env
  * var — só recebe fora de produção.
  */
-export const DEV_REPORT_RECIPIENTS: string[] = [];
+export const DEV_REPORT_RECIPIENTS: string[] = ["andre.pereira@oficinabrasil.com.br"];
 
 export interface ResolucaoDestinatarios {
   destinatarios: string[];
