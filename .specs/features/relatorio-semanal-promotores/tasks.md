@@ -328,15 +328,17 @@ T21 -> T22
 - Skill: NONE
 
 **Done when**:
-- [ ] `CREATE TABLE IF NOT EXISTS` com todas as colunas de T08
-- [ ] Índice único parcial `WHERE ORIGEM = 'CRON'` sobre `(ID_CLIENTE, PERIODO_INICIO, PERIODO_FIM)`
-- [ ] Cabeçalho com bloco `ROLLBACK:` (`DROP TABLE`)
-- [ ] Nenhuma execução automática — a task só cria o arquivo
+- [x] `CREATE TABLE IF NOT EXISTS` com todas as colunas de T08 (TEXT+CHECK pros enums, TIMESTAMPTZ, sem FK — convenção confirmada em `migration-notificacao-visita.sql`)
+- [x] Índice único parcial `WHERE ORIGEM = 'CRON' AND STATUS = 'SUCESSO'` sobre `(ID_CLIENTE, PERIODO_INICIO, PERIODO_FIM)`
+- [x] Cabeçalho com bloco `ROLLBACK:` (`DROP TABLE ... CASCADE`)
+- [x] Nenhuma execução automática — a task só criou o arquivo
 
 **Tests**: none
 **Gate**: nenhum — revisão manual, execução manual pelo usuário
 
 **Commit**: `chore(promotor-relatorio): script de migration da tabela de controle de envio`
+
+**Status**: ✅ Complete
 
 ---
 
