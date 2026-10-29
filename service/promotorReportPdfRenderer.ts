@@ -1,23 +1,14 @@
-import { chromium } from "playwright";
-import { renderizarHtml } from "../templates/relatorioPromotor";
+import { construirPdf } from "../templates/relatorioPromotor";
 import { RelatorioPromotorData } from "../types/promotorRelatorio";
 
 /**
- * Renderiza o relatório (capa + 1 bloco por campanha) em PDF via Playwright.
- * Precisa do Chromium instalado no ambiente de execução — ver T01
- * (.specs/features/relatorio-semanal-promotores/design.md, Risks & Concerns)
- * pros pacotes `dnf` necessários na EC2 de produção.
+ * Renderiza o relatório (capa + 1 bloco por campanha) em PDF via `pdf-lib`
+ * (desenho direto, sem navegador — ver `templates/relatorioPromotor.ts` pro
+ * motivo da troca a partir do Playwright).
  */
 export default class PromotorReportPdfRenderer {
   static async renderizarPdf(dados: RelatorioPromotorData): Promise<Buffer> {
-    const html = renderizarHtml(dados);
-    const browser = await chromium.launch();
-    try {
-      const page = await browser.newPage();
-      await page.setContent(html, { waitUntil: "networkidle" });
-      return await page.pdf({ format: "A4", printBackground: true });
-    } finally {
-      await browser.close();
-    }
+    const bytes = await construirPdf(dados);
+    return Buffer.from(bytes);
   }
 }

@@ -50,6 +50,12 @@ export interface VisaoGeralCampanha {
   abertasNaRota: number;
 }
 
+export interface PontoVisitasPorDia {
+  dia: string; // dd/MM, America/Sao_Paulo
+  concluidas: number;
+  canceladas: number;
+}
+
 export interface LinhaPromotor {
   idPromotor: number;
   nomePromotor: string;
@@ -108,6 +114,36 @@ export function calcularVisaoGeral(rotas: RotaPromotorRow[], periodo: PeriodoRel
   ).length;
 
   return { concluidas, canceladas, abertasNaRota };
+}
+
+/**
+ * Visitas por dia no período (gráfico comparativo da visão geral, igual ao
+ * modelo do CON26-325). Só os dias com pelo menos 1 concluída ou cancelada
+ * aparecem — dia sem nenhuma atividade não vira barra zerada, mesmo
+ * comportamento do modelo (fins de semana etc. somem do gráfico).
+ */
+export function agruparVisitasPorDia(rotas: RotaPromotorRow[], periodo: PeriodoRelatorio): PontoVisitasPorDia[] {
+  const porDia = new Map<string, { concluidas: number; canceladas: number }>();
+
+  for (const rota of rotas) {
+    const ehConcluida = rota.STATUS === StatusRota.FINALIZADO && dentroDoPeriodo(rota.DONE_AT, periodo);
+    const ehCancelada = rota.STATUS === StatusRota.CANCELADO && dentroDoPeriodo(rota.UPDATED_AT, periodo);
+    if (!ehConcluida && !ehCancelada) continue;
+
+    const data = (ehConcluida ? rota.DONE_AT : rota.UPDATED_AT) as Date;
+    const chave = formatInTimeZone(data, FUSO_RELATORIO, "yyyy-MM-dd");
+    const ponto = porDia.get(chave) ?? { concluidas: 0, canceladas: 0 };
+    if (ehConcluida) ponto.concluidas += 1;
+    else ponto.canceladas += 1;
+    porDia.set(chave, ponto);
+  }
+
+  return Array.from(porDia.entries())
+    .sort(([chaveA], [chaveB]) => chaveA.localeCompare(chaveB))
+    .map(([chave, valores]) => ({
+      dia: `${chave.slice(8, 10)}/${chave.slice(5, 7)}`,
+      ...valores,
+    }));
 }
 
 /** RELPROM-05, RELPROM-06. */

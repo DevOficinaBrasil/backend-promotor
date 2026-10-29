@@ -7,6 +7,7 @@ import PromotorRelatorioEnvio, {
 } from "../entities/PromotorRelatorioEnvio";
 import {
   agruparPorPromotor,
+  agruparVisitasPorDia,
   calcularAssertividade,
   calcularProximosPassos,
   calcularVisaoGeral,
@@ -109,6 +110,7 @@ export default class PromotorReportService {
       idCampanha: campanha.ID_CAMPANHA,
       nomeCampanha: campanha.NOME,
       visaoGeral,
+      visitasPorDia: agruparVisitasPorDia(rotas, periodo),
       assertividade: calcularAssertividade(visaoGeral.concluidas, visaoGeral.canceladas),
       porPromotor,
       cancelamentos: listarCancelamentos(rotas, periodo),

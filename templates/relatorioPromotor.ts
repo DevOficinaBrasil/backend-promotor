@@ -1,189 +1,482 @@
+import { PDFDocument, PDFFont, PDFPage, StandardFonts, rgb } from "pdf-lib";
 import { RelatorioPromotorData, CampanhaBlocoRelatorio } from "../types/promotorRelatorio";
+import { Cancelamento, DestaqueCampo, LinhaPromotor, PontoVisitasPorDia } from "../utils/promotorReportCalculos";
+
+/**
+ * Gera o PDF do relatório desenhando direto com `pdf-lib` (sem navegador —
+ * trocado de Playwright porque o Chromium precisa de um binário + libs de
+ * sistema instalados no ambiente de execução, frágil demais pra um cron de
+ * produção; ver design.md, Risks & Concerns). Fontes padrão do `pdf-lib`
+ * (Helvetica): embutir a fonte de marca (Montserrat) exigiria instalar
+ * `@pdf-lib/fontkit` à parte (não é o `fontkit` puro já presente no
+ * `package.json`) — sem AC pedindo fidelidade visual exata, não se justifica.
+ *
+ * Layout espelha a organização, a ordem e as proporções do modelo anexado ao
+ * CON26-325: página no formato slide widescreen (960x540pt, não A4 — o
+ * modelo é um deck, não um documento), 1 seção por página (capa escura →
+ * visão geral clara (com gráfico por dia) → assertividade escura → por
+ * promotor clara → cancelamentos clara → destaques clara → próximos passos
+ * escura), paleta navy/verde-limão/menta e cards grandes.
+ */
+
+const LARGURA_PAGINA = 960; // formato slide widescreen (13.33x7.5in a 72dpi), como o modelo
+const ALTURA_PAGINA = 540;
+const MARGEM = 40;
+const LARGURA_UTIL = LARGURA_PAGINA - 2 * MARGEM;
+
+// Paleta aproximada do modelo (sem o arquivo de design original, não é
+// pixel-perfect, mas mantém a mesma lógica: navy escuro, verde-limão de
+// destaque, menta claro pros cards secundários).
+const COR_NAVY = rgb(0.043, 0.122, 0.302); // #0B1F4D
+const COR_NAVY_CLARA = rgb(0.11, 0.2, 0.42); // card escuro sobre página escura
+const COR_VERDE = rgb(0.569, 0.812, 0.243); // #91CF3E — eyebrow, números grandes, linha de destaque
+const COR_MENTA = rgb(0.886, 0.953, 0.925); // #E2F3EC — card/zebra claro
+const COR_BRANCA = rgb(1, 1, 1);
+const COR_TEXTO = COR_NAVY; // corpo de texto em página clara usa navy, não preto puro
+const COR_TEXTO_CLARO = rgb(0.85, 0.88, 0.95); // texto secundário em página escura
+const COR_CINZA = rgb(0.4, 0.42, 0.46); // texto secundário em página clara
+const COR_VERMELHO = rgb(0.82, 0.3, 0.25); // canceladas no gráfico — menta sumia de tão clara contra o fundo branco
+const COR_BORDA = rgb(0.85, 0.87, 0.9); // linha de base do gráfico
+
+type EstiloPagina = "clara" | "escura";
+
+interface Cursor {
+  doc: PDFDocument;
+  pagina: PDFPage;
+  y: number;
+  fonte: PDFFont;
+  fonteNegrito: PDFFont;
+  estilo: EstiloPagina;
+}
+
+function criarPagina(doc: PDFDocument, estilo: EstiloPagina): PDFPage {
+  const pagina = doc.addPage([LARGURA_PAGINA, ALTURA_PAGINA]);
+  if (estilo === "escura") {
+    pagina.drawRectangle({ x: 0, y: 0, width: LARGURA_PAGINA, height: ALTURA_PAGINA, color: COR_NAVY });
+  }
+  return pagina;
+}
+
+/** Começa uma seção nova em página própria (1 seção por página, como no modelo). */
+function iniciarSecao(cursor: Cursor, estilo: EstiloPagina): void {
+  cursor.estilo = estilo;
+  cursor.pagina = criarPagina(cursor.doc, estilo);
+  cursor.y = ALTURA_PAGINA - MARGEM;
+}
+
+/** Cria página nova (mesmo estilo da atual) se não houver espaço pra `altura` a partir do y atual. */
+function garantirEspaco(cursor: Cursor, altura: number): void {
+  if (cursor.y - altura < MARGEM) {
+    cursor.pagina = criarPagina(cursor.doc, cursor.estilo);
+    cursor.y = ALTURA_PAGINA - MARGEM;
+  }
+}
 
 function formatarData(data: Date): string {
   return data.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" });
 }
 
-function escapar(texto: string): string {
-  return texto
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+function truncarTexto(texto: string, fonte: PDFFont, tamanho: number, larguraMax: number): string {
+  if (fonte.widthOfTextAtSize(texto, tamanho) <= larguraMax) return texto;
+  let truncado = texto;
+  while (truncado.length > 1 && fonte.widthOfTextAtSize(`${truncado}…`, tamanho) > larguraMax) {
+    truncado = truncado.slice(0, -1);
+  }
+  return `${truncado}…`;
 }
 
-function renderizarCapa(dados: RelatorioPromotorData): string {
-  return `
-    <section class="capa">
-      <p class="eyebrow">RELATÓRIO SEMANAL DE PROMOTORES</p>
-      <h1>${escapar(dados.nomeCliente)}</h1>
-      <p class="periodo">Período: ${formatarData(dados.periodo.inicio)} a ${formatarData(dados.periodo.fim)}</p>
-    </section>
-  `;
+/** Quebra `texto` em linhas que cabem em `larguraMax`, sem cortar palavras. */
+function quebrarLinhas(texto: string, fonte: PDFFont, tamanho: number, larguraMax: number): string[] {
+  const palavras = texto.split(/\s+/).filter(Boolean);
+  const linhas: string[] = [];
+  let linhaAtual = "";
+
+  for (const palavra of palavras) {
+    const tentativa = linhaAtual ? `${linhaAtual} ${palavra}` : palavra;
+    if (fonte.widthOfTextAtSize(tentativa, tamanho) <= larguraMax) {
+      linhaAtual = tentativa;
+    } else {
+      if (linhaAtual) linhas.push(linhaAtual);
+      linhaAtual = fonte.widthOfTextAtSize(palavra, tamanho) <= larguraMax ? palavra : truncarTexto(palavra, fonte, tamanho, larguraMax);
+    }
+  }
+  if (linhaAtual) linhas.push(linhaAtual);
+  return linhas.length > 0 ? linhas : [""];
 }
 
-function renderizarVisaoGeral(bloco: CampanhaBlocoRelatorio): string {
-  const { visaoGeral } = bloco;
-  return `
-    <section>
-      <h2>Visão geral</h2>
-      <div class="cards">
-        <div class="card"><span class="numero">${visaoGeral.concluidas}</span><span class="rotulo">Concluídas</span></div>
-        <div class="card"><span class="numero">${visaoGeral.canceladas}</span><span class="rotulo">Canceladas</span></div>
-        <div class="card"><span class="numero">${visaoGeral.abertasNaRota}</span><span class="rotulo">Abertas na rota</span></div>
-      </div>
-    </section>
-  `;
+/** Eyebrow verde + headline grande em negrito — mesmo padrão em toda seção do modelo. */
+function desenharCabecalhoSecao(cursor: Cursor, eyebrow: string, headline: string): void {
+  const corTexto = cursor.estilo === "escura" ? COR_BRANCA : COR_NAVY;
+
+  cursor.pagina.drawText(eyebrow.toUpperCase(), { x: MARGEM, y: cursor.y, size: 10, font: cursor.fonteNegrito, color: COR_VERDE });
+  cursor.y -= 24;
+
+  for (const linha of quebrarLinhas(headline, cursor.fonteNegrito, 20, LARGURA_UTIL)) {
+    cursor.pagina.drawText(linha, { x: MARGEM, y: cursor.y, size: 20, font: cursor.fonteNegrito, color: corTexto });
+    cursor.y -= 24;
+  }
+  cursor.y -= 10;
 }
 
-function renderizarAssertividade(bloco: CampanhaBlocoRelatorio): string {
-  return `
-    <section>
-      <h2>Assertividade</h2>
-      <p class="assertividade">${bloco.assertividade === "N/A" ? "N/A" : `${bloco.assertividade}%`}</p>
-    </section>
-  `;
+function desenharLinhaDestaque(cursor: Cursor): void {
+  cursor.pagina.drawRectangle({ x: MARGEM, y: cursor.y, width: 44, height: 3, color: COR_VERDE });
+  cursor.y -= 18;
 }
 
-function renderizarPorPromotor(bloco: CampanhaBlocoRelatorio): string {
-  const linhas = bloco.porPromotor
-    .map(
-      (promotor) => `
-        <tr>
-          <td>${escapar(promotor.nomePromotor)}</td>
-          <td>${promotor.concluidasPeriodo}</td>
-          <td>${promotor.canceladasPeriodo}</td>
-          <td>${promotor.concluidasAcumulado}</td>
-          <td>${promotor.abertasNaRota}</td>
-        </tr>
-      `
-    )
-    .join("");
-
-  return `
-    <section>
-      <h2>Performance por promotor</h2>
-      <table>
-        <thead>
-          <tr><th>Promotor</th><th>Concluídas (período)</th><th>Canceladas (período)</th><th>Concluídas (acumulado)</th><th>Abertas na rota</th></tr>
-        </thead>
-        <tbody>${linhas || `<tr><td colspan="5">Sem promotores nesta campanha.</td></tr>`}</tbody>
-      </table>
-    </section>
-  `;
+interface Card {
+  numero: string;
+  rotulo: string;
 }
 
-function renderizarCancelamentos(bloco: CampanhaBlocoRelatorio): string {
-  const linhas = bloco.cancelamentos
-    .map(
-      (cancelamento) => `
-        <tr>
-          <td>${escapar(cancelamento.nomePromotor)}</td>
-          <td>${escapar(cancelamento.nomeOficina)}</td>
-          <td>${escapar(cancelamento.cidadeOficina)}</td>
-          <td>${cancelamento.obs ? escapar(cancelamento.obs) : "—"}</td>
-        </tr>
-      `
-    )
-    .join("");
+/**
+ * Cards grandes lado a lado. Em página clara, o 1º card vem escuro (métrica
+ * principal, igual ao modelo); em página escura, todos vêm no mesmo tom.
+ */
+function desenharCards(cursor: Cursor, cards: Card[]): void {
+  const alturaCard = 78;
+  const espaco = 12;
+  const larguraCard = (LARGURA_UTIL - espaco * (cards.length - 1)) / cards.length;
 
-  return `
-    <section>
-      <h2>Cancelamentos</h2>
-      <table>
-        <thead><tr><th>Promotor</th><th>Oficina</th><th>Cidade</th><th>Justificativa</th></tr></thead>
-        <tbody>${linhas || `<tr><td colspan="4">Nenhum cancelamento no período.</td></tr>`}</tbody>
-      </table>
-    </section>
-  `;
+  garantirEspaco(cursor, alturaCard + 14);
+  const yTopo = cursor.y;
+
+  cards.forEach((card, indice) => {
+    const x = MARGEM + indice * (larguraCard + espaco);
+    const ehCardEscuro = cursor.estilo === "escura" || indice === 0;
+    const corFundo = ehCardEscuro ? (cursor.estilo === "escura" ? COR_NAVY_CLARA : COR_NAVY) : COR_MENTA;
+    const corNumero = ehCardEscuro ? COR_VERDE : COR_NAVY;
+    const corRotulo = ehCardEscuro ? COR_TEXTO_CLARO : COR_CINZA;
+
+    cursor.pagina.drawRectangle({ x, y: yTopo - alturaCard, width: larguraCard, height: alturaCard, color: corFundo });
+    cursor.pagina.drawText(card.numero, { x: x + 14, y: yTopo - 38, size: 28, font: cursor.fonteNegrito, color: corNumero });
+    for (const [indiceLinha, linha] of quebrarLinhas(card.rotulo, cursor.fonte, 9, larguraCard - 28).entries()) {
+      cursor.pagina.drawText(linha, { x: x + 14, y: yTopo - 54 - indiceLinha * 11, size: 9, font: cursor.fonte, color: corRotulo });
+    }
+  });
+
+  cursor.y = yTopo - alturaCard - 20;
 }
 
-function renderizarItemDestaque(destaque: CampanhaBlocoRelatorio["destaquesDeCampo"][number]): string {
-  return `
-    <li>
-      ${escapar(destaque.nomePromotor)}, ${escapar(destaque.nomeOficina)} (${escapar(destaque.cidadeOficina)}):
-      ${escapar(destaque.obs)}
-    </li>
-  `;
+/** Caixa de destaque (callout) — usada na assertividade e no resumo de cancelamentos. */
+function desenharCallout(cursor: Cursor, texto: string): void {
+  const padding = 12;
+  const corFundo = cursor.estilo === "escura" ? COR_NAVY_CLARA : COR_MENTA;
+  const corTexto = cursor.estilo === "escura" ? COR_BRANCA : COR_NAVY;
+  const linhas = quebrarLinhas(texto, cursor.fonteNegrito, 10.5, LARGURA_UTIL - padding * 2);
+  const altura = linhas.length * 14 + padding * 2;
+
+  garantirEspaco(cursor, altura + 10);
+  cursor.pagina.drawRectangle({ x: MARGEM, y: cursor.y - altura, width: LARGURA_UTIL, height: altura, color: corFundo });
+  linhas.forEach((linha, indice) => {
+    cursor.pagina.drawText(linha, { x: MARGEM + padding, y: cursor.y - padding - 10 - indice * 14, size: 10.5, font: cursor.fonteNegrito, color: corTexto });
+  });
+  cursor.y -= altura + 16;
 }
 
-/** RELPROM-09: 2 sub-seções, concluídas e canceladas, nunca uma lista única intercalada. */
-function renderizarDestaques(bloco: CampanhaBlocoRelatorio): string {
+function desenharSubtitulo(cursor: Cursor, titulo: string, espacoAcima = 10): void {
+  garantirEspaco(cursor, 18 + espacoAcima);
+  cursor.y -= espacoAcima;
+  const corTexto = cursor.estilo === "escura" ? COR_BRANCA : COR_NAVY;
+  cursor.pagina.drawText(titulo, { x: MARGEM, y: cursor.y, size: 11, font: cursor.fonteNegrito, color: corTexto });
+  cursor.y -= 16;
+}
+
+/**
+ * Gráfico de barras comparativo — concluídas x canceladas por dia, igual ao
+ * modelo. Só pontos com atividade entram (ver `agruparVisitasPorDia`).
+ */
+function desenharGraficoPorDia(cursor: Cursor, pontos: PontoVisitasPorDia[]): void {
+  desenharSubtitulo(cursor, "Visitas por dia");
+
+  const alturaBarras = 90;
+  const alturaGrafico = alturaBarras + 56;
+
+  garantirEspaco(cursor, alturaGrafico + 16);
+
+  if (pontos.length === 0) {
+    cursor.pagina.drawText("Sem visitas registradas no período.", { x: MARGEM, y: cursor.y - 10, size: 9, font: cursor.fonte, color: COR_CINZA });
+    cursor.y -= alturaGrafico;
+    return;
+  }
+
+  const yBase = cursor.y - alturaBarras;
+  const larguraGrupo = LARGURA_UTIL / pontos.length;
+  const larguraBarra = Math.max(10, Math.min(34, larguraGrupo / 2 - 8));
+  const maiorValor = Math.max(1, ...pontos.map((ponto) => Math.max(ponto.concluidas, ponto.canceladas)));
+
+  cursor.pagina.drawLine({ start: { x: MARGEM, y: yBase }, end: { x: MARGEM + LARGURA_UTIL, y: yBase }, thickness: 1, color: COR_BORDA });
+
+  pontos.forEach((ponto, indice) => {
+    const xCentro = MARGEM + indice * larguraGrupo + larguraGrupo / 2;
+    const xConcluidas = xCentro - larguraBarra - 3;
+    const xCanceladas = xCentro + 3;
+    const alturaConcluidas = (ponto.concluidas / maiorValor) * alturaBarras;
+    const alturaCanceladas = (ponto.canceladas / maiorValor) * alturaBarras;
+
+    if (ponto.concluidas > 0) cursor.pagina.drawRectangle({ x: xConcluidas, y: yBase, width: larguraBarra, height: alturaConcluidas, color: COR_NAVY });
+    if (ponto.canceladas > 0) cursor.pagina.drawRectangle({ x: xCanceladas, y: yBase, width: larguraBarra, height: alturaCanceladas, color: COR_VERMELHO });
+
+    if (ponto.concluidas > 0) {
+      const texto = String(ponto.concluidas);
+      const largura = cursor.fonteNegrito.widthOfTextAtSize(texto, 8.5);
+      cursor.pagina.drawText(texto, { x: xConcluidas + larguraBarra / 2 - largura / 2, y: yBase + alturaConcluidas + 4, size: 8.5, font: cursor.fonteNegrito, color: COR_NAVY });
+    }
+    if (ponto.canceladas > 0) {
+      const texto = String(ponto.canceladas);
+      const largura = cursor.fonteNegrito.widthOfTextAtSize(texto, 8.5);
+      cursor.pagina.drawText(texto, { x: xCanceladas + larguraBarra / 2 - largura / 2, y: yBase + alturaCanceladas + 4, size: 8.5, font: cursor.fonteNegrito, color: COR_VERMELHO });
+    }
+
+    const larguraDia = cursor.fonte.widthOfTextAtSize(ponto.dia, 8.5);
+    cursor.pagina.drawText(ponto.dia, { x: xCentro - larguraDia / 2, y: yBase - 16, size: 8.5, font: cursor.fonte, color: COR_CINZA });
+  });
+
+  const yLegenda = yBase - 38;
+  cursor.pagina.drawRectangle({ x: MARGEM, y: yLegenda, width: 9, height: 9, color: COR_NAVY });
+  cursor.pagina.drawText("Concluídas", { x: MARGEM + 13, y: yLegenda + 1, size: 8.5, font: cursor.fonte, color: COR_CINZA });
+  cursor.pagina.drawRectangle({ x: MARGEM + 95, y: yLegenda, width: 9, height: 9, color: COR_VERMELHO });
+  cursor.pagina.drawText("Canceladas", { x: MARGEM + 108, y: yLegenda + 1, size: 8.5, font: cursor.fonte, color: COR_CINZA });
+
+  cursor.y = yLegenda - 20;
+}
+
+interface ColunaTabela {
+  titulo: string;
+  largura: number;
+}
+
+/** Tabela com cabeçalho navy + texto branco e zebra menta, igual ao modelo (sem bordas de grade). */
+function desenharTabela(cursor: Cursor, colunas: ColunaTabela[], linhas: string[][], mensagemVazia: string): void {
+  const alturaLinha = 20;
+  const larguraTotal = colunas.reduce((soma, coluna) => soma + coluna.largura, 0);
+
+  const desenharCabecalho = () => {
+    garantirEspaco(cursor, alturaLinha * 2);
+    cursor.pagina.drawRectangle({ x: MARGEM, y: cursor.y - alturaLinha, width: larguraTotal, height: alturaLinha, color: COR_NAVY });
+    let x = MARGEM;
+    for (const coluna of colunas) {
+      cursor.pagina.drawText(coluna.titulo, { x: x + 8, y: cursor.y - alturaLinha + 6, size: 9, font: cursor.fonteNegrito, color: COR_BRANCA });
+      x += coluna.largura;
+    }
+    cursor.y -= alturaLinha;
+  };
+
+  desenharCabecalho();
+
+  if (linhas.length === 0) {
+    garantirEspaco(cursor, alturaLinha);
+    cursor.pagina.drawText(mensagemVazia, { x: MARGEM + 8, y: cursor.y - alturaLinha + 6, size: 9, font: cursor.fonte, color: COR_CINZA });
+    cursor.y -= alturaLinha;
+  } else {
+    linhas.forEach((linha, indiceLinha) => {
+      const paginaAntes = cursor.pagina;
+      garantirEspaco(cursor, alturaLinha);
+      if (cursor.pagina !== paginaAntes) desenharCabecalho();
+
+      if (indiceLinha % 2 === 1) {
+        cursor.pagina.drawRectangle({ x: MARGEM, y: cursor.y - alturaLinha, width: larguraTotal, height: alturaLinha, color: COR_MENTA });
+      }
+      let x = MARGEM;
+      linha.forEach((valor, indiceColuna) => {
+        const coluna = colunas[indiceColuna];
+        const textoTruncado = truncarTexto(valor, cursor.fonte, 9, coluna.largura - 16);
+        cursor.pagina.drawText(textoTruncado, { x: x + 8, y: cursor.y - alturaLinha + 6, size: 9, font: cursor.fonte, color: COR_TEXTO });
+        x += coluna.largura;
+      });
+      cursor.y -= alturaLinha;
+    });
+  }
+
+  cursor.y -= 18;
+}
+
+function desenharCapa(cursor: Cursor, dados: RelatorioPromotorData): void {
+  // Não chama iniciarSecao: a página escura inicial já foi criada em
+  // construirPdf e vira a própria capa — criar outra aqui deixaria a
+  // primeira em branco, sobrando no PDF final.
+  cursor.y = ALTURA_PAGINA - 110;
+
+  cursor.pagina.drawText("RELATÓRIO SEMANAL DE PROMOTORES", { x: MARGEM, y: cursor.y, size: 11, font: cursor.fonteNegrito, color: COR_VERDE });
+  cursor.y -= 42;
+  cursor.pagina.drawText(dados.nomeCliente, { x: MARGEM, y: cursor.y, size: 30, font: cursor.fonteNegrito, color: COR_BRANCA });
+  cursor.y -= 30;
+  cursor.pagina.drawText(`Período: ${formatarData(dados.periodo.inicio)} a ${formatarData(dados.periodo.fim)}`, {
+    x: MARGEM,
+    y: cursor.y,
+    size: 12,
+    font: cursor.fonte,
+    color: COR_TEXTO_CLARO,
+  });
+
+  cursor.pagina.drawRectangle({ x: MARGEM, y: MARGEM + 20, width: 44, height: 3, color: COR_VERDE });
+  cursor.pagina.drawText(`Gerado em ${formatarData(new Date())}`, { x: MARGEM, y: MARGEM + 4, size: 9, font: cursor.fonte, color: COR_TEXTO_CLARO });
+}
+
+function desenharVisaoGeral(cursor: Cursor, bloco: CampanhaBlocoRelatorio): void {
+  iniciarSecao(cursor, "clara");
+  desenharCabecalhoSecao(
+    cursor,
+    `Visão geral — ${bloco.nomeCampanha}`,
+    `${bloco.visaoGeral.concluidas} oficinas visitadas no período`
+  );
+  desenharLinhaDestaque(cursor);
+  desenharCards(cursor, [
+    { numero: String(bloco.visaoGeral.concluidas), rotulo: "Visitas concluídas" },
+    { numero: String(bloco.visaoGeral.canceladas), rotulo: "Canceladas" },
+    { numero: String(bloco.visaoGeral.abertasNaRota), rotulo: "Abertas na rota" },
+  ]);
+  desenharGraficoPorDia(cursor, bloco.visitasPorDia);
+}
+
+function desenharAssertividade(cursor: Cursor, bloco: CampanhaBlocoRelatorio): void {
+  iniciarSecao(cursor, "escura");
+  desenharCabecalhoSecao(cursor, `Assertividade — ${bloco.nomeCampanha}`, "Visitas concluídas sobre visitas encerradas");
+  desenharLinhaDestaque(cursor);
+
+  garantirEspaco(cursor, 80);
+  const texto = bloco.assertividade === "N/A" ? "N/A" : `${bloco.assertividade}%`;
+  cursor.pagina.drawText(texto, { x: MARGEM, y: cursor.y - 44, size: 64, font: cursor.fonteNegrito, color: COR_VERDE });
+  cursor.y -= 90;
+
+  const encerradas = bloco.visaoGeral.concluidas + bloco.visaoGeral.canceladas;
+  desenharCallout(
+    cursor,
+    `${bloco.visaoGeral.concluidas} concluídas de ${encerradas} visitas encerradas no período (concluídas + canceladas).`
+  );
+}
+
+function desenharPorPromotor(cursor: Cursor, bloco: CampanhaBlocoRelatorio): void {
+  iniciarSecao(cursor, "clara");
+  desenharCabecalhoSecao(cursor, `Performance por promotor — ${bloco.nomeCampanha}`, `${bloco.porPromotor.length} promotores na campanha`);
+  desenharLinhaDestaque(cursor);
+
+  const colunas: ColunaTabela[] = [
+    { titulo: "Promotor", largura: 260 },
+    { titulo: "Concl. (período)", largura: 150 },
+    { titulo: "Canc. (período)", largura: 150 },
+    { titulo: "Concl. (acum.)", largura: 150 },
+    { titulo: "Abertas", largura: LARGURA_UTIL - 260 - 150 - 150 - 150 },
+  ];
+  const linhas = bloco.porPromotor.map((promotor: LinhaPromotor) => [
+    promotor.nomePromotor,
+    String(promotor.concluidasPeriodo),
+    String(promotor.canceladasPeriodo),
+    String(promotor.concluidasAcumulado),
+    String(promotor.abertasNaRota),
+  ]);
+  desenharTabela(cursor, colunas, linhas, "Sem promotores nesta campanha.");
+}
+
+function desenharCancelamentos(cursor: Cursor, bloco: CampanhaBlocoRelatorio): void {
+  iniciarSecao(cursor, "clara");
+  desenharCabecalhoSecao(cursor, `Cancelamentos — ${bloco.nomeCampanha}`, `${bloco.cancelamentos.length} cancelamentos no período`);
+  desenharLinhaDestaque(cursor);
+
+  const colunas: ColunaTabela[] = [
+    { titulo: "Promotor", largura: 180 },
+    { titulo: "Oficina", largura: 180 },
+    { titulo: "Cidade", largura: 180 },
+    { titulo: "Justificativa", largura: LARGURA_UTIL - 180 - 180 - 180 },
+  ];
+  const linhas = bloco.cancelamentos.map((cancelamento: Cancelamento) => [
+    cancelamento.nomePromotor,
+    cancelamento.nomeOficina,
+    cancelamento.cidadeOficina,
+    cancelamento.obs ?? "—",
+  ]);
+  desenharTabela(cursor, colunas, linhas, "Nenhum cancelamento no período.");
+
+  if (bloco.cancelamentos.length > 0) {
+    desenharCallout(cursor, `${bloco.cancelamentos.length} oficinas canceladas no período, listadas acima com a justificativa de cada promotor.`);
+  }
+}
+
+/** Card de observação — 1 por visita com OBS, com barra lateral colorida por status. */
+function desenharCardDestaque(cursor: Cursor, item: DestaqueCampo): void {
+  const padding = 8;
+  const corBarra = item.status === "concluida" ? COR_VERDE : COR_NAVY;
+  const cabecalho = `${item.nomePromotor} — ${item.nomeOficina} (${item.cidadeOficina})`;
+  const linhasCabecalho = quebrarLinhas(cabecalho, cursor.fonteNegrito, 9.5, LARGURA_UTIL - padding * 2 - 6);
+  const linhasObs = quebrarLinhas(item.obs, cursor.fonte, 9, LARGURA_UTIL - padding * 2 - 6);
+  const altura = (linhasCabecalho.length + linhasObs.length) * 12 + padding * 2;
+
+  garantirEspaco(cursor, altura + 8);
+  cursor.pagina.drawRectangle({ x: MARGEM, y: cursor.y - altura, width: LARGURA_UTIL, height: altura, color: COR_MENTA });
+  cursor.pagina.drawRectangle({ x: MARGEM, y: cursor.y - altura, width: 4, height: altura, color: corBarra });
+
+  let yLinha = cursor.y - padding - 8;
+  for (const linha of linhasCabecalho) {
+    cursor.pagina.drawText(linha, { x: MARGEM + padding + 6, y: yLinha, size: 9.5, font: cursor.fonteNegrito, color: COR_NAVY });
+    yLinha -= 12;
+  }
+  for (const linha of linhasObs) {
+    cursor.pagina.drawText(linha, { x: MARGEM + padding + 6, y: yLinha, size: 9, font: cursor.fonte, color: COR_CINZA });
+    yLinha -= 12;
+  }
+
+  cursor.y -= altura + 8;
+}
+
+/** RELPROM-09: 2 sub-seções, concluídas e canceladas, nunca 1 lista única intercalada. */
+function desenharDestaques(cursor: Cursor, bloco: CampanhaBlocoRelatorio): void {
+  iniciarSecao(cursor, "clara");
+  desenharCabecalhoSecao(cursor, `Destaques do campo — ${bloco.nomeCampanha}`, "Observações registradas pelos promotores");
+  desenharLinhaDestaque(cursor);
+
   const concluidas = bloco.destaquesDeCampo.filter((destaque) => destaque.status === "concluida");
   const canceladas = bloco.destaquesDeCampo.filter((destaque) => destaque.status === "cancelada");
 
-  return `
-    <section>
-      <h2>Destaques do campo</h2>
-      <h3>Concluídas com observação</h3>
-      <ul class="destaques">${concluidas.map(renderizarItemDestaque).join("") || "<li>Nenhuma.</li>"}</ul>
-      <h3>Canceladas com justificativa</h3>
-      <ul class="destaques">${canceladas.map(renderizarItemDestaque).join("") || "<li>Nenhuma.</li>"}</ul>
-    </section>
-  `;
+  desenharSubtitulo(cursor, "Concluídas com observação");
+  if (concluidas.length === 0) {
+    garantirEspaco(cursor, 14);
+    cursor.pagina.drawText("Nenhuma.", { x: MARGEM, y: cursor.y, size: 9, font: cursor.fonte, color: COR_CINZA });
+    cursor.y -= 18;
+  } else {
+    for (const item of concluidas) desenharCardDestaque(cursor, item);
+  }
+
+  desenharSubtitulo(cursor, "Canceladas com justificativa", 18);
+  if (canceladas.length === 0) {
+    garantirEspaco(cursor, 14);
+    cursor.pagina.drawText("Nenhuma.", { x: MARGEM, y: cursor.y, size: 9, font: cursor.fonte, color: COR_CINZA });
+    cursor.y -= 18;
+  } else {
+    for (const item of canceladas) desenharCardDestaque(cursor, item);
+  }
 }
 
-function renderizarProximosPassos(bloco: CampanhaBlocoRelatorio): string {
-  const { proximosPassos } = bloco;
-  return `
-    <section>
-      <h2>Próximos passos</h2>
-      <div class="cards">
-        <div class="card"><span class="numero">${proximosPassos.abertasNaRota}</span><span class="rotulo">Oficinas abertas na rota</span></div>
-        <div class="card"><span class="numero">${proximosPassos.canceladasARedistribuir}</span><span class="rotulo">Canceladas a redistribuir</span></div>
-        <div class="card"><span class="numero">${proximosPassos.promotoresSemRegistro}</span><span class="rotulo">Promotores sem registro</span></div>
-      </div>
-    </section>
-  `;
+function desenharProximosPassos(cursor: Cursor, bloco: CampanhaBlocoRelatorio): void {
+  iniciarSecao(cursor, "escura");
+  desenharCabecalhoSecao(cursor, `Próximos passos — ${bloco.nomeCampanha}`, "O que vem a seguir");
+  desenharLinhaDestaque(cursor);
+  desenharCards(cursor, [
+    { numero: String(bloco.proximosPassos.abertasNaRota), rotulo: "Oficinas abertas na rota" },
+    { numero: String(bloco.proximosPassos.canceladasARedistribuir), rotulo: "Canceladas a redistribuir" },
+    { numero: String(bloco.proximosPassos.promotoresSemRegistro), rotulo: "Promotores sem registro" },
+  ]);
 }
 
-function renderizarBlocoCampanha(bloco: CampanhaBlocoRelatorio): string {
-  return `
-    <section class="bloco-campanha">
-      <h1 class="nome-campanha">${escapar(bloco.nomeCampanha)}</h1>
-      ${renderizarVisaoGeral(bloco)}
-      ${renderizarAssertividade(bloco)}
-      ${renderizarPorPromotor(bloco)}
-      ${renderizarCancelamentos(bloco)}
-      ${renderizarDestaques(bloco)}
-      ${renderizarProximosPassos(bloco)}
-    </section>
-  `;
+function desenharBlocoCampanha(cursor: Cursor, bloco: CampanhaBlocoRelatorio): void {
+  desenharVisaoGeral(cursor, bloco);
+  desenharAssertividade(cursor, bloco);
+  desenharPorPromotor(cursor, bloco);
+  desenharCancelamentos(cursor, bloco);
+  desenharDestaques(cursor, bloco);
+  desenharProximosPassos(cursor, bloco);
 }
 
-const ESTILO = `
-  body { font-family: Arial, Helvetica, sans-serif; color: #1a1a2e; margin: 0; padding: 32px; }
-  .capa { background: #0b1f4d; color: #fff; padding: 48px 32px; margin: -32px -32px 32px; }
-  .capa .eyebrow { letter-spacing: 1px; font-size: 12px; opacity: 0.8; }
-  .capa h1 { font-size: 32px; margin: 8px 0; }
-  .bloco-campanha { page-break-before: always; }
-  .nome-campanha { font-size: 22px; border-bottom: 2px solid #0b1f4d; padding-bottom: 8px; }
-  h2 { font-size: 16px; color: #0b1f4d; margin-top: 24px; }
-  h3 { font-size: 13px; color: #0b1f4d; margin: 12px 0 4px; }
-  .cards { display: flex; gap: 16px; }
-  .card { flex: 1; background: #f0f3fa; border-radius: 8px; padding: 16px; text-align: center; }
-  .card .numero { display: block; font-size: 28px; font-weight: bold; color: #0b1f4d; }
-  .card .rotulo { font-size: 12px; color: #555; }
-  .assertividade { font-size: 40px; font-weight: bold; color: #2e7d32; }
-  table { width: 100%; border-collapse: collapse; font-size: 12px; }
-  th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; }
-  th { background: #f0f3fa; }
-  ul.destaques { font-size: 12px; padding-left: 18px; }
-`;
+/** Gera o PDF completo: 1 capa + 6 páginas de seção por campanha (RELPROM-01, RELPROM-26, RELPROM-27). */
+export async function construirPdf(dados: RelatorioPromotorData): Promise<Uint8Array> {
+  const doc = await PDFDocument.create();
+  const fonte = await doc.embedFont(StandardFonts.Helvetica);
+  const fonteNegrito = await doc.embedFont(StandardFonts.HelveticaBold);
 
-/** Gera o HTML completo do relatório: 1 capa + 1 bloco por campanha (RELPROM-01, RELPROM-26, RELPROM-27). */
-export function renderizarHtml(dados: RelatorioPromotorData): string {
-  const blocos = dados.campanhas.map(renderizarBlocoCampanha).join("");
+  const cursor: Cursor = { doc, pagina: criarPagina(doc, "escura"), y: ALTURA_PAGINA - MARGEM, fonte, fonteNegrito, estilo: "escura" };
 
-  return `<!doctype html>
-    <html lang="pt-BR">
-      <head>
-        <meta charset="utf-8" />
-        <style>${ESTILO}</style>
-      </head>
-      <body>
-        ${renderizarCapa(dados)}
-        ${blocos}
-      </body>
-    </html>`;
+  desenharCapa(cursor, dados);
+  for (const bloco of dados.campanhas) {
+    desenharBlocoCampanha(cursor, bloco);
+  }
+
+  return doc.save();
 }

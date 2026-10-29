@@ -1,13 +1,4 @@
-const setContentMock = jest.fn();
-const pdfMock = jest.fn().mockResolvedValue(Buffer.from("%PDF-1.4"));
-const closeMock = jest.fn();
-const newPageMock = jest.fn().mockResolvedValue({ setContent: setContentMock, pdf: pdfMock });
-const launchMock = jest.fn().mockResolvedValue({ newPage: newPageMock, close: closeMock });
-
-jest.mock("playwright", () => ({
-  chromium: { launch: (...args: unknown[]) => launchMock(...args) },
-}));
-
+import { PDFDocument, PDFPage } from "pdf-lib";
 import PromotorReportPdfRenderer from "../../service/promotorReportPdfRenderer";
 import { RelatorioPromotorData } from "../../types/promotorRelatorio";
 
@@ -20,6 +11,11 @@ const DADOS: RelatorioPromotorData = {
       idCampanha: 1,
       nomeCampanha: "Campanha SKF",
       visaoGeral: { concluidas: 71, canceladas: 21, abertasNaRota: 132 },
+      visitasPorDia: [
+        { dia: "13/10", concluidas: 2, canceladas: 0 },
+        { dia: "14/10", concluidas: 4, canceladas: 0 },
+        { dia: "15/10", concluidas: 52, canceladas: 16 },
+      ],
       assertividade: 77,
       porPromotor: [
         { idPromotor: 1, nomePromotor: "Willian Ferreira", concluidasPeriodo: 15, canceladasPeriodo: 0, concluidasAcumulado: 18, abertasNaRota: 11 },
@@ -35,47 +31,69 @@ const DADOS: RelatorioPromotorData = {
   ],
 };
 
-beforeEach(() => jest.clearAllMocks());
+let drawTextSpy: jest.SpyInstance;
+
+beforeEach(() => {
+  // Spia a API real do pdf-lib (sem mockar o módulo) -- confirma o texto
+  // efetivamente mandado pro PDF, na ordem real de desenho (topo->baixo).
+  drawTextSpy = jest.spyOn(PDFPage.prototype, "drawText");
+});
+
+afterEach(() => drawTextSpy.mockRestore());
+
+function textosDesenhados(): string[] {
+  return drawTextSpy.mock.calls.map((chamada) => chamada[0] as string);
+}
 
 describe("PromotorReportPdfRenderer.renderizarPdf", () => {
-  it("retorna o Buffer do PDF produzido pelo Playwright — RELPROM-01", async () => {
+  it("retorna um Buffer de PDF valido — RELPROM-01", async () => {
     const resultado = await PromotorReportPdfRenderer.renderizarPdf(DADOS);
 
+    expect(Buffer.isBuffer(resultado)).toBe(true);
     expect(resultado.subarray(0, 5).toString("ascii")).toBe("%PDF-");
   });
 
-  it("passa pro Playwright um HTML com o nome do cliente e de cada campanha", async () => {
+  it("desenha o nome do cliente e de cada campanha", async () => {
     await PromotorReportPdfRenderer.renderizarPdf(DADOS);
 
-    const [html] = setContentMock.mock.calls[0];
-    expect(html).toContain("SKF");
-    expect(html).toContain("Campanha SKF");
+    const textos = textosDesenhados();
+    expect(textos).toContain("SKF");
+    // O nome da campanha vai no eyebrow de cada seção ("VISÃO GERAL — CAMPANHA SKF" etc.), em maiúsculas.
+    expect(textos.some((t) => t.toUpperCase().includes("CAMPANHA SKF"))).toBe(true);
   });
 
-  it("inclui os contadores da visao geral e dos proximos passos no HTML", async () => {
+  it("desenha os contadores da visao geral e dos proximos passos", async () => {
     await PromotorReportPdfRenderer.renderizarPdf(DADOS);
 
-    const [html] = setContentMock.mock.calls[0];
-    expect(html).toContain(">71<");
-    expect(html).toContain(">21<");
-    expect(html).toContain(">132<");
+    const textos = textosDesenhados();
+    expect(textos).toContain("71");
+    expect(textos).toContain("21");
+    expect(textos).toContain("132");
   });
 
-  it("inclui 1 bloco por campanha (RELPROM-26) e fecha o browser mesmo em caso de sucesso", async () => {
+  it("gera 1 capa + 6 paginas de secao por campanha, 1 bloco por campanha (RELPROM-26)", async () => {
     const dadosComDuasCampanhas: RelatorioPromotorData = {
       ...DADOS,
       campanhas: [DADOS.campanhas[0], { ...DADOS.campanhas[0], idCampanha: 2, nomeCampanha: "Campanha Outra" }],
     };
 
-    await PromotorReportPdfRenderer.renderizarPdf(dadosComDuasCampanhas);
+    const resultado = await PromotorReportPdfRenderer.renderizarPdf(dadosComDuasCampanhas);
 
-    const [html] = setContentMock.mock.calls[0];
-    expect(html).toContain("Campanha SKF");
-    expect(html).toContain("Campanha Outra");
-    expect(closeMock).toHaveBeenCalledTimes(1);
+    const doc = await PDFDocument.load(resultado);
+    expect(doc.getPageCount()).toBe(13); // 1 capa + 6 secoes x 2 campanhas
+    const textos = textosDesenhados().map((t) => t.toUpperCase());
+    expect(textos.some((t) => t.includes("CAMPANHA SKF"))).toBe(true);
+    expect(textos.some((t) => t.includes("CAMPANHA OUTRA"))).toBe(true);
   });
 
-  it("coloca cada destaque sob o h3 correto, mesmo com status misto — RELPROM-09", async () => {
+  it("gera 1 capa + 6 paginas de secao pra 1 campanha unica (RELPROM-27)", async () => {
+    const resultado = await PromotorReportPdfRenderer.renderizarPdf(DADOS);
+
+    const doc = await PDFDocument.load(resultado);
+    expect(doc.getPageCount()).toBe(7); // 1 capa + 6 secoes
+  });
+
+  it("coloca cada destaque sob o titulo correto, mesmo com status misto — RELPROM-09", async () => {
     const dadosComDestaquesMistos: RelatorioPromotorData = {
       ...DADOS,
       campanhas: [
@@ -91,25 +109,38 @@ describe("PromotorReportPdfRenderer.renderizarPdf", () => {
 
     await PromotorReportPdfRenderer.renderizarPdf(dadosComDestaquesMistos);
 
-    const [html] = setContentMock.mock.calls[0];
-    const indiceConcluidas = html.indexOf("Concluídas com observação");
-    const indiceCanceladas = html.indexOf("Canceladas com justificativa");
-    const indiceObsConcluida = html.indexOf("Obs concluida unica");
-    const indiceObsCancelada = html.indexOf("Obs cancelada unica");
+    const textos = textosDesenhados();
+    const indiceConcluidas = textos.indexOf("Concluídas com observação");
+    const indiceCanceladas = textos.indexOf("Canceladas com justificativa");
+    const indiceObsConcluida = textos.findIndex((t) => t.includes("Obs concluida unica"));
+    const indiceObsCancelada = textos.findIndex((t) => t.includes("Obs cancelada unica"));
 
-    expect(indiceConcluidas).toBeGreaterThan(-1);
+    expect(indiceConcluidas).toBeGreaterThanOrEqual(0);
     expect(indiceCanceladas).toBeGreaterThan(indiceConcluidas);
-    // A observação "concluida" tem de cair entre os 2 titulos (na secao certa).
+    // A ordem real de desenho (topo->baixo) é a ordem das chamadas: a
+    // observação "concluida" tem de ser desenhada entre os 2 titulos.
     expect(indiceObsConcluida).toBeGreaterThan(indiceConcluidas);
     expect(indiceObsConcluida).toBeLessThan(indiceCanceladas);
-    // A observação "cancelada" tem de cair depois do titulo de canceladas.
     expect(indiceObsCancelada).toBeGreaterThan(indiceCanceladas);
   });
 
-  it("fecha o browser mesmo quando a renderizacao falha", async () => {
-    pdfMock.mockRejectedValueOnce(new Error("falha de renderizacao"));
+  it("quebra observacoes longas em varias linhas, sem cortar o texto (RELPROM-24 ja trunca em 500, aqui so garante leitura)", async () => {
+    const obsLonga = "palavra ".repeat(40).trim(); // bem maior que 1 linha de pagina A4
+    const dados: RelatorioPromotorData = {
+      ...DADOS,
+      campanhas: [
+        {
+          ...DADOS.campanhas[0],
+          destaquesDeCampo: [
+            { status: "concluida", idPromotor: 1, nomePromotor: "P", nomeOficina: "O", cidadeOficina: "C/UF", obs: obsLonga },
+          ],
+        },
+      ],
+    };
 
-    await expect(PromotorReportPdfRenderer.renderizarPdf(DADOS)).rejects.toThrow("falha de renderizacao");
-    expect(closeMock).toHaveBeenCalledTimes(1);
+    await PromotorReportPdfRenderer.renderizarPdf(dados);
+
+    const textosComPalavra = textosDesenhados().filter((t) => t.includes("palavra"));
+    expect(textosComPalavra.length).toBeGreaterThan(1); // quebrou em mais de 1 linha
   });
 });

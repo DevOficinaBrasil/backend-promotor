@@ -1,6 +1,7 @@
 import { StatusRota } from "../../entities/RotaPromotor";
 import {
   agruparPorPromotor,
+  agruparVisitasPorDia,
   calcularAssertividade,
   calcularPeriodoSemanal,
   calcularProximosPassos,
@@ -213,6 +214,44 @@ describe("listarDestaquesDeCampo", () => {
     const rotas = [rota({ STATUS: StatusRota.FINALIZADO, DONE_AT: new Date("2026-10-15T10:00:00-03:00"), OBS: obsNoLimite })];
 
     expect(listarDestaquesDeCampo(rotas, PERIODO)[0].obs).toBe(obsNoLimite);
+  });
+});
+
+describe("agruparVisitasPorDia", () => {
+  it("agrupa concluidas e canceladas por dia, ordenado cronologicamente", () => {
+    const rotas = [
+      rota({ STATUS: StatusRota.FINALIZADO, DONE_AT: new Date("2026-10-15T10:00:00-03:00") }),
+      rota({ STATUS: StatusRota.FINALIZADO, DONE_AT: new Date("2026-10-15T11:00:00-03:00") }),
+      rota({ STATUS: StatusRota.CANCELADO, UPDATED_AT: new Date("2026-10-14T09:00:00-03:00") }),
+      rota({ STATUS: StatusRota.FINALIZADO, DONE_AT: new Date("2026-10-16T09:00:00-03:00") }),
+    ];
+
+    expect(agruparVisitasPorDia(rotas, PERIODO)).toEqual([
+      { dia: "14/10", concluidas: 0, canceladas: 1 },
+      { dia: "15/10", concluidas: 2, canceladas: 0 },
+      { dia: "16/10", concluidas: 1, canceladas: 0 },
+    ]);
+  });
+
+  it("nao inclui dia sem nenhuma atividade (sem barra zerada)", () => {
+    const rotas = [rota({ STATUS: StatusRota.FINALIZADO, DONE_AT: new Date("2026-10-15T10:00:00-03:00") })];
+
+    const pontos = agruparVisitasPorDia(rotas, PERIODO);
+
+    expect(pontos).toHaveLength(1);
+    expect(pontos[0].dia).toBe("15/10");
+  });
+
+  it("ignora status que nao e concluida nem cancelada", () => {
+    const rotas = [rota({ STATUS: StatusRota.BACKLOG })];
+
+    expect(agruparVisitasPorDia(rotas, PERIODO)).toEqual([]);
+  });
+
+  it("ignora visita fora do periodo", () => {
+    const rotas = [rota({ STATUS: StatusRota.FINALIZADO, DONE_AT: new Date("2026-09-01T10:00:00-03:00") })];
+
+    expect(agruparVisitasPorDia(rotas, PERIODO)).toEqual([]);
   });
 });
 
