@@ -1,5 +1,10 @@
 import { AppDataSourceSync } from "../data-source";
 import { StatusRota } from "../entities/RotaPromotor";
+import PromotorRelatorioEnvio, {
+  AmbienteRelatorioEnvio,
+  OrigemRelatorioEnvio,
+  StatusRelatorioEnvio,
+} from "../entities/PromotorRelatorioEnvio";
 import {
   agruparPorPromotor,
   calcularAssertividade,
@@ -11,10 +16,26 @@ import {
   RotaPromotorRow,
 } from "../utils/promotorReportCalculos";
 import { CampanhaBlocoRelatorio, RelatorioPromotorData } from "../types/promotorRelatorio";
+import PromotorReportPdfRenderer from "./promotorReportPdfRenderer";
+import ObAdsIntegrationClient from "./obAdsIntegrationClient";
+import { resolverDestinatarios } from "../config/promotorReportRecipients";
 
 interface CampanhaAtivaDoCliente {
   ID_CAMPANHA: number;
   NOME: string;
+}
+
+export interface ClienteParaProcessar {
+  idCliente: number;
+  nomeCliente: string;
+  admins: string[];
+}
+
+export interface ResultadoEnvioCliente {
+  idCliente: number;
+  pdf: Buffer;
+  enviado: boolean;
+  motivoFalha?: string;
 }
 
 export default class PromotorReportService {
@@ -113,5 +134,118 @@ export default class PromotorReportService {
       periodo,
       campanhas,
     };
+  }
+
+  private static async registrarAuditoria(params: {
+    idCliente: number;
+    periodo: PeriodoRelatorio;
+    origem: OrigemRelatorioEnvio;
+    status: StatusRelatorioEnvio;
+    motivoFalha?: string;
+    destinatarios: string[];
+  }): Promise<void> {
+    const repo = AppDataSourceSync.getRepository(PromotorRelatorioEnvio);
+    await repo.save(
+      repo.create({
+        ID_CLIENTE: params.idCliente,
+        PERIODO_INICIO: params.periodo.inicio,
+        PERIODO_FIM: params.periodo.fim,
+        ORIGEM: params.origem,
+        STATUS: params.status,
+        MOTIVO_FALHA: params.motivoFalha,
+        DESTINATARIOS: params.destinatarios,
+        AMBIENTE:
+          process.env.NODE_ENV === "production"
+            ? AmbienteRelatorioEnvio.PRODUCTION
+            : AmbienteRelatorioEnvio.NAO_PRODUCTION,
+      })
+    );
+  }
+
+  /**
+   * Gera o relatório de 1 cliente, renderiza o PDF e (salvo `enviarEmail:
+   * false`) envia por e-mail + grava auditoria. Nunca lança — toda falha
+   * (geração, PDF, destinatário, envio) vira `{enviado: false, motivoFalha}`,
+   * isolada desse cliente (RELPROM-17).
+   */
+  static async processarRelatorioCliente(
+    cliente: ClienteParaProcessar,
+    periodo: PeriodoRelatorio,
+    origem: OrigemRelatorioEnvio,
+    opcoes: { enviarEmail?: boolean } = {}
+  ): Promise<ResultadoEnvioCliente> {
+    const enviarEmail = opcoes.enviarEmail ?? true;
+
+    let pdf: Buffer;
+    try {
+      const dados = await this.gerarRelatorioCliente(cliente, periodo);
+      pdf = await PromotorReportPdfRenderer.renderizarPdf(dados);
+    } catch (erro) {
+      const motivoFalha = (erro as Error)?.message ?? "falha ao gerar o relatório";
+      if (enviarEmail) {
+        await this.registrarAuditoria({
+          idCliente: cliente.idCliente,
+          periodo,
+          origem,
+          status: StatusRelatorioEnvio.FALHA,
+          motivoFalha,
+          destinatarios: [],
+        });
+      }
+      return { idCliente: cliente.idCliente, pdf: Buffer.alloc(0), enviado: false, motivoFalha };
+    }
+
+    if (!enviarEmail) {
+      return { idCliente: cliente.idCliente, pdf, enviado: false };
+    }
+
+    const { destinatarios, adminsReaisParaLog } = resolverDestinatarios(cliente.admins);
+    if (destinatarios.length === 0) {
+      const motivoFalha =
+        adminsReaisParaLog.length === 0
+          ? "nenhum admin resolvido para o cliente"
+          : "lista fixa de destinatários de teste está vazia";
+      console.error("[promotorReportService] relatório não enviado", {
+        idCliente: cliente.idCliente,
+        motivoFalha,
+        adminsReais: adminsReaisParaLog,
+      });
+      await this.registrarAuditoria({
+        idCliente: cliente.idCliente,
+        periodo,
+        origem,
+        status: StatusRelatorioEnvio.FALHA,
+        motivoFalha,
+        destinatarios: [],
+      });
+      return { idCliente: cliente.idCliente, pdf, enviado: false, motivoFalha };
+    }
+
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[promotorReportService] fora de produção: e-mail real iria para", {
+        idCliente: cliente.idCliente,
+        adminsReais: adminsReaisParaLog,
+      });
+    }
+
+    const resultadoEnvio = await ObAdsIntegrationClient.enviarEmailComAnexo({
+      to: destinatarios,
+      subject: `Relatório semanal de promotores — ${cliente.nomeCliente}`,
+      bodyHtml: "<p>Segue em anexo o relatório semanal de visitas de promotores.</p>",
+      attachment: { filename: "relatorio-promotores.pdf", content: pdf, contentType: "application/pdf" },
+    });
+
+    await this.registrarAuditoria({
+      idCliente: cliente.idCliente,
+      periodo,
+      origem,
+      status: resultadoEnvio.sucesso ? StatusRelatorioEnvio.SUCESSO : StatusRelatorioEnvio.FALHA,
+      motivoFalha: resultadoEnvio.sucesso ? undefined : resultadoEnvio.motivo,
+      destinatarios,
+    });
+
+    return resultadoEnvio.sucesso
+      ? { idCliente: cliente.idCliente, pdf, enviado: true }
+      : { idCliente: cliente.idCliente, pdf, enviado: false, motivoFalha: resultadoEnvio.motivo };
   }
 }

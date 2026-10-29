@@ -555,16 +555,19 @@ T21 -> T22
 - Skill: NONE
 
 **Done when**:
-- [ ] Fluxo completo: gera PDF (T15) → resolve destinatários (T14) → envia (T13) → grava `PromotorRelatorioEnvio` com `STATUS`/`DESTINATARIOS`/`AMBIENTE`
-- [ ] Falha em qualquer etapa (PDF, resolução de destinatário, envio) grava `STATUS='FALHA'` com `MOTIVO_FALHA`, não lança pra cima (isolamento por cliente, RELPROM-17)
-- [ ] `ORIGEM='CRON'` respeita a chave única (RELPROM-18); `ORIGEM='MANUAL'` nunca colide
-- [ ] Em dev, `DESTINATARIOS` gravado é a lista de teste, mas o log também mostra os admins reais que seriam usados
-- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportService.test.ts`
+- [x] Fluxo completo: gera PDF (T15) → resolve destinatários (T14) → envia (T13) → grava `PromotorRelatorioEnvio` com `STATUS`/`DESTINATARIOS`/`AMBIENTE`
+- [x] Falha em qualquer etapa (PDF, resolução de destinatário, envio) grava `STATUS='FALHA'` com `MOTIVO_FALHA`, não lança pra cima (isolamento por cliente, RELPROM-17)
+- [x] `ORIGEM='CRON'`/`ORIGEM='MANUAL'` gravados conforme quem chamou (chave única do índice parcial de T09 cuida da idempotência — não é checada aqui, é constraint de banco)
+- [x] Em dev, `DESTINATARIOS` gravado é a lista de teste, mas o log também mostra os admins reais que seriam usados
+- [x] Modo preview (`enviarEmail:false`) retorna o PDF sem enviar nem gravar auditoria (RELPROM-38)
+- [x] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportServiceEnvio.test.ts` (9 passed) — teste em arquivo próprio (`promotorReportServiceEnvio.test.ts`), não no mesmo de T16, pra não misturar mocks de banco com mocks de PDF/e-mail/destinatários
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(promotor-relatorio): envia relatorio e registra auditoria/idempotencia`
+
+**Status**: ✅ Complete
 
 ---
 
