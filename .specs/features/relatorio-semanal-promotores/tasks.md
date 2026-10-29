@@ -643,13 +643,15 @@ T21 -> T22
 - Skill: NONE
 
 **Done when**:
-- [ ] Chamada adicionada logo após o registro do outbox cron, mesma ordem de dependência (depois do data source pronto)
-- [ ] Gate check passa: `npx tsc --noEmit`
+- [x] Chamada adicionada logo após o registro do outbox cron, mesma ordem de dependência (depois do data source pronto)
+- [x] Gate check passa: `npx tsc --noEmit`
 
 **Tests**: none
 **Gate**: build
 
 **Commit**: `chore(promotor-relatorio): registra cron na subida do processo`
+
+**Status**: ✅ Complete
 
 ---
 
