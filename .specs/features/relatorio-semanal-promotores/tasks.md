@@ -9,7 +9,7 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 ---
 
 **Design**: `.specs/features/relatorio-semanal-promotores/design.md`
-**Status**: Draft
+**Status**: In Progress
 
 **Escopo cross-repo**: Fase 2 roda inteira no repo `backend-ob-ads` (`C:\Users\AndrePereira\Documents\oficina brasil\backend-ob-ads`), já na branch `feat/relatorio-promotores-semanal` (criada a partir de `main`, confirmado limpo e sincronizado — nenhuma task de setup de branch é necessária). As demais fases rodam no `backend-promotor`, também já na branch `feat/relatorio-promotores-semanal`. Cada commit de task vai pro repo correto — os comandos de commit das tasks da Fase 2 usam `git -C "<path do ob-ads>"`, nunca o repo atual.
 
@@ -110,16 +110,18 @@ T21 -> T22
 - Skill: NONE
 
 **Done when**:
-- [ ] Container `amazonlinux:2023` rodando localmente, com Node 20 instalado nele (`dnf install nodejs20` ou NodeSource, o que existir)
-- [ ] Dentro do container: `npx playwright install --with-deps chromium` executado e resultado (sucesso/erro, pacotes `dnf` que faltavam) registrado
-- [ ] Se a instalação funcionar: 1 PDF gerado a partir de um HTML mínimo dentro do container, confirmando que `chromium.launch()` roda em Amazon Linux 2023
-- [ ] Resultado documentado em `design.md`: funcionou/não funcionou, e se funcionou, a lista exata de pacotes de sistema (`dnf install ...`) que a EC2 real de produção precisa ter instalados antes de `PROMOTOR_RELATORIO_ENABLED=1`
-- [ ] Se não funcionou mesmo em glibc: a task para aqui e o usuário é avisado antes de qualquer outra task tocar `PromotorReportPdfRenderer` (T15) — não decidir a abordagem alternativa sozinho
+- [x] Container `amazonlinux:2023` rodando localmente, com Node 20 instalado nele (NodeSource `setup_20.x`, `dnf` não tinha `nodejs20` por esse nome)
+- [x] Dentro do container: `npx playwright install --with-deps chromium` executado — **falhou**: `--with-deps` só sabe instalar via `apt-get`, inexistente no AL2023 (`sh: apt-get: command not found`, aviso "your OS is not officially supported by Playwright")
+- [x] Instalado manualmente via `dnf` o conjunto de libs equivalente (`nspr nss nss-util dbus-libs atk at-spi2-atk cups-libs libxcb libxkbcommon at-spi2-core libX11 libXcomposite libXdamage libXext libXfixes libXrandr mesa-libgbm cairo pango systemd-libs alsa-lib`) — 1 PDF gerado com sucesso a partir de HTML mínimo (`OK bytes=10064 prefix=%PDF-`), confirmando que `chromium.launch()` roda em Amazon Linux 2023 com esse provisionamento
+- [x] Resultado documentado em `design.md` (linha de risco do Playwright): funcionou, com a lista exata de pacotes `dnf` e a ressalva de rodar `playwright install chromium` **sem** `--with-deps`
+- [x] N/A — funcionou (não precisou escalonar pra abordagem alternativa)
 
 **Tests**: none
-**Gate**: build (`npx tsc --noEmit` só pro script novo, já que não há suíte de teste pra um spike)
+**Gate**: build — `npx tsc --noEmit` rodado; zero erros no arquivo novo (2 erros pré-existentes no repo, em `__tests__/unit/segmentacaoCampanhaPromotor.test.ts`, não relacionados a esta task — fora de escopo, não tocados)
 
 **Commit**: `chore(relatorio-promotores): valida playwright no so real da ec2 (amazon linux 2023)`
+
+**Status**: ✅ Complete
 
 ---
 
