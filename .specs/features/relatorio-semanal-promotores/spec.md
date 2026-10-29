@@ -35,7 +35,6 @@ Toda ambiguidade foi resolvida ou registrada aqui.
 | --- | --- | --- | --- |
 | Mecanismo exato de integração cross-service (backend-promotor ↔ backend-ob-ads) para resolver admins e enviar e-mail | Decisão de Design, não de produto; backend-promotor hoje não tem client SQL Server nem SES configurado, backend-ob-ads já tem ambos prontos (`EmailService`, `ClientClientTraining`→`Usuario`) | Specify captura o QUÊ, não o COMO; ver `Agent's Discretion` em context.md | n |
 | Mecanismo de deduplicação/auditoria de envio (nova tabela vs. reaproveitar padrão `CommunityReportConfig`) | Decisão de Design; requisito funcional (não reenviar o mesmo período duas vezes) é obrigatório, a estrutura de dados é decisão de implementação | Mesma razão acima | n |
-| Cliente com mais de uma `Campanha` ativa vinculada | Agrega todas as campanhas ativas do cliente em um único relatório (não gera um e-mail por campanha) | Ticket fala em "relatório do cliente", não "por campanha"; múltiplos e-mails no mesmo dia pro mesmo admin seria ruído | n |
 | Retenção do PDF gerado | Não arquivar o binário do PDF a longo prazo; persistir só metadados do envio (cliente, período, timestamp, status) | MVP enxuto; o PDF pode ser regenerado sob demanda a partir dos mesmos dados/período se necessário | n |
 | Tamanho máximo do texto de OBS exibido no PDF | Truncar em 500 caracteres com reticências | Limite de layout do PDF (cards/tabela não têm espaço ilimitado); valor arbitrário mas suficiente para o conteúdo observado no modelo | n |
 | Horário exato do cron na sexta-feira | 07:00 America/Sao_Paulo | Antes do expediente, dá tempo do time ver antes do cliente perguntar; mesmo fuso usado no corte de período | n |
@@ -43,6 +42,7 @@ Toda ambiguidade foi resolvida ou registrada aqui.
 | Definição de "Campanha ativa" para fins de inclusão no relatório | Usa o campo de status já existente na entidade `Campanha` (o mesmo critério usado hoje para considerar uma campanha operante); detalhe exato do valor de status é resolvido na fase de Design ao ler o enum real | Specify não deve inventar um valor de enum sem confirmar no código/schema | n |
 | Múltiplos admins por cliente | Um único envio por cliente/período, todos os e-mails de admin no `To` | Decidido em discuss | y |
 | Cliente sem nenhum admin resolvido | Não envia; registra falha de resolução de destinatário para aquele cliente, não impede os demais clientes | Decidido em discuss (combinação com tratamento de falha) | y |
+| Cliente com mais de uma `Campanha` ativa vinculada | **Revisado em discuss**: não agrega — o relatório segmenta por campanha. Um único PDF/e-mail por cliente, mas com um bloco completo (todas as 6 seções de dados) por campanha ativa | Ticket ficou ambíguo nesse ponto; agregar misturaria métricas de campanhas distintas (ex.: assertividade de uma campanha nova com poucos dias junto da de uma campanha madura) | y |
 
 **Open questions:** none — todas resolvidas ou registradas acima.
 
@@ -58,21 +58,23 @@ Toda ambiguidade foi resolvida ou registrada aqui.
 
 **Acceptance Criteria** (each line is one EARS pattern):
 
-1. WHEN o relatório é gerado para um cliente THEN o sistema SHALL produzir um PDF com exatamente estas 7 seções, nesta ordem: capa, visão geral, assertividade, performance por promotor, cancelamentos, destaques do campo (observações), próximos passos. <!-- RELPROM-01, event-driven -->
-2. The system SHALL calcular "visitas concluídas" do período como a contagem de registros de rota de promotor com status `FINALIZADO` e data de conclusão dentro da janela do período, para as campanhas ativas do cliente. <!-- RELPROM-02, ubiquitous -->
-3. The system SHALL calcular "canceladas" do período como a contagem de registros de rota de promotor com status `CANCELADO` e data de cancelamento dentro da janela do período. <!-- RELPROM-03, ubiquitous -->
-4. The system SHALL calcular "abertas na rota" como a contagem de registros com status `BACKLOG` ou `A_CAMINHO`, excluindo os marcados como `AGUARDANDO`, no momento da geração (foto do estado atual, não limitado à janela do período). <!-- RELPROM-04, ubiquitous -->
-5. The system SHALL calcular a assertividade do período como concluídas ÷ (concluídas + canceladas) do período, expressa em porcentagem arredondada ao inteiro mais próximo. <!-- RELPROM-05, ubiquitous -->
-6. IF concluídas + canceladas do período for igual a 0 THEN o sistema SHALL exibir a assertividade como "N/A" em vez de uma divisão por zero. <!-- RELPROM-06, unwanted-behavior -->
-7. The system SHALL listar, por promotor vinculado à(s) campanha(s) do cliente, as colunas: concluídas no período, canceladas no período, concluídas no acumulado desde o início da campanha, abertas na rota — incluindo promotores com todos os valores em zero. <!-- RELPROM-07, ubiquitous -->
-8. The system SHALL listar cada cancelamento do período com promotor, oficina, cidade e o texto do campo de observação (OBS) quando preenchido. <!-- RELPROM-08, ubiquitous -->
-9. The system SHALL listar, na seção de destaques do campo, toda visita concluída ou cancelada no período cujo campo OBS esteja preenchido, agrupada por status (concluída com observação / cancelada com justificativa), sem gerar texto interpretativo além do conteúdo do campo OBS. <!-- RELPROM-09, ubiquitous -->
-10. The system SHALL calcular os contadores de "próximos passos" como: total de oficinas abertas na rota, total de canceladas no período a redistribuir, e quantidade de promotores com zero visitas concluídas no período. <!-- RELPROM-10, ubiquitous -->
+1. WHEN o relatório é gerado para um cliente THEN o sistema SHALL produzir um PDF com uma capa única seguida de um bloco de dados por campanha ativa do cliente, cada bloco contendo, nesta ordem, as 6 seções: visão geral, assertividade, performance por promotor, cancelamentos, destaques do campo (observações), próximos passos. <!-- RELPROM-01, event-driven -->
+2. The system SHALL calcular "visitas concluídas" do período, por campanha, como a contagem de registros de rota de promotor com status `FINALIZADO` e data de conclusão dentro da janela do período, restrita àquela campanha. <!-- RELPROM-02, ubiquitous -->
+3. The system SHALL calcular "canceladas" do período, por campanha, como a contagem de registros de rota de promotor com status `CANCELADO` e data de cancelamento dentro da janela do período, restrita àquela campanha. <!-- RELPROM-03, ubiquitous -->
+4. The system SHALL calcular "abertas na rota", por campanha, como a contagem de registros com status `BACKLOG` ou `A_CAMINHO` daquela campanha, excluindo os marcados como `AGUARDANDO`, no momento da geração (foto do estado atual, não limitado à janela do período). <!-- RELPROM-04, ubiquitous -->
+5. The system SHALL calcular a assertividade do período, por campanha, como concluídas ÷ (concluídas + canceladas) daquela campanha no período, expressa em porcentagem arredondada ao inteiro mais próximo. <!-- RELPROM-05, ubiquitous -->
+6. IF concluídas + canceladas do período de uma campanha for igual a 0 THEN o sistema SHALL exibir a assertividade daquela campanha como "N/A" em vez de uma divisão por zero. <!-- RELPROM-06, unwanted-behavior -->
+7. The system SHALL listar, por promotor vinculado a cada campanha, as colunas: concluídas no período, canceladas no período, concluídas no acumulado desde o início daquela campanha, abertas na rota — incluindo promotores com todos os valores em zero. <!-- RELPROM-07, ubiquitous -->
+8. The system SHALL listar, por campanha, cada cancelamento do período com promotor, oficina, cidade e o texto do campo de observação (OBS) quando preenchido. <!-- RELPROM-08, ubiquitous -->
+9. The system SHALL listar, na seção de destaques do campo de cada campanha, toda visita concluída ou cancelada no período daquela campanha cujo campo OBS esteja preenchido, agrupada por status (concluída com observação / cancelada com justificativa), sem gerar texto interpretativo além do conteúdo do campo OBS. <!-- RELPROM-09, ubiquitous -->
+10. The system SHALL calcular os contadores de "próximos passos" de cada campanha como: total de oficinas abertas na rota daquela campanha, total de canceladas no período a redistribuir, e quantidade de promotores daquela campanha com zero visitas concluídas no período. <!-- RELPROM-10, ubiquitous -->
 11. WHEN o relatório de um cliente é gerado com sucesso THEN o sistema SHALL enviar um e-mail com o PDF anexado para todos os usuários com `IS_ADMIN = 1` vinculados a esse cliente. <!-- RELPROM-11, event-driven -->
 12. IF nenhum admin for resolvido para o cliente THEN o sistema SHALL registrar a falha de resolução de destinatário e SHALL NOT tentar enviar e-mail para esse cliente nessa execução. <!-- RELPROM-12, unwanted-behavior -->
 13. IF o cliente não teve nenhuma visita concluída ou cancelada no período THEN o sistema SHALL gerar e enviar o relatório normalmente, com os contadores do período em zero. <!-- RELPROM-13, unwanted-behavior -->
+14. WHEN o cliente tiver mais de uma campanha ativa THEN o sistema SHALL incluir, no mesmo PDF e no mesmo e-mail, um bloco de dados completo e identificado pelo nome da campanha para cada campanha ativa — sem agregar métricas entre campanhas diferentes. <!-- RELPROM-26, event-driven -->
+15. WHEN o cliente tiver exatamente uma campanha ativa THEN o sistema SHALL exibir um único bloco de dados, identificado pelo nome dessa campanha. <!-- RELPROM-27, event-driven -->
 
-**Independent Test**: Disparar a geração manualmente para o cliente SKF (sem esperar o cron) e comparar o PDF resultante, seção a seção, com o modelo anexado ao CON26-325 — mesmas seções, mesma ordem, números batendo com uma consulta SELECT equivalente no banco de produção.
+**Independent Test**: Disparar a geração manualmente para o cliente SKF (sem esperar o cron) e comparar o PDF resultante, seção a seção, com o modelo anexado ao CON26-325 — mesmas seções, mesma ordem, números batendo com uma consulta SELECT equivalente no banco de produção. Repetir com um cliente de teste com 2 campanhas ativas e confirmar 2 blocos de dados distintos no mesmo PDF, sem mistura de números entre eles.
 
 ---
 
@@ -137,6 +139,8 @@ Toda ambiguidade foi resolvida ou registrada aqui.
 | RELPROM-11 | P1: Relatório semanal correto | Design | Pending |
 | RELPROM-12 | P1: Relatório semanal correto | Design | Pending |
 | RELPROM-13 | P1: Relatório semanal correto | Design | Pending |
+| RELPROM-26 | P1: Relatório semanal correto | Design | Pending |
+| RELPROM-27 | P1: Relatório semanal correto | Design | Pending |
 | RELPROM-14 | P2: Execução automática semanal | Design | Pending |
 | RELPROM-15 | P2: Execução automática semanal | Design | Pending |
 | RELPROM-16 | P2: Execução automática semanal | Design | Pending |
@@ -154,7 +158,7 @@ Toda ambiguidade foi resolvida ou registrada aqui.
 
 **Status values:** Pending → In Design → In Tasks → Implementing → Verified
 
-**Coverage:** 25 total, 0 mapped to tasks, 25 unmapped ⚠️ (esperado — Tasks ainda não rodou)
+**Coverage:** 27 total, 0 mapped to tasks, 27 unmapped ⚠️ (esperado — Tasks ainda não rodou)
 
 ---
 
@@ -166,3 +170,4 @@ Como saberemos que a feature foi bem-sucedida:
 - [ ] Um cliente novo com o módulo "Promotores" habilitado passa a receber o relatório no próximo ciclo semanal, sem alteração de código.
 - [ ] Nenhum envio duplicado ocorre para o mesmo cliente/período, mesmo se a rotina for disparada mais de uma vez.
 - [ ] Falha em um cliente (sem admin resolvido, integração fora do ar) não impede o envio para os demais clientes elegíveis na mesma execução.
+- [ ] Um cliente com 2+ campanhas ativas recebe um único e-mail/PDF com um bloco de dados por campanha, sem misturar métricas entre campanhas.

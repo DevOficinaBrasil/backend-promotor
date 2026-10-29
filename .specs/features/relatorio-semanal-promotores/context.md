@@ -33,6 +33,11 @@ Automatizar a geração e o envio por e-mail do relatório semanal de visitas de
 - Não é acumulado desde o envio anterior — se um envio falhar numa semana, a semana seguinte cobre só os 7 dias dela, sem tentar recuperar o gap (simplicidade > acúmulo).
 - O relatório também traz, à parte, o acumulado desde o início da campanha (replicando os números "acumulado" do PDF modelo) — isso é cumulativo por natureza e não depende da janela de 7 dias.
 
+### Separação por campanha
+- Ponto ambíguo no ticket, resolvido em discuss: um cliente com mais de uma `Campanha` ativa **não** tem suas métricas agregadas num único bloco. O relatório continua sendo 1 PDF e 1 e-mail por cliente (mantém a decisão de destinatário/envio único), mas internamente ganha um bloco de dados completo por campanha (visão geral, assertividade, performance por promotor, cancelamentos, destaques do campo, próximos passos), identificado pelo nome da campanha.
+- Cliente com 1 campanha ativa (caso da SKF hoje): continua um único bloco, sem mudança visível.
+- Rationale: agregar misturaria métricas de campanhas com maturidades diferentes (ex.: campanha nova de poucos dias junto de uma campanha consolidada), distorcendo assertividade e comparações por promotor.
+
 ### Cliente sem movimentação no período
 - Envia o relatório mesmo com todos os contadores zerados (concluídas, canceladas, abertas na rota podem ainda ser > 0 mesmo sem conclusões/cancelamentos novos). Preferência por transparência: zero visível é mais confiável que silêncio.
 
