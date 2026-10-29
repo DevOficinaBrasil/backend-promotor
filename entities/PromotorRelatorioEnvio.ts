@@ -34,24 +34,19 @@ export default class PromotorRelatorioEnvio {
   @Column({ type: "int", name: "ID_CLIENTE" })
   ID_CLIENTE?: number;
 
-  @Column({ type: "timestamp", name: "PERIODO_INICIO" })
+  @Column({ type: "timestamptz", name: "PERIODO_INICIO" })
   PERIODO_INICIO?: Date;
 
-  @Column({ type: "timestamp", name: "PERIODO_FIM" })
+  @Column({ type: "timestamptz", name: "PERIODO_FIM" })
   PERIODO_FIM?: Date;
 
-  @Column({
-    type: "enum",
-    enum: OrigemRelatorioEnvio,
-    name: "ORIGEM",
-  })
+  // A coluna é restrita por CHK_PROMOTOR_RELATORIO_ENVIO_ORIGEM, que precisa
+  // listar os mesmos valores deste enum (ver scripts/migration-promotor-relatorio-envio.sql).
+  @Column({ type: "text", name: "ORIGEM" })
   ORIGEM?: OrigemRelatorioEnvio;
 
-  @Column({
-    type: "enum",
-    enum: StatusRelatorioEnvio,
-    name: "STATUS",
-  })
+  // Idem, restrita por CHK_PROMOTOR_RELATORIO_ENVIO_STATUS.
+  @Column({ type: "text", name: "STATUS" })
   STATUS?: StatusRelatorioEnvio;
 
   @Column({ type: "text", nullable: true, name: "MOTIVO_FALHA" })
@@ -60,15 +55,12 @@ export default class PromotorRelatorioEnvio {
   @Column({ type: "jsonb", nullable: true, name: "DESTINATARIOS" })
   DESTINATARIOS?: string[];
 
-  @Column({
-    type: "enum",
-    enum: AmbienteRelatorioEnvio,
-    name: "AMBIENTE",
-  })
+  // Idem, restrita por CHK_PROMOTOR_RELATORIO_ENVIO_AMBIENTE.
+  @Column({ type: "text", name: "AMBIENTE" })
   AMBIENTE?: AmbienteRelatorioEnvio;
 
   @CreateDateColumn({
-    type: "timestamp",
+    type: "timestamptz",
     default: () => "CURRENT_TIMESTAMP",
     name: "CRIADO_EM",
   })
