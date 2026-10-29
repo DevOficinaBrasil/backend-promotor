@@ -414,15 +414,18 @@ T21 -> T22
 - Skill: NONE
 
 **Done when**:
-- [ ] `listarClientesHabilitados(nomeModulo, idCliente?)` retorna `{sucesso:true, dados}` ou `{sucesso:false, motivo}` — nunca lança
-- [ ] Timeout e erro de rede tratados como `{sucesso:false, motivo}`
-- [ ] Header `x-api-key` lido de `process.env.INTERNAL_API_KEY` a cada chamada (não cacheado em const de módulo, por causa de `dotenv.config()` tardio)
-- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/obAdsIntegrationClient.test.ts`
+- [x] `listarClientesHabilitados(nomeModulo, idCliente?)` retorna `{sucesso:true, dados}` ou `{sucesso:false, motivo}` — nunca lança
+- [x] Timeout e erro de rede tratados como `{sucesso:false, motivo}` (`AbortSignal.timeout`, 10s)
+- [x] Header `x-api-key` lido de `process.env.INTERNAL_API_KEY` a cada chamada (não cacheado em const de módulo, por causa de `dotenv.config()` tardio)
+- [x] Gate check passa: `npx jest --runInBand __tests__/unit/obAdsIntegrationClient.test.ts` (5 passed)
+- [x] `OBADS_BASE_URL`/`INTERNAL_API_KEY` documentadas em `.env.example`/`exemple.env`
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(promotor-relatorio): cliente de integracao com ob-ads (listagem)`
+
+**Status**: ✅ Complete
 
 ---
 
