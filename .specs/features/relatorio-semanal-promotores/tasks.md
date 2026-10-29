@@ -584,15 +584,18 @@ T21 -> T22
 - Skill: NONE
 
 **Done when**:
-- [ ] Falha ao listar clientes elegíveis (ob-ads indisponível) aborta a execução inteira com 1 log único, não tenta nenhum cliente
-- [ ] Falha isolada em 1 cliente não impede os demais (RELPROM-17)
-- [ ] Resumo final: `{elegiveis, enviados, falharam}` logado ao fim (RELPROM-19)
-- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportService.test.ts`
+- [x] Falha ao listar clientes elegíveis (ob-ads indisponível) aborta a execução inteira com 1 log único, não tenta nenhum cliente
+- [x] Falha isolada em 1 cliente não impede os demais (RELPROM-17)
+- [x] Resumo final: `{elegiveis, enviados, falharam}` logado ao fim (RELPROM-19)
+- [x] Nome do módulo (`"promotores"`, minúsculo — RELPROM-20/T07) centralizado em `NOME_MODULO_PROMOTORES`, não repetido em cada chamador
+- [x] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportServiceLote.test.ts` (4 passed) — arquivo próprio, mesmo motivo de T17
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(promotor-relatorio): processa todos os clientes elegiveis em lote`
+
+**Status**: ✅ Complete
 
 ---
 

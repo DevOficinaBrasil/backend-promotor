@@ -38,6 +38,14 @@ export interface ResultadoEnvioCliente {
   motivoFalha?: string;
 }
 
+export interface ResumoExecucao {
+  elegiveis: number;
+  enviados: number;
+  falharam: number;
+}
+
+export const NOME_MODULO_PROMOTORES = "promotores";
+
 export default class PromotorReportService {
   /**
    * Campanhas ativas de 1 cliente — mesmo critério de
@@ -247,5 +255,34 @@ export default class PromotorReportService {
     return resultadoEnvio.sucesso
       ? { idCliente: cliente.idCliente, pdf, enviado: true }
       : { idCliente: cliente.idCliente, pdf, enviado: false, motivoFalha: resultadoEnvio.motivo };
+  }
+
+  /**
+   * Processa todos os clientes com o módulo "promotores" habilitado
+   * (RELPROM-14). Falha ao listar os clientes elegíveis aborta a execução
+   * inteira (não há granularidade possível antes de saber quem processar);
+   * falha isolada em 1 cliente não impede os demais (RELPROM-17).
+   */
+  static async processarClientesElegiveis(periodo: PeriodoRelatorio): Promise<ResumoExecucao> {
+    const listagem = await ObAdsIntegrationClient.listarClientesHabilitados(NOME_MODULO_PROMOTORES);
+
+    if (!listagem.sucesso) {
+      console.error("[promotorReportService] falha ao listar clientes elegíveis", { motivo: listagem.motivo });
+      return { elegiveis: 0, enviados: 0, falharam: 0 };
+    }
+
+    const resumo: ResumoExecucao = { elegiveis: listagem.dados.length, enviados: 0, falharam: 0 };
+
+    for (const cliente of listagem.dados) {
+      const resultado = await this.processarRelatorioCliente(cliente, periodo, OrigemRelatorioEnvio.CRON);
+      if (resultado.enviado) {
+        resumo.enviados += 1;
+      } else {
+        resumo.falharam += 1;
+      }
+    }
+
+    console.log("[promotorReportService] execução concluída", resumo);
+    return resumo;
   }
 }
