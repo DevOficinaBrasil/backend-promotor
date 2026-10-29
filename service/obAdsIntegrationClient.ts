@@ -8,6 +8,10 @@ export type ResultadoListagem =
   | { sucesso: true; dados: ClienteModuloHabilitado[] }
   | { sucesso: false; motivo: string };
 
+export type ResultadoResolucaoCliente =
+  | { sucesso: true; dados: ClienteModuloHabilitado }
+  | { sucesso: false; motivo: string };
+
 export interface EnviarEmailComAnexoRequest {
   to: string[];
   subject: string;
@@ -56,6 +60,30 @@ export default class ObAdsIntegrationClient {
       }
 
       const dados = (await resposta.json()) as ClienteModuloHabilitado[];
+      return { sucesso: true, dados };
+    } catch (erro) {
+      return { sucesso: false, motivo: (erro as Error)?.message ?? "erro desconhecido na chamada ao ob-ads" };
+    }
+  }
+
+  /**
+   * Pós-Execute (AD-006): resolve admins de 1 cliente direto por ID_CLIENTE,
+   * sem passar por module/cliente_module — caminho ativo em produção
+   * enquanto o SQL Server estiver em congelamento pré-migração.
+   */
+  static async resolverAdminsDoCliente(idCliente: number): Promise<ResultadoResolucaoCliente> {
+    try {
+      const resposta = await fetch(`${baseUrl()}/internal/clientes/${encodeURIComponent(String(idCliente))}/admins`, {
+        method: "GET",
+        headers: headersInternos(),
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      });
+
+      if (!resposta.ok) {
+        return { sucesso: false, motivo: `ob-ads respondeu ${resposta.status}` };
+      }
+
+      const dados = (await resposta.json()) as ClienteModuloHabilitado;
       return { sucesso: true, dados };
     } catch (erro) {
       return { sucesso: false, motivo: (erro as Error)?.message ?? "erro desconhecido na chamada ao ob-ads" };

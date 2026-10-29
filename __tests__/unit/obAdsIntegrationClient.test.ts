@@ -62,6 +62,42 @@ describe("ObAdsIntegrationClient.listarClientesHabilitados", () => {
   });
 });
 
+describe("ObAdsIntegrationClient.resolverAdminsDoCliente (pos-Execute, AD-006)", () => {
+  it("retorna sucesso:true com o cliente quando a resposta e 200", async () => {
+    const dados = { idCliente: 126, nomeCliente: "SKF", admins: ["admin@skf.com"] };
+    (global.fetch as jest.Mock).mockResolvedValue({ ok: true, status: 200, json: async () => dados });
+
+    const resultado = await ObAdsIntegrationClient.resolverAdminsDoCliente(126);
+
+    expect(resultado).toEqual({ sucesso: true, dados });
+  });
+
+  it("monta a URL com o idCliente no path, sem passar por modulo", async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+
+    await ObAdsIntegrationClient.resolverAdminsDoCliente(126);
+
+    const [urlChamada] = (global.fetch as jest.Mock).mock.calls[0];
+    expect(String(urlChamada)).toBe("https://ob-ads.exemplo.com/internal/clientes/126/admins");
+  });
+
+  it("retorna sucesso:false quando a resposta HTTP nao e ok (ex: 404 cliente inexistente)", async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({ ok: false, status: 404, json: async () => ({}) });
+
+    const resultado = await ObAdsIntegrationClient.resolverAdminsDoCliente(999);
+
+    expect(resultado).toEqual({ sucesso: false, motivo: "ob-ads respondeu 404" });
+  });
+
+  it("retorna sucesso:false (nunca lanca) quando o fetch rejeita", async () => {
+    (global.fetch as jest.Mock).mockRejectedValue(new Error("timeout"));
+
+    const resultado = await ObAdsIntegrationClient.resolverAdminsDoCliente(126);
+
+    expect(resultado).toEqual({ sucesso: false, motivo: "timeout" });
+  });
+});
+
 describe("ObAdsIntegrationClient.enviarEmailComAnexo", () => {
   const requisicao = {
     to: ["admin@skf.com"],
