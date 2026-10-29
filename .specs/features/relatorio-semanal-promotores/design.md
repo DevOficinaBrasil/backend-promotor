@@ -1,7 +1,7 @@
 # Relatório Semanal de Promotores Design
 
 **Spec**: `.specs/features/relatorio-semanal-promotores/spec.md`
-**Status**: Draft
+**Status**: Done — Verifier PASS (Phases 1-5), + Phase 6 (AD-006/SKF-only) e Phase 7 (pdf-lib + gráfico por dia, pós-Execute, `tasks.md`)
 
 **Escopo cross-repo**: esta feature toca dois repositórios com deploy independente — `backend-promotor` (todo o cálculo, PDF, cron, endpoint manual) e `backend-ob-ads` (2 endpoints internos novos, genéricos, reaproveitando `EmailService` e `Module/ClienteModule` já existentes). A fase Tasks deve sequenciar isso: endpoints do ob-ads primeiro, backend-promotor depois (ver Risco 4).
 
@@ -22,7 +22,7 @@ graph TD
     SVC --> CALC["PromotorReportCalculos<br/>(funções puras por campanha)"]
     CALC --> PG[("Postgres backend-promotor<br/>CAMPANHA / ROTA_PROMOTOR")]
 
-    SVC --> PDF["PromotorReportPdfRenderer<br/>(Playwright HTML→PDF)"]
+    SVC --> PDF["PromotorReportPdfRenderer<br/>(templates/relatorioPromotor.ts, pdf-lib desenho direto)"]
 
     SVC --> GUARD{"NODE_ENV === production?"}
     GUARD -->|não| DEVLIST["DEV_REPORT_RECIPIENTS<br/>(constante em código)"]
@@ -48,7 +48,7 @@ graph TD
 | `createDocumentedRoute` + padrão `router.use(adminAuthMiddleware)` + `responder()` | `routes/AdminDisparoRoute.ts:18-46` | Modelo exato pra declarar a rota nova, validar com zod e envelopar erro/sucesso |
 | `node-cron` + guarda `NODE_ENV==="test"` + flag `*_ENABLED==="1"` + lock de sobreposição | `schedule/outboxNotificacaoCron.ts:30-32,48-84`, registrado em `app.ts:53` | Modelo exato pro cron novo (`PROMOTOR_RELATORIO_ENABLED`) |
 | `AppDataSourceSync` / `data-source.ts` | `data-source.ts` | Acesso ao Postgres pra `ROTA_PROMOTOR`/`CAMPANHA`/`CAMPANHA_PROMOTOR` |
-| Playwright (dependência já presente, `package.json:56`, `^1.56.0`) | — | Primeiro uso real no repo (zero uso hoje) — renderizar HTML→PDF |
+| `pdf-lib` (dependência já presente, não precisa de instalação nova) | — | **Pós-Execute**: substitui Playwright — desenho direto de PDF (texto/retângulo/linha), sem navegador/binário externo, sem risco de ambiente na EC2 de produção |
 | `EmailService.sendEmailWithAttachment` | `backend-ob-ads/src/appplication/services/EmailService.ts:115-153` | Reaproveitado via novo endpoint interno fino, não reimplementado |
 | Padrão de guarda de rota interna (`apiKeyGuard`, header `x-api-key`) | `backend-ob-ads/src/main/config/routes/CommunityReportInternalRoutes.ts:9-19` | Modelo exato de auth pros 2 endpoints internos novos |
 | Query de resolução de `Usuario` por `idCliente` (M:N `USUARIO_X_CLIENTES` + direto) | `backend-ob-ads/src/appplication/services/communityReport/CommunityReportEmailService.ts:221-233` | Extrair pra uma função reaproveitável, invertendo `IS_ADMIN` (`=1` em vez de `IS NULL OR =0`), mantendo a exclusão de `@oficinabrasil.com.br` |
@@ -98,12 +98,14 @@ graph TD
 - **Reuses**: nada — é a lógica de domínio nova desta feature
 
 ### PromotorReportPdfRenderer
-- **Purpose**: Renderiza o HTML do relatório (capa + blocos por campanha) em PDF via Playwright.
-- **Location**: `service/promotorReportPdfRenderer.ts` + template em `templates/relatorioPromotor.ts` (gera a string HTML; usar a mesma identidade visual — fontes `assets/fonts/Montserrat-*`, logo `assets/img/obLogo.png` — sem reusar `assets/pdf/capaOb.pdf`, que é uma capa estática de arquivo e não suporta nome de cliente/campanha dinâmico)
+- **Purpose**: Gera o PDF do relatório (capa + blocos por campanha).
+- **Location**: `service/promotorReportPdfRenderer.ts` — wrapper fino que só chama `construirPdf` e converte `Uint8Array` pra `Buffer`; toda a lógica de desenho mora em `templates/relatorioPromotor.ts`
 - **Interfaces**:
-  - `renderizarPdf(dados: RelatorioPromotorData): Promise<Buffer>`
-- **Dependencies**: `playwright` (`chromium.launch()`)
-- **Reuses**: `assets/fonts`, `assets/img/obLogo.png` (identidade visual); nada de lógica
+  - `renderizarPdf(dados: RelatorioPromotorData): Promise<Buffer>` (contrato inalterado — `PromotorReportService` não precisou mudar)
+  - `construirPdf(dados: RelatorioPromotorData): Promise<Uint8Array>` (em `templates/relatorioPromotor.ts`)
+- **Dependencies**: `pdf-lib` (`PDFDocument`, fontes padrão `StandardFonts.Helvetica`/`HelveticaBold` — sem fonte customizada embutida, exigiria a dependência separada `@pdf-lib/fontkit`, não presente no projeto)
+- **Reuses**: nada de `assets/fonts`/`assets/img/obLogo.png`/`assets/pdf/capaOb.pdf` — identidade visual replicada via paleta de cores (constantes `COR_*`) desenhada direto com `pdf-lib`, não via asset de arquivo
+- **Pós-Execute (motivo da troca)**: Playwright exigia Chromium instalado no SO de produção (EC2 Amazon Linux 2023, sem Docker) — risco validado e mitigável (T01), mas ainda assim uma dependência de ambiente frágil pra um cron de produção. Trocado por `pdf-lib`: desenho direto do PDF (texto, retângulo, linha), zero dependência de binário/navegador externo. Página no formato slide widescreen (960x540pt, não A4) e paleta navy/verde-limão/menta, pra reproduzir a mesma organização e proporção do modelo do CON26-325 (feedback do usuário após a 1ª versão). Ver Phase 7 em `tasks.md` e AD-007 em `STATE.md`.
 
 ### ObAdsIntegrationClient
 - **Purpose**: Cliente HTTP fino pros endpoints internos do ob-ads. Isola toda a integração cross-service num único arquivo, com timeout e tratamento de erro padronizado.
@@ -180,6 +182,7 @@ interface CampanhaBlocoRelatorio {
   idCampanha: number
   nomeCampanha: string
   visaoGeral: { concluidas: number; canceladas: number; abertasNaRota: number } // sem "promotoresComRegistro": nenhuma AC da spec pede esse resumo, a tabela por promotor (RELPROM-07) já cobre a informação — corrigido durante T10
+  visitasPorDia: { dia: string; concluidas: number; canceladas: number }[] // RELPROM-44, pós-Execute — dd/MM America/Sao_Paulo, só dias com atividade (sem barra zerada)
   assertividade: number | "N/A"
   porPromotor: LinhaPromotor[]
   cancelamentos: { promotor: string; oficina: string; cidade: string; obs: string | null }[]
@@ -231,7 +234,7 @@ interface PromotorRelatorioEnvio {
 | --- | --- | --- |
 | ob-ads indisponível/timeout ao **listar clientes elegíveis** (chamada única por execução do cron) | Aborta a execução inteira dessa semana, loga erro único, resumo final reporta "0 processados, falha ao listar clientes elegíveis" | Nenhum cliente recebe relatório nessa semana; corrigido na próxima execução |
 | ob-ads indisponível/timeout ao **enviar e-mail de um cliente específico** | Isola — grava `STATUS='FALHA'` em `PROMOTOR_RELATORIO_ENVIO`, loga com `[relatorioPromotores]` + idCliente, segue pro próximo cliente (RELPROM-17) | Aquele cliente não recebe nessa semana; os demais recebem normalmente |
-| Falha ao renderizar PDF (Playwright) de um cliente | Mesmo tratamento do item acima — isolado por cliente | Idem |
+| Falha ao renderizar PDF (`pdf-lib`) de um cliente | Mesmo tratamento do item acima — isolado por cliente | Idem |
 | `INTERNAL_API_KEY` ausente/errada (401 do ob-ads) | Erro de configuração, não de dado — aborta a execução inteira (não adianta tentar o próximo cliente, vai falhar igual); loga como erro crítico de config | Nenhum cliente recebe até a config ser corrigida |
 | Cliente sem nenhum admin resolvido (produção) | RELPROM-12 — loga falha de destinatário, não envia, segue pros demais | Aquele cliente não recebe |
 | Lista `DEV_REPORT_RECIPIENTS` vazia fora de produção | RELPROM-30 — não envia, loga condição | Nenhum e-mail sai em dev até a lista ser preenchida no código |
@@ -244,7 +247,7 @@ interface PromotorRelatorioEnvio {
 
 | Concern | Location (file:line) | Impact | Mitigation |
 | --- | --- | --- | --- |
-| Playwright/Chromium em produção — **correção**: `Dockerfile`/`task_definition.tpl.json` (ECS) estão desatualizados e não são o deploy real; produção roda `node` direto no SO da instância EC2 (Amazon Linux 2023), sem container. **Validado (T01, spike concluído)**: `npx playwright install --with-deps chromium` falha nessa SO (`--with-deps` só sabe instalar via `apt-get`, inexistente no AL2023/dnf — "BEWARE: your OS is not officially supported by Playwright"). Instalando manualmente os pacotes `dnf` equivalentes, o Chromium roda normalmente e gera PDF válido | Instância EC2 de produção (SO, não arquivo do repo); validado num container `amazonlinux:2023` local | Sem esse passo manual, o cron/endpoint falharia 100% das vezes em produção mesmo com código correto | **Resolvido**: antes de ligar `PROMOTOR_RELATORIO_ENABLED=1` em produção, rodar na EC2 real (ou no playbook/script de provisionamento dela) `dnf install -y nspr nss nss-util dbus-libs atk at-spi2-atk cups-libs libxcb libxkbcommon at-spi2-core libX11 libXcomposite libXdamage libXext libXfixes libXrandr mesa-libgbm cairo pango systemd-libs alsa-lib`, depois `npx playwright install chromium` (sem `--with-deps`, que falha nesse SO). Risco rebaixado de "alto" pra "baixo" — é só um passo de provisionamento, documentado e já testado. Risco residual: Playwright usa um build de fallback pra Ubuntu 20.04 (AL2023 não é SO oficialmente suportado) — reavaliar se uma major version futura do Playwright descontinuar esse fallback |
+| ~~Playwright/Chromium em produção~~ — **Removido pós-Execute (AD-007)**: T01 validou que dava pra rodar na EC2 (Amazon Linux 2023, sem Docker) via `dnf install` manual de ~20 pacotes de sistema, mas era um risco residual permanente (reprovisionar a instância exige repetir o passo manual; SO não oficialmente suportado pelo Playwright). Trocado por `pdf-lib` (desenho direto, zero dependência de SO/navegador) — ver AD-007 em `STATE.md`, Phase 7 em `tasks.md`. `playwright` removido do `package.json`, `scripts/spike-playwright-ec2.ts` apagado | — (dependência não existe mais) | — (risco eliminado, não só mitigado) | N/A — não se aplica mais |
 | Schema real de `ROTA_PROMOTOR.STATUS` / colunas de `CAMPANHA` não confirmado por `SELECT` ao vivo nesta sessão (`.env.readonly` ausente nesta máquina) | `scripts/db-query.ts` (bloqueado), compensado por `service/adminDisparoService.ts:178-208` (fonte de verdade via código) | Cálculos podem divergir do schema real se o enum tiver mudado desde a última leitura das entities | Antes de implementar `PromotorReportCalculos`, configurar `.env.readonly` e rodar `db-query.ts` pra confirmar os valores distintos reais de `STATUS` e as colunas de `CAMPANHA` |
 | `GET /internal/modulos/:nomeModulo/clientes-habilitados` não tem nenhum precedente no ob-ads — é lógica 100% nova (SQL Server) | `backend-ob-ads/src/domain/entities/{Module,ClienteModule}.ts` | Maior risco de bug em código sem padrão testado pra copiar | Cobertura de teste de integração dedicada no Tasks (reaproveitando o padrão de teste já usado pra `CommunityReportEmailService`) |
 | `POST /internal/email/enviar-com-anexo` é um endpoint genérico e poderoso (manda e-mail arbitrário pra qualquer destinatário, dado o anexo) | `backend-ob-ads/src/main/config/routes/InternalEmailRoutes.ts` (novo) | Se `INTERNAL_API_KEY` vazar, qualquer chamador pode mandar e-mail arbitrário via o SES de produção | Mesma postura de `CommunityReportInternalRoutes` (sem exposição pública, só rede interna); logar remetente/feature de origem em todo envio pra rastreabilidade; chave rotacionável via env sem deploy de código |
@@ -259,7 +262,9 @@ interface PromotorRelatorioEnvio {
 | --- | --- | --- |
 | Mecanismo de acoplamento cross-service | 2 endpoints internos **genéricos** no ob-ads (`clientes-habilitados` por módulo, `enviar-com-anexo`), autenticados por API key compartilhada, guarda dev/prod só no backend-promotor | Confirmado com o usuário; reaproveita SES/SQL Server já existentes e prontos; evita duplicar credenciais/lógica de "quem é admin" em dois lugares |
 | Nome do secret de API key interna | `INTERNAL_API_KEY` único, compartilhado por endpoints internos genéricos (não um por feature) | Os 2 endpoints novos não são específicos de "promotor" — uma chave por feature (como `COMMUNITY_REPORT_INTERNAL_API_KEY`) criaria uma chave nova a cada endpoint genérico futuro, sem ganho de segurança real (mesmo chamador: backend-promotor) |
-| Renderização de PDF | Playwright (HTML → PDF) | Único jeito realista de reproduzir layout com cards/tabelas; `pdf-lib` não suporta esse nível de layout; Playwright já é dependência do projeto |
+| Renderização de PDF | ~~Playwright (HTML → PDF)~~ **Pós-Execute: `pdf-lib` (desenho direto)** | Decisão original (Playwright) assumia que `pdf-lib` não suportava layout com cards/tabela — na prática, deu pra reproduzir com funções de desenho manual (cursor + paginação própria); eliminou o risco de dependência de SO/navegador em produção (EC2 sem Docker). Ver AD-007 em `STATE.md` |
+| Formato de página do PDF | Slide widescreen 960x540pt (não A4) | Pós-Execute, feedback do usuário: o modelo do CON26-325 é um deck, não um documento — A4 retrato deixava excesso de espaço em branco em todo conteúdo que não preenche a página inteira |
+| Gráfico de visitas por dia (RELPROM-44) | Barras pareadas (concluídas/canceladas) por dia, navy/vermelho, só dias com atividade | Reproduz o gráfico existente no modelo do CON26-325 que faltava na 1ª versão do PDF gerado; cor vermelha (não a menta usada em outros cards) porque menta tem contraste baixo demais contra fundo branco pra ser legível num gráfico |
 | Idempotência do cron | Tabela nova `PROMOTOR_RELATORIO_ENVIO` com chave única `(ID_CLIENTE, PERIODO_INICIO, PERIODO_FIM, ORIGEM='CRON', STATUS='SUCESSO')` | Resposta determinística sem depender de estado externo; `ORIGEM='MANUAL'` fica isenta, então o endpoint de teste nunca é bloqueado |
 | Definição de "campanha ativa" | `STATUS='PUBLICADA' AND DELETED_AT IS NULL AND START_TIME<=agora AND (END_TIME IS NULL OR END_TIME>=agora)` | Mesma regra já usada em produção por `adminDisparoService.listarCampanhasAtivas` — reaproveitar em vez de inventar critério novo |
 | Identificador de cliente usado nas rotas/integração | `ID_CLIENTE` (o mesmo `Campanha.ID_CLIENT`, direto o ID do SQL Server — `entities/Campanha.ts:40`) | Diferente do `CommunityReport` (que precisa de `ClientClientTraining` pra traduzir Postgres↔SQL Server), aqui `Campanha.ID_CLIENT` já é o ID do SQL Server — nenhuma tabela de tradução necessária |

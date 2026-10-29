@@ -9,7 +9,7 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 ---
 
 **Design**: `.specs/features/relatorio-semanal-promotores/design.md`
-**Status**: Done — 22 tasks concluídas, Verifier independente PASS (3ª iteração do ciclo fix→re-verify, `.specs/features/relatorio-semanal-promotores/validation.md`), `validate_state.py` exit 0
+**Status**: Done — 22 tasks concluídas (Phases 1-5), Verifier independente PASS (3ª iteração do ciclo fix→re-verify, `.specs/features/relatorio-semanal-promotores/validation.md`), `validate_state.py` exit 0. + Phase 6 (AD-006/SKF-only, pós-Execute) e Phase 7 (pdf-lib + gráfico por dia, pós-Execute) — ambas feitas depois do Verifier, sem nova rodada formal do Verifier (mudança de implementação com testes próprios, não revalidação de requisito novo em escopo grande)
 
 **Escopo cross-repo**: Fase 2 roda inteira no repo `backend-ob-ads` (`C:\Users\AndrePereira\Documents\oficina brasil\backend-ob-ads`), já na branch `feat/relatorio-promotores-semanal` (criada a partir de `main`, confirmado limpo e sincronizado — nenhuma task de setup de branch é necessária). As demais fases rodam no `backend-promotor`, também já na branch `feat/relatorio-promotores-semanal`. Cada commit de task vai pro repo correto — os comandos de commit das tasks da Fase 2 usam `git -C "<path do ob-ads>"`, nunca o repo atual.
 
@@ -29,7 +29,7 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 | Entity (`PromotorRelatorioEnvio`) | none | - (build gate only) | - | `npx tsc --noEmit` |
 | Script SQL de migration/módulo (manual, nunca executado pelo agente) | none | - (revisão humana; execução manual pelo usuário, conforme instrução) | `scripts/*.sql` (backend-promotor) · `sql/*.sql` (backend-ob-ads) | nenhum — revisão manual, sem gate automatizado |
 | Wiring trivial (registrar rota/cron existente em `app.ts`) | none | Coberto indiretamente pelo teste unitário/integração do componente já registrado na mesma task ou numa task anterior | `app.ts` | `npx tsc --noEmit` |
-| Spike exploratório (validação do Playwright no SO real da EC2, simulado via `amazonlinux:2023`) | none | Não é código de produção coberto pela matrix — resultado documentado em prosa no próprio design.md | `scripts/spike-playwright-ec2.ts` | nenhum automatizado — validação manual via Docker Desktop (sandbox) |
+| Spike exploratório (validação do Playwright no SO real da EC2, simulado via `amazonlinux:2023`) | none | Não é código de produção coberto pela matrix — resultado documentado em prosa no próprio design.md. **Pós-Execute (T30)**: `scripts/spike-playwright-ec2.ts` apagado — Playwright substituído por `pdf-lib` (AD-007), spike virou órfão | — (arquivo removido) | — |
 
 ## Gate Check Commands
 
@@ -101,6 +101,15 @@ T23 -> T24
 T24 -> T26
 T25 -> T26
 T24 -> T27
+```
+
+### Phase 7: Ajustes pós-Execute — pdf-lib + gráfico por dia (AD-007 / RELPROM-44)
+
+Adicionada depois do Verifier dar PASS e depois da Phase 6, a pedido do usuário: (1) risco de Playwright em produção virou motivo pra trocar de renderer; (2) feedback visual sobre o layout e o gráfico faltante em relação ao modelo do CON26-325.
+
+```
+T28 -> T29
+T28 -> T30
 ```
 
 ---
@@ -859,10 +868,94 @@ Adicionada depois do Verifier dar PASS (3ª iteração). 2 pedidos do usuário: 
 
 ---
 
+### Phase 7: Ajustes pós-Execute — pdf-lib + gráfico por dia (tasks)
+
+### T28: Migra `PromotorReportPdfRenderer`/template de Playwright pra `pdf-lib` (backend-promotor)
+
+**What**: Troca a renderização HTML→PDF via Playwright (`chromium.launch()`) por desenho direto com `pdf-lib` (texto/retângulo/linha), eliminando a dependência de navegador/SO em produção (AD-007). `service/promotorReportPdfRenderer.ts` vira um wrapper fino (`renderizarPdf` chama `construirPdf` e converte pra `Buffer`); toda a lógica de layout migra pra `templates/relatorioPromotor.ts` (gera o PDF, não mais uma string HTML). Página muda de A4 retrato pra slide widescreen (960x540pt), paleta navy/verde-limão/menta, pra reproduzir organização e proporção do modelo do CON26-325 (feedback do usuário).
+**Where**: `service/promotorReportPdfRenderer.ts`, `templates/relatorioPromotor.ts` (reescritos)
+**Depends on**: None (reaproveita o contrato já existente de T15 — `renderizarPdf(dados): Promise<Buffer>` não muda, `PromotorReportService` não precisou ser tocado)
+**Reuses**: `types/promotorRelatorio.ts` (`RelatorioPromotorData`/`CampanhaBlocoRelatorio`, sem mudança de forma além de T29); nada de `assets/fonts`/`assets/img` (fonte padrão do `pdf-lib`, `@pdf-lib/fontkit` não instalado)
+**Requirement**: RELPROM-01, RELPROM-26, RELPROM-27, AD-007
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [x] `renderizarPdf(dados)` continua retornando `Buffer` de PDF válido (prefixo `%PDF-`), mesma assinatura
+- [x] Página no formato 960x540pt (slide widescreen), não mais A4
+- [x] 1 capa + 6 páginas de seção por campanha, mesma ordem de T15 (capa → visão geral → assertividade → por promotor → cancelamentos → destaques → próximos passos)
+- [x] Teste reescrito pra espiar a API real do `pdf-lib` (`jest.spyOn(PDFPage.prototype, "drawText")`, sem `jest.mock` no módulo) — prova texto e ordem de desenho reais, em vez de mockar o renderer inteiro
+- [x] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportPdfRenderer.test.ts` (7 passed)
+
+**Tests**: unit
+**Gate**: quick
+
+**Commit**: `refactor(promotor-relatorio): troca Playwright por pdf-lib na geração do PDF` (`52ce6ca`)
+
+**Status**: ✅ Complete
+
+---
+
+### T29: Gráfico "visitas por dia" na visão geral (backend-promotor)
+
+**What**: Nova função pura `agruparVisitasPorDia` (bucket por dia, America/Sao_Paulo, só dias com pelo menos 1 visita concluída/cancelada) e uma nova função de desenho (`desenharGraficoPorDia`) que renderiza barras pareadas (concluídas navy / canceladas vermelho) com rótulo de valor e dia, chamada a partir da seção de visão geral — reproduz o gráfico do modelo do CON26-325 que faltava na 1ª versão do PDF gerado em pdf-lib (T28).
+**Where**: `utils/promotorReportCalculos.ts` (modifica — nova função + `PontoVisitasPorDia`), `types/promotorRelatorio.ts` (modifica — `visitasPorDia` em `CampanhaBlocoRelatorio`), `service/promotorReportService.ts` (modifica — wiring em `montarBlocoCampanha`), `templates/relatorioPromotor.ts` (modifica — `desenharGraficoPorDia`, chamada em `desenharVisaoGeral`)
+**Depends on**: T28 (gráfico desenha direto com `pdf-lib`, no renderer novo)
+**Reuses**: `formatInTimeZone`/`FUSO_RELATORIO` já usados em `calcularPeriodoSemanal`; `quebrarLinhas`/`garantirEspaco` já existentes em `templates/relatorioPromotor.ts`
+**Requirement**: RELPROM-44
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [x] `agruparVisitasPorDia` agrupa e ordena cronologicamente, exclui dia sem nenhuma atividade (sem barra zerada), ignora status fora de concluída/cancelada e visita fora do período
+- [x] Gráfico desenha 2 barras por dia (concluídas/canceladas) com valor e dia legíveis; cor vermelha pras canceladas (menta tinha contraste baixo demais contra fundo branco — trocado após feedback visual do usuário)
+- [x] Espaçamento entre as 2 sub-seções de destaques do campo ("Concluídas com observação"/"Canceladas com justificativa") aumentado — estavam coladas (feedback do usuário)
+- [x] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportCalculos.test.ts __tests__/unit/promotorReportPdfRenderer.test.ts` (35 passed)
+- [x] `npx tsc --noEmit` sem erro novo (2 erros pré-existentes, não relacionados, em `__tests__/unit/segmentacaoCampanhaPromotor.test.ts`)
+
+**Tests**: unit
+**Gate**: quick
+
+**Commit**: `refactor(promotor-relatorio): troca Playwright por pdf-lib na geração do PDF` (`52ce6ca`, mesmo commit de T28 — par indissociável: renderer novo sem o dado do gráfico já wireado não tinha como ser validado visualmente)
+
+**Status**: ✅ Complete
+
+---
+
+### T30: Remove dependência `playwright` não usada (backend-promotor)
+
+**What**: Com T28 completo, `playwright` não é mais importado em nenhum lugar do código. Remove a dependência (`npm uninstall playwright`) e o script spike órfão (`scripts/spike-playwright-ec2.ts`, T01).
+**Where**: `package.json`, `package-lock.json` (modifica), `scripts/spike-playwright-ec2.ts` (apagado)
+**Depends on**: T28
+**Reuses**: nenhum
+**Requirement**: AD-007
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [x] `grep -rn "playwright"` no código de aplicação (fora de `node_modules`/skills de terceiros) não retorna nenhum import — só menções em prosa (comentário/design doc)
+- [x] `npm uninstall playwright` rodado, `package.json`/`package-lock.json` atualizados
+- [x] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportPdfRenderer.test.ts __tests__/unit/promotorReportCalculos.test.ts` (35 passed, sem regressão) + `npx tsc --noEmit` (sem erro novo)
+
+**Tests**: none
+**Gate**: build
+
+**Commit**: `chore(promotor-relatorio): remove dependência playwright não usada` (`aa184a7`)
+
+**Status**: ✅ Complete
+
+---
+
 ## Phase Execution Map
 
 ```
-Phase 1 → Phase 2 → Phase 3 → Phase 4 → Phase 5 → Phase 6 (pós-Execute, AD-006)
+Phase 1 → Phase 2 → Phase 3 → Phase 4 → Phase 5 → Phase 6 (pós-Execute, AD-006) → Phase 7 (pós-Execute, AD-007)
 
 Phase 1:  T01
 Phase 2:  T02 ------→ T05
@@ -878,9 +971,14 @@ Phase 4:  T12 ------→ T13 ------→ T17 ------→ T18
           T15 ------→ T17
 Phase 5:  T19 ------→ T20
           T21 ------→ T22
+Phase 6:  T23 ------→ T24 ------→ T26
+          T25 ------→ T26
+          T24 ------→ T27
+Phase 7:  T28 ------→ T29
+          T28 ------→ T30
 ```
 
-Dependências cross-phase (não aparecem no diagrama por fase, só no `Depends on` de cada task, conforme a regra do skill): T15 depende de T01 (Phase 1) e T11 (Phase 3); T16 depende de T10 e T11 (Phase 3); T19 depende de T18 (Phase 4); T21 depende de T17 (Phase 4).
+Dependências cross-phase (não aparecem no diagrama por fase, só no `Depends on` de cada task, conforme a regra do skill): T15 depende de T01 (Phase 1) e T11 (Phase 3); T16 depende de T10 e T11 (Phase 3); T19 depende de T18 (Phase 4); T21 depende de T17 (Phase 4); T23/T25 não têm dependência cross-phase (reaproveitam T02/T04 já concluídas, sem precisar reabrir); T28 não depende de nenhuma task de fase anterior (reescreve T15 por completo, contrato de `renderizarPdf` preservado).
 
 Execução é estritamente sequencial dentro de cada fase — sem paralelismo intra-fase.
 
@@ -912,6 +1010,14 @@ Execução é estritamente sequencial dentro de cada fase — sem paralelismo in
 | T20 | 1 linha de wiring | ✅ Granular |
 | T21 | 1 rota + 1 controller | ✅ Granular (par indissociável, mesmo padrão de `AdminDisparoRoute`) |
 | T22 | 1 linha de wiring | ✅ Granular |
+| T23 | 1 rota + 1 controller (ob-ads) | ✅ Granular |
+| T24 | 1 método, mesmo arquivo de T12/T13 | ✅ Granular |
+| T25 | 1 constante | ✅ Granular |
+| T26 | 1 troca de origem de dados, mesmo método de T18 | ✅ Granular |
+| T27 | 1 troca de chamada, mesmo controller de T21 | ✅ Granular |
+| T28 | 1 renderer + 1 template (reescrita completa) | ✅ Granular (par indissociável, mesmo motivo de T15) |
+| T29 | 1 função pura + 1 função de desenho + wiring de 1 campo novo | ✅ Granular (coeso: dado e desenho do mesmo gráfico) |
+| T30 | 1 remoção de dependência + 1 arquivo apagado | ✅ Granular |
 
 ---
 
@@ -941,6 +1047,14 @@ Execução é estritamente sequencial dentro de cada fase — sem paralelismo in
 | T20 | T19 (mesma fase) | T19→T20 | ✅ Match |
 | T21 | T17 (phase 4, cross-phase) | — (cross-phase) | ✅ Match |
 | T22 | T21 (mesma fase) | T21→T22 | ✅ Match |
+| T23 | None (reaproveita T02/T04, fases anteriores, sem precisar reabri-las) | — | ✅ Match |
+| T24 | T23 (phase 6, mesma fase) | T23→T24 | ✅ Match |
+| T25 | None | — | ✅ Match |
+| T26 | T24, T25 (mesma fase) | T24→T26, T25→T26 | ✅ Match |
+| T27 | T24 (mesma fase) | T24→T27 | ✅ Match |
+| T28 | None | — | ✅ Match |
+| T29 | T28 (mesma fase) | T28→T29 | ✅ Match |
+| T30 | T28 (mesma fase) | T28→T30 | ✅ Match |
 
 ---
 
@@ -970,12 +1084,21 @@ Execução é estritamente sequencial dentro de cada fase — sem paralelismo in
 | T20 | Wiring trivial | none | none | ✅ OK |
 | T21 | Rota/controller | integration | integration | ✅ OK |
 | T22 | Wiring trivial | none | none | ✅ OK |
+| T23 | Rota/controller (ob-ads) | integration | integration | ✅ OK |
+| T24 | Service/domínio | unit | unit | ✅ OK |
+| T25 | Wiring trivial (constante) | none | none | ✅ OK |
+| T26 | Service/domínio | unit | unit | ✅ OK |
+| T27 | Rota/controller | integration | integration | ✅ OK |
+| T28 | Service/domínio (renderer) | unit | unit | ✅ OK |
+| T29 | Service/domínio puro + renderer | unit | unit | ✅ OK |
+| T30 | Wiring trivial (dependência) | none | none | ✅ OK |
 
 ---
 
 ## Tips
 
-- **Cross-repo**: Fase 2 é `backend-ob-ads`, as demais são `backend-promotor`. Cada commit vai pro repo certo.
-- **Playwright é um risco real**: T01 decide se T15 segue como planejado ou muda de abordagem — não pular a validação.
+- **Cross-repo**: Fase 2 e T23 são `backend-ob-ads`, as demais são `backend-promotor`. Cada commit vai pro repo certo.
 - **Nenhum SQL roda sozinho**: T07 e T09 só criam o arquivo; execução é manual, do usuário.
 - **Teste sempre escopado**: todo `Gate` tem o caminho do arquivo explícito, nunca a suíte inteira, sempre `--runInBand`.
+- **SQL Server congelado (AD-006)**: nenhuma task cria tabela/coluna/linha de catálogo lá enquanto a migração pra Postgres não terminar — T23-T27 usam allowlist fixa em código em vez disso.
+- **PDF é `pdf-lib`, não navegador (AD-007)**: T01/`scripts/spike-playwright-ec2.ts` documentam uma abordagem (Playwright) descontinuada em T28/T30 — histórico mantido em `design.md`/`STATE.md`, não repetir Playwright em feature futura sem reavaliar o risco de SO/EC2.

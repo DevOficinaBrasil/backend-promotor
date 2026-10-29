@@ -82,8 +82,9 @@ Toda ambiguidade foi resolvida ou registrada aqui.
 17. WHILE o ambiente de execução não for produção THEN o sistema SHALL registrar em log, para cada cliente processado, a lista de e-mails de admin que teriam sido os destinatários reais, sem enviar e-mail para eles. <!-- RELPROM-29, state-driven -->
 18. IF a lista fixa de destinatários de teste estiver vazia fora de produção THEN o sistema SHALL NOT enviar nenhum e-mail para aquele cliente e SHALL registrar essa condição em log, tratando-a como falha de resolução de destinatário (mesmo tratamento de RELPROM-12). <!-- RELPROM-30, unwanted-behavior -->
 19. WHILE o ambiente de execução for produção THEN o sistema SHALL enviar exclusivamente para os admins reais resolvidos do cliente (RELPROM-11), SHALL NOT usar a lista fixa de destinatários de teste. <!-- RELPROM-31, state-driven -->
+20. The system SHALL exibir, na seção de visão geral de cada campanha, um gráfico comparativo de visitas concluídas x canceladas por dia do período, incluindo só os dias com pelo menos 1 visita concluída ou cancelada. <!-- RELPROM-44, ubiquitous, adicionado pós-Execute: modelo do CON26-325 tem esse gráfico na página de visão geral, faltava no PDF gerado -->
 
-**Independent Test**: Disparar a geração manualmente para o cliente SKF (sem esperar o cron) e comparar o PDF resultante, seção a seção, com o modelo anexado ao CON26-325 — mesmas seções, mesma ordem, números batendo com uma consulta SELECT equivalente no banco de produção. Repetir com um cliente de teste com 2 campanhas ativas e confirmar 2 blocos de dados distintos no mesmo PDF, sem mistura de números entre eles. Rodar fora de produção e confirmar: o e-mail chega só na lista fixa de teste, nunca no admin real do cliente, e o log mostra quais e-mails de admin teriam sido os destinatários reais.
+**Independent Test**: Disparar a geração manualmente para o cliente SKF (sem esperar o cron) e comparar o PDF resultante, seção a seção, com o modelo anexado ao CON26-325 — mesmas seções, mesma ordem, números batendo com uma consulta SELECT equivalente no banco de produção. Repetir com um cliente de teste com 2 campanhas ativas e confirmar 2 blocos de dados distintos no mesmo PDF, sem mistura de números entre eles. Rodar fora de produção e confirmar: o e-mail chega só na lista fixa de teste, nunca no admin real do cliente, e o log mostra quais e-mails de admin teriam sido os destinatários reais. Confirmar que a visão geral mostra o gráfico por dia, com barras só nos dias com atividade (RELPROM-44).
 
 ---
 
@@ -196,6 +197,7 @@ Toda ambiguidade foi resolvida ou registrada aqui.
 | RELPROM-29 | P1: Relatório semanal correto | Design | Pending |
 | RELPROM-30 | P1: Relatório semanal correto | Design | Pending |
 | RELPROM-31 | P1: Relatório semanal correto | Design | Pending |
+| RELPROM-44 | P1: Relatório semanal correto | Execute | Implemented |
 | RELPROM-32 | P2: Disparo manual via endpoint | Design | Pending |
 | RELPROM-33 | P2: Disparo manual via endpoint | Design | Pending |
 | RELPROM-34 | P2: Disparo manual via endpoint | Design | Pending |
@@ -225,7 +227,7 @@ Toda ambiguidade foi resolvida ou registrada aqui.
 
 **Status values:** Pending → In Design → In Tasks → Implementing → Verified
 
-**Coverage:** 43 total, 0 mapped to tasks, 43 unmapped ⚠️ (esperado — Tasks ainda não rodou)
+**Coverage:** 44 total. RELPROM-44 adicionada pós-Execute (pedido do usuário, gráfico que faltava em relação ao modelo do ticket), implementada em `templates/relatorioPromotor.ts` (`desenharGraficoPorDia`) + `utils/promotorReportCalculos.ts` (`agruparVisitasPorDia`), ver Phase 7 em `tasks.md`.
 
 ---
 
@@ -240,3 +242,4 @@ Como saberemos que a feature foi bem-sucedida:
 - [ ] Um cliente com 2+ campanhas ativas recebe um único e-mail/PDF com um bloco de dados por campanha, sem misturar métricas entre campanhas.
 - [ ] Fora de produção, nenhum e-mail chega a um admin real de cliente — só a lista fixa de teste definida em código recebe, e os e-mails de admin que seriam os destinatários reais aparecem logados.
 - [ ] É possível gerar o relatório de um cliente sob demanda via endpoint administrativo, sem esperar o cron, com o mesmo resultado (dados e segmentação por campanha) que o fluxo agendado produziria.
+- [ ] A visão geral de cada campanha mostra o gráfico comparativo de visitas por dia, igual ao modelo do CON26-325.

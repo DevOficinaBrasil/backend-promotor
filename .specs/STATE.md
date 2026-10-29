@@ -42,6 +42,14 @@
 - **Date**: 2026-10-30
 - **Status**: active
 
+### AD-007
+- **Decision**: Geração de PDF em cron/endpoint de produção usa `pdf-lib` (desenho direto: texto, retângulo, linha), nunca um navegador headless (Playwright/Puppeteer) renderizando HTML→PDF.
+- **Reason**: O relatório semanal de promotores (CON26-325) começou com Playwright (`chromium.launch()`). Produção roda `node` direto numa EC2 (Amazon Linux 2023), sem Docker — Playwright exige Chromium + libs de sistema instaladas manualmente (`dnf`, pacote por pacote, SO não oficialmente suportado). Validado funcionando (T01, spike), mas é uma dependência de ambiente frágil: qualquer recriação da instância/imagem base exige repetir o provisionamento manual, e uma falha aí derruba o cron inteiro sem nenhuma mudança de código. `pdf-lib` já é dependência do projeto, roda em JS puro, sem binário externo.
+- **Trade-off**: Layout com `pdf-lib` é desenho manual (cursor, quebra de linha, paginação própria) em vez de CSS/HTML — mais código de baixo nível no renderer, sem flexbox/grid prontos. Fonte customizada (`assets/fonts/Montserrat-*`) exigiria a dependência separada `@pdf-lib/fontkit` (não instalada); por ora usa as fontes padrão do `pdf-lib` (Helvetica). Compensado pela ausência total de dependência de SO/navegador em produção.
+- **Scope**: Qualquer feature futura que precise gerar PDF em produção (cron ou request-time) usa `pdf-lib` por padrão; Playwright só se justificaria por uma necessidade de layout que `pdf-lib` realmente não cubra (ex. renderizar HTML arbitrário de terceiros), e mesmo assim reavaliar o custo de provisionamento na EC2 antes de adicionar de volta.
+- **Date**: 2026-10-29
+- **Status**: active
+
 ## Handoff
 
 - **Feature**: disparo-convite-visita-admin (`.specs/features/disparo-convite-visita-admin/`), **DONE**

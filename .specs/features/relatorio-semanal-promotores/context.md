@@ -25,7 +25,7 @@ Automatizar a geração e o envio por e-mail do relatório semanal de visitas de
 
 ### Formato do relatório
 - PDF anexado ao e-mail, replicando visualmente o layout e a ordem de seções do PDF modelo (capa dark-blue, cards de métricas, tabela por promotor, tabela de cancelamentos, cards de destaques, cards de próximos passos).
-- Geração via renderização HTML → PDF (lib já disponível no projeto: Playwright), não via reconstrução manual de PDF (pdf-lib ficaria limitado pro layout com cards/tabelas).
+- **Pós-Execute (decisão revisada, AD-007)**: geração via `pdf-lib` com desenho direto (texto/retângulo/linha), não via Playwright/HTML→PDF. A decisão original (Playwright, HTML→PDF) partia da premissa de que `pdf-lib` não suportava layout com cards/tabela; na prática deu pra reproduzir com funções de desenho manual, e eliminou o risco de dependência de Chromium/SO na EC2 de produção.
 - E-mail em si pode ter corpo simples (ex.: "segue em anexo o relatório semanal de promotores"); o conteúdo rico vive no PDF.
 
 ### Período coberto
@@ -81,7 +81,7 @@ Automatizar a geração e o envio por e-mail do relatório semanal de visitas de
 
 ## Deferred Ideas
 
-- Embutir as fontes de marca (`assets/fonts/Montserrat-*`) e o logo no PDF via `@font-face`/imagem local no Playwright, pra fidelidade visual total com a identidade Oficina Brasil — não há AC pedindo isso, o MVP usa CSS com as cores da marca e fonte padrão do sistema.
+- Embutir a fonte de marca (Montserrat) e o logo no PDF — exigiria a dependência `@pdf-lib/fontkit` (não instalada, diferente do `fontkit` puro já presente) pra fonte customizada, e desenho de imagem pro logo; não há AC pedindo fidelidade visual exata, o PDF atual usa as fontes padrão do `pdf-lib` (Helvetica) e a paleta de cores da marca.
 
 - Interpretação textual automática das observações (keyword matching pra gerar cards tipo "base com oficinas que não existem mais", "oficinas fora do perfil") — fica pra uma v2, fora do MVP.
 - Qualquer canal de envio além de e-mail (ex.: WhatsApp do admin) — fora de escopo; ticket pede e-mail.
