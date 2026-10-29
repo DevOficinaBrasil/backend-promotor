@@ -26,6 +26,18 @@ describe("PromotorReportService.gerarRelatorioCliente", () => {
     expect(queryMock).toHaveBeenCalledTimes(1);
   });
 
+  it("cliente com exatamente 1 campanha ativa monta 1 unico bloco, identificado pelo nome dela — RELPROM-27", async () => {
+    queryMock
+      .mockResolvedValueOnce([{ ID_CAMPANHA: 1, NOME: "Campanha Unica" }])
+      .mockResolvedValueOnce([]);
+
+    const resultado = await PromotorReportService.gerarRelatorioCliente(CLIENTE, PERIODO, AGORA);
+
+    expect(resultado.campanhas).toHaveLength(1);
+    expect(resultado.campanhas[0].idCampanha).toBe(1);
+    expect(resultado.campanhas[0].nomeCampanha).toBe("Campanha Unica");
+  });
+
   it("monta 1 bloco por campanha ativa, com os dados calculados — RELPROM-01, RELPROM-26", async () => {
     queryMock
       .mockResolvedValueOnce([

@@ -163,7 +163,8 @@ export function listarCancelamentos(rotas: RotaPromotorRow[], periodo: PeriodoRe
  * preenchido — sem interpretação além do texto do próprio campo.
  */
 export function listarDestaquesDeCampo(rotas: RotaPromotorRow[], periodo: PeriodoRelatorio): DestaqueCampo[] {
-  const destaques: DestaqueCampo[] = [];
+  const concluidas: DestaqueCampo[] = [];
+  const canceladas: DestaqueCampo[] = [];
 
   for (const rota of rotas) {
     if (!rota.OBS) continue;
@@ -176,17 +177,21 @@ export function listarDestaquesDeCampo(rotas: RotaPromotorRow[], periodo: Period
           : null;
     if (!status) continue;
 
-    destaques.push({
+    const destaque: DestaqueCampo = {
       status,
       idPromotor: rota.idPromotor,
       nomePromotor: rota.nomePromotor,
       nomeOficina: rota.nomeOficina,
       cidadeOficina: rota.cidadeOficina,
       obs: truncarObs(rota.OBS),
-    });
+    };
+
+    (status === "concluida" ? concluidas : canceladas).push(destaque);
   }
 
-  return destaques;
+  // RELPROM-09: agrupada por status — todas as concluídas antes de todas as
+  // canceladas, independente da ordem de entrada em `rotas`.
+  return [...concluidas, ...canceladas];
 }
 
 /** RELPROM-10. Reaproveita a visão geral e a lista por promotor, sem recalcular. */

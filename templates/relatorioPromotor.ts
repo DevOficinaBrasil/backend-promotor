@@ -98,23 +98,27 @@ function renderizarCancelamentos(bloco: CampanhaBlocoRelatorio): string {
   `;
 }
 
+function renderizarItemDestaque(destaque: CampanhaBlocoRelatorio["destaquesDeCampo"][number]): string {
+  return `
+    <li>
+      ${escapar(destaque.nomePromotor)}, ${escapar(destaque.nomeOficina)} (${escapar(destaque.cidadeOficina)}):
+      ${escapar(destaque.obs)}
+    </li>
+  `;
+}
+
+/** RELPROM-09: 2 sub-seções, concluídas e canceladas, nunca uma lista única intercalada. */
 function renderizarDestaques(bloco: CampanhaBlocoRelatorio): string {
-  const itens = bloco.destaquesDeCampo
-    .map(
-      (destaque) => `
-        <li>
-          <strong>${destaque.status === "concluida" ? "Concluída" : "Cancelada"}</strong> —
-          ${escapar(destaque.nomePromotor)}, ${escapar(destaque.nomeOficina)} (${escapar(destaque.cidadeOficina)}):
-          ${escapar(destaque.obs)}
-        </li>
-      `
-    )
-    .join("");
+  const concluidas = bloco.destaquesDeCampo.filter((destaque) => destaque.status === "concluida");
+  const canceladas = bloco.destaquesDeCampo.filter((destaque) => destaque.status === "cancelada");
 
   return `
     <section>
       <h2>Destaques do campo</h2>
-      <ul class="destaques">${itens || "<li>Nenhuma observação registrada no período.</li>"}</ul>
+      <h3>Concluídas com observação</h3>
+      <ul class="destaques">${concluidas.map(renderizarItemDestaque).join("") || "<li>Nenhuma.</li>"}</ul>
+      <h3>Canceladas com justificativa</h3>
+      <ul class="destaques">${canceladas.map(renderizarItemDestaque).join("") || "<li>Nenhuma.</li>"}</ul>
     </section>
   `;
 }
@@ -155,6 +159,7 @@ const ESTILO = `
   .bloco-campanha { page-break-before: always; }
   .nome-campanha { font-size: 22px; border-bottom: 2px solid #0b1f4d; padding-bottom: 8px; }
   h2 { font-size: 16px; color: #0b1f4d; margin-top: 24px; }
+  h3 { font-size: 13px; color: #0b1f4d; margin: 12px 0 4px; }
   .cards { display: flex; gap: 16px; }
   .card { flex: 1; background: #f0f3fa; border-radius: 8px; padding: 16px; text-align: center; }
   .card .numero { display: block; font-size: 28px; font-weight: bold; color: #0b1f4d; }

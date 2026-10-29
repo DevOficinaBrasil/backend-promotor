@@ -172,6 +172,20 @@ describe("listarDestaquesDeCampo", () => {
     ]);
   });
 
+  it("agrupa por status mesmo com entrada intercalada, nao so a ordem natural — RELPROM-09", () => {
+    const rotas = [
+      rota({ idPromotor: 1, STATUS: StatusRota.CANCELADO, UPDATED_AT: new Date("2026-10-14T10:00:00-03:00"), OBS: "Cancelada 1" }),
+      rota({ idPromotor: 2, STATUS: StatusRota.FINALIZADO, DONE_AT: new Date("2026-10-15T10:00:00-03:00"), OBS: "Concluida 1" }),
+      rota({ idPromotor: 3, STATUS: StatusRota.CANCELADO, UPDATED_AT: new Date("2026-10-16T10:00:00-03:00"), OBS: "Cancelada 2" }),
+      rota({ idPromotor: 4, STATUS: StatusRota.FINALIZADO, DONE_AT: new Date("2026-10-17T10:00:00-03:00"), OBS: "Concluida 2" }),
+    ];
+
+    const destaques = listarDestaquesDeCampo(rotas, PERIODO);
+
+    expect(destaques.map((d) => d.status)).toEqual(["concluida", "concluida", "cancelada", "cancelada"]);
+    expect(destaques.map((d) => d.obs)).toEqual(["Concluida 1", "Concluida 2", "Cancelada 1", "Cancelada 2"]);
+  });
+
   it("ignora visita sem OBS preenchido", () => {
     const rotas = [rota({ STATUS: StatusRota.FINALIZADO, DONE_AT: new Date("2026-10-15T10:00:00-03:00"), OBS: null })];
 

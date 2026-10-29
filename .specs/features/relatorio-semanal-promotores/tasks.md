@@ -388,7 +388,8 @@ T21 -> T22
 - [x] `listarDestaquesDeCampo` só lista visitas com OBS preenchido, truncando em 500 caracteres + reticências (RELPROM-24); agrupa por status
 - [x] `calcularProximosPassos` reaproveita `VisaoGeralCampanha`/`LinhaPromotor[]` já calculados (abertas na rota, canceladas) em vez de duplicar o filtro de período, e conta promotores sem registro no período
 - [x] Limite superior do período (23:59:59 America/Sao_Paulo) é inclusivo (RELPROM-25)
-- [x] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportCalculos.test.ts` (21 passed)
+- [x] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportCalculos.test.ts` (23 passed)
+- [x] **Fix do Verifier (RELPROM-09, real gap)**: `listarDestaquesDeCampo` fazia só `push` na ordem de entrada — com concluídas/canceladas intercaladas na origem, a saída não vinha agrupada (o teste original só provava com entrada já ordenada). Corrigido pra particionar em 2 listas e concatenar (`[...concluidas, ...canceladas]`); `templates/relatorioPromotor.ts` (T15) também corrigido pra renderizar 2 sub-seções rotuladas em vez de 1 `<ul>` só. Teste novo com entrada intercalada prova o agrupamento de verdade.
 
 **Tests**: unit
 **Gate**: quick
@@ -508,7 +509,7 @@ T21 -> T22
 
 **Commit**: `feat(promotor-relatorio): renderizacao do pdf via playwright`
 
-**Status**: ✅ Complete
+**Status**: ✅ Complete — **fix do Verifier (RELPROM-09)**: `renderizarDestaques` virou 2 sub-seções (`<h3>Concluídas com observação</h3>`/`<h3>Canceladas com justificativa</h3>`), cada uma com seu `<ul>`, em vez de 1 lista única — consistente com `listarDestaquesDeCampo` (T11) já vir agrupado
 
 ---
 
@@ -526,10 +527,10 @@ T21 -> T22
 
 **Done when**:
 - [x] Cliente com 2+ campanhas ativas → 1 bloco por campanha, sem agregar métricas entre elas
-- [x] Cliente com 1 campanha ativa → 1 bloco só
+- [x] Cliente com 1 campanha ativa → 1 bloco só (RELPROM-27) — **fix do Verifier**: só havia teste pra N=0 e N=2; evidence-or-zero marcava N=1 como não coberto apesar de funcionar (mesma lógica de `.map()`). Teste dedicado adicionado.
 - [x] Cliente com módulo habilitado mas sem campanha ativa → `RelatorioPromotorData` com `campanhas: []`, tratado como "sem dado disponível" (RELPROM-22), não erro
 - [x] Cliente sem nenhuma visita no período → contadores zerados, gera normalmente (RELPROM-13)
-- [x] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportService.test.ts` (5 passed)
+- [x] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportService.test.ts` (6 passed)
 - [x] Assinatura ajustada durante a implementação: `gerarRelatorioCliente({idCliente, nomeCliente}, periodo, agora?)` — recebe `nomeCliente` já resolvido (vem de T05/T12, backend-promotor não tem lookup próprio de nome de cliente) em vez de buscar de novo
 - [x] Critério de "campanha ativa" reaproveitado de `adminDisparoService.ts:178-208`, filtrado por `ID_CLIENT` (não reescrito do zero)
 
