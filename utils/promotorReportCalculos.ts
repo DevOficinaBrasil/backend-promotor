@@ -1,8 +1,27 @@
+import { formatInTimeZone, fromZonedTime } from "date-fns-tz";
 import { StatusRota } from "../entities/RotaPromotor";
 
 export interface PeriodoRelatorio {
   inicio: Date;
   fim: Date;
+}
+
+const FUSO_RELATORIO = "America/Sao_Paulo";
+
+/**
+ * RELPROM-15. Janela fixa de 7 dias corridos terminando no dia anterior ao
+ * disparo (dia completo): `agora` numa sexta-feira cobre de sexta anterior
+ * 00:00:00 até a quinta imediatamente anterior 23:59:59.999, horário de
+ * Brasília — sem depender do fuso do servidor.
+ */
+export function calcularPeriodoSemanal(agora: Date): PeriodoRelatorio {
+  const diaAtual = formatInTimeZone(agora, FUSO_RELATORIO, "yyyy-MM-dd");
+  const inicioDoDiaAtual = fromZonedTime(`${diaAtual}T00:00:00.000`, FUSO_RELATORIO);
+
+  const fim = new Date(inicioDoDiaAtual.getTime() - 1);
+  const inicio = new Date(inicioDoDiaAtual.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+  return { inicio, fim };
 }
 
 /**

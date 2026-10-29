@@ -2,6 +2,7 @@ import { StatusRota } from "../../entities/RotaPromotor";
 import {
   agruparPorPromotor,
   calcularAssertividade,
+  calcularPeriodoSemanal,
   calcularProximosPassos,
   calcularVisaoGeral,
   listarCancelamentos,
@@ -198,6 +199,25 @@ describe("listarDestaquesDeCampo", () => {
     const rotas = [rota({ STATUS: StatusRota.FINALIZADO, DONE_AT: new Date("2026-10-15T10:00:00-03:00"), OBS: obsNoLimite })];
 
     expect(listarDestaquesDeCampo(rotas, PERIODO)[0].obs).toBe(obsNoLimite);
+  });
+});
+
+describe("calcularPeriodoSemanal", () => {
+  it("sexta-feira cobre de sexta anterior 00:00 ate quinta imediatamente anterior 23:59:59.999 (America/Sao_Paulo) — RELPROM-15", () => {
+    // 2026-10-30 e sexta-feira, 07:00 horario de Brasilia (UTC-3) = 10:00 UTC.
+    const agora = new Date("2026-10-30T10:00:00.000Z");
+
+    const periodo = calcularPeriodoSemanal(agora);
+
+    expect(periodo.inicio.toISOString()).toBe("2026-10-23T03:00:00.000Z"); // sexta anterior 00:00 -03:00
+    expect(periodo.fim.toISOString()).toBe("2026-10-30T02:59:59.999Z"); // quinta 23:59:59.999 -03:00
+  });
+
+  it("a janela tem exatamente 7 dias corridos", () => {
+    const periodo = calcularPeriodoSemanal(new Date("2026-10-30T10:00:00.000Z"));
+
+    const seteDiasMenos1ms = 7 * 24 * 60 * 60 * 1000 - 1;
+    expect(periodo.fim.getTime() - periodo.inicio.getTime()).toBe(seteDiasMenos1ms);
   });
 });
 

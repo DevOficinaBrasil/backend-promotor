@@ -614,16 +614,19 @@ T21 -> T22
 - Skill: NONE
 
 **Done when**:
-- [ ] `NODE_ENV==="test"` nunca registra (sem log)
-- [ ] `PROMOTOR_RELATORIO_ENABLED` diferente de exatamente `"1"` (incluindo `"true"`) não registra
-- [ ] Período calculado: 7 dias corridos anteriores, corte 23:59:59 America/Sao_Paulo do dia anterior ao disparo
-- [ ] Lock impede 2 execuções simultâneas se o tick anterior ainda não terminou
-- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/promotorRelatorioCron.test.ts`
+- [x] `NODE_ENV==="test"` nunca registra (sem log)
+- [x] `PROMOTOR_RELATORIO_ENABLED` diferente de exatamente `"1"` (incluindo `"true"`) não registra
+- [x] Período calculado via `calcularPeriodoSemanal` (T10/T11, movida pra `utils/promotorReportCalculos.ts`): 7 dias corridos anteriores, corte 23:59:59.999 America/Sao_Paulo do dia anterior ao disparo
+- [x] Lock impede 2 execuções simultâneas se o tick anterior ainda não terminou
+- [x] Gate check passa: `npx jest --runInBand __tests__/unit/promotorRelatorioCron.test.ts` (7 passed)
+- [x] `PROMOTOR_RELATORIO_ENABLED`/`PROMOTOR_RELATORIO_CRON_EXPRESSION` documentadas em `.env.example`/`exemple.env`
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(promotor-relatorio): cron semanal de disparo`
+
+**Status**: ✅ Complete
 
 ---
 
