@@ -8,6 +8,15 @@ export type ResultadoListagem =
   | { sucesso: true; dados: ClienteModuloHabilitado[] }
   | { sucesso: false; motivo: string };
 
+export interface EnviarEmailComAnexoRequest {
+  to: string[];
+  subject: string;
+  bodyHtml: string;
+  attachment: { filename: string; content: Buffer; contentType: string };
+}
+
+export type ResultadoEnvio = { sucesso: true } | { sucesso: false; motivo: string };
+
 const TIMEOUT_MS = 10_000;
 
 function headersInternos(): Record<string, string> {
@@ -48,6 +57,36 @@ export default class ObAdsIntegrationClient {
 
       const dados = (await resposta.json()) as ClienteModuloHabilitado[];
       return { sucesso: true, dados };
+    } catch (erro) {
+      return { sucesso: false, motivo: (erro as Error)?.message ?? "erro desconhecido na chamada ao ob-ads" };
+    }
+  }
+
+  static async enviarEmailComAnexo(req: EnviarEmailComAnexoRequest): Promise<ResultadoEnvio> {
+    try {
+      const resposta = await fetch(`${baseUrl()}/internal/email/enviar-com-anexo`, {
+        method: "POST",
+        headers: { ...headersInternos(), "Content-Type": "application/json" },
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+        body: JSON.stringify({
+          to: req.to,
+          subject: req.subject,
+          bodyHtml: req.bodyHtml,
+          attachment: {
+            filename: req.attachment.filename,
+            contentBase64: req.attachment.content.toString("base64"),
+            contentType: req.attachment.contentType,
+          },
+        }),
+      });
+
+      const corpo = (await resposta.json().catch(() => ({}))) as { success?: boolean; error?: string };
+
+      if (!resposta.ok || corpo.success !== true) {
+        return { sucesso: false, motivo: corpo.error ?? `ob-ads respondeu ${resposta.status}` };
+      }
+
+      return { sucesso: true };
     } catch (erro) {
       return { sucesso: false, motivo: (erro as Error)?.message ?? "erro desconhecido na chamada ao ob-ads" };
     }

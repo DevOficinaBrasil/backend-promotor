@@ -442,14 +442,16 @@ T21 -> T22
 - Skill: NONE
 
 **Done when**:
-- [ ] `enviarEmailComAnexo(req)` retorna `{sucesso:true}` ou `{sucesso:false, motivo}` — nunca lança
-- [ ] PDF passado como `Buffer`, convertido pra base64 só na borda HTTP (não antes)
-- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/obAdsIntegrationClient.test.ts`
+- [x] `enviarEmailComAnexo(req)` retorna `{sucesso:true}` ou `{sucesso:false, motivo}` — nunca lança
+- [x] PDF passado como `Buffer`, convertido pra base64 só na borda HTTP (não antes)
+- [x] Gate check passa: `npx jest --runInBand __tests__/unit/obAdsIntegrationClient.test.ts` (10 passed)
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(promotor-relatorio): cliente de integracao com ob-ads (envio de email)`
+
+**Status**: ✅ Complete
 
 ---
 

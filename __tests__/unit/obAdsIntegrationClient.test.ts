@@ -61,3 +61,59 @@ describe("ObAdsIntegrationClient.listarClientesHabilitados", () => {
     expect((global.fetch as jest.Mock).mock.calls[1][1].headers["x-api-key"]).toBe("definida-depois");
   });
 });
+
+describe("ObAdsIntegrationClient.enviarEmailComAnexo", () => {
+  const requisicao = {
+    to: ["admin@skf.com"],
+    subject: "Relatorio semanal",
+    bodyHtml: "<p>oi</p>",
+    attachment: { filename: "relatorio.pdf", content: Buffer.from("%PDF-1.4"), contentType: "application/pdf" },
+  };
+
+  it("retorna sucesso:true quando o ob-ads responde success:true", async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({ ok: true, status: 200, json: async () => ({ success: true }) });
+
+    const resultado = await ObAdsIntegrationClient.enviarEmailComAnexo(requisicao);
+
+    expect(resultado).toEqual({ sucesso: true });
+  });
+
+  it("converte o Buffer do anexo pra base64 so na borda HTTP", async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({ ok: true, status: 200, json: async () => ({ success: true }) });
+
+    await ObAdsIntegrationClient.enviarEmailComAnexo(requisicao);
+
+    const [, opcoes] = (global.fetch as jest.Mock).mock.calls[0];
+    const corpo = JSON.parse(opcoes.body);
+    expect(corpo.attachment.contentBase64).toBe(Buffer.from("%PDF-1.4").toString("base64"));
+    expect(corpo.attachment.filename).toBe("relatorio.pdf");
+  });
+
+  it("retorna sucesso:false quando o ob-ads responde success:false (nunca lanca)", async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ success: false, error: "SES fora do ar" }),
+    });
+
+    const resultado = await ObAdsIntegrationClient.enviarEmailComAnexo(requisicao);
+
+    expect(resultado).toEqual({ sucesso: false, motivo: "SES fora do ar" });
+  });
+
+  it("retorna sucesso:false quando a resposta HTTP nao e ok", async () => {
+    (global.fetch as jest.Mock).mockResolvedValue({ ok: false, status: 502, json: async () => ({}) });
+
+    const resultado = await ObAdsIntegrationClient.enviarEmailComAnexo(requisicao);
+
+    expect(resultado).toEqual({ sucesso: false, motivo: "ob-ads respondeu 502" });
+  });
+
+  it("retorna sucesso:false quando o fetch rejeita", async () => {
+    (global.fetch as jest.Mock).mockRejectedValue(new Error("timeout"));
+
+    const resultado = await ObAdsIntegrationClient.enviarEmailComAnexo(requisicao);
+
+    expect(resultado).toEqual({ sucesso: false, motivo: "timeout" });
+  });
+});
