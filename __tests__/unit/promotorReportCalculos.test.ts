@@ -1,7 +1,11 @@
 import { StatusRota } from "../../entities/RotaPromotor";
 import {
+  agruparPorPromotor,
   calcularAssertividade,
+  calcularProximosPassos,
   calcularVisaoGeral,
+  listarCancelamentos,
+  listarDestaquesDeCampo,
   PeriodoRelatorio,
   RotaPromotorRow,
 } from "../../utils/promotorReportCalculos";
@@ -16,6 +20,11 @@ function rota(partial: Partial<RotaPromotorRow>): RotaPromotorRow {
     STATUS: StatusRota.BACKLOG,
     DONE_AT: null,
     UPDATED_AT: new Date("2026-10-15T12:00:00-03:00"),
+    idPromotor: 1,
+    nomePromotor: "Willian Ferreira",
+    nomeOficina: "Oficina Teste",
+    cidadeOficina: "São Paulo/SP",
+    OBS: null,
     ...partial,
   };
 }
@@ -86,5 +95,124 @@ describe("calcularAssertividade", () => {
 
   it("retorna 0 quando so ha canceladas", () => {
     expect(calcularAssertividade(0, 5)).toBe(0);
+  });
+});
+
+describe("agruparPorPromotor", () => {
+  it("agrupa concluidas/canceladas do periodo e acumulado por promotor — RELPROM-07", () => {
+    const rotas = [
+      rota({ idPromotor: 1, nomePromotor: "Willian", STATUS: StatusRota.FINALIZADO, DONE_AT: new Date("2026-10-15T10:00:00-03:00") }),
+      rota({ idPromotor: 1, nomePromotor: "Willian", STATUS: StatusRota.FINALIZADO, DONE_AT: new Date("2026-09-01T10:00:00-03:00") }), // acumulado, fora do periodo
+      rota({ idPromotor: 1, nomePromotor: "Willian", STATUS: StatusRota.BACKLOG }),
+      rota({ idPromotor: 2, nomePromotor: "Djoni", STATUS: StatusRota.CANCELADO, UPDATED_AT: new Date("2026-10-16T10:00:00-03:00") }),
+    ];
+
+    const resultado = agruparPorPromotor(rotas, PERIODO);
+
+    expect(resultado).toEqual([
+      { idPromotor: 1, nomePromotor: "Willian", concluidasPeriodo: 1, canceladasPeriodo: 0, concluidasAcumulado: 2, abertasNaRota: 1 },
+      { idPromotor: 2, nomePromotor: "Djoni", concluidasPeriodo: 0, canceladasPeriodo: 1, concluidasAcumulado: 0, abertasNaRota: 0 },
+    ]);
+  });
+
+  it("inclui promotor com tudo zerado, sem omitir a linha", () => {
+    const rotas = [rota({ idPromotor: 3, nomePromotor: "Vanessa", STATUS: StatusRota.BACKLOG, UPDATED_AT: new Date("2020-01-01T00:00:00-03:00") })];
+
+    const resultado = agruparPorPromotor(rotas, PERIODO);
+
+    expect(resultado).toEqual([
+      { idPromotor: 3, nomePromotor: "Vanessa", concluidasPeriodo: 0, canceladasPeriodo: 0, concluidasAcumulado: 0, abertasNaRota: 1 },
+    ]);
+  });
+});
+
+describe("listarCancelamentos", () => {
+  it("lista cancelamentos do periodo com promotor, oficina, cidade e obs — RELPROM-08", () => {
+    const rotas = [
+      rota({
+        STATUS: StatusRota.CANCELADO,
+        UPDATED_AT: new Date("2026-10-15T10:00:00-03:00"),
+        nomeOficina: "Real Car",
+        cidadeOficina: "Belo Horizonte/MG",
+        OBS: "Promotor de folga",
+      }),
+    ];
+
+    expect(listarCancelamentos(rotas, PERIODO)).toEqual([
+      { idPromotor: 1, nomePromotor: "Willian Ferreira", nomeOficina: "Real Car", cidadeOficina: "Belo Horizonte/MG", obs: "Promotor de folga" },
+    ]);
+  });
+
+  it("inclui cancelamento mesmo sem OBS (obs: null)", () => {
+    const rotas = [rota({ STATUS: StatusRota.CANCELADO, UPDATED_AT: new Date("2026-10-15T10:00:00-03:00"), OBS: null })];
+
+    expect(listarCancelamentos(rotas, PERIODO)[0].obs).toBeNull();
+  });
+
+  it("nao lista cancelamento fora do periodo", () => {
+    const rotas = [rota({ STATUS: StatusRota.CANCELADO, UPDATED_AT: new Date("2026-09-01T10:00:00-03:00") })];
+
+    expect(listarCancelamentos(rotas, PERIODO)).toEqual([]);
+  });
+});
+
+describe("listarDestaquesDeCampo", () => {
+  it("lista concluida e cancelada do periodo com OBS, agrupadas por status — RELPROM-09", () => {
+    const rotas = [
+      rota({ STATUS: StatusRota.FINALIZADO, DONE_AT: new Date("2026-10-15T10:00:00-03:00"), OBS: "Oficina fechada" }),
+      rota({ STATUS: StatusRota.CANCELADO, UPDATED_AT: new Date("2026-10-16T10:00:00-03:00"), OBS: "Fora da area" }),
+    ];
+
+    const destaques = listarDestaquesDeCampo(rotas, PERIODO);
+
+    expect(destaques).toEqual([
+      expect.objectContaining({ status: "concluida", obs: "Oficina fechada" }),
+      expect.objectContaining({ status: "cancelada", obs: "Fora da area" }),
+    ]);
+  });
+
+  it("ignora visita sem OBS preenchido", () => {
+    const rotas = [rota({ STATUS: StatusRota.FINALIZADO, DONE_AT: new Date("2026-10-15T10:00:00-03:00"), OBS: null })];
+
+    expect(listarDestaquesDeCampo(rotas, PERIODO)).toEqual([]);
+  });
+
+  it("ignora status que nao e concluida nem cancelada, mesmo com OBS", () => {
+    const rotas = [rota({ STATUS: StatusRota.BACKLOG, OBS: "Nota qualquer" })];
+
+    expect(listarDestaquesDeCampo(rotas, PERIODO)).toEqual([]);
+  });
+
+  it("trunca OBS maior que 500 caracteres com reticencias — RELPROM-24", () => {
+    const obsLongo = "a".repeat(600);
+    const rotas = [rota({ STATUS: StatusRota.FINALIZADO, DONE_AT: new Date("2026-10-15T10:00:00-03:00"), OBS: obsLongo })];
+
+    const [destaque] = listarDestaquesDeCampo(rotas, PERIODO);
+
+    expect(destaque.obs).toBe(`${"a".repeat(500)}...`);
+    expect(destaque.obs.length).toBe(503);
+  });
+
+  it("nao trunca OBS com exatamente 500 caracteres", () => {
+    const obsNoLimite = "a".repeat(500);
+    const rotas = [rota({ STATUS: StatusRota.FINALIZADO, DONE_AT: new Date("2026-10-15T10:00:00-03:00"), OBS: obsNoLimite })];
+
+    expect(listarDestaquesDeCampo(rotas, PERIODO)[0].obs).toBe(obsNoLimite);
+  });
+});
+
+describe("calcularProximosPassos", () => {
+  it("reaproveita visaoGeral (abertas/canceladas) e conta promotores sem registro — RELPROM-10", () => {
+    const visaoGeral = { concluidas: 10, canceladas: 3, abertasNaRota: 7 };
+    const porPromotor = [
+      { idPromotor: 1, nomePromotor: "A", concluidasPeriodo: 2, canceladasPeriodo: 0, concluidasAcumulado: 2, abertasNaRota: 1 },
+      { idPromotor: 2, nomePromotor: "B", concluidasPeriodo: 0, canceladasPeriodo: 1, concluidasAcumulado: 0, abertasNaRota: 2 },
+    ];
+
+    expect(calcularProximosPassos(visaoGeral, porPromotor)).toEqual({
+      abertasNaRota: 7,
+      canceladasARedistribuir: 3,
+      promotoresSemRegistro: 1,
+    });
   });
 });

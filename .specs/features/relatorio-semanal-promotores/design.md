@@ -84,8 +84,9 @@ graph TD
   - `calcularVisaoGeral(rotas: RotaPromotorRow[], periodo: PeriodoRelatorio): VisaoGeralCampanha`
   - `calcularAssertividade(concluidas: number, canceladas: number): number | "N/A"`
   - `agruparPorPromotor(rotas: RotaPromotorRow[], periodo: PeriodoRelatorio): LinhaPromotor[]`
+  - `listarCancelamentos(rotas: RotaPromotorRow[], periodo: PeriodoRelatorio): Cancelamento[]` (RELPROM-08, corrigido durante T11 — faltava na listagem original)
   - `listarDestaquesDeCampo(rotas: RotaPromotorRow[], periodo: PeriodoRelatorio): DestaqueCampo[]`
-  - `calcularProximosPassos(rotas: RotaPromotorRow[], periodo: PeriodoRelatorio): ProximosPassos`
+  - `calcularProximosPassos(visaoGeral: VisaoGeralCampanha, porPromotor: LinhaPromotor[]): ProximosPassos` (reaproveita os cálculos já feitos em vez de reprocessar `rotas`)
 - **Dependencies**: nenhuma (puro)
 - **Reuses**: nada — é a lógica de domínio nova desta feature
 

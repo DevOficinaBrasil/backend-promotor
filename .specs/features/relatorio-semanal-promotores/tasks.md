@@ -372,7 +372,7 @@ T21 -> T22
 
 ### T11: Cálculo de promotores, destaques e próximos passos (backend-promotor)
 
-**What**: Funções puras `agruparPorPromotor`, `listarDestaquesDeCampo` (com truncamento de OBS em 500 caracteres) e `calcularProximosPassos`, no mesmo arquivo de T10.
+**What**: Funções puras `agruparPorPromotor`, `listarCancelamentos` (RELPROM-08 — não estava no "What" original mas já estava listada no Requirement, corrigido aqui), `listarDestaquesDeCampo` (com truncamento de OBS em 500 caracteres) e `calcularProximosPassos`, no mesmo arquivo de T10.
 **Where**: `utils/promotorReportCalculos.ts` (modifica)
 **Depends on**: T10
 **Reuses**: nada novo além do próprio arquivo
@@ -383,16 +383,19 @@ T21 -> T22
 - Skill: NONE
 
 **Done when**:
-- [ ] `agruparPorPromotor` inclui promotor com todos os valores zerados (não omite linha)
-- [ ] `listarDestaquesDeCampo` só lista visitas com OBS preenchido, truncando em 500 caracteres + reticências (RELPROM-24); agrupa por status
-- [ ] `calcularProximosPassos` conta abertas na rota, canceladas a redistribuir, promotores sem registro no período
-- [ ] Limite superior do período (23:59:59 America/Sao_Paulo) é inclusivo (RELPROM-25)
-- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportCalculos.test.ts`
+- [x] `agruparPorPromotor` inclui promotor com todos os valores zerados (não omite linha)
+- [x] `listarCancelamentos` lista todo cancelamento do período, com ou sem OBS (RELPROM-08)
+- [x] `listarDestaquesDeCampo` só lista visitas com OBS preenchido, truncando em 500 caracteres + reticências (RELPROM-24); agrupa por status
+- [x] `calcularProximosPassos` reaproveita `VisaoGeralCampanha`/`LinhaPromotor[]` já calculados (abertas na rota, canceladas) em vez de duplicar o filtro de período, e conta promotores sem registro no período
+- [x] Limite superior do período (23:59:59 America/Sao_Paulo) é inclusivo (RELPROM-25)
+- [x] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportCalculos.test.ts` (21 passed)
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(promotor-relatorio): calculo de promotores, destaques e proximos passos`
+
+**Status**: ✅ Complete
 
 ---
 
