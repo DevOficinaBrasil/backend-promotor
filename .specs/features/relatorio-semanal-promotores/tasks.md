@@ -9,7 +9,7 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 ---
 
 **Design**: `.specs/features/relatorio-semanal-promotores/design.md`
-**Status**: Done — todas as 22 tasks concluídas; falta o Verifier (passo 9 do Execute)
+**Status**: Done — 22 tasks concluídas, Verifier independente PASS (3ª iteração do ciclo fix→re-verify, `.specs/features/relatorio-semanal-promotores/validation.md`), `validate_state.py` exit 0
 
 **Escopo cross-repo**: Fase 2 roda inteira no repo `backend-ob-ads` (`C:\Users\AndrePereira\Documents\oficina brasil\backend-ob-ads`), já na branch `feat/relatorio-promotores-semanal` (criada a partir de `main`, confirmado limpo e sincronizado — nenhuma task de setup de branch é necessária). As demais fases rodam no `backend-promotor`, também já na branch `feat/relatorio-promotores-semanal`. Cada commit de task vai pro repo correto — os comandos de commit das tasks da Fase 2 usam `git -C "<path do ob-ads>"`, nunca o repo atual.
 
