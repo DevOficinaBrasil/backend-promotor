@@ -2,12 +2,12 @@
 
 ## Validation: relatorio-semanal-promotores - PASS ✅
 
-**Date**: 2026-10-29
+**Date**: 2026-10-29 (original 3-iteration round) — **updated 2026-10-29, Phase 6 addendum below**
 **Spec**: `.specs/features/relatorio-semanal-promotores/spec.md`
-**Diff range**: `backend-promotor` `9a5ee0d..HEAD` (34 files changed, includes all 3 fix commits: `dd99b6e`, `b0a033a`, plus the earlier round-2 evidence baseline) · `backend-ob-ads` `69a645bb..HEAD` (6 files changed)
-**Verifier**: independent sub-agent (author ≠ verifier) — **3rd and final iteration of fix→re-verify (max 3)**
+**Diff range**: `backend-promotor` `9a5ee0d..HEAD` (34 files changed, includes all 3 fix commits: `dd99b6e`, `b0a033a`, plus the earlier round-2 evidence baseline) · `backend-ob-ads` `69a645bb..HEAD` (6 files changed) — **plus Phase 6**: `backend-promotor` `72e8df5..HEAD` (4 commits, 11 files) · `backend-ob-ads` `0ed7be63..HEAD` (2 commits, 5 files). See "Phase 6 — AD-006 / SKF-only (pós-Execute)" section at the end of this report for the focused delta verification.
+**Verifier**: independent sub-agent (author ≠ verifier) — **3rd and final iteration of fix→re-verify (max 3) for the original 39 RELPROM; separate focused verification pass for Phase 6 (RELPROM-40..43)**
 
-## Validation verdict: PASS ✅ — the single gap carried from round 2 (RELPROM-09 template-layer surviving mutant) is now closed. The fix commit `b0a033a` ("testa posicao correta dos destaques mistos") added exactly 1 new test to `__tests__/unit/promotorReportPdfRenderer.test.ts` and touched no production code. I independently re-injected the exact mutation that survived in round 2 (swap which filter feeds which `<h3>`) on a safe in-place/revert basis and confirmed it now fails the test suite (mutant killed). All 39 RELPROM ACs + edge cases re-derived against spec-defined outcomes, both build gates clean, 107 tests pass (84 backend-promotor + 23 backend-ob-ads), 0 failed, 0 skipped.
+## Validation verdict: PASS ✅ — the single gap carried from round 2 (RELPROM-09 template-layer surviving mutant) is now closed. The fix commit `b0a033a` ("testa posicao correta dos destaques mistos") added exactly 1 new test to `__tests__/unit/promotorReportPdfRenderer.test.ts` and touched no production code. I independently re-injected the exact mutation that survived in round 2 (swap which filter feeds which `<h3>`) on a safe in-place/revert basis and confirmed it now fails the test suite (mutant killed). All 39 RELPROM ACs + edge cases re-derived against spec-defined outcomes, both build gates clean, 107 tests pass (84 backend-promotor + 23 backend-ob-ads), 0 failed, 0 skipped. **Phase 6 (AD-006 / SKF-only, verified separately below) adds RELPROM-40..43, all covered, 0 gaps, overall verdict remains PASS.**
 
 ---
 
@@ -209,3 +209,109 @@ None. The single open gap from round 2 (RELPROM-09 template-layer test-coverage 
 **Issues found**: None.
 
 **Next steps**: Feature is done. No further fix→re-verify iterations needed (this was iteration 3 of 3, closing PASS). Recommend proceeding to merge/deploy per the team's normal process; no code-level follow-up required by this validation. Lessons L-017/018/019 from prior rounds remain the authoritative record of what this feature taught the process (evidence-or-zero for N=1 cases, template-layer sensor coverage, scratch-worktree node_modules isolation) — no new lesson warranted this round since there is no new genuine gap to distill.
+
+---
+
+## Phase 6 — AD-006 / SKF-only (pós-Execute)
+
+**Date**: 2026-10-29
+**Context**: After the 3-iteration PASS above, the user requested 2 post-Execute adjustments, implemented as Phase 6 (T23–T27): (1) DBA froze the SQL Server pre-Postgres-migration — no new tables/columns/catalog rows, recorded as `AD-006` in `.specs/STATE.md`; (2) Product restricted production delivery to only SKF (`ID_CLIENTE=126`) for now. This changed 2 core flows previously verified: where "eligible clients" come from (was: SQL Server module; now: fixed allowlist in code) and how the manual endpoint resolves 1 client (was: module; now: new endpoint direct by `ID_CLIENTE`). This is a **focused delta verification**, not a re-run of the original 39 RELPROM from scratch (already done 3x).
+**Diff range**: `backend-promotor` `72e8df5..HEAD` (commits `b7a8ae3`, `2497bae`, `d49160d`, `76865f8` — 11 files changed, 369 insertions, 77 deletions) · `backend-ob-ads` `0ed7be63..HEAD` (commits `800a0a0a`, `9e1b16bb` — 5 files changed, 140 insertions)
+**Verifier**: independent sub-agent (author ≠ verifier) — fresh verification pass, separate from the original 3-iteration round
+
+### Spec-Anchored Acceptance Criteria (RELPROM-40..43, P5)
+
+| Criterion (WHEN X THEN Y) | Spec-defined outcome | `file:line` + assertion | Result |
+| --- | --- | --- | --- |
+| RELPROM-40 — elegibilidade em produção vem de allowlist fixa em código, não de `cliente_module` | `processarClientesElegiveis` itera `CLIENTES_PRODUCAO_HABILITADOS`, nunca chama `listarClientesHabilitados` | `service/promotorReportService.ts:272-279` (`for (const idCliente of CLIENTES_PRODUCAO_HABILITADOS)`) + `__tests__/unit/promotorReportServiceLote.test.ts:31-39` — `expect(resumo.elegiveis).toBe(2); expect(resolverAdminsDoCliente).toHaveBeenCalledWith(10); expect(resolverAdminsDoCliente).toHaveBeenCalledWith(20)` (mock allowlist `[10,20]` injected via `jest.mock("../../config/promotorReportClientesProducao", ...)`) | ✅ PASS |
+| RELPROM-41 — allowlist contém só SKF (`ID_CLIENTE=126`) | `CLIENTES_PRODUCAO_HABILITADOS = [126]` exatamente | `config/promotorReportClientesProducao.ts:14` — `export const CLIENTES_PRODUCAO_HABILITADOS: number[] = [126];` (valor literal, confirmado por leitura direta; não há teste automatizado pro valor exato da constante de produção — gate é `tsc --noEmit` por T25, consistente com "Tests: none / Gate: build" documentado em tasks.md) | ✅ PASS (valor confirmado por leitura; gate do tipo documentado) |
+| RELPROM-42 — resolve admins de 1 cliente direto por `ID_CLIENTE`, via `GET /internal/clientes/:idCliente/admins` | Chamada HTTP monta a URL com `idCliente` no path, sem nome de módulo; endpoint no ob-ads retorna `{idCliente, nomeCliente, admins}` | `service/obAdsIntegrationClient.ts:69-88` (`resolverAdminsDoCliente`, monta `${baseUrl()}/internal/clientes/${idCliente}/admins`) + `__tests__/unit/obAdsIntegrationClient.test.ts:72-79` — `expect(String(urlChamada)).toBe("https://ob-ads.exemplo.com/internal/clientes/126/admins")`. Server side: `backend-ob-ads/src/main/config/routes/InternalClientesRoutes.ts:10` (`GET /:idCliente/admins`) + `backend-ob-ads/src/presentation/controllers/InternalClientesController.ts:22-34` + `backend-ob-ads/src/tests/internalClientesRoutes.test.ts:46-54` — `expect(res.body).toEqual({ idCliente: 126, nomeCliente: "SKF", admins: ["admin@skf.com"] })` | ✅ PASS |
+| RELPROM-43 — nenhuma linha nova em `module`/`cliente_module` (SQL Server) enquanto AD-006 estiver ativa | Nenhum script SQL novo faz `INSERT`/`CREATE` em `module`/`cliente_module`; o script existente de T07 ganha só um aviso de "não rodar", sem alterar a lógica do `INSERT` condicional | `backend-ob-ads/sql/2026-10-con26-325-modulo-promotores.sql:3-11` (aviso `⚠️ NÃO RODAR enquanto AD-006 ... estiver active`, adicionado por `git diff 0ed7be63..HEAD`) + confirmado por `git diff 72e8df5..HEAD -- '*.sql'` no backend-promotor (saída vazia — nenhum `.sql` novo em `scripts/`) e por `git diff --stat` do ob-ads (nenhum arquivo `.sql` novo além do já existente T07, só modificado pra adicionar o comentário) | ✅ PASS |
+
+**Status**: ✅ All 4 ACs covered with direct `file:line` evidence matching the spec-defined outcome. RELPROM-41's exact-value check is a direct code read rather than a dedicated assertion (no test pins the literal `[126]`) — flagged above as the one minor spec-precision note, not a gap, since the spec only requires the value be `126` and it demonstrably is; a future change to the array would only be caught by `tsc`/manual review, not by a test. Not escalated to a fix task — consistent with `Tests: none / Gate: build` already decided for T25 in `tasks.md`.
+
+### Endpoint manual (T27) — status/motivo semantics
+
+| Behavior | Spec-defined outcome | `file:line` + assertion | Result |
+| --- | --- | --- | --- |
+| `gerar` chama `resolverAdminsDoCliente`, não mais `listarClientesHabilitados` | `controllers/promotorReportController.ts` import drops `NOME_MODULO_PROMOTORES`, calls new method | `controllers/promotorReportController.ts:2,42` — `import PromotorReportService from "../service/promotorReportService";` (no longer imports `NOME_MODULO_PROMOTORES`) + `const resolucao = await ObAdsIntegrationClient.resolverAdminsDoCliente(idCliente);` | ✅ PASS |
+| 404 só quando `resolucao.status === 404` | Cliente inexistente → 404; qualquer outra falha (timeout/500) → 502, nunca 404 | `controllers/promotorReportController.ts:44-47` (`if (resolucao.status === 404) return res.status(404)...; return res.status(502)...`) + `__tests__/integration/promotorRelatorio.test.ts:119-129` ("404 quando o cliente nao existe", `resolverAdminsDoCliente` mockado com `{sucesso:false, status:404}` → `expect(res.status).toBe(404)`) + `:131-139` ("502 quando a resolucao do ob-ads falha por outro motivo (timeout/infra)", mock sem `status` → `expect(res.status).toBe(502)`) | ✅ PASS |
+
+**Status**: ✅ Both behaviors covered with direct `file:line` evidence + passing test, and both independently confirmed below by the discrimination sensor (mutation #2 flips exactly this condition and is killed by these same two tests).
+
+### Non-Regression
+
+- **Backend-promotor**: `npx jest --runInBand` over the 9 feature test files (`promotorReportCalculos`, `obAdsIntegrationClient`, `promotorReportRecipients`, `promotorReportPdfRenderer`, `promotorReportService`, `promotorReportServiceEnvio`, `promotorReportServiceLote`, `promotorRelatorioCron`, `promotorRelatorio` integration) run together in one batch: **88 passed, 88 total, 9 suites passed** — matches the expected total exactly.
+- **Backend-ob-ads**: `npx jest --runInBand` over the 6 feature test files (`internalApiKeyGuard`, `moduloClientesService`, `adminResolverService`, `internalModulosRoutes`, `internalEmailRoutes`, `internalClientesRoutes`): **28 passed, 28 total, 6 suites passed** — matches the expected total exactly.
+- `npx tsc --noEmit` (backend-promotor): 0 errors in any feature file. 2 pre-existing errors remain in `__tests__/unit/segmentacaoCampanhaPromotor.test.ts` (`Cannot find module '../../utils/migrationRepository'` / `'../helpers/mockMigrationRepo'`) — **confirmed NOT a Phase 6 regression**: reproduced the identical 2 errors by checking out commit `72e8df5` (pre-Phase-6) into the working tree via `git checkout 72e8df5 -- .`, re-running `tsc --noEmit`, then restoring with `git checkout HEAD -- .` (verified `git status --porcelain` empty afterward). Out of this feature's scope (file untouched by any Phase 6 commit).
+- `npx tsc --noEmit` (backend-ob-ads): 0 errors.
+- **Test count before Phase 6** (backend-promotor, from the 3-iteration PASS report above): 84. **After Phase 6**: 88. **Delta**: +4 (net: `promotorReportServiceLote.test.ts` rewritten, same 4 test count but different assertions per AD-006; `obAdsIntegrationClient.test.ts` +4 new for `resolverAdminsDoCliente`; `promotorRelatorio.test.ts` integration tests renamed/re-asserted, same count). No test deleted without replacement; no assertion weakened.
+- **Test count before/after Phase 6** (backend-ob-ads): 23 → 28. **Delta**: +5, all in the new `internalClientesRoutes.test.ts` (T23). No existing test file touched.
+
+### T02–T07 (Phase 2, módulo) — intocados
+
+- `git diff 0ed7be63..HEAD --stat` (backend-ob-ads) touches only: `sql/2026-10-con26-325-modulo-promotores.sql` (T07, comment-only header addition — the `BEGIN TRANSACTION ... INSERT ... COMMIT` logic block is byte-identical, confirmed by reading the full file), `src/main/api.ts` (adds 2 lines registering the new route, doesn't touch existing route registrations), and 3 new files (`InternalClientesRoutes.ts`, `InternalClientesController.ts`, `internalClientesRoutes.test.ts`). None of T02's `internalApiKeyGuard.ts`, T03's `moduloClientesService.ts`, T04's `adminResolverService.ts`, T05's `InternalModulosRoutes.ts`, or T06's `InternalEmailRoutes.ts` appear in the diff — **confirmed untouched**.
+- `service/obAdsIntegrationClient.ts` (backend-promotor): `listarClientesHabilitados` (T03/T05 client side) is still present, byte-identical, only a new method `resolverAdminsDoCliente` was added alongside it (confirmed by diff — additive only, no deletion/modification inside the existing method).
+- **Conclusion**: T02–T07 (and their backend-promotor-side consumer) kept, not apagados nem alterados — only new neighbors added, as `tasks.md` Phase 6 intro states.
+
+### Discrimination Sensor (Phase 6, lightweight — 2 mutations)
+
+**Isolation method**: no scratch worktree used — a direct, single-file mutate→test→revert cycle on the real `backend-promotor` working tree, per the explicit safety instruction for this round (avoids the node_modules/junction incident class entirely by never creating a worktree or junction). `git status --porcelain` confirmed empty immediately before the first mutation and immediately after each revert.
+
+| # | File:line | Description | Killed? |
+| --- | --- | --- | --- |
+| 1 | `service/promotorReportService.ts:291-294` (`processarClientesElegiveis`) | Swapped `resumo.enviados += 1` / `resumo.falharam += 1` (flipped which branch increments which counter) | ✅ **Killed** — `npx jest --runInBand __tests__/unit/promotorReportServiceLote.test.ts`: 1 failed, 3 passed (was 4/4 before mutation). Failing test: "falha ao resolver admins de 1 cliente nao impede os demais ... RELPROM-17" — expected `{elegiveis:2, enviados:1, falharam:1}`, got `{elegiveis:2, enviados:0, falharam:2}` |
+| 2 | `controllers/promotorReportController.ts:44` | `resolucao.status === 404` → `resolucao.status !== 404` (inverts when a resolution failure is treated as "not found" vs. "infra failure") | ✅ **Killed** — `npx jest --runInBand __tests__/integration/promotorRelatorio.test.ts`: 2 failed, 10 passed (was 12/12 before mutation). Both the "404 quando o cliente nao existe" test (expected 404, got 502) and the "502 quando a resolucao do ob-ads falha por outro motivo" test (expected 502, got 404) failed — confirming the tests discriminate both directions of this condition |
+
+- Baseline `git status --porcelain` (backend-promotor, before sensor work): empty.
+- Post-mutation-1-revert `git status --porcelain`: empty (confirmed before starting mutation 2).
+- Post-mutation-2-revert `git status --porcelain`: empty (final state, confirmed before writing this report).
+- No worktree was created at any point in this sensor run, so there is no `node_modules` sanity check to report (the explicit incident-avoidance guidance applies to worktree-based scratch setups; this run used none).
+
+**Sensor depth**: lightweight (2 targeted mutations, both on the highest-risk new code paths — the allowlist iteration's success/failure counting, and the manual endpoint's 404-vs-502 branch)
+**Result**: 2/2 killed → **PASS**
+
+### Code Quality (Phase 6 delta)
+
+| Check | Status |
+| --- | --- |
+| No features beyond what was asked | ✅ — exactly the allowlist + new resolve-by-ID endpoint, nothing else |
+| No abstractions for single-use code | ✅ — `CLIENTES_PRODUCAO_HABILITADOS` is a flat array, no factory/strategy pattern introduced |
+| No unnecessary "flexibility" added | ✅ |
+| Only touched files required for task | ✅ — see T02–T07 intocados section above |
+| Didn't "improve" unrelated code | ✅ — `listarClientesHabilitados` (dormant path) left byte-identical |
+| Matches existing patterns/style | ✅ — `resolverAdminsDoCliente` mirrors the existing `{sucesso, motivo}` discriminated-union error pattern used throughout `ObAdsIntegrationClient` |
+| Tests map to ACs, non-shallow | ✅ — spot-checked `promotorReportServiceLote.test.ts`: assertions target exact call arguments and exact summed counters, not just "doesn't throw" |
+| Spec-anchored outcome check | ✅ — see tables above, all assertions target the exact spec-defined value/status code |
+| Per-layer coverage (domain 1:1, routes happy+edge+error) | ✅ — `InternalClientesController` has 401/400/404/200(with admins)/200(empty admins) all covered in `internalClientesRoutes.test.ts` |
+| Every test maps to a spec requirement | ✅ — new/changed tests cite RELPROM-40/41/42/43 or AD-006 explicitly in their `it()` names |
+| Documented guidelines followed | ✅ none found in either repo — strong defaults applied (same as original round) |
+
+### Fix Plans
+
+None. 0 gaps found in the Phase 6 delta.
+
+### Requirement Traceability Update
+
+| Requirement | Previous Status | New Status |
+| --- | --- | --- |
+| RELPROM-40 | Pending (spec.md table, Design) | ✅ Verified |
+| RELPROM-41 | Pending (spec.md table, Design) | ✅ Verified (spec-precision note: exact literal value confirmed by read, not by a dedicated test — see AC table above) |
+| RELPROM-42 | Pending (spec.md table, Design) | ✅ Verified |
+| RELPROM-43 | Pending (spec.md table, Design) | ✅ Verified |
+
+**Note on spec.md's own traceability table**: the "Status" column in `spec.md` (`Pending` for every RELPROM, including the original 39 already verified in the 3-iteration round) was not mechanically updated by any implementer — this is a pre-existing gap in process bookkeeping carried from before Phase 6, not something Phase 6 introduced or worsened. Not treated as a Phase 6 fix task; flagged here for visibility.
+
+### Phase 6 Summary
+
+**Overall**: ✅ Ready
+
+**Spec-anchored check**: 4/4 new ACs (RELPROM-40..43) matched spec outcome with direct `file:line` evidence; 1 minor spec-precision note (RELPROM-41's literal value has no dedicated test pin, confirmed by code read instead) — not a gap
+**Sensor**: 2/2 new mutations killed
+**Gate**: 88 passed (backend-promotor, was 84), 28 passed (backend-ob-ads, was 23), 0 failed, 0 skipped; `tsc --noEmit` clean in both repos (same 2 pre-existing unrelated errors in backend-promotor, confirmed pre-dating Phase 6 by diffing against `72e8df5`)
+
+**What works**: The allowlist-based eligibility switch (RELPROM-40/41) and the direct-by-`ID_CLIENTE` admin resolution (RELPROM-42) are both correctly wired end-to-end — cron path (`processarClientesElegiveis`) and manual endpoint path (`gerar`) now share `resolverAdminsDoCliente` instead of the frozen module-based listing. AD-006 compliance (RELPROM-43) is structurally enforced: no new SQL file was added anywhere in either repo's Phase 6 diff, and the one pre-existing SQL script gained only a "do not run" comment header, its `INSERT` logic untouched. T02–T07 (the dormant module-based flow) are byte-identical to before Phase 6, confirmed by diff, ready to be reactivated by a 1-line source swap when AD-006 is lifted, exactly as `design.md`/`tasks.md` claim.
+
+**Issues found**: None blocking. One cosmetic traceability-bookkeeping gap noted (spec.md's Status column), pre-existing and out of Phase 6's scope.
+
+**Next steps**: Feature (including Phase 6) is done. No further fix→re-verify iterations needed. Recommend proceeding to merge/deploy per the team's normal process.
