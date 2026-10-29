@@ -19,6 +19,7 @@ import { CampanhaBlocoRelatorio, RelatorioPromotorData } from "../types/promotor
 import PromotorReportPdfRenderer from "./promotorReportPdfRenderer";
 import ObAdsIntegrationClient from "./obAdsIntegrationClient";
 import { resolverDestinatarios } from "../config/promotorReportRecipients";
+import { CLIENTES_PRODUCAO_HABILITADOS } from "../config/promotorReportClientesProducao";
 
 interface CampanhaAtivaDoCliente {
   ID_CAMPANHA: number;
@@ -258,23 +259,35 @@ export default class PromotorReportService {
   }
 
   /**
-   * Processa todos os clientes com o módulo "promotores" habilitado
-   * (RELPROM-14). Falha ao listar os clientes elegíveis aborta a execução
-   * inteira (não há granularidade possível antes de saber quem processar);
-   * falha isolada em 1 cliente não impede os demais (RELPROM-17).
+   * Processa os clientes elegíveis (RELPROM-14). **Pós-Execute, AD-006**:
+   * em vez de listar pelo módulo "promotores" no SQL Server (dormente —
+   * `ObAdsIntegrationClient.listarClientesHabilitados`, T03/T05, intocado
+   * pra quando a migração pra Postgres acabar), itera a allowlist fixa
+   * `CLIENTES_PRODUCAO_HABILITADOS` (RELPROM-40/41, hoje só SKF) e resolve
+   * cada cliente direto por `ID_CLIENTE` (RELPROM-42). Falha ao resolver 1
+   * cliente é isolada (RELPROM-17) — nunca aborta os demais, já que cada
+   * resolução agora é independente (sem mais 1 chamada única de listagem
+   * que pudesse falhar pra todos de uma vez).
    */
   static async processarClientesElegiveis(periodo: PeriodoRelatorio): Promise<ResumoExecucao> {
-    const listagem = await ObAdsIntegrationClient.listarClientesHabilitados(NOME_MODULO_PROMOTORES);
+    const resumo: ResumoExecucao = {
+      elegiveis: CLIENTES_PRODUCAO_HABILITADOS.length,
+      enviados: 0,
+      falharam: 0,
+    };
 
-    if (!listagem.sucesso) {
-      console.error("[promotorReportService] falha ao listar clientes elegíveis", { motivo: listagem.motivo });
-      return { elegiveis: 0, enviados: 0, falharam: 0 };
-    }
+    for (const idCliente of CLIENTES_PRODUCAO_HABILITADOS) {
+      const resolucao = await ObAdsIntegrationClient.resolverAdminsDoCliente(idCliente);
+      if (!resolucao.sucesso) {
+        console.error("[promotorReportService] falha ao resolver admins do cliente, pulando", {
+          idCliente,
+          motivo: resolucao.motivo,
+        });
+        resumo.falharam += 1;
+        continue;
+      }
 
-    const resumo: ResumoExecucao = { elegiveis: listagem.dados.length, enviados: 0, falharam: 0 };
-
-    for (const cliente of listagem.dados) {
-      const resultado = await this.processarRelatorioCliente(cliente, periodo, OrigemRelatorioEnvio.CRON);
+      const resultado = await this.processarRelatorioCliente(resolucao.dados, periodo, OrigemRelatorioEnvio.CRON);
       if (resultado.enviado) {
         resumo.enviados += 1;
       } else {

@@ -24,6 +24,7 @@ Explicitamente excluído. Documentado para prevenir scope creep.
 | Canais de envio além de e-mail (WhatsApp, etc.) | Ticket pede especificamente envio por e-mail ao admin |
 | Qualquer DDL/migration executada automaticamente em produção | Instrução explícita do usuário: toda alteração de schema roda manual, a partir de script gerado |
 | Escrita/alteração de dados de negócio no banco de produção via este fluxo | Este fluxo é somente leitura (SELECT) sobre dados de campanha/visita; a única escrita permitida é a própria tabela de controle de envio (dedupe/auditoria) deste feature |
+| Habilitar de fato o módulo "promotores" no SQL Server (rodar o INSERT em `module`/conceder via `cliente_module`) | **Adicionado após o Execute**: SQL Server entra em congelamento pré-migração pra Postgres (AD-006, `.specs/STATE.md`) — o DBA pediu pra não acrescentar nada lá (nem tabela, nem coluna, nem linha) enquanto a migração não terminar. O código do módulo (T02-T07) fica pronto e testado, mas dormente; produção usa a allowlist fixa de RELPROM-40/41 até a migração acabar |
 
 ---
 
@@ -140,6 +141,25 @@ Toda ambiguidade foi resolvida ou registrada aqui.
 
 **Independent Test**: Habilitar o módulo "Promotores" para um segundo cliente de teste (sem tocar em código), rodar a rotina manualmente, e confirmar que esse cliente também recebe o relatório, com o mesmo formato usado para a SKF.
 
+**Status pós-Execute**: RELPROM-20/21/22 continuam implementados e testados (`ModuloClientesService`, endpoints `/internal/modulos/*`), mas **dormentes** em produção — ver RELPROM-40/41 abaixo. Reativar é trocar a fonte de clientes elegíveis de volta pra `ObAdsIntegrationClient.listarClientesHabilitados`, sem reescrever nada.
+
+---
+
+### P5: Restrição temporária a SKF (SQL Server em congelamento pré-migração)
+
+**User Story**: Como Oficina Brasil, quero que o relatório automático só seja enviado pra SKF em produção por enquanto, sem depender de nenhuma tabela nova no SQL Server, porque o DBA pediu pra não acrescentar nada lá antes da migração pra Postgres e a SKF é o único cliente de fato usando o módulo hoje.
+
+**Why P5**: Decisão operacional pós-Execute (AD-006, `.specs/STATE.md`) — sem isso, ou o cron não envia pra ninguém (módulo nunca habilitado no SQL Server) ou violaria o pedido do DBA criando a linha do módulo.
+
+**Acceptance Criteria**:
+
+1. The system SHALL determinar os clientes elegíveis, em produção, por uma allowlist fixa em código no backend-promotor (`config/promotorReportClientesProducao.ts`), em vez de consultar `cliente_module` no SQL Server. <!-- RELPROM-40, ubiquitous -->
+2. The system SHALL conter, por enquanto, só o cliente SKF (`ID_CLIENTE = 126`) nessa allowlist. <!-- RELPROM-41, ubiquitous -->
+3. The system SHALL resolver os admins de um cliente da allowlist direto por `ID_CLIENTE` (endpoint interno novo `GET /internal/clientes/:idCliente/admins`, sem depender de `module`/`cliente_module`). <!-- RELPROM-42, ubiquitous -->
+4. The system SHALL NOT escrever nenhuma linha nova em `module`/`cliente_module` (SQL Server) enquanto AD-006 estiver ativa. <!-- RELPROM-43, unwanted-behavior -->
+
+**Independent Test**: Rodar o cron (ou o endpoint manual) em produção e confirmar que só a SKF recebe e-mail, mesmo que outro cliente tenha dados de campanha prontos; confirmar por `git diff`/revisão que nenhum script SQL desta mudança roda `INSERT`/`CREATE` no SQL Server.
+
 ---
 
 ## Edge Cases
@@ -196,12 +216,16 @@ Toda ambiguidade foi resolvida ou registrada aqui.
 | RELPROM-23 | Edge Case | Design | Pending |
 | RELPROM-24 | Edge Case | Design | Pending |
 | RELPROM-25 | Edge Case | Design | Pending |
+| RELPROM-40 | P5: Restrição temporária a SKF | Design | Pending |
+| RELPROM-41 | P5: Restrição temporária a SKF | Design | Pending |
+| RELPROM-42 | P5: Restrição temporária a SKF | Design | Pending |
+| RELPROM-43 | P5: Restrição temporária a SKF | Design | Pending |
 
 **ID format:** `RELPROM-NN`
 
 **Status values:** Pending → In Design → In Tasks → Implementing → Verified
 
-**Coverage:** 39 total, 0 mapped to tasks, 39 unmapped ⚠️ (esperado — Tasks ainda não rodou)
+**Coverage:** 43 total, 0 mapped to tasks, 43 unmapped ⚠️ (esperado — Tasks ainda não rodou)
 
 ---
 

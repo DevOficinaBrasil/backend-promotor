@@ -92,6 +92,17 @@ T19 -> T20
 T21 -> T22
 ```
 
+### Phase 6: Ajustes pós-Execute — AD-006 (SQL Server congelado, só SKF em produção)
+
+Adicionada depois do Verifier dar PASS, a pedido do usuário (DBA + só SKF em produção por enquanto). T02-T07 (módulo, Phase 2) ficam intocados, dormentes.
+
+```
+T23 -> T24
+T24 -> T26
+T25 -> T26
+T24 -> T27
+```
+
 ---
 
 ## Task Breakdown
@@ -711,10 +722,146 @@ T21 -> T22
 
 ---
 
+### Phase 6: Ajustes pós-Execute — AD-006 (tasks)
+
+Adicionada depois do Verifier dar PASS (3ª iteração). 2 pedidos do usuário: (1) DBA — SQL Server entra em congelamento pré-migração pra Postgres, nada novo pode ser acrescentado lá; (2) produto — só a SKF recebe o relatório em produção por enquanto, único cliente de fato usando. T02-T07 (módulo "promotores" no SQL Server, Phase 2) ficam **intocados, dormentes** — não apagados, não executados.
+
+### T23: `GET /internal/clientes/:idCliente/admins` (ob-ads)
+
+**What**: Endpoint interno novo que resolve admins de **1 cliente explícito por `ID_CLIENTE`**, sem passar por `module`/`cliente_module` — não lê nem escreve nenhuma tabela nova no SQL Server, só `TB_CLIENTE` (já existe) + reaproveita `AdminResolverService` (T04) sem alteração.
+**Where**: `backend-ob-ads/src/presentation/controllers/InternalClientesController.ts`, `backend-ob-ads/src/main/config/routes/InternalClientesRoutes.ts`, `backend-ob-ads/src/main/api.ts` (modifica, monta a rota)
+**Depends on**: None (reaproveita T02 e T04 já existentes)
+**Reuses**: `internalApiKeyGuard` (T02), `AdminResolverService.resolverAdminsPorCliente` (T04) — nenhum dos dois muda
+**Requirement**: RELPROM-42
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [x] `GET /internal/clientes/126/admins` retorna `{idCliente, nomeCliente, admins}`, 401 sem `x-api-key`, 404 se o `ID_CLIENTE` não existir em `TB_CLIENTE`, 400 se não for inteiro positivo
+- [x] Nenhuma tabela nova, nenhuma coluna nova, nenhum INSERT — só `SELECT` em `TB_CLIENTE` (já existente) + a query de admin já existente de T04
+- [x] Gate check passa: `npx jest --runInBand src/tests/internalClientesRoutes.test.ts` (5 passed)
+
+**Tests**: integration
+**Gate**: full
+
+**Commit**: `feat(internal): expoe admins de 1 cliente sem modulo (AD-006)`
+
+**Status**: ✅ Complete
+
+---
+
+### T24: `ObAdsIntegrationClient.resolverAdminsDoCliente` (backend-promotor)
+
+**What**: Método novo no cliente HTTP já existente (T12/T13), chamando `GET /internal/clientes/:idCliente/admins` (T23). Mesmo padrão de erro-como-união, nunca lança.
+**Where**: `service/obAdsIntegrationClient.ts` (modifica)
+**Depends on**: T23 (funcionalmente — o método compila e testa isolado antes, mas só funciona fim-a-fim depois do endpoint existir em produção)
+**Reuses**: estrutura HTTP já criada em T12/T13 (`headersInternos`, `baseUrl`, `AbortSignal.timeout`)
+**Requirement**: RELPROM-42
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [x] `resolverAdminsDoCliente(idCliente)` retorna `{sucesso:true, dados}` ou `{sucesso:false, motivo}` — nunca lança
+- [x] URL montada com `idCliente` no path (`/internal/clientes/:idCliente/admins`), sem nome de módulo
+- [x] Gate check passa: `npx jest --runInBand __tests__/unit/obAdsIntegrationClient.test.ts` (14 passed, 4 novos)
+
+**Tests**: unit
+**Gate**: quick
+
+**Commit**: `feat(promotor-relatorio): resolve admins de 1 cliente sem modulo`
+
+**Status**: ✅ Complete
+
+---
+
+### T25: Allowlist fixa de clientes em produção (backend-promotor)
+
+**What**: Constante `CLIENTES_PRODUCAO_HABILITADOS: number[]` hardcoded em código — mesmo espírito de `DEV_REPORT_RECIPIENTS` (T14) — com o `ID_CLIENTE` da SKF (126), documentada como temporária até a migração SQL Server→Postgres acabar e o módulo poder ser habilitado de verdade.
+**Where**: `config/promotorReportClientesProducao.ts` (novo)
+**Depends on**: None
+**Reuses**: nenhum
+**Requirement**: RELPROM-40, RELPROM-41, RELPROM-43
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [x] `CLIENTES_PRODUCAO_HABILITADOS = [126]` (SKF, confirmado pelo usuário)
+- [x] Comentário documenta o porquê (AD-006) e como reverter quando a migração acabar
+- [x] Gate check passa: `npx tsc --noEmit`
+
+**Tests**: none
+**Gate**: build
+
+**Commit**: `feat(promotor-relatorio): allowlist fixa de clientes em producao`
+
+**Status**: ✅ Complete
+
+---
+
+### T26: Religa `processarClientesElegiveis` pra allowlist fixa (backend-promotor)
+
+**What**: Troca a origem dos clientes elegíveis do cron de "listar por módulo no SQL Server" (`listarClientesHabilitados`, T03/T05, agora dormente) pra "iterar `CLIENTES_PRODUCAO_HABILITADOS` (T25) chamando `resolverAdminsDoCliente` (T24) por cliente". Sem isso, com T07 nunca executado, o módulo nunca existe e ninguém recebe nada — nem a SKF.
+**Where**: `service/promotorReportService.ts` (modifica `processarClientesElegiveis`)
+**Depends on**: T24, T25
+**Reuses**: `processarRelatorioCliente` (T17, sem alteração nenhuma) — só muda de onde vem a lista de clientes
+**Requirement**: RELPROM-40, RELPROM-41, RELPROM-42, RELPROM-17 (reafirmado), RELPROM-19 (reafirmado)
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [x] Itera `CLIENTES_PRODUCAO_HABILITADOS`, não mais `listarClientesHabilitados` — `NOME_MODULO_PROMOTORES`/`listarClientesHabilitados` continuam no arquivo, intocados, dormentes, prontos pra religar quando a migração acabar
+- [x] Falha ao resolver admins de 1 cliente isola só aquele cliente (cada cliente agora é 1 chamada independente, não existe mais "1 falha de listagem derruba todo mundo")
+- [x] Resumo `{elegiveis, enviados, falharam}` continua certo (RELPROM-19)
+- [x] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportServiceLote.test.ts` (4 passed, reescrito) + `__tests__/unit/promotorReportService.test.ts` + `__tests__/unit/promotorReportServiceEnvio.test.ts` (15 passed, sem regressão)
+
+**Tests**: unit
+**Gate**: quick
+
+**Commit**: `feat(promotor-relatorio): usa allowlist fixa em vez de modulo (AD-006)`
+
+**Status**: ✅ Complete
+
+---
+
+### T27: Endpoint manual resolve cliente direto, sem checar módulo (backend-promotor)
+
+**What**: `PromotorReportController.gerar` (T21) hoje chama `listarClientesHabilitados(NOME_MODULO_PROMOTORES, idCliente)` — com o módulo nunca criado no SQL Server (AD-006), isso sempre devolveria 404 pra qualquer cliente, inclusive a SKF, quebrando o próprio propósito de teste do endpoint. Troca pra `resolverAdminsDoCliente(idCliente)` (T24) direto.
+**Where**: `controllers/promotorReportController.ts` (modifica)
+**Depends on**: T24
+**Reuses**: nada novo
+**Requirement**: RELPROM-32, RELPROM-39 (reafirmado — 404 agora é "cliente não existe em `TB_CLIENTE`", não mais "sem módulo habilitado")
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [ ] `gerar` chama `ObAdsIntegrationClient.resolverAdminsDoCliente(idCliente)` em vez de `listarClientesHabilitados`
+- [ ] 404 quando o cliente não existe em `TB_CLIENTE` (resposta `sucesso:false` do novo endpoint tratada como "não encontrado", já que T23 só devolve 404 por esse motivo)
+- [ ] Demais comportamentos do endpoint (200+PDF, 400 período inválido, enviarEmail=false, 500 PDF vazio) continuam idênticos
+- [ ] Gate check passa: `npx jest --runInBand __tests__/integration/promotorRelatorio.test.ts`
+
+**Tests**: integration
+**Gate**: full
+
+**Commit**: `feat(promotor-relatorio): endpoint manual resolve cliente sem modulo`
+
+**Status**: ⏳ Pendente
+
+---
+
 ## Phase Execution Map
 
 ```
-Phase 1 → Phase 2 → Phase 3 → Phase 4 → Phase 5
+Phase 1 → Phase 2 → Phase 3 → Phase 4 → Phase 5 → Phase 6 (pós-Execute, AD-006)
 
 Phase 1:  T01
 Phase 2:  T02 ------→ T05

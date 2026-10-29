@@ -34,6 +34,14 @@
 - **Date**: 2026-10-29
 - **Status**: active
 
+### AD-006
+- **Decision**: O SQL Server (`backend-ob-ads`, `SqlConnections.SQLServerDataSource`) entra em congelamento de pré-migração: nenhuma feature nova pode acrescentar tabela, coluna ou linha de configuração nele (migrations/DDL, e também INSERTs de catálogo tipo `module`/`cliente_module`) até a migração pra Postgres terminar. Vale mesmo pra scripts marcados "execução manual" — não só código automático. Toda feature que precisaria de "habilitar algo por cliente" usa, em vez disso, uma allowlist fixa em código (backend-promotor ou backend-ob-ads), documentada como temporária, até a migração acabar e o mecanismo baseado em tabela poder ser ligado.
+- **Reason**: Pedido do DBA — toda alteração no SQL Server antes da migração aumenta o que precisa ser revalidado contra o schema novo em Postgres. Acrescentar `module`/`cliente_module` (CON26-325, relatório de promotores) seria mais uma coisa a portar/conferir na migração, mesmo sendo "só uma linha de dado".
+- **Trade-off**: Funcionalidade que dependeria do SQL Server pra escalar (ex.: módulo "promotores" habilitado por cliente via `cliente_module`) fica com o código pronto e testado, mas dormente — reativar depois da migração é trocar a fonte de dados de volta, não reescrever a feature. Até lá, "quem está habilitado" vive hardcoded em código, exigindo deploy pra mudar (aceitável: é só a SKF por enquanto).
+- **Scope**: Qualquer feature futura que cogitaria `CREATE TABLE`/`ALTER TABLE`/`INSERT` de catálogo no SQL Server do ob-ads primeiro verifica se essa decisão ainda está `active`; se estiver, usa allowlist/config em código em vez disso. Leitura (`SELECT`) no SQL Server continua liberada — a restrição é só escrita/schema.
+- **Date**: 2026-10-30
+- **Status**: active
+
 ## Handoff
 
 - **Feature**: disparo-convite-visita-admin (`.specs/features/disparo-convite-visita-admin/`), **DONE**

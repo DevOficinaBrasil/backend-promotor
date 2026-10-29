@@ -73,9 +73,16 @@ graph TD
 - **Location**: `service/promotorReportService.ts`
 - **Interfaces**:
   - `gerarRelatorioCliente(idCliente: number, periodo: PeriodoRelatorio, opcoes?: { enviarEmail?: boolean }): Promise<ResultadoRelatorioCliente>` — usado tanto pelo cron quanto pelo endpoint manual
-  - `processarClientesElegiveis(periodo: PeriodoRelatorio): Promise<ResumoExecucao>` — usado só pelo cron (itera todos os clientes elegíveis)
-- **Dependencies**: `ObAdsIntegrationClient`, `PromotorReportCalculos`, `PromotorReportPdfRenderer`, `AppDataSourceSync`, `PromotorRelatorioEnvioRepository`
+  - `processarClientesElegiveis(periodo: PeriodoRelatorio): Promise<ResumoExecucao>` — **pós-Execute (AD-006)**: itera `CLIENTES_PRODUCAO_HABILITADOS` (allowlist fixa, hoje só SKF) chamando `ObAdsIntegrationClient.resolverAdminsDoCliente` por cliente, em vez de `listarClientesHabilitados`. Trocar de volta é 1 linha, quando a migração acabar
+- **Dependencies**: `ObAdsIntegrationClient`, `PromotorReportCalculos`, `PromotorReportPdfRenderer`, `AppDataSourceSync`, `PromotorRelatorioEnvioRepository`, `CLIENTES_PRODUCAO_HABILITADOS` (config novo)
 - **Reuses**: `listarCampanhasAtivas` (adaptado de `adminDisparoService.ts:178-208`)
+
+### config/promotorReportClientesProducao.ts (novo, pós-Execute — AD-006)
+- **Purpose**: Allowlist fixa dos clientes que recebem o relatório em produção, enquanto o SQL Server estiver em congelamento (AD-006). Mesmo espírito de `DEV_REPORT_RECIPIENTS` (T14): hardcoded em código, não em tabela/env, documentado como temporário.
+- **Location**: `config/promotorReportClientesProducao.ts`
+- **Interfaces**: `CLIENTES_PRODUCAO_HABILITADOS: number[]` = `[126]` (SKF)
+- **Dependencies**: nenhuma
+- **Reuses**: nenhum — constante nova
 
 ### PromotorReportCalculos
 - **Purpose**: Funções puras de cálculo por campanha (contagens, assertividade, agrupamento de destaques, contadores de próximos passos) — testáveis sem banco, seguindo a convenção do repo de isolar política de domínio em funções puras.
@@ -99,12 +106,13 @@ graph TD
 - **Reuses**: `assets/fonts`, `assets/img/obLogo.png` (identidade visual); nada de lógica
 
 ### ObAdsIntegrationClient
-- **Purpose**: Cliente HTTP fino pros 2 endpoints internos novos do ob-ads. Isola toda a integração cross-service num único arquivo, com timeout e tratamento de erro padronizado.
+- **Purpose**: Cliente HTTP fino pros endpoints internos do ob-ads. Isola toda a integração cross-service num único arquivo, com timeout e tratamento de erro padronizado.
 - **Location**: `service/obAdsIntegrationClient.ts`
 - **Interfaces**:
-  - `listarClientesHabilitados(nomeModulo: string, idCliente?: number): Promise<ClienteModuloHabilitado[]>`
+  - `listarClientesHabilitados(nomeModulo: string, idCliente?: number): Promise<ResultadoListagem>` — caminho baseado em módulo (T03/T05), dormente em produção (AD-006), mantido pra pós-migração
+  - `resolverAdminsDoCliente(idCliente: number): Promise<ResultadoResolucaoCliente>` — **novo, pós-Execute**: chama `GET /internal/clientes/:idCliente/admins` (`InternalClientesRoutes`), sem passar por módulo. Caminho ativo em produção enquanto AD-006 estiver em vigor (RELPROM-42)
   - `enviarEmailComAnexo(req: EnviarEmailComAnexoRequest): Promise<{ sucesso: true } | { sucesso: false; motivo: string }>`
-- **Dependencies**: `OBADS_BASE_URL`, `INTERNAL_API_KEY` (env novas), cliente HTTP já usado no repo (verificar se `fetch` nativo do Node 20 é suficiente — provável, sem nova dependência)
+- **Dependencies**: `OBADS_BASE_URL`, `INTERNAL_API_KEY` (env novas), `fetch` nativo do Node 20 (sem nova dependência)
 - **Reuses**: nenhum código, mas espelha o padrão de erro-como-união (nunca lança, retorna `{sucesso, motivo?}`) já usado em `ChannelSendResult`/`rotaService.notificarRotasCriadas`
 
 ### PromotorReportRoute / promotorReportController
@@ -144,6 +152,13 @@ graph TD
 - **Interfaces**: `POST /internal/email/enviar-com-anexo` body `{ to: string[], subject: string, bodyHtml: string, attachment: { filename: string, contentBase64: string, contentType: string } }` → `{ success: boolean, error?: string }`
 - **Dependencies**: `apiKeyGuard`, `EmailService`
 - **Reuses**: `EmailService.sendEmailWithAttachment` (`EmailService.ts:115-153`) sem alteração
+
+### InternalClientesRoutes (novo, pós-Execute — AD-006)
+- **Purpose**: Resolve admins de **1 cliente explícito por `ID_CLIENTE`**, sem passar por `module`/`cliente_module` — caminho usado enquanto o SQL Server estiver em congelamento pré-migração (AD-006) e só a SKF for allowlisted (RELPROM-40 a 43). `InternalModulosRoutes` continua existindo, intocada, pra quando a migração acabar.
+- **Location**: `backend-ob-ads/src/main/config/routes/InternalClientesRoutes.ts` + `src/presentation/controllers/InternalClientesController.ts` (novos)
+- **Interfaces**: `GET /internal/clientes/:idCliente/admins` → `{ idCliente, nomeCliente, admins: string[] }`, 404 se `Cliente` não existir
+- **Dependencies**: `apiKeyGuard` (T02, reaproveitado), `Cliente`, `AdminResolverService` (T04, reaproveitado sem alteração)
+- **Reuses**: `AdminResolverService.resolverAdminsPorCliente` (já existe, T04) — este componente só soma a consulta de `Cliente` por `ID_CLIENTE` e empacota a resposta; nenhuma lógica de admin nova
 
 ---
 
@@ -248,5 +263,8 @@ interface PromotorRelatorioEnvio {
 | Idempotência do cron | Tabela nova `PROMOTOR_RELATORIO_ENVIO` com chave única `(ID_CLIENTE, PERIODO_INICIO, PERIODO_FIM, ORIGEM='CRON', STATUS='SUCESSO')` | Resposta determinística sem depender de estado externo; `ORIGEM='MANUAL'` fica isenta, então o endpoint de teste nunca é bloqueado |
 | Definição de "campanha ativa" | `STATUS='PUBLICADA' AND DELETED_AT IS NULL AND START_TIME<=agora AND (END_TIME IS NULL OR END_TIME>=agora)` | Mesma regra já usada em produção por `adminDisparoService.listarCampanhasAtivas` — reaproveitar em vez de inventar critério novo |
 | Identificador de cliente usado nas rotas/integração | `ID_CLIENTE` (o mesmo `Campanha.ID_CLIENT`, direto o ID do SQL Server — `entities/Campanha.ts:40`) | Diferente do `CommunityReport` (que precisa de `ClientClientTraining` pra traduzir Postgres↔SQL Server), aqui `Campanha.ID_CLIENT` já é o ID do SQL Server — nenhuma tabela de tradução necessária |
+| **Pós-Execute**: elegibilidade de cliente em produção | Allowlist fixa em código (`CLIENTES_PRODUCAO_HABILITADOS = [126]`) + endpoint novo não-gated-por-módulo (`/internal/clientes/:idCliente/admins`), em vez do fluxo `module`/`cliente_module` (T03/T05) | AD-006: SQL Server em congelamento pré-migração pra Postgres, DBA pediu pra não acrescentar nada lá. T07 (INSERT do módulo) nunca roda enquanto isso vigorar. Código do módulo fica pronto/testado, só não é o caminho ativo |
 
-> **Project-level decisions**: a decisão de secret compartilhado (`INTERNAL_API_KEY`) e o padrão de endpoints internos genéricos (em vez de um por feature) são convenção pra qualquer integração cross-service futura entre backend-promotor e backend-ob-ads — registrada como `AD-005` em `.specs/STATE.md`.
+> **Project-level decisions**: a decisão sobre congelamento do SQL Server pré-migração está registrada como `AD-006` em `.specs/STATE.md` — vale pra qualquer feature futura que cogitasse escrever lá, não só esta.
+>
+> As decisões abaixo (`INTERNAL_API_KEY` compartilhado, endpoints genéricos) continuam valendo: a decisão de secret compartilhado (`INTERNAL_API_KEY`) e o padrão de endpoints internos genéricos (em vez de um por feature) são convenção pra qualquer integração cross-service futura entre backend-promotor e backend-ob-ads — registrada como `AD-005` em `.specs/STATE.md`.
