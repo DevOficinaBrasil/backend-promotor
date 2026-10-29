@@ -29,7 +29,7 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 | Entity (`PromotorRelatorioEnvio`) | none | - (build gate only) | - | `npx tsc --noEmit` |
 | Script SQL de migration/módulo (manual, nunca executado pelo agente) | none | - (revisão humana; execução manual pelo usuário, conforme instrução) | `scripts/*.sql` (backend-promotor) · `sql/*.sql` (backend-ob-ads) | nenhum — revisão manual, sem gate automatizado |
 | Wiring trivial (registrar rota/cron existente em `app.ts`) | none | Coberto indiretamente pelo teste unitário/integração do componente já registrado na mesma task ou numa task anterior | `app.ts` | `npx tsc --noEmit` |
-| Spike exploratório (validação do Playwright no Docker) | none | Não é código de produção coberto pela matrix — resultado documentado em prosa no próprio design.md | `scripts/spike-playwright-docker.ts` | nenhum automatizado — validação manual via Docker Desktop |
+| Spike exploratório (validação do Playwright no SO real da EC2, simulado via `amazonlinux:2023`) | none | Não é código de produção coberto pela matrix — resultado documentado em prosa no próprio design.md | `scripts/spike-playwright-ec2.ts` | nenhum automatizado — validação manual via Docker Desktop (sandbox) |
 
 ## Gate Check Commands
 
@@ -47,7 +47,7 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 
 Fases são sequenciais — cada fase termina antes da próxima começar, tasks dentro de uma fase executam em ordem.
 
-### Phase 1: Spike — validar Playwright no Docker
+### Phase 1: Spike — validar Playwright no SO real da EC2
 
 Gate de risco antes de qualquer código de produção da feature (pedido do usuário).
 
@@ -96,30 +96,30 @@ T21 -> T22
 
 ## Task Breakdown
 
-### Phase 1: Spike — validar Playwright no Docker (tasks)
+### Phase 1: Spike — validar Playwright no SO real da EC2 (tasks)
 
-### T01: Validar Playwright na imagem Docker atual (spike)
+### T01: Validar Playwright no SO real da EC2 de produção (spike)
 
-**What**: Buildar a imagem do `Dockerfile` atual (`node:20-alpine`) no Docker Desktop local, instalar o Chromium do Playwright dentro do container e gerar 1 PDF de teste a partir de um HTML mínimo, pra confirmar (ou não) que a imagem atual suporta Playwright sem mudança de base image.
-**Where**: `scripts/spike-playwright-docker.ts` (novo, script descartável), `.specs/features/relatorio-semanal-promotores/design.md` (atualiza a linha de risco do Playwright com o resultado real)
+**What**: Produção roda `node` direto numa instância EC2 (Amazon Linux 2023), sem Docker/ECS — `Dockerfile`/`task_definition.tpl.json` do repo estão desatualizados e não refletem o deploy real. Simular esse ambiente localmente com um container `amazonlinux:2023` (sandbox só pra validação, não é o que vai rodar em produção), instalar Node 20 + Chromium do Playwright nele, e gerar 1 PDF de teste a partir de um HTML mínimo.
+**Where**: `scripts/spike-playwright-ec2.ts` (novo, script descartável), `.specs/features/relatorio-semanal-promotores/design.md` (atualiza a linha de risco do Playwright com o resultado real e a lista de pacotes de sistema necessários, se houver)
 **Depends on**: None
-**Reuses**: `Dockerfile` existente (sem modificar)
+**Reuses**: nada do `Dockerfile` do repo (ele não representa o ambiente real)
 
 **Tools**:
-- MCP: NONE (Bash local com `docker build`/`docker run`, Docker Desktop precisa estar rodando)
+- MCP: NONE (Bash local com `docker run amazonlinux:2023`, Docker Desktop só como sandbox de simulação)
 - Skill: NONE
 
 **Done when**:
-- [ ] Imagem buildada localmente a partir do `Dockerfile` atual, sem alteração nele
-- [ ] Dentro do container: `npx playwright install --with-deps chromium` executado e resultado (sucesso/erro) registrado
-- [ ] Se a instalação funcionar: 1 PDF gerado a partir de um HTML mínimo dentro do container, confirmando que `chromium.launch()` roda
-- [ ] Resultado (funcionou / não funcionou, com o erro exato se não funcionou) documentado na linha de risco do Playwright em `design.md`
-- [ ] Se não funcionou: a task para aqui e o usuário é avisado antes de qualquer outra task tocar `PromotorReportPdfRenderer` (T15) — não decidir a abordagem alternativa sozinho
+- [ ] Container `amazonlinux:2023` rodando localmente, com Node 20 instalado nele (`dnf install nodejs20` ou NodeSource, o que existir)
+- [ ] Dentro do container: `npx playwright install --with-deps chromium` executado e resultado (sucesso/erro, pacotes `dnf` que faltavam) registrado
+- [ ] Se a instalação funcionar: 1 PDF gerado a partir de um HTML mínimo dentro do container, confirmando que `chromium.launch()` roda em Amazon Linux 2023
+- [ ] Resultado documentado em `design.md`: funcionou/não funcionou, e se funcionou, a lista exata de pacotes de sistema (`dnf install ...`) que a EC2 real de produção precisa ter instalados antes de `PROMOTOR_RELATORIO_ENABLED=1`
+- [ ] Se não funcionou mesmo em glibc: a task para aqui e o usuário é avisado antes de qualquer outra task tocar `PromotorReportPdfRenderer` (T15) — não decidir a abordagem alternativa sozinho
 
 **Tests**: none
 **Gate**: build (`npx tsc --noEmit` só pro script novo, já que não há suíte de teste pra um spike)
 
-**Commit**: `chore(relatorio-promotores): valida playwright na imagem docker atual`
+**Commit**: `chore(relatorio-promotores): valida playwright no so real da ec2 (amazon linux 2023)`
 
 ---
 
