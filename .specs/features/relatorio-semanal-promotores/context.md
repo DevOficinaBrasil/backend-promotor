@@ -38,6 +38,12 @@ Automatizar a geração e o envio por e-mail do relatório semanal de visitas de
 - Cliente com 1 campanha ativa (caso da SKF hoje): continua um único bloco, sem mudança visível.
 - Rationale: agregar misturaria métricas de campanhas com maturidades diferentes (ex.: campanha nova de poucos dias junto de uma campanha consolidada), distorcendo assertividade e comparações por promotor.
 
+### Guarda de ambiente (dev vs. produção)
+- Fora de produção (`NODE_ENV !== "production"`), o envio real do e-mail vai só para uma lista fixa de destinatários de teste definida em código (ex.: `DEV_REPORT_RECIPIENTS`), nunca para os admins reais do cliente.
+- Os e-mails de admin que seriam os destinatários reais são registrados em log (não "print" literal no console de produção — log estruturado, seguindo a convenção de logging do repo), pra permitir validar a resolução de destinatários sem risco de vazar e-mail de teste pro cliente real.
+- Lista de teste vazia fora de produção ⇒ não envia nada pro cliente, loga a condição (mesmo tratamento de "cliente sem admin resolvido").
+- Em produção, a lista de teste nunca é usada — sempre os admins reais.
+
 ### Cliente sem movimentação no período
 - Envia o relatório mesmo com todos os contadores zerados (concluídas, canceladas, abertas na rota podem ainda ser > 0 mesmo sem conclusões/cancelamentos novos). Preferência por transparência: zero visível é mais confiável que silêncio.
 

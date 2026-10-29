@@ -43,6 +43,8 @@ Toda ambiguidade foi resolvida ou registrada aqui.
 | Múltiplos admins por cliente | Um único envio por cliente/período, todos os e-mails de admin no `To` | Decidido em discuss | y |
 | Cliente sem nenhum admin resolvido | Não envia; registra falha de resolução de destinatário para aquele cliente, não impede os demais clientes | Decidido em discuss (combinação com tratamento de falha) | y |
 | Cliente com mais de uma `Campanha` ativa vinculada | **Revisado em discuss**: não agrega — o relatório segmenta por campanha. Um único PDF/e-mail por cliente, mas com um bloco completo (todas as 6 seções de dados) por campanha ativa | Ticket ficou ambíguo nesse ponto; agregar misturaria métricas de campanhas distintas (ex.: assertividade de uma campanha nova com poucos dias junto da de uma campanha madura) | y |
+| Critério para distinguir "ambiente de dev" do "de produção" (guarda de destinatários) | `NODE_ENV !== "production"` é tratado como não-produção | Convenção Node mais comum; repo já usa `NODE_ENV` para distinguir `test` em outro cron (`schedule/outboxNotificacaoCron.ts`); escolha conservadora, pois qualquer ambiente não explicitamente marcado `production` cai no modo seguro (não manda pro admin real) | n |
+| Onde/como a lista fixa de destinatários de teste é definida | Constante no código (ex.: `DEV_REPORT_RECIPIENTS` em um arquivo de config), não em variável de ambiente | Pedido explícito do usuário: "lista de e-mails que ficará definida em código" | y |
 
 **Open questions:** none — todas resolvidas ou registradas acima.
 
@@ -73,8 +75,12 @@ Toda ambiguidade foi resolvida ou registrada aqui.
 13. IF o cliente não teve nenhuma visita concluída ou cancelada no período THEN o sistema SHALL gerar e enviar o relatório normalmente, com os contadores do período em zero. <!-- RELPROM-13, unwanted-behavior -->
 14. WHEN o cliente tiver mais de uma campanha ativa THEN o sistema SHALL incluir, no mesmo PDF e no mesmo e-mail, um bloco de dados completo e identificado pelo nome da campanha para cada campanha ativa — sem agregar métricas entre campanhas diferentes. <!-- RELPROM-26, event-driven -->
 15. WHEN o cliente tiver exatamente uma campanha ativa THEN o sistema SHALL exibir um único bloco de dados, identificado pelo nome dessa campanha. <!-- RELPROM-27, event-driven -->
+16. WHILE o ambiente de execução não for produção (`NODE_ENV !== "production"`) THEN o sistema SHALL enviar o e-mail do relatório de cada cliente apenas para a lista fixa de destinatários de teste definida em código, nunca para os admins reais resolvidos daquele cliente. <!-- RELPROM-28, state-driven -->
+17. WHILE o ambiente de execução não for produção THEN o sistema SHALL registrar em log, para cada cliente processado, a lista de e-mails de admin que teriam sido os destinatários reais, sem enviar e-mail para eles. <!-- RELPROM-29, state-driven -->
+18. IF a lista fixa de destinatários de teste estiver vazia fora de produção THEN o sistema SHALL NOT enviar nenhum e-mail para aquele cliente e SHALL registrar essa condição em log, tratando-a como falha de resolução de destinatário (mesmo tratamento de RELPROM-12). <!-- RELPROM-30, unwanted-behavior -->
+19. WHILE o ambiente de execução for produção THEN o sistema SHALL enviar exclusivamente para os admins reais resolvidos do cliente (RELPROM-11), SHALL NOT usar a lista fixa de destinatários de teste. <!-- RELPROM-31, state-driven -->
 
-**Independent Test**: Disparar a geração manualmente para o cliente SKF (sem esperar o cron) e comparar o PDF resultante, seção a seção, com o modelo anexado ao CON26-325 — mesmas seções, mesma ordem, números batendo com uma consulta SELECT equivalente no banco de produção. Repetir com um cliente de teste com 2 campanhas ativas e confirmar 2 blocos de dados distintos no mesmo PDF, sem mistura de números entre eles.
+**Independent Test**: Disparar a geração manualmente para o cliente SKF (sem esperar o cron) e comparar o PDF resultante, seção a seção, com o modelo anexado ao CON26-325 — mesmas seções, mesma ordem, números batendo com uma consulta SELECT equivalente no banco de produção. Repetir com um cliente de teste com 2 campanhas ativas e confirmar 2 blocos de dados distintos no mesmo PDF, sem mistura de números entre eles. Rodar fora de produção e confirmar: o e-mail chega só na lista fixa de teste, nunca no admin real do cliente, e o log mostra quais e-mails de admin teriam sido os destinatários reais.
 
 ---
 
@@ -119,6 +125,8 @@ Toda ambiguidade foi resolvida ou registrada aqui.
 - IF o texto do campo OBS exceder 500 caracteres THEN o sistema SHALL truncar o texto exibido no PDF em 500 caracteres seguidos de reticências. <!-- RELPROM-24 -->
 - WHEN uma visita tem `DONE_AT`/data de cancelamento exatamente no instante de corte (23:59:59 America/Sao_Paulo do dia anterior ao disparo) THEN o sistema SHALL incluí-la no período que está terminando (limite superior inclusivo). <!-- RELPROM-25 -->
 - IF um promotor não teve nenhuma visita concluída nem cancelada no período, mas tem oficinas abertas na rota THEN o sistema SHALL listá-lo na tabela por promotor com as colunas de período zeradas e a coluna de abertas na rota preenchida (não omitir a linha). <!-- coberto por RELPROM-07 -->
+- IF a lista fixa de destinatários de teste contiver um e-mail em formato inválido THEN o sistema SHALL tratar esse e-mail como inválido e SHALL seguir o envio apenas com os e-mails válidos da lista, registrando o inválido em log. <!-- coberto por RELPROM-28 -->
+- IF o código rodar com `NODE_ENV` indefinido THEN o sistema SHALL tratar essa execução como não-produção (modo seguro: usa a lista de teste). <!-- coberto por RELPROM-28 -->
 
 ---
 
@@ -141,6 +149,10 @@ Toda ambiguidade foi resolvida ou registrada aqui.
 | RELPROM-13 | P1: Relatório semanal correto | Design | Pending |
 | RELPROM-26 | P1: Relatório semanal correto | Design | Pending |
 | RELPROM-27 | P1: Relatório semanal correto | Design | Pending |
+| RELPROM-28 | P1: Relatório semanal correto | Design | Pending |
+| RELPROM-29 | P1: Relatório semanal correto | Design | Pending |
+| RELPROM-30 | P1: Relatório semanal correto | Design | Pending |
+| RELPROM-31 | P1: Relatório semanal correto | Design | Pending |
 | RELPROM-14 | P2: Execução automática semanal | Design | Pending |
 | RELPROM-15 | P2: Execução automática semanal | Design | Pending |
 | RELPROM-16 | P2: Execução automática semanal | Design | Pending |
@@ -158,7 +170,7 @@ Toda ambiguidade foi resolvida ou registrada aqui.
 
 **Status values:** Pending → In Design → In Tasks → Implementing → Verified
 
-**Coverage:** 27 total, 0 mapped to tasks, 27 unmapped ⚠️ (esperado — Tasks ainda não rodou)
+**Coverage:** 31 total, 0 mapped to tasks, 31 unmapped ⚠️ (esperado — Tasks ainda não rodou)
 
 ---
 
@@ -171,3 +183,4 @@ Como saberemos que a feature foi bem-sucedida:
 - [ ] Nenhum envio duplicado ocorre para o mesmo cliente/período, mesmo se a rotina for disparada mais de uma vez.
 - [ ] Falha em um cliente (sem admin resolvido, integração fora do ar) não impede o envio para os demais clientes elegíveis na mesma execução.
 - [ ] Um cliente com 2+ campanhas ativas recebe um único e-mail/PDF com um bloco de dados por campanha, sem misturar métricas entre campanhas.
+- [ ] Fora de produção, nenhum e-mail chega a um admin real de cliente — só a lista fixa de teste definida em código recebe, e os e-mails de admin que seriam os destinatários reais aparecem logados.
