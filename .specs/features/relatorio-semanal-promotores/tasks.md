@@ -468,16 +468,18 @@ T21 -> T22
 - Skill: NONE
 
 **Done when**:
-- [ ] `NODE_ENV !== "production"` (incluindo indefinido) → retorna `DEV_REPORT_RECIPIENTS` + `adminsReaisParaLog: adminsReais`
-- [ ] `NODE_ENV === "production"` → retorna `adminsReais`, nunca a lista de teste
-- [ ] `DEV_REPORT_RECIPIENTS` vazia fora de produção → retorna destinatários vazios (tratado como falha de resolução a jusante, RELPROM-30)
-- [ ] E-mail inválido na lista de teste é filtrado, não derruba os demais
-- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportRecipients.test.ts`
+- [x] `NODE_ENV !== "production"` (incluindo indefinido) → retorna `DEV_REPORT_RECIPIENTS` + `adminsReaisParaLog: adminsReais`
+- [x] `NODE_ENV === "production"` → retorna `adminsReais`, nunca a lista de teste
+- [x] `DEV_REPORT_RECIPIENTS` vazia fora de produção → retorna destinatários vazios (tratado como falha de resolução a jusante, RELPROM-30)
+- [x] E-mail inválido na lista de teste é filtrado, não derruba os demais
+- [x] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportRecipients.test.ts` (6 passed)
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(promotor-relatorio): guarda de destinatarios dev/producao`
+
+**Status**: ✅ Complete
 
 ---
 
