@@ -355,15 +355,18 @@ T21 -> T22
 - Skill: NONE
 
 **Done when**:
-- [ ] `calcularVisaoGeral` conta concluídas/canceladas no período e abertas na rota (foto atual) corretamente
-- [ ] `calcularAssertividade` retorna `"N/A"` quando concluídas+canceladas = 0, senão a porcentagem arredondada
-- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportCalculos.test.ts`
-- [ ] Teste cobre RELPROM-02 a RELPROM-06, incluindo o caso de divisão por zero
+- [x] `calcularVisaoGeral` conta concluídas/canceladas no período e abertas na rota (foto atual) corretamente
+- [x] `calcularAssertividade` retorna `"N/A"` quando concluídas+canceladas = 0, senão a porcentagem arredondada
+- [x] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportCalculos.test.ts` (10 passed)
+- [x] Teste cobre RELPROM-02 a RELPROM-06, incluindo o caso de divisão por zero
+- [x] Removido `promotoresComRegistro` do `VisaoGeralCampanha` do design.md — nenhuma AC pede esse resumo (scope creep identificado durante a implementação)
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(promotor-relatorio): calculo de visao geral e assertividade por campanha`
+
+**Status**: ✅ Complete — nota: `ROTA_PROMOTOR` não tem coluna própria de "data de cancelamento"; `UPDATED_AT` usado como proxy (documentado no código), pendente de confirmação quando `.env.readonly` existir nesta máquina
 
 ---
 

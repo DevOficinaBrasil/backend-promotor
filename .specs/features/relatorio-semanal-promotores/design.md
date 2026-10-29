@@ -163,7 +163,7 @@ interface ClienteModuloHabilitado {
 interface CampanhaBlocoRelatorio {
   idCampanha: number
   nomeCampanha: string
-  visaoGeral: { concluidas: number; canceladas: number; abertasNaRota: number; promotoresComRegistro: string }
+  visaoGeral: { concluidas: number; canceladas: number; abertasNaRota: number } // sem "promotoresComRegistro": nenhuma AC da spec pede esse resumo, a tabela por promotor (RELPROM-07) já cobre a informação — corrigido durante T10
   assertividade: number | "N/A"
   porPromotor: LinhaPromotor[]
   cancelamentos: { promotor: string; oficina: string; cidade: string; obs: string | null }[]
