@@ -9,7 +9,7 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 ---
 
 **Design**: `.specs/features/relatorio-semanal-promotores/design.md`
-**Status**: In Progress
+**Status**: Done — todas as 22 tasks concluídas; falta o Verifier (passo 9 do Execute)
 
 **Escopo cross-repo**: Fase 2 roda inteira no repo `backend-ob-ads` (`C:\Users\AndrePereira\Documents\oficina brasil\backend-ob-ads`), já na branch `feat/relatorio-promotores-semanal` (criada a partir de `main`, confirmado limpo e sincronizado — nenhuma task de setup de branch é necessária). As demais fases rodam no `backend-promotor`, também já na branch `feat/relatorio-promotores-semanal`. Cada commit de task vai pro repo correto — os comandos de commit das tasks da Fase 2 usam `git -C "<path do ob-ads>"`, nunca o repo atual.
 
@@ -698,13 +698,15 @@ T21 -> T22
 - Skill: NONE
 
 **Done when**:
-- [ ] Rota nova montada igual às demais `/admin/*`
-- [ ] Gate check passa: `npx tsc --noEmit`
+- [x] Rota nova montada igual às demais `/admin/*`
+- [x] Gate check passa: `npx tsc --noEmit`
 
 **Tests**: none
 **Gate**: build
 
 **Commit**: `chore(promotor-relatorio): registra rota administrativa de disparo manual`
+
+**Status**: ✅ Complete
 
 ---
 
