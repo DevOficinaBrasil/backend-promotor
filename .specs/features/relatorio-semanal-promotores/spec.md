@@ -45,6 +45,8 @@ Toda ambiguidade foi resolvida ou registrada aqui.
 | Cliente com mais de uma `Campanha` ativa vinculada | **Revisado em discuss**: não agrega — o relatório segmenta por campanha. Um único PDF/e-mail por cliente, mas com um bloco completo (todas as 6 seções de dados) por campanha ativa | Ticket ficou ambíguo nesse ponto; agregar misturaria métricas de campanhas distintas (ex.: assertividade de uma campanha nova com poucos dias junto da de uma campanha madura) | y |
 | Critério para distinguir "ambiente de dev" do "de produção" (guarda de destinatários) | `NODE_ENV !== "production"` é tratado como não-produção | Convenção Node mais comum; repo já usa `NODE_ENV` para distinguir `test` em outro cron (`schedule/outboxNotificacaoCron.ts`); escolha conservadora, pois qualquer ambiente não explicitamente marcado `production` cai no modo seguro (não manda pro admin real) | n |
 | Onde/como a lista fixa de destinatários de teste é definida | Constante no código (ex.: `DEV_REPORT_RECIPIENTS` em um arquivo de config), não em variável de ambiente | Pedido explícito do usuário: "lista de e-mails que ficará definida em código" | y |
+| Identificador do cliente usado na rota de disparo manual (`EMPRESA_SLUG` vs `ID_CLIENT`) | Decisão de Design, a partir do que já é usado em outras rotas `/admin/*` existentes | Specify não deve inventar o formato de um path param sem checar a convenção real das rotas administrativas já existentes | n |
+| Endpoint de disparo manual: síncrono (retorna o PDF na mesma resposta) ou assíncrono (dispara e retorna 202, PDF disponível depois) | Síncrono — retorna o PDF na mesma requisição | Caso de uso é teste/depuração e preview de frontend; geração de 1 cliente é rápida o bastante pra não precisar de fila/job assíncrono no MVP | n |
 
 **Open questions:** none — todas resolvidas ou registradas acima.
 
@@ -84,11 +86,32 @@ Toda ambiguidade foi resolvida ou registrada aqui.
 
 ---
 
-### P2: Execução automática semanal, sem intervenção manual
+### P2: Disparo manual via endpoint administrativo
+
+**User Story**: Como time de Oficina Brasil (dev/QA) ou uma futura tela administrativa, quero disparar a geração (e, opcionalmente, o envio) do relatório de um cliente sob demanda, via um endpoint HTTP autenticado, para testar o relatório sem esperar o cron semanal e para já existir uma integração pronta para o frontend usar no futuro.
+
+**Why P2**: Sem um endpoint, validar P1 em dev depende de rodar script/consulta manual sem superfície HTTP — trava o teste e não deixa nada pronto para uma tela administrativa futura pedir o relatório sob demanda.
+
+**Acceptance Criteria**:
+
+1. The system SHALL expose um endpoint HTTP administrativo, protegido por `adminAuthMiddleware` (mesma convenção dos demais endpoints `/admin/*`, AD-004), que dispara a geração do relatório para um cliente específico identificado na requisição. <!-- RELPROM-32, ubiquitous -->
+2. WHEN o endpoint é chamado sem parâmetros de período THEN o sistema SHALL usar a mesma regra de janela do disparo agendado (últimos 7 dias corridos, corte quinta 23:59:59 America/Sao_Paulo) — RELPROM-15. <!-- RELPROM-33, event-driven -->
+3. WHERE o endpoint for chamado com um período explícito (data de início/fim) THEN o sistema SHALL gerar o relatório para esse período customizado, em vez da janela padrão — uso de teste/depuração. <!-- RELPROM-34, optional-feature -->
+4. WHEN o endpoint é chamado THEN o sistema SHALL aplicar a mesma segmentação por campanha (RELPROM-01, RELPROM-26, RELPROM-27) e os mesmos cálculos (RELPROM-02 a RELPROM-10) usados no fluxo agendado — nenhuma lógica duplicada ou divergente entre os dois gatilhos. <!-- RELPROM-35, ubiquitous -->
+5. The system SHALL retornar, na resposta do endpoint, o PDF gerado (para permitir pré-visualização/download imediato, inclusive por um frontend futuro), independentemente de o e-mail ter sido enviado ou não. <!-- RELPROM-36, ubiquitous -->
+6. WHERE o endpoint for chamado para também disparar o e-mail (comportamento padrão) THEN o sistema SHALL aplicar a mesma guarda de ambiente dev/produção já definida (RELPROM-28 a RELPROM-31) — em dev, o e-mail real vai só para a lista fixa de teste, nunca para o admin do cliente. <!-- RELPROM-37, state-driven -->
+7. WHERE o endpoint for chamado em modo somente-pré-visualização (sem disparar e-mail) THEN o sistema SHALL gerar e retornar o PDF sem enviar nenhum e-mail. <!-- RELPROM-38, optional-feature -->
+8. IF o cliente informado não existir, não tiver o módulo "Promotores" habilitado, ou não tiver nenhuma campanha vinculada THEN o endpoint SHALL responder com um erro claro identificando qual dessas condições falhou, sem gerar PDF nem tentar enviar e-mail. <!-- RELPROM-39, unwanted-behavior -->
+
+**Independent Test**: Chamar o endpoint autenticado como admin interno para o cliente SKF em dev, sem esperar sexta-feira nem o cron: confirmar que o PDF retornado bate com o gerado pelo fluxo agendado para o mesmo período, que o e-mail (quando solicitado) só chega na lista fixa de teste, e que o modo somente-pré-visualização não dispara e-mail nenhum.
+
+---
+
+### P3: Execução automática semanal, sem intervenção manual
 
 **User Story**: Como Oficina Brasil (squad de Interação), quero que o relatório seja gerado e enviado automaticamente toda sexta-feira, para eliminar o trabalho manual semanal de consultar o banco e montar o PDF.
 
-**Why P2**: Automatizar o disparo é o que de fato tira o trabalho manual do analista — sem isso, P1 ainda exigiria alguém rodar o processo na mão toda semana.
+**Why P3**: Automatizar o disparo é o que de fato tira o trabalho manual do analista — sem isso, P1/P2 ainda exigiriam alguém rodar o processo na mão toda semana.
 
 **Acceptance Criteria**:
 
@@ -103,11 +126,11 @@ Toda ambiguidade foi resolvida ou registrada aqui.
 
 ---
 
-### P3: Escalável para qualquer cliente com o módulo de promotores
+### P4: Escalável para qualquer cliente com o módulo de promotores
 
 **User Story**: Como Oficina Brasil, quero que qualquer cliente (não só a SKF) que tenha o módulo de promotores habilitado passe a receber o mesmo relatório automaticamente, sem eu precisar escrever código específico para esse cliente.
 
-**Why P3**: É o requisito explícito de escalabilidade do ticket — sem isso a automação resolve só o caso da SKF e o problema de "generalizar para outros clientes" continua manual.
+**Why P4**: É o requisito explícito de escalabilidade do ticket — sem isso a automação resolve só o caso da SKF e o problema de "generalizar para outros clientes" continua manual.
 
 **Acceptance Criteria**:
 
@@ -153,15 +176,23 @@ Toda ambiguidade foi resolvida ou registrada aqui.
 | RELPROM-29 | P1: Relatório semanal correto | Design | Pending |
 | RELPROM-30 | P1: Relatório semanal correto | Design | Pending |
 | RELPROM-31 | P1: Relatório semanal correto | Design | Pending |
-| RELPROM-14 | P2: Execução automática semanal | Design | Pending |
-| RELPROM-15 | P2: Execução automática semanal | Design | Pending |
-| RELPROM-16 | P2: Execução automática semanal | Design | Pending |
-| RELPROM-17 | P2: Execução automática semanal | Design | Pending |
-| RELPROM-18 | P2: Execução automática semanal | Design | Pending |
-| RELPROM-19 | P2: Execução automática semanal | Design | Pending |
-| RELPROM-20 | P3: Escalável para qualquer cliente | Design | Pending |
-| RELPROM-21 | P3: Escalável para qualquer cliente | Design | Pending |
-| RELPROM-22 | P3: Escalável para qualquer cliente | Design | Pending |
+| RELPROM-32 | P2: Disparo manual via endpoint | Design | Pending |
+| RELPROM-33 | P2: Disparo manual via endpoint | Design | Pending |
+| RELPROM-34 | P2: Disparo manual via endpoint | Design | Pending |
+| RELPROM-35 | P2: Disparo manual via endpoint | Design | Pending |
+| RELPROM-36 | P2: Disparo manual via endpoint | Design | Pending |
+| RELPROM-37 | P2: Disparo manual via endpoint | Design | Pending |
+| RELPROM-38 | P2: Disparo manual via endpoint | Design | Pending |
+| RELPROM-39 | P2: Disparo manual via endpoint | Design | Pending |
+| RELPROM-14 | P3: Execução automática semanal | Design | Pending |
+| RELPROM-15 | P3: Execução automática semanal | Design | Pending |
+| RELPROM-16 | P3: Execução automática semanal | Design | Pending |
+| RELPROM-17 | P3: Execução automática semanal | Design | Pending |
+| RELPROM-18 | P3: Execução automática semanal | Design | Pending |
+| RELPROM-19 | P3: Execução automática semanal | Design | Pending |
+| RELPROM-20 | P4: Escalável para qualquer cliente | Design | Pending |
+| RELPROM-21 | P4: Escalável para qualquer cliente | Design | Pending |
+| RELPROM-22 | P4: Escalável para qualquer cliente | Design | Pending |
 | RELPROM-23 | Edge Case | Design | Pending |
 | RELPROM-24 | Edge Case | Design | Pending |
 | RELPROM-25 | Edge Case | Design | Pending |
@@ -170,7 +201,7 @@ Toda ambiguidade foi resolvida ou registrada aqui.
 
 **Status values:** Pending → In Design → In Tasks → Implementing → Verified
 
-**Coverage:** 31 total, 0 mapped to tasks, 31 unmapped ⚠️ (esperado — Tasks ainda não rodou)
+**Coverage:** 39 total, 0 mapped to tasks, 39 unmapped ⚠️ (esperado — Tasks ainda não rodou)
 
 ---
 
@@ -184,3 +215,4 @@ Como saberemos que a feature foi bem-sucedida:
 - [ ] Falha em um cliente (sem admin resolvido, integração fora do ar) não impede o envio para os demais clientes elegíveis na mesma execução.
 - [ ] Um cliente com 2+ campanhas ativas recebe um único e-mail/PDF com um bloco de dados por campanha, sem misturar métricas entre campanhas.
 - [ ] Fora de produção, nenhum e-mail chega a um admin real de cliente — só a lista fixa de teste definida em código recebe, e os e-mails de admin que seriam os destinatários reais aparecem logados.
+- [ ] É possível gerar o relatório de um cliente sob demanda via endpoint administrativo, sem esperar o cron, com o mesmo resultado (dados e segmentação por campanha) que o fluxo agendado produziria.

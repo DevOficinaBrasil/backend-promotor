@@ -54,6 +54,12 @@ Automatizar a geração e o envio por e-mail do relatório semanal de visitas de
 ### Múltiplos admins (detalhe de envio)
 - Um único e-mail por cliente/período, todos os admins resolvidos no campo `To`.
 
+### Endpoint de disparo manual (testes + futura integração de frontend)
+- Novo endpoint administrativo (`/admin/*`, `adminAuthMiddleware`, convenção AD-004) que roda a mesma lógica de geração usada pelo cron, para um cliente específico, sob demanda — sem esperar sexta-feira.
+- Retorna o PDF gerado na própria resposta (síncrono), pra servir tanto teste manual quanto uma futura tela administrativa que queira pré-visualizar/baixar o relatório.
+- Respeita a mesma guarda dev/produção do envio por e-mail (lista fixa em dev, admins reais em produção) — chamar o endpoint em dev nunca manda e-mail pro admin do cliente.
+- Suporta um modo somente-pré-visualização (gera e retorna o PDF sem enviar e-mail) e aceita período customizado opcional, pra depuração sem depender da janela fixa de 7 dias.
+
 ### Agent's Discretion
 - Mecanismo exato de integração cross-service (backend-promotor chamando backend-ob-ads para resolver admins e/ou disparar o e-mail via SES já configurado lá, versus backend-promotor ganhar seu próprio client de e-mail) fica a critério da fase de Design — não é uma decisão de produto, é arquitetura de implementação.
 - Nome exato do schedule (horário do cron na sexta-feira, formato do nome do job) fica a critério da implementação, respeitando a convenção `node-cron` + flag `*_ENABLED` já usada em `schedule/outboxNotificacaoCron.ts`.
