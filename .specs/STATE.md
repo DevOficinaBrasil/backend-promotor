@@ -26,6 +26,14 @@
 - **Date**: 2026-09-28
 - **Status**: active
 
+### AD-005
+- **Decision**: Integração cross-service entre `backend-promotor` e `backend-ob-ads` acontece via endpoints internos **genéricos** (não um por feature) no ob-ads, atrás de um único header `x-api-key` validado contra a env `INTERNAL_API_KEY`. O backend-promotor nunca ganha client SQL Server ou SES próprio para falar com dados que já vivem no ob-ads (admins, módulos, envio de e-mail) — ele chama o ob-ads.
+- **Reason**: `backend-ob-ads` já tem SES e SQL Server configurados e testados em produção (`EmailService`, `Usuario`/`ClienteModule`). Duplicar essas credenciais/lógica no backend-promotor criaria dois pontos de divergência (ex.: definição de "admin" mudar num lado e não no outro). O padrão de guarda por header de API key já existe (`CommunityReportInternalRoutes.ts`), só que por feature (`COMMUNITY_REPORT_INTERNAL_API_KEY`); como os dois endpoints novos (`/internal/modulos/:nome/clientes-habilitados`, `/internal/email/enviar-com-anexo`) são genéricos e não específicos de uma feature, usam uma chave compartilhada em vez de criar uma chave nova a cada endpoint interno futuro.
+- **Trade-off**: Qualquer indisponibilidade do ob-ads vira falha também no backend-promotor para tudo que depender de admin/e-mail — mitigado isolando a falha por cliente (não derruba o processamento inteiro, exceto na chamada de listagem, que é única por execução). A guarda de ambiente dev/produção (quem realmente recebe o e-mail) fica sempre do lado de quem a decide por contexto de negócio — o backend-promotor — nunca do lado do ob-ads, que só manda pra lista que recebe.
+- **Scope**: Qualquer integração cross-service futura entre backend-promotor e backend-ob-ads (ou outro serviço interno) que precise ler dado do ob-ads ou disparar e-mail reaproveita esse padrão (endpoint genérico + `INTERNAL_API_KEY`), em vez de criar uma chave por feature ou duplicar credencial/lógica no chamador.
+- **Date**: 2026-10-29
+- **Status**: active
+
 ## Handoff
 
 - **Feature**: disparo-convite-visita-admin (`.specs/features/disparo-convite-visita-admin/`), **DONE**
