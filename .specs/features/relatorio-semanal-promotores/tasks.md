@@ -302,14 +302,16 @@ T21 -> T22
 - Skill: NONE
 
 **Done when**:
-- [ ] Entity compila, colunas e tipos batem com o design.md
-- [ ] `coveragePathIgnorePatterns` do `jest.config.ts` já ignora `entities` — nenhuma mudança de config necessária
-- [ ] Gate check passa: `npx tsc --noEmit`
+- [x] Entity compila, colunas e tipos batem com o design.md (enums `OrigemRelatorioEnvio`, `StatusRelatorioEnvio`, `AmbienteRelatorioEnvio`)
+- [x] `coveragePathIgnorePatterns` do `jest.config.ts` já ignora `entities` — nenhuma mudança de config necessária
+- [x] Gate check passa: `npx tsc --noEmit` (zero erros no arquivo novo)
 
 **Tests**: none
 **Gate**: build
 
 **Commit**: `feat(promotor-relatorio): adiciona entity de controle de envio`
+
+**Status**: ✅ Complete
 
 ---
 
