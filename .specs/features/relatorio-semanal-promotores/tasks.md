@@ -525,16 +525,20 @@ T21 -> T22
 - Skill: NONE
 
 **Done when**:
-- [ ] Cliente com 2+ campanhas ativas → 1 bloco por campanha, sem agregar métricas entre elas
-- [ ] Cliente com 1 campanha ativa → 1 bloco só
-- [ ] Cliente com módulo habilitado mas sem campanha ativa → `RelatorioPromotorData` com `campanhas: []`, tratado como "sem dado disponível" (RELPROM-22), não erro
-- [ ] Cliente sem nenhuma visita no período → contadores zerados, gera normalmente (RELPROM-13)
-- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportService.test.ts`
+- [x] Cliente com 2+ campanhas ativas → 1 bloco por campanha, sem agregar métricas entre elas
+- [x] Cliente com 1 campanha ativa → 1 bloco só
+- [x] Cliente com módulo habilitado mas sem campanha ativa → `RelatorioPromotorData` com `campanhas: []`, tratado como "sem dado disponível" (RELPROM-22), não erro
+- [x] Cliente sem nenhuma visita no período → contadores zerados, gera normalmente (RELPROM-13)
+- [x] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportService.test.ts` (5 passed)
+- [x] Assinatura ajustada durante a implementação: `gerarRelatorioCliente({idCliente, nomeCliente}, periodo, agora?)` — recebe `nomeCliente` já resolvido (vem de T05/T12, backend-promotor não tem lookup próprio de nome de cliente) em vez de buscar de novo
+- [x] Critério de "campanha ativa" reaproveitado de `adminDisparoService.ts:178-208`, filtrado por `ID_CLIENT` (não reescrito do zero)
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(promotor-relatorio): monta dados do relatorio por cliente`
+
+**Status**: ✅ Complete
 
 ---
 
