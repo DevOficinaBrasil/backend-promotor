@@ -81,6 +81,8 @@ Automatizar a geração e o envio por e-mail do relatório semanal de visitas de
 
 ## Deferred Ideas
 
+- Embutir as fontes de marca (`assets/fonts/Montserrat-*`) e o logo no PDF via `@font-face`/imagem local no Playwright, pra fidelidade visual total com a identidade Oficina Brasil — não há AC pedindo isso, o MVP usa CSS com as cores da marca e fonte padrão do sistema.
+
 - Interpretação textual automática das observações (keyword matching pra gerar cards tipo "base com oficinas que não existem mais", "oficinas fora do perfil") — fica pra uma v2, fora do MVP.
 - Qualquer canal de envio além de e-mail (ex.: WhatsApp do admin) — fora de escopo; ticket pede e-mail.
 - Dashboard/self-service pro admin configurar frequência/destinatários — fora de escopo; ticket especifica fluxo automático fixo.

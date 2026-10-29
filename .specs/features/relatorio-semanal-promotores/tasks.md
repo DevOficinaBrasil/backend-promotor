@@ -496,15 +496,19 @@ T21 -> T22
 - Skill: NONE
 
 **Done when**:
-- [ ] Template HTML gera 1 capa + N blocos (1 por campanha), nessa ordem, com as 6 seções por bloco
-- [ ] `renderizarPdf(dados)` retorna `Buffer` de PDF válido (prefixo `%PDF-`)
-- [ ] Teste unitário mocka o módulo `playwright` (não renderiza PDF real) e verifica que o HTML passado pro `page.setContent`/`page.pdf` contém os dados esperados (nome do cliente, nome de cada campanha, contadores)
-- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportPdfRenderer.test.ts`
+- [x] Template HTML gera 1 capa + N blocos (1 por campanha), nessa ordem, com as 6 seções por bloco
+- [x] `renderizarPdf(dados)` retorna `Buffer` de PDF válido (prefixo `%PDF-`)
+- [x] Teste unitário mocka o módulo `playwright` (não renderiza PDF real) e verifica que o HTML passado pro `page.setContent` contém os dados esperados (nome do cliente, nome de cada campanha, contadores); browser fechado mesmo em caso de falha
+- [x] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportPdfRenderer.test.ts` (5 passed)
+- [x] Tipos `RelatorioPromotorData`/`CampanhaBlocoRelatorio` criados em `types/promotorRelatorio.ts` (compartilhados com T16), reaproveitando os tipos de `utils/promotorReportCalculos.ts`
+- [x] Identidade visual: cores da marca aplicadas via CSS; fontes customizadas (`assets/fonts/Montserrat-*`) e logo não embutidos nesta rodada — complexidade de `@font-face`/arquivo local no Playwright não se justifica sem AC pedindo fidelidade visual exata, registrado como ideia futura
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(promotor-relatorio): renderizacao do pdf via playwright`
+
+**Status**: ✅ Complete
 
 ---
 
