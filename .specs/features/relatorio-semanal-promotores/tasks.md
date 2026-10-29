@@ -130,9 +130,9 @@ T21 -> T22
 ### T02: Middleware genérico de API key interna (ob-ads)
 
 **What**: Extrair o padrão de guarda de `CommunityReportInternalRoutes.ts:9-19` pra um middleware reutilizável, validando `x-api-key` contra `process.env.INTERNAL_API_KEY` (AD-005).
-**Where**: `backend-ob-ads/src/main/middlewares/internalApiKeyGuard.ts` (novo)
+**Where**: `backend-ob-ads/src/main/config/middlewares/internalApiKeyGuard.ts` (novo — pasta real é `config/middlewares`, não `middlewares` direto; corrigido durante a implementação ao confirmar onde os middlewares existentes já vivem)
 **Depends on**: None
-**Reuses**: `CommunityReportInternalRoutes.ts:9-19` (padrão, não o código em si — esse arquivo não muda)
+**Reuses**: `notificationWebhookAuth.ts` (comparação em tempo constante via `timingSafeEqual`+hash, mais robusta que a comparação `!==` ingênua de `CommunityReportInternalRoutes.ts:9-19`) — mesmo header `x-api-key` desse último
 **Requirement**: AD-005 (infra, sem AC de spec direta)
 
 **Tools**:
@@ -140,15 +140,17 @@ T21 -> T22
 - Skill: NONE
 
 **Done when**:
-- [ ] Middleware exportado, 401 se header ausente ou diferente de `INTERNAL_API_KEY`
-- [ ] Não depende de sessão/JWT de usuário (mesma postura do padrão original)
-- [ ] Gate check passa: `npx jest --runInBand src/tests/internalApiKeyGuard.test.ts`
-- [ ] Teste cobre: header ausente (401), header errado (401), header correto (chama `next()`)
+- [x] Middleware exportado, 401 se header ausente ou diferente de `INTERNAL_API_KEY`
+- [x] Não depende de sessão/JWT de usuário (mesma postura do padrão original)
+- [x] Gate check passa: `npx jest --runInBand src/tests/internalApiKeyGuard.test.ts` (4 passed)
+- [x] Teste cobre: header ausente (401), header errado (401), header correto (chama `next()`), e falha fechado sem `INTERNAL_API_KEY` configurado
 
 **Tests**: unit
 **Gate**: quick
 
-**Commit**: `feat(internal): adiciona guarda generica de api key pra rotas internas`
+**Commit**: `feat(internal): adiciona guarda generica de api key` (ob-ads `e6c9e60e`)
+
+**Status**: ✅ Complete
 
 ---
 
@@ -165,15 +167,17 @@ T21 -> T22
 - Skill: NONE
 
 **Done when**:
-- [ ] `listarClientesHabilitados(nomeModulo: string, idCliente?: number)` retorna `{idCliente, nomeCliente}[]`
-- [ ] Módulo inexistente (nome não cadastrado em `Module`) retorna lista vazia, não erro
-- [ ] Filtro por `idCliente` restringe a 0 ou 1 resultado
-- [ ] Gate check passa: `npx jest --runInBand src/tests/moduloClientesService.test.ts`
+- [x] `listarClientesHabilitados(nomeModulo: string, idCliente?: number)` retorna `{idCliente, nomeCliente}[]`
+- [x] Módulo inexistente (nome não cadastrado em `Module`) retorna lista vazia, não erro
+- [x] Filtro por `idCliente` restringe a 0 ou 1 resultado
+- [x] Gate check passa: `npx jest --runInBand src/tests/moduloClientesService.test.ts` (4 passed)
 
 **Tests**: unit
 **Gate**: quick
 
-**Commit**: `feat(modulos): lista clientes habilitados por nome de modulo`
+**Commit**: `feat(modulos): lista clientes habilitados por nome de modulo` (ob-ads `5f0a037e`)
+
+**Status**: ✅ Complete
 
 ---
 
@@ -190,14 +194,16 @@ T21 -> T22
 - Skill: NONE
 
 **Done when**:
-- [ ] `resolverAdminsPorCliente(idsCliente: number[])` retorna `Record<idCliente, string[]>` só com e-mails de `IS_ADMIN = 1`, excluindo `@oficinabrasil.com.br`
-- [ ] Cliente sem nenhum admin aparece com array vazio (não lança erro, não omite a chave)
-- [ ] Gate check passa: `npx jest --runInBand src/tests/adminResolverService.test.ts`
+- [x] `resolverAdminsPorCliente(idCliente: number)` retorna `string[]` só com e-mails de `IS_ADMIN = 1`, excluindo `@oficinabrasil.com.br` — assinatura simplificada pra 1 cliente por chamada durante a implementação (evita ambiguidade de bucket quando o vínculo vem do M:N `USUARIO_X_CLIENTES`; T05 chama 1x por cliente da listagem de T03)
+- [x] Cliente sem nenhum admin resolvido retorna array vazio (não lança erro)
+- [x] Gate check passa: `npx jest --runInBand src/tests/adminResolverService.test.ts` (4 passed)
 
 **Tests**: unit
 **Gate**: quick
 
-**Commit**: `feat(usuarios): resolve admins de um cliente para notificacao`
+**Commit**: `feat(usuarios): resolve admins de um cliente para notificacao` (ob-ads `78cb356d`)
+
+**Status**: ✅ Complete
 
 ---
 
@@ -214,14 +220,17 @@ T21 -> T22
 - Skill: NONE
 
 **Done when**:
-- [ ] `GET /internal/modulos/Promotores/clientes-habilitados` retorna `{idCliente, nomeCliente, admins: string[]}[]`, 401 sem `x-api-key` válido
-- [ ] Query `?idCliente=` filtra pra 1 cliente só; cliente sem módulo habilitado retorna lista vazia (não 404 — 404 é decisão do chamador, não da rota de listagem)
-- [ ] Gate check passa: `npx jest --runInBand src/tests/internalModulosRoutes.test.ts`
+- [x] `GET /internal/modulos/promotores/clientes-habilitados` retorna `{idCliente, nomeCliente, admins: string[]}[]`, 401 sem `x-api-key` válido
+- [x] Query `?idCliente=` filtra pra 1 cliente só; cliente sem módulo habilitado retorna lista vazia (não 404 — 404 é decisão do chamador, não da rota de listagem); `?idCliente=` inválido responde 400
+- [x] Gate check passa: `npx jest --runInBand src/tests/internalModulosRoutes.test.ts` (6 passed)
+- [x] Rota montada em `src/main/api.ts` (`app.use("/internal/modulos", internalModulosRoutes)`)
 
 **Tests**: integration
 **Gate**: full
 
-**Commit**: `feat(internal): expoe endpoint de clientes habilitados por modulo`
+**Commit**: `feat(internal): expoe endpoint de clientes habilitados por modulo` (ob-ads `ade8cd68`)
+
+**Status**: ✅ Complete
 
 ---
 
@@ -238,20 +247,23 @@ T21 -> T22
 - Skill: NONE
 
 **Done when**:
-- [ ] `POST /internal/email/enviar-com-anexo` com body `{to, subject, bodyHtml, attachment:{filename, contentBase64, contentType}}` chama `EmailService.sendEmailWithAttachment` e devolve `{success, error?}` tal qual o service retorna (nunca lança)
-- [ ] 401 sem `x-api-key` válido; 400 se `to` vazio ou `attachment` ausente
-- [ ] Gate check passa: `npx jest --runInBand src/tests/internalEmailRoutes.test.ts`
+- [x] `POST /internal/email/enviar-com-anexo` com body `{to, subject, bodyHtml, attachment:{filename, contentBase64, contentType}}` chama `EmailService.sendEmailWithAttachment` e devolve `{success, error?}` tal qual o service retorna (nunca lança); resposta HTTP 200 se `success:true`, 502 se `success:false` (falha de SES não é erro do chamador)
+- [x] 401 sem `x-api-key` válido; 400 se `to` vazio ou `attachment` ausente
+- [x] Gate check passa: `npx jest --runInBand src/tests/internalEmailRoutes.test.ts` (5 passed)
+- [x] Rota montada em `src/main/api.ts` (`app.use("/internal/email", internalEmailRoutes)`)
 
 **Tests**: integration
 **Gate**: full
 
-**Commit**: `feat(internal): expoe endpoint generico de envio de email com anexo`
+**Commit**: `feat(internal): expoe endpoint generico de envio de email com anexo` (ob-ads `1a9b892d`)
+
+**Status**: ✅ Complete
 
 ---
 
 ### T07: Script SQL do módulo "Promotores" (ob-ads, execução manual)
 
-**What**: Script idempotente (`IF NOT EXISTS`) pra inserir a linha do módulo "Promotores" em `module`, seguindo o padrão de `sql/2026-09-con26-156-modulo-comentarios-global.sql` (`menu_nome`/`ordem` `NULL` — é permissão de API, sem item de menu próprio). **Não executado pelo agente** — fica pronto pro usuário rodar manualmente em homolog/produção.
+**What**: Script idempotente (`IF NOT EXISTS`) pra inserir a linha do módulo "promotores" em `module`, seguindo o padrão de `sql/2026-09-con26-156-modulo-comentarios-global.sql` (`menu_nome`/`ordem` `NULL` — é permissão de API, sem item de menu próprio). **Não executado pelo agente** — fica pronto pro usuário rodar manualmente em homolog/produção. Nome do módulo em minúsculo (`promotores`), não `Promotores`, pra seguir a convenção real do repo (`comentarios_global`).
 **Where**: `backend-ob-ads/sql/2026-10-con26-325-modulo-promotores.sql` (novo)
 **Depends on**: None
 **Reuses**: padrão de `sql/2026-09-con26-156-modulo-comentarios-global.sql` (idempotência, bloco de rollback no cabeçalho)
@@ -262,14 +274,16 @@ T21 -> T22
 - Skill: NONE
 
 **Done when**:
-- [ ] `INSERT INTO module (nome, menu_nome, ordem) VALUES ('Promotores', NULL, NULL)` dentro de `IF NOT EXISTS (...)`
-- [ ] Cabeçalho do script documenta o `DELETE FROM module WHERE nome = 'Promotores'` de rollback, com o aviso de que não há FK impedindo linha órfã em `cliente_module`
-- [ ] Nenhuma execução automática — a task só cria o arquivo
+- [x] `INSERT INTO module (nome, menu_nome, ordem) VALUES ('promotores', NULL, NULL)` dentro de `IF NOT EXISTS (...)`
+- [x] Cabeçalho do script documenta o `DELETE FROM module WHERE nome = 'promotores'` de rollback, com o aviso de que não há FK impedindo linha órfã em `cliente_module`
+- [x] Nenhuma execução automática — a task só criou o arquivo
 
 **Tests**: none
 **Gate**: nenhum — revisão manual do SQL, execução manual pelo usuário
 
-**Commit**: `chore(modulos): script de criacao do modulo promotores (execucao manual)`
+**Commit**: `chore(modulos): script de criacao do modulo promotores` (ob-ads `0ed7be63`)
+
+**Status**: ✅ Complete
 
 ---
 
