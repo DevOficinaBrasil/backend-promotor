@@ -10,7 +10,7 @@ export type ResultadoListagem =
 
 export type ResultadoResolucaoCliente =
   | { sucesso: true; dados: ClienteModuloHabilitado }
-  | { sucesso: false; motivo: string };
+  | { sucesso: false; motivo: string; status?: number };
 
 export interface EnviarEmailComAnexoRequest {
   to: string[];
@@ -80,7 +80,7 @@ export default class ObAdsIntegrationClient {
       });
 
       if (!resposta.ok) {
-        return { sucesso: false, motivo: `ob-ads respondeu ${resposta.status}` };
+        return { sucesso: false, motivo: `ob-ads respondeu ${resposta.status}`, status: resposta.status };
       }
 
       const dados = (await resposta.json()) as ClienteModuloHabilitado;

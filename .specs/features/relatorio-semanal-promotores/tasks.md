@@ -768,6 +768,7 @@ Adicionada depois do Verifier dar PASS (3ª iteração). 2 pedidos do usuário: 
 - [x] `resolverAdminsDoCliente(idCliente)` retorna `{sucesso:true, dados}` ou `{sucesso:false, motivo}` — nunca lança
 - [x] URL montada com `idCliente` no path (`/internal/clientes/:idCliente/admins`), sem nome de módulo
 - [x] Gate check passa: `npx jest --runInBand __tests__/unit/obAdsIntegrationClient.test.ts` (14 passed, 4 novos)
+- [x] **Ajustado em T27**: `ResultadoResolucaoCliente` ganhou `status?: number` na falha, pra o chamador (endpoint manual) distinguir "cliente não existe" (404) de falha de infra (timeout/502), sem fazer o controller inspecionar a string de `motivo`
 
 **Tests**: unit
 **Gate**: quick
@@ -844,17 +845,17 @@ Adicionada depois do Verifier dar PASS (3ª iteração). 2 pedidos do usuário: 
 - Skill: NONE
 
 **Done when**:
-- [ ] `gerar` chama `ObAdsIntegrationClient.resolverAdminsDoCliente(idCliente)` em vez de `listarClientesHabilitados`
-- [ ] 404 quando o cliente não existe em `TB_CLIENTE` (resposta `sucesso:false` do novo endpoint tratada como "não encontrado", já que T23 só devolve 404 por esse motivo)
-- [ ] Demais comportamentos do endpoint (200+PDF, 400 período inválido, enviarEmail=false, 500 PDF vazio) continuam idênticos
-- [ ] Gate check passa: `npx jest --runInBand __tests__/integration/promotorRelatorio.test.ts`
+- [x] `gerar` chama `ObAdsIntegrationClient.resolverAdminsDoCliente(idCliente)` em vez de `listarClientesHabilitados`
+- [x] 404 quando `resolucao.status === 404` (cliente não existe em `TB_CLIENTE`); 502 pra qualquer outra falha (timeout/infra) — adicionado campo `status?: number` em `ResultadoResolucaoCliente` (T24) pra distinguir os dois casos, já que nem toda falha de resolução é "não encontrado"
+- [x] Demais comportamentos do endpoint (200+PDF, 400 período inválido, enviarEmail=false, 500 PDF vazio) continuam idênticos
+- [x] Gate check passa: `npx jest --runInBand __tests__/integration/promotorRelatorio.test.ts` (12 passed) + `npx jest --runInBand __tests__/unit/obAdsIntegrationClient.test.ts` (14 passed, sem regressão)
 
 **Tests**: integration
 **Gate**: full
 
 **Commit**: `feat(promotor-relatorio): endpoint manual resolve cliente sem modulo`
 
-**Status**: ⏳ Pendente
+**Status**: ✅ Complete
 
 ---
 

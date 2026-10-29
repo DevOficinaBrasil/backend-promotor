@@ -12,11 +12,11 @@ jest.mock("../../service/promotorReportService", () => {
 });
 jest.mock("../../service/obAdsIntegrationClient", () => ({
   __esModule: true,
-  default: { listarClientesHabilitados: jest.fn() },
+  default: { resolverAdminsDoCliente: jest.fn() },
 }));
 
 const processarRelatorioCliente = PromotorReportService.processarRelatorioCliente as jest.Mock;
-const listarClientesHabilitados = ObAdsIntegrationClient.listarClientesHabilitados as jest.Mock;
+const resolverAdminsDoCliente = ObAdsIntegrationClient.resolverAdminsDoCliente as jest.Mock;
 
 const SEGREDO = "segredo-obads-de-teste";
 const CLIENTE_OB_ADS = { idCliente: 10, nomeCliente: "SKF", admins: ["admin@skf.com"] };
@@ -36,7 +36,7 @@ const tokenNaoAdmin = () => jwt.sign({ user: { ID_USUARIO: 901, IS_ADMIN: false 
 beforeEach(() => {
   jest.clearAllMocks();
   process.env.OBADS_JWT_SECRET = SEGREDO;
-  listarClientesHabilitados.mockResolvedValue({ sucesso: true, dados: [CLIENTE_OB_ADS] });
+  resolverAdminsDoCliente.mockResolvedValue({ sucesso: true, dados: CLIENTE_OB_ADS });
   processarRelatorioCliente.mockResolvedValue({ idCliente: 10, pdf: PDF, enviado: true });
 });
 
@@ -116,8 +116,8 @@ describe("POST /admin/promotor-relatorio/:idCliente/gerar", () => {
     );
   });
 
-  it("404 quando o cliente não tem o módulo habilitado (lista vazia) — RELPROM-39", async () => {
-    listarClientesHabilitados.mockResolvedValue({ sucesso: true, dados: [] });
+  it("404 quando o cliente nao existe (ob-ads responde 404) — RELPROM-39", async () => {
+    resolverAdminsDoCliente.mockResolvedValue({ sucesso: false, motivo: "ob-ads respondeu 404", status: 404 });
 
     const res = await request(app)
       .post("/admin/promotor-relatorio/10/gerar")
@@ -127,8 +127,8 @@ describe("POST /admin/promotor-relatorio/:idCliente/gerar", () => {
     expect(processarRelatorioCliente).not.toHaveBeenCalled();
   });
 
-  it("502 quando a listagem do ob-ads falha", async () => {
-    listarClientesHabilitados.mockResolvedValue({ sucesso: false, motivo: "timeout" });
+  it("502 quando a resolucao do ob-ads falha por outro motivo (timeout/infra)", async () => {
+    resolverAdminsDoCliente.mockResolvedValue({ sucesso: false, motivo: "timeout" });
 
     const res = await request(app)
       .post("/admin/promotor-relatorio/10/gerar")

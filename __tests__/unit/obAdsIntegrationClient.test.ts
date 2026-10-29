@@ -81,12 +81,12 @@ describe("ObAdsIntegrationClient.resolverAdminsDoCliente (pos-Execute, AD-006)",
     expect(String(urlChamada)).toBe("https://ob-ads.exemplo.com/internal/clientes/126/admins");
   });
 
-  it("retorna sucesso:false quando a resposta HTTP nao e ok (ex: 404 cliente inexistente)", async () => {
+  it("retorna sucesso:false com status quando a resposta HTTP nao e ok (ex: 404 cliente inexistente)", async () => {
     (global.fetch as jest.Mock).mockResolvedValue({ ok: false, status: 404, json: async () => ({}) });
 
     const resultado = await ObAdsIntegrationClient.resolverAdminsDoCliente(999);
 
-    expect(resultado).toEqual({ sucesso: false, motivo: "ob-ads respondeu 404" });
+    expect(resultado).toEqual({ sucesso: false, motivo: "ob-ads respondeu 404", status: 404 });
   });
 
   it("retorna sucesso:false (nunca lanca) quando o fetch rejeita", async () => {

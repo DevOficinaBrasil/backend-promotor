@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import PromotorReportService, { NOME_MODULO_PROMOTORES } from "../service/promotorReportService";
+import PromotorReportService from "../service/promotorReportService";
 import ObAdsIntegrationClient from "../service/obAdsIntegrationClient";
 import { OrigemRelatorioEnvio } from "../entities/PromotorRelatorioEnvio";
 import { calcularPeriodoSemanal, PeriodoRelatorio } from "../utils/promotorReportCalculos";
@@ -35,25 +35,27 @@ export class PromotorReportController {
         periodo = calcularPeriodoSemanal(new Date());
       }
 
-      const listagem = await ObAdsIntegrationClient.listarClientesHabilitados(NOME_MODULO_PROMOTORES, idCliente);
-      if (!listagem.sucesso) {
-        return res.status(502).json({ message: "Não foi possível consultar o backend-ob-ads.", error: listagem.motivo });
+      // Pós-Execute (AD-006): resolve direto por ID_CLIENTE, sem checar
+      // module/cliente_module — o módulo nunca é criado no SQL Server
+      // enquanto o congelamento pré-migração estiver em vigor, então checar
+      // module aqui faria todo cliente (inclusive a SKF) voltar 404.
+      const resolucao = await ObAdsIntegrationClient.resolverAdminsDoCliente(idCliente);
+      if (!resolucao.sucesso) {
+        if (resolucao.status === 404) {
+          return res.status(404).json({ message: `Cliente ${idCliente} não encontrado.` });
+        }
+        return res.status(502).json({ message: "Não foi possível consultar o backend-ob-ads.", error: resolucao.motivo });
       }
-
-      const [cliente] = listagem.dados;
-      if (!cliente) {
-        return res
-          .status(404)
-          .json({ message: `Cliente ${idCliente} não encontrado ou sem o módulo "${NOME_MODULO_PROMOTORES}" habilitado.` });
-      }
+      const cliente = resolucao.dados;
 
       // SPEC_DEVIATION: RELPROM-39 original também pedia 404 pra "sem campanha
-      // vinculada". Mantido só módulo/cliente como 404 — zero campanha ativa já
-      // é tratado de forma uniforme como RELPROM-13/22 (gera com zeros), tanto
-      // no cron quanto aqui; um 404 só aqui criaria 2 comportamentos
-      // diferentes pra mesma condição, dependendo de quem chamou.
-      // Reason: consistência > fidelidade literal a uma AC que criaria uma
-      // inconsistência de comportamento entre os 2 gatilhos da mesma feature.
+      // vinculada". Mantido só cliente-inexistente como 404 — zero campanha
+      // ativa já é tratado de forma uniforme como RELPROM-13/22 (gera com
+      // zeros), tanto no cron quanto aqui; um 404 só aqui criaria 2
+      // comportamentos diferentes pra mesma condição, dependendo de quem
+      // chamou. Reason: consistência > fidelidade literal a uma AC que criaria
+      // uma inconsistência de comportamento entre os 2 gatilhos da mesma
+      // feature.
 
       const resultado = await PromotorReportService.processarRelatorioCliente(cliente, periodo, OrigemRelatorioEnvio.MANUAL, {
         enviarEmail,
