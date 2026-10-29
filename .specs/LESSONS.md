@@ -24,7 +24,23 @@ Corroborated across multiple features. Safe to apply as guidance.
 
 Seen once or not yet corroborated. Tracked, not trusted.
 
-_none_
+### L-017 - When a spec AC says a list must be 'grouped by status/category', verify the code partitions or sorts by that field — don't accept a test that only feeds already-sorted input as proof of grouping.
+- signal: `ac_gap` · recurrence: 1 feature(s) · scope: `backend-promotor` · harmful: 0
+- features: relatorio-semanal-promotores
+- evidence: RELPROM-09 (utils/promotorReportCalculos.ts:165-190) (backend-promotor)
+- last seen: 2026-10-29T13:11:51Z
+
+### L-018 - When an AC specifies a boundary count (exactly 1 vs N), add a dedicated test for the boundary case even if it looks trivially covered by the N-case — evidence-or-zero requires a direct citation.
+- signal: `spec_precision_gap` · recurrence: 1 feature(s) · scope: `backend-promotor` · harmful: 0
+- features: relatorio-semanal-promotores
+- evidence: RELPROM-27 (no direct test for exactly-1-active-campaign) (backend-promotor)
+- last seen: 2026-10-29T13:11:52Z
+
+### L-019 - When a fix groups data into labeled template sub-sections, add a test asserting each item lands under its correct heading - a correctly-grouped data layer can still be mis-rendered into swapped sections with zero test failures.
+- signal: `surviving_mutant` · recurrence: 1 feature(s) · scope: `backend-promotor` · harmful: 0
+- features: relatorio-semanal-promotores
+- evidence: templates/relatorioPromotor.ts:112-113 (mutant: swapped concluida/cancelada filter in renderizarDestaques) (backend-promotor)
+- last seen: 2026-10-29T13:23:52Z
 
 ## Quarantined (failed when applied - ignore)
 

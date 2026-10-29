@@ -3,7 +3,7 @@
   "promote_threshold": 2,
   "window_days": 45,
   "quarantine_threshold": 2,
-  "next_id": 17,
+  "next_id": 20,
   "lessons": [
     {
       "id": "L-002",
@@ -44,6 +44,60 @@
       ],
       "created": "2026-08-05T19:21:55Z",
       "last_seen": "2026-09-09T18:34:21Z"
+    },
+    {
+      "id": "L-017",
+      "key": "ac_gap::when a spec ac says a list must be grouped by status category verify the code partitions or sorts by that field don t accept a test that only feeds already sorted input as proof of grouping",
+      "text": "When a spec AC says a list must be 'grouped by status/category', verify the code partitions or sorts by that field — don't accept a test that only feeds already-sorted input as proof of grouping.",
+      "signal": "ac_gap",
+      "scope": "backend-promotor",
+      "status": "candidate",
+      "features": [
+        "relatorio-semanal-promotores"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "RELPROM-09 (utils/promotorReportCalculos.ts:165-190) (backend-promotor)"
+      ],
+      "created": "2026-10-29T13:11:51Z",
+      "last_seen": "2026-10-29T13:11:51Z"
+    },
+    {
+      "id": "L-018",
+      "key": "spec_precision_gap::when an ac specifies a boundary count exactly 1 vs n add a dedicated test for the boundary case even if it looks trivially covered by the n case evidence or zero requires a direct citation",
+      "text": "When an AC specifies a boundary count (exactly 1 vs N), add a dedicated test for the boundary case even if it looks trivially covered by the N-case — evidence-or-zero requires a direct citation.",
+      "signal": "spec_precision_gap",
+      "scope": "backend-promotor",
+      "status": "candidate",
+      "features": [
+        "relatorio-semanal-promotores"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "RELPROM-27 (no direct test for exactly-1-active-campaign) (backend-promotor)"
+      ],
+      "created": "2026-10-29T13:11:52Z",
+      "last_seen": "2026-10-29T13:11:52Z"
+    },
+    {
+      "id": "L-019",
+      "key": "surviving_mutant::when a fix groups data into labeled template sub sections add a test asserting each item lands under its correct heading a correctly grouped data layer can still be mis rendered into swapped sections with zero test failures",
+      "text": "When a fix groups data into labeled template sub-sections, add a test asserting each item lands under its correct heading - a correctly-grouped data layer can still be mis-rendered into swapped sections with zero test failures.",
+      "signal": "surviving_mutant",
+      "scope": "backend-promotor",
+      "status": "candidate",
+      "features": [
+        "relatorio-semanal-promotores"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "templates/relatorioPromotor.ts:112-113 (mutant: swapped concluida/cancelada filter in renderizarDestaques) (backend-promotor)"
+      ],
+      "created": "2026-10-29T13:23:52Z",
+      "last_seen": "2026-10-29T13:23:52Z"
     }
   ]
 }

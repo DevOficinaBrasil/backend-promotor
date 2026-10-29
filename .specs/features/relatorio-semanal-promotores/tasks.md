@@ -509,7 +509,7 @@ T21 -> T22
 
 **Commit**: `feat(promotor-relatorio): renderizacao do pdf via playwright`
 
-**Status**: ✅ Complete — **fix do Verifier (RELPROM-09)**: `renderizarDestaques` virou 2 sub-seções (`<h3>Concluídas com observação</h3>`/`<h3>Canceladas com justificativa</h3>`), cada uma com seu `<ul>`, em vez de 1 lista única — consistente com `listarDestaquesDeCampo` (T11) já vir agrupado
+**Status**: ✅ Complete — **fix do Verifier (RELPROM-09)**: `renderizarDestaques` virou 2 sub-seções (`<h3>Concluídas com observação</h3>`/`<h3>Canceladas com justificativa</h3>`), cada uma com seu `<ul>`, em vez de 1 lista única — consistente com `listarDestaquesDeCampo` (T11) já vir agrupado. **2ª rodada do Verifier**: mutante sobrevivente (trocar qual filtro alimenta qual `<h3>` não quebrava nenhum teste) — adicionado teste com destaque misto (1 concluída + 1 cancelada) que confirma, por posição no HTML, que cada item cai sob o título certo (`__tests__/unit/promotorReportPdfRenderer.test.ts`).
 
 ---
 

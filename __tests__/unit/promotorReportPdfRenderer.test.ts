@@ -75,6 +75,37 @@ describe("PromotorReportPdfRenderer.renderizarPdf", () => {
     expect(closeMock).toHaveBeenCalledTimes(1);
   });
 
+  it("coloca cada destaque sob o h3 correto, mesmo com status misto — RELPROM-09", async () => {
+    const dadosComDestaquesMistos: RelatorioPromotorData = {
+      ...DADOS,
+      campanhas: [
+        {
+          ...DADOS.campanhas[0],
+          destaquesDeCampo: [
+            { status: "concluida", idPromotor: 1, nomePromotor: "Willian", nomeOficina: "Oficina A", cidadeOficina: "São Paulo/SP", obs: "Obs concluida unica" },
+            { status: "cancelada", idPromotor: 2, nomePromotor: "José", nomeOficina: "Oficina B", cidadeOficina: "Belo Horizonte/MG", obs: "Obs cancelada unica" },
+          ],
+        },
+      ],
+    };
+
+    await PromotorReportPdfRenderer.renderizarPdf(dadosComDestaquesMistos);
+
+    const [html] = setContentMock.mock.calls[0];
+    const indiceConcluidas = html.indexOf("Concluídas com observação");
+    const indiceCanceladas = html.indexOf("Canceladas com justificativa");
+    const indiceObsConcluida = html.indexOf("Obs concluida unica");
+    const indiceObsCancelada = html.indexOf("Obs cancelada unica");
+
+    expect(indiceConcluidas).toBeGreaterThan(-1);
+    expect(indiceCanceladas).toBeGreaterThan(indiceConcluidas);
+    // A observação "concluida" tem de cair entre os 2 titulos (na secao certa).
+    expect(indiceObsConcluida).toBeGreaterThan(indiceConcluidas);
+    expect(indiceObsConcluida).toBeLessThan(indiceCanceladas);
+    // A observação "cancelada" tem de cair depois do titulo de canceladas.
+    expect(indiceObsCancelada).toBeGreaterThan(indiceCanceladas);
+  });
+
   it("fecha o browser mesmo quando a renderizacao falha", async () => {
     pdfMock.mockRejectedValueOnce(new Error("falha de renderizacao"));
 
