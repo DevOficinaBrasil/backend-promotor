@@ -1152,21 +1152,21 @@ Adicionada depois do Verifier dar PASS (3ª iteração). 2 pedidos do usuário: 
 - Skill: NONE
 
 **Done when**:
-- [ ] `gerarSinteses(bloco: CampanhaBlocoRelatorio): Promise<SintesesPorSecao>` — nunca lança
-- [ ] 1 só chamada à OpenAI por bloco (não 6), pedindo JSON com as 6 chaves de `SecaoRelatorio`
-- [ ] Prompt passa só os dados já calculados daquela seção, nunca pede pra IA calcular nada
-- [ ] Frase que falha em `validarSintese` é descartada individualmente — as demais seções da mesma resposta continuam
-- [ ] Chamada falha (mock rejeita, JSON inválido, resposta vazia) → retorna `{}`, loga o erro
-- [ ] Teste mocka o módulo `openai` inteiro (`jest.mock("openai")) — nunca chama a API de verdade
-- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportSintese.test.ts`
-- [ ] `OPENAI_API_KEY` documentada em `.env.example`/`exemple.env` (nova — usuário fornece o valor real)
+- [x] `gerarSinteses(bloco: CampanhaBlocoRelatorio): Promise<SintesesPorSecao>` — nunca lança
+- [x] 1 só chamada à OpenAI por bloco (não 6), pedindo JSON com as 6 chaves de `SecaoRelatorio`
+- [x] Prompt passa só os dados já calculados daquela seção, nunca pede pra IA calcular nada
+- [x] Frase que falha em `validarSintese` é descartada individualmente — as demais seções da mesma resposta continuam
+- [x] Chamada falha (mock rejeita, JSON inválido, resposta vazia) → retorna `{}`, loga o erro
+- [x] Teste mocka o módulo `openai` inteiro (`jest.mock("openai")`) — nunca chama a API de verdade
+- [x] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportSintese.test.ts` (6 passed)
+- [x] `OPENAI_API_KEY` documentada em `.env.example`/`exemple.env` (nova — usuário fornece o valor real)
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(promotor-relatorio): gera sintese por secao via openai`
 
-**Status**: ⬜ Pending
+**Status**: ✅ Complete
 
 ---
 
