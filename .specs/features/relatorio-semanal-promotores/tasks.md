@@ -1099,16 +1099,16 @@ Adicionada depois do Verifier dar PASS (3ª iteração). 2 pedidos do usuário: 
 - Skill: NONE
 
 **Done when**:
-- [ ] `SecaoRelatorio` e `SintesesPorSecao` exportados
-- [ ] `CampanhaBlocoRelatorio.sintesesPorSecao?: SintesesPorSecao`
-- [ ] Gate check passa: `npx tsc --noEmit` (zero erros novos)
+- [x] `SecaoRelatorio` e `SintesesPorSecao` exportados
+- [x] `CampanhaBlocoRelatorio.sintesesPorSecao?: SintesesPorSecao`
+- [x] Gate check passa: `npx tsc --noEmit` (zero erros novos)
 
 **Tests**: none
 **Gate**: build
 
 **Commit**: `feat(promotor-relatorio): adiciona tipos de sintese por secao`
 
-**Status**: ⬜ Pending
+**Status**: ✅ Complete
 
 ---
 
