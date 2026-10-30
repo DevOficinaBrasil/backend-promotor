@@ -95,6 +95,24 @@ describe("PromotorReportSintese.gerarSinteses", () => {
     expect(resultado.proximosPassos).toBe("132 oficinas abertas na rota");
   });
 
+  it("descarta a frase que cita o texto literal de uma obs original — RELPROM-66", async () => {
+    mockCreate.mockResolvedValue(
+      respostaComConteudo(
+        JSON.stringify({
+          visaoGeral: "71 visitas concluidas no periodo",
+          cancelamentos: "Cancelado porque Promotor de folga", // cita a obs literal (18+ caracteres)
+          proximosPassos: "132 oficinas abertas na rota",
+        })
+      )
+    );
+
+    const resultado = await PromotorReportSintese.gerarSinteses(BLOCO);
+
+    expect(resultado.cancelamentos).toBeUndefined();
+    expect(resultado.visaoGeral).toBe("71 visitas concluidas no periodo");
+    expect(resultado.proximosPassos).toBe("132 oficinas abertas na rota");
+  });
+
   it("retorna {} quando a resposta vem sem conteudo — RELPROM-51", async () => {
     mockCreate.mockResolvedValue(respostaComConteudo(null));
 

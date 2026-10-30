@@ -1561,6 +1561,8 @@ Adicionada depois do Verifier dar PASS (3ª iteração). 2 pedidos do usuário: 
 
 **Status**: ✅ Complete
 
+**Corrigido pós-Execute (achado na revisão de T51, mesmo gap de RELPROM-66)**: `gerarSinteses` (síntese geral, RELPROM-49) também lê OBS bruto de `cancelamentos`/`destaques` como insumo do prompt, mas só chamava `validarSintese` (checa número), nunca `contemTextoVerbatim` — o mesmo risco de vazamento verbatim que esta task fechou pra `construirResumoCancelamentos`/`construirInsightsCampo` continuava aberto nesse 3º caminho. Fechado adicionando `observacoesOriginaisDaSecao` + chamada a `contemTextoVerbatim` no loop de validação de `gerarSinteses`, em `service/promotorReportSintese.ts`. Commit: `fix(promotor-relatorio): bloqueia vazamento de obs bruto na sintese geral`.
+
 ---
 
 ### T51: Remove OBS bruto dos fallbacks no PDF (backend-promotor)

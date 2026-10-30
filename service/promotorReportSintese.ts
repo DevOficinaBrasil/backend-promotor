@@ -4,6 +4,7 @@ import { Cancelamento, DestaqueCampo, VisaoGeralCampanha } from "../utils/promot
 import {
   construirInsightsCampo,
   construirResumoCancelamentos,
+  contemTextoVerbatim,
   GrupoCancelamentoBruto,
   InsightCampoBruto,
   numerosValidosDaSecao,
@@ -17,6 +18,20 @@ import {
 const SECOES: SecaoRelatorio[] = ["visaoGeral", "assertividade", "cancelamentos", "destaques", "proximosPassos"];
 
 const MODELO = "gpt-4o-mini";
+
+// RELPROM-66: mesmo guardrail de vazamento verbatim do OBS já usado em
+// `construirResumoCancelamentos`/`construirInsightsCampo` — a síntese geral
+// (RELPROM-49) também lê OBS bruto como insumo do prompt pra essas 2 seções.
+function observacoesOriginaisDaSecao(secao: SecaoRelatorio, bloco: CampanhaBlocoRelatorio): (string | null | undefined)[] {
+  switch (secao) {
+    case "cancelamentos":
+      return bloco.cancelamentos.map((cancelamento) => cancelamento.obs);
+    case "destaques":
+      return bloco.destaquesDeCampo.map((destaque) => destaque.obs);
+    default:
+      return [];
+  }
+}
 
 function montarPrompt(bloco: CampanhaBlocoRelatorio): string {
   // Só os dados já calculados — a IA nunca recebe a tarefa de somar/contar
@@ -133,9 +148,9 @@ export default class PromotorReportSintese {
       for (const secao of SECOES) {
         const texto = bruto[secao];
         if (typeof texto !== "string" || texto.trim().length === 0) continue;
-        if (validarSintese(texto, numerosValidosDaSecao(secao, bloco))) {
-          validadas[secao] = texto.trim();
-        }
+        if (!validarSintese(texto, numerosValidosDaSecao(secao, bloco))) continue;
+        if (contemTextoVerbatim(texto, observacoesOriginaisDaSecao(secao, bloco))) continue;
+        validadas[secao] = texto.trim();
       }
 
       return validadas;
