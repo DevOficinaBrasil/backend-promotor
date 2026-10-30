@@ -415,15 +415,14 @@ function desenharCancelamentos(cursor: Cursor, bloco: CampanhaBlocoRelatorio): v
 
   // RELPROM-53/55: usa o resumo agrupado por IA quando disponível e válido;
   // senão cai pra tabela detalhada de hoje, 1 linha por cancelamento.
+  // RELPROM-65: o fallback detalhado nunca mostra o texto bruto do campo
+  // OBS (pode conter anotação interna de revisão de cadastro, não uma
+  // justificativa de campo) — só a síntese validada da IA carrega texto
+  // livre nessa coluna.
   const linhas =
     bloco.resumoCancelamentos && bloco.resumoCancelamentos.length > 0
       ? bloco.resumoCancelamentos.map((grupo) => [grupo.promotor, formatarOficinas(grupo.oficinas), grupo.cidade, grupo.justificativa])
-      : bloco.cancelamentos.map((cancelamento: Cancelamento) => [
-          cancelamento.nomePromotor,
-          cancelamento.nomeOficina,
-          cancelamento.cidadeOficina,
-          cancelamento.obs ?? "—",
-        ]);
+      : bloco.cancelamentos.map((cancelamento: Cancelamento) => [cancelamento.nomePromotor, cancelamento.nomeOficina, cancelamento.cidadeOficina, "—"]);
   desenharTabela(cursor, colunas, linhas, "Nenhum cancelamento no período.");
 
   if (bloco.cancelamentos.length > 0) {
@@ -431,14 +430,19 @@ function desenharCancelamentos(cursor: Cursor, bloco: CampanhaBlocoRelatorio): v
   }
 }
 
-/** Card de observação — 1 por visita com OBS, com barra lateral colorida por status. */
+/**
+ * Card de destaque — 1 por visita com OBS, com barra lateral colorida por
+ * status. **RELPROM-65**: não desenha o texto do campo OBS (pode conter
+ * anotação interna de revisão de cadastro, não observação de campo real) —
+ * só dados estruturados (promotor/oficina/cidade). O texto livre só aparece
+ * via síntese validada da IA (`insightsCampo`), nunca neste fallback.
+ */
 function desenharCardDestaque(cursor: Cursor, item: DestaqueCampo): void {
   const padding = 8;
   const corBarra = item.status === "concluida" ? COR_VERDE : COR_NAVY;
   const cabecalho = `${item.nomePromotor} — ${item.nomeOficina} (${item.cidadeOficina})`;
   const linhasCabecalho = quebrarLinhas(cabecalho, cursor.fonteNegrito, 9.5, LARGURA_UTIL - padding * 2 - 6);
-  const linhasObs = quebrarLinhas(item.obs, cursor.fonte, 9, LARGURA_UTIL - padding * 2 - 6);
-  const altura = (linhasCabecalho.length + linhasObs.length) * 12 + padding * 2;
+  const altura = linhasCabecalho.length * 12 + padding * 2;
 
   garantirEspaco(cursor, altura + 8);
   cursor.pagina.drawRectangle({ x: MARGEM, y: cursor.y - altura, width: LARGURA_UTIL, height: altura, color: COR_MENTA });
@@ -447,10 +451,6 @@ function desenharCardDestaque(cursor: Cursor, item: DestaqueCampo): void {
   let yLinha = cursor.y - padding - 8;
   for (const linha of linhasCabecalho) {
     cursor.pagina.drawText(linha, { x: MARGEM + padding + 6, y: yLinha, size: 9.5, font: cursor.fonteNegrito, color: COR_NAVY });
-    yLinha -= 12;
-  }
-  for (const linha of linhasObs) {
-    cursor.pagina.drawText(linha, { x: MARGEM + padding + 6, y: yLinha, size: 9, font: cursor.fonte, color: COR_CINZA });
     yLinha -= 12;
   }
 

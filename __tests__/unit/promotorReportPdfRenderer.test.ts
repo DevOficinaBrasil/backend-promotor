@@ -112,27 +112,27 @@ describe("PromotorReportPdfRenderer.renderizarPdf", () => {
     const textos = textosDesenhados();
     const indiceConcluidas = textos.indexOf("Concluídas com observação");
     const indiceCanceladas = textos.indexOf("Canceladas com justificativa");
-    const indiceObsConcluida = textos.findIndex((t) => t.includes("Obs concluida unica"));
-    const indiceObsCancelada = textos.findIndex((t) => t.includes("Obs cancelada unica"));
+    const indiceCardConcluida = textos.findIndex((t) => t.includes("Willian — Oficina A"));
+    const indiceCardCancelada = textos.findIndex((t) => t.includes("José — Oficina B"));
 
     expect(indiceConcluidas).toBeGreaterThanOrEqual(0);
     expect(indiceCanceladas).toBeGreaterThan(indiceConcluidas);
-    // A ordem real de desenho (topo->baixo) é a ordem das chamadas: a
-    // observação "concluida" tem de ser desenhada entre os 2 titulos.
-    expect(indiceObsConcluida).toBeGreaterThan(indiceConcluidas);
-    expect(indiceObsConcluida).toBeLessThan(indiceCanceladas);
-    expect(indiceObsCancelada).toBeGreaterThan(indiceCanceladas);
+    // A ordem real de desenho (topo->baixo) é a ordem das chamadas: o card
+    // "concluida" tem de ser desenhado entre os 2 titulos.
+    expect(indiceCardConcluida).toBeGreaterThan(indiceConcluidas);
+    expect(indiceCardConcluida).toBeLessThan(indiceCanceladas);
+    expect(indiceCardCancelada).toBeGreaterThan(indiceCanceladas);
   });
 
-  it("quebra observacoes longas em varias linhas, sem cortar o texto (RELPROM-24 ja trunca em 500, aqui so garante leitura)", async () => {
-    const obsLonga = "palavra ".repeat(40).trim(); // bem maior que 1 linha de pagina A4
+  it("nunca desenha o texto do campo OBS no card de destaque (fallback) — RELPROM-65", async () => {
+    const obsSensivel = "Liberada sem confirmacao na revisao da base, anotacao interna de cadastro";
     const dados: RelatorioPromotorData = {
       ...DADOS,
       campanhas: [
         {
           ...DADOS.campanhas[0],
           destaquesDeCampo: [
-            { status: "concluida", idPromotor: 1, nomePromotor: "P", nomeOficina: "O", cidadeOficina: "C/UF", obs: obsLonga },
+            { status: "concluida", idPromotor: 1, nomePromotor: "P", nomeOficina: "O", cidadeOficina: "C/UF", obs: obsSensivel },
           ],
         },
       ],
@@ -140,8 +140,9 @@ describe("PromotorReportPdfRenderer.renderizarPdf", () => {
 
     await PromotorReportPdfRenderer.renderizarPdf(dados);
 
-    const textosComPalavra = textosDesenhados().filter((t) => t.includes("palavra"));
-    expect(textosComPalavra.length).toBeGreaterThan(1); // quebrou em mais de 1 linha
+    const textos = textosDesenhados();
+    expect(textos.some((t) => t.includes("Liberada") || t.includes("revisao da base"))).toBe(false);
+    expect(textos.some((t) => t.includes("P — O"))).toBe(true); // header estrutural continua
   });
 
   it("desenha o grafico por dia empilhado com valor combinado e o dia de pico em destaque — RELPROM-44", async () => {
@@ -222,6 +223,26 @@ describe("PromotorReportPdfRenderer.renderizarPdf", () => {
     const textos = textosDesenhados();
     expect(textos).toContain("José Maria Jr.");
     expect(textos).toContain("Real Car");
+  });
+
+  it("nunca desenha o texto do campo OBS na tabela detalhada de cancelamentos (fallback) — RELPROM-65", async () => {
+    const dados: RelatorioPromotorData = {
+      ...DADOS,
+      campanhas: [
+        {
+          ...DADOS.campanhas[0],
+          cancelamentos: [
+            { idPromotor: 2, nomePromotor: "José Maria Jr.", nomeOficina: "Real Car", cidadeOficina: "Belo Horizonte/MG", obs: "Liberada sem confirmacao na revisao da base" },
+          ],
+        },
+      ],
+    };
+
+    await PromotorReportPdfRenderer.renderizarPdf(dados);
+
+    const textos = textosDesenhados();
+    expect(textos.some((t) => t.includes("Liberada") || t.includes("revisao da base"))).toBe(false);
+    expect(textos).toContain("José Maria Jr."); // dados estruturados continuam
   });
 
   it("desenha a sintese de cada secao, logo apos a linha de destaque e antes do conteudo deterministico — RELPROM-52", async () => {

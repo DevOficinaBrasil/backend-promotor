@@ -1576,17 +1576,17 @@ Adicionada depois do Verifier dar PASS (3ª iteração). 2 pedidos do usuário: 
 - Skill: NONE
 
 **Done when**:
-- [ ] Card de destaque (fallback) não desenha nenhum texto do campo OBS — só promotor/oficina/cidade
-- [ ] Tabela detalhada de cancelamentos (fallback) não desenha `cancelamento.obs` — coluna "Justificativa" fica vazia/placeholder nesse modo
-- [ ] Resumo via IA (`resumoCancelamentos`/`insightsCampo`), quando presente e válido, continua mostrando a justificativa/descrição sintetizada normalmente — a mudança é só no fallback cru
-- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportPdfRenderer.test.ts` (sem regressão + novos casos)
+- [x] Card de destaque (fallback) não desenha nenhum texto do campo OBS — só promotor/oficina/cidade
+- [x] Tabela detalhada de cancelamentos (fallback) não desenha `cancelamento.obs` — coluna "Justificativa" fica vazia/placeholder nesse modo
+- [x] Resumo via IA (`resumoCancelamentos`/`insightsCampo`), quando presente e válido, continua mostrando a justificativa/descrição sintetizada normalmente — a mudança é só no fallback cru
+- [x] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportPdfRenderer.test.ts` (sem regressão + novos casos) — 16 passed, 16 total
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `fix(promotor-relatorio): remove obs bruto dos fallbacks no pdf`
 
-**Status**: ⬜ Pending
+**Status**: ✅ Complete
 
 ---
 

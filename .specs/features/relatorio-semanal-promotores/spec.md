@@ -333,16 +333,16 @@ Toda ambiguidade foi resolvida ou registrada aqui.
 | RELPROM-61 | P9: Resumo dos destaques do campo gerado por IA | Execute | Implemented |
 | RELPROM-62 | P9: Resumo dos destaques do campo gerado por IA | Execute | Implemented |
 | RELPROM-63 | P9: Resumo dos destaques do campo gerado por IA | Execute | Implemented |
-| RELPROM-64 | P10: Correções pós-revisão do PO | Design | Pending |
-| RELPROM-65 | P10: Correções pós-revisão do PO | Design | Pending |
-| RELPROM-66 | P10: Correções pós-revisão do PO | Design | Pending |
-| RELPROM-67 | P10: Correções pós-revisão do PO | Design | Pending |
+| RELPROM-64 | P10: Correções pós-revisão do PO | Execute | Implemented |
+| RELPROM-65 | P10: Correções pós-revisão do PO | Execute | Implemented |
+| RELPROM-66 | P10: Correções pós-revisão do PO | Execute | Implemented |
+| RELPROM-67 | P10: Correções pós-revisão do PO | Execute | Implemented |
 
 **ID format:** `RELPROM-NN`
 
 **Status values:** Pending → In Design → In Tasks → Implementing → Verified
 
-**Coverage:** 67 total. RELPROM-01 a 63 implementadas (Phases 1-11 em `tasks.md`). RELPROM-64 a 67 (P10, correções pós-PO) são novas, pendentes de Design.
+**Coverage:** 67 total. RELPROM-01 a 67 implementadas (Phases 1-12 em `tasks.md`).
 
 ---
 
