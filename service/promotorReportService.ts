@@ -217,6 +217,13 @@ export default class PromotorReportService {
           const resumo = await PromotorReportSintese.gerarResumoCancelamentos(bloco.cancelamentos);
           if (resumo) bloco.resumoCancelamentos = resumo;
         }
+        // RELPROM-58/63: insights dos destaques do campo — só tenta quando
+        // há destaque com OBS; `null` deixa a chave ausente, e o renderer
+        // cai pra listagem de cards individuais de hoje.
+        if (bloco.destaquesDeCampo.length > 0) {
+          const insights = await PromotorReportSintese.gerarInsightsCampo(bloco.destaquesDeCampo, bloco.visaoGeral);
+          if (insights) bloco.insightsCampo = insights;
+        }
       }
       pdf = await PromotorReportPdfRenderer.renderizarPdf(dados);
     } catch (erro) {

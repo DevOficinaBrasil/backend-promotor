@@ -1428,17 +1428,17 @@ Adicionada depois do Verifier dar PASS (3ª iteração). 2 pedidos do usuário: 
 - Skill: NONE
 
 **Done when**:
-- [ ] Bloco com destaques → `gerarInsightsCampo` chamado, resultado anexado quando não `null`
-- [ ] Bloco sem destaques (`length === 0`) → `gerarInsightsCampo` não é chamado
-- [ ] `null` (falha/validação) → `bloco.insightsCampo` fica ausente, PDF renderiza normalmente (cards individuais)
-- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportServiceEnvio.test.ts` (sem regressão + novo caso)
+- [x] Bloco com destaques → `gerarInsightsCampo` chamado, resultado anexado quando não `null`
+- [x] Bloco sem destaques (`length === 0`) → `gerarInsightsCampo` não é chamado
+- [x] `null` (falha/validação) → `bloco.insightsCampo` fica ausente, PDF renderiza normalmente (cards individuais)
+- [x] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportServiceEnvio.test.ts` (21 passed, sem regressão + 3 novos casos)
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(promotor-relatorio): anexa insights de destaques antes de renderizar o pdf`
 
-**Status**: ⬜ Pending
+**Status**: ✅ Complete
 
 ---
 

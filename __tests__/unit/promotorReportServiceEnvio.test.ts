@@ -17,7 +17,7 @@ jest.mock("../../service/s3StorageClient", () => ({
 }));
 jest.mock("../../service/promotorReportSintese", () => ({
   __esModule: true,
-  default: { gerarSinteses: jest.fn(), gerarResumoCancelamentos: jest.fn() },
+  default: { gerarSinteses: jest.fn(), gerarResumoCancelamentos: jest.fn(), gerarInsightsCampo: jest.fn() },
 }));
 
 import { AppDataSourceSync } from "../../data-source";
@@ -36,6 +36,7 @@ const enviarEmailComAnexo = ObAdsIntegrationClient.enviarEmailComAnexo as jest.M
 const resolverDestinatariosMock = resolverDestinatarios as jest.Mock;
 const gerarSinteses = PromotorReportSintese.gerarSinteses as jest.Mock;
 const gerarResumoCancelamentos = PromotorReportSintese.gerarResumoCancelamentos as jest.Mock;
+const gerarInsightsCampo = PromotorReportSintese.gerarInsightsCampo as jest.Mock;
 const uploadPdf = S3StorageClient.uploadPdf as jest.Mock;
 
 const PERIODO: PeriodoRelatorio = {
@@ -62,6 +63,7 @@ beforeEach(() => {
   uploadPdf.mockResolvedValue({ sucesso: true, url: "https://bucket.s3.amazonaws.com/relatorio.pdf" });
   gerarSinteses.mockResolvedValue({});
   gerarResumoCancelamentos.mockResolvedValue(null);
+  gerarInsightsCampo.mockResolvedValue(null);
 
   createMock = jest.fn((data: unknown) => data);
   saveMock = jest.fn((data: unknown) => Promise.resolve(data));
@@ -321,5 +323,88 @@ describe("PromotorReportService.processarRelatorioCliente", () => {
     expect(resultado.enviado).toBe(true);
     const [dadosPassadosPraRenderer] = renderizarPdf.mock.calls[0];
     expect(dadosPassadosPraRenderer.campanhas[0].resumoCancelamentos).toBeUndefined();
+  });
+
+  it("anexa os insights de destaques quando o bloco tem destaque e a ia valida — RELPROM-58", async () => {
+    const bloco: CampanhaBlocoRelatorio = {
+      idCampanha: 1,
+      nomeCampanha: "Campanha SKF",
+      visaoGeral: { concluidas: 71, canceladas: 21, abertasNaRota: 132 },
+      visitasPorDia: [],
+      assertividade: 77,
+      porPromotor: [],
+      cancelamentos: [],
+      destaquesDeCampo: [
+        { status: "concluida", idPromotor: 1, nomePromotor: "Willian", nomeOficina: "Oficina A", cidadeOficina: "São Paulo/SP", obs: "Tudo certo" },
+      ],
+      proximosPassos: { abertasNaRota: 132, canceladasARedistribuir: 21, promotoresSemRegistro: 1 },
+    };
+    (PromotorReportService.gerarRelatorioCliente as jest.Mock).mockResolvedValue({
+      idCliente: 10,
+      nomeCliente: "SKF",
+      periodo: PERIODO,
+      campanhas: [bloco],
+    });
+    const insights = [{ titulo: "Observações positivas", descricao: "Oficina com bom estoque" }];
+    gerarInsightsCampo.mockResolvedValue(insights);
+
+    await PromotorReportService.processarRelatorioCliente(CLIENTE, PERIODO, OrigemRelatorioEnvio.CRON);
+
+    expect(gerarInsightsCampo).toHaveBeenCalledWith(bloco.destaquesDeCampo, bloco.visaoGeral);
+    const [dadosPassadosPraRenderer] = renderizarPdf.mock.calls[0];
+    expect(dadosPassadosPraRenderer.campanhas[0].insightsCampo).toEqual(insights);
+  });
+
+  it("nao chama gerarInsightsCampo quando o bloco nao tem destaque", async () => {
+    const bloco: CampanhaBlocoRelatorio = {
+      idCampanha: 1,
+      nomeCampanha: "Campanha SKF",
+      visaoGeral: { concluidas: 71, canceladas: 21, abertasNaRota: 132 },
+      visitasPorDia: [],
+      assertividade: 77,
+      porPromotor: [],
+      cancelamentos: [],
+      destaquesDeCampo: [],
+      proximosPassos: { abertasNaRota: 132, canceladasARedistribuir: 21, promotoresSemRegistro: 1 },
+    };
+    (PromotorReportService.gerarRelatorioCliente as jest.Mock).mockResolvedValue({
+      idCliente: 10,
+      nomeCliente: "SKF",
+      periodo: PERIODO,
+      campanhas: [bloco],
+    });
+
+    await PromotorReportService.processarRelatorioCliente(CLIENTE, PERIODO, OrigemRelatorioEnvio.CRON);
+
+    expect(gerarInsightsCampo).not.toHaveBeenCalled();
+  });
+
+  it("insights nulos (falha/validacao) nao anexam insightsCampo nem impedem o envio — RELPROM-63", async () => {
+    const bloco: CampanhaBlocoRelatorio = {
+      idCampanha: 1,
+      nomeCampanha: "Campanha SKF",
+      visaoGeral: { concluidas: 71, canceladas: 21, abertasNaRota: 132 },
+      visitasPorDia: [],
+      assertividade: 77,
+      porPromotor: [],
+      cancelamentos: [],
+      destaquesDeCampo: [
+        { status: "concluida", idPromotor: 1, nomePromotor: "Willian", nomeOficina: "Oficina A", cidadeOficina: "São Paulo/SP", obs: "Tudo certo" },
+      ],
+      proximosPassos: { abertasNaRota: 132, canceladasARedistribuir: 21, promotoresSemRegistro: 1 },
+    };
+    (PromotorReportService.gerarRelatorioCliente as jest.Mock).mockResolvedValue({
+      idCliente: 10,
+      nomeCliente: "SKF",
+      periodo: PERIODO,
+      campanhas: [bloco],
+    });
+    gerarInsightsCampo.mockResolvedValue(null);
+
+    const resultado = await PromotorReportService.processarRelatorioCliente(CLIENTE, PERIODO, OrigemRelatorioEnvio.CRON);
+
+    expect(resultado.enviado).toBe(true);
+    const [dadosPassadosPraRenderer] = renderizarPdf.mock.calls[0];
+    expect(dadosPassadosPraRenderer.campanhas[0].insightsCampo).toBeUndefined();
   });
 });
