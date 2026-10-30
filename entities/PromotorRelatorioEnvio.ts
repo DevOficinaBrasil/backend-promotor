@@ -59,6 +59,11 @@ export default class PromotorRelatorioEnvio {
   @Column({ type: "text", name: "AMBIENTE" })
   AMBIENTE?: AmbienteRelatorioEnvio;
 
+  // URL pública do PDF arquivado no S3 (RELPROM-45). Nulo quando enviarEmail
+  // for false (preview, RELPROM-48) ou quando o upload falhar (RELPROM-46).
+  @Column({ type: "text", nullable: true, name: "LINK_PDF" })
+  LINK_PDF?: string | null;
+
   @CreateDateColumn({
     type: "timestamptz",
     default: () => "CURRENT_TIMESTAMP",
