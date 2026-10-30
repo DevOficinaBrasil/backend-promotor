@@ -1041,19 +1041,19 @@ Adicionada depois do Verifier dar PASS (3ª iteração). 2 pedidos do usuário: 
 - Skill: NONE
 
 **Done when**:
-- [ ] `uploadPdf({idCliente, periodo, pdf}): Promise<{sucesso:true; url:string} | {sucesso:false; motivo:string}>` — nunca lança
-- [ ] Chave montada com `idCliente`, período (`yyyy-MM-dd` dos 2 extremos) e um `crypto.randomUUID()`
-- [ ] `PutObjectCommand` chamado com `Bucket`, `Key`, `Body: pdf`, `ContentType: "application/pdf"`, `ACL: "public-read"`
-- [ ] Falha do SDK (`client.send` rejeita) é capturada e vira `{sucesso:false, motivo}`, nunca propaga
-- [ ] Teste mocka `@aws-sdk/client-s3` (`jest.mock`) — nunca sobe pro S3 de verdade
-- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/s3StorageClient.test.ts`
+- [x] `uploadPdf({idCliente, periodo, pdf}): Promise<{sucesso:true; url:string} | {sucesso:false; motivo:string}>` — nunca lança
+- [x] Chave montada com `idCliente`, período (`yyyy-MM-dd` dos 2 extremos) e um `crypto.randomUUID()`
+- [x] `PutObjectCommand` chamado com `Bucket`, `Key`, `Body: pdf`, `ContentType: "application/pdf"`, `ACL: "public-read"`
+- [x] Falha do SDK (`client.send` rejeita) é capturada e vira `{sucesso:false, motivo}`, nunca propaga
+- [x] Teste mocka `@aws-sdk/client-s3` (`jest.mock`) — nunca sobe pro S3 de verdade
+- [x] Gate check passa: `npx jest --runInBand __tests__/unit/s3StorageClient.test.ts` (4 passed)
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(promotor-relatorio): sobe pdf gerado pro s3`
 
-**Status**: ⬜ Pending
+**Status**: ✅ Complete
 
 ---
 
