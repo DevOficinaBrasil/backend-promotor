@@ -1548,18 +1548,18 @@ Adicionada depois do Verifier dar PASS (3ª iteração). 2 pedidos do usuário: 
 - Skill: NONE
 
 **Done when**:
-- [ ] `contemTextoVerbatim` retorna `true` só pra observação de 15+ caracteres citada literalmente (case-insensitive); ignora observações curtas (abaixo do limiar) e `null`
-- [ ] `construirResumoCancelamentos` rejeita (`null`) um grupo cuja justificativa cite verbatim o OBS de qualquer cancelamento (não só os do próprio grupo — o texto pode ter vazado de qualquer item)
-- [ ] `construirInsightsCampo` rejeita (`null`) um insight cujo título/descrição cite verbatim o OBS de qualquer destaque
-- [ ] Prompts de `montarPromptResumoCancelamentos`/`montarPromptInsightsCampo` instruem explicitamente: nunca citar o texto original palavra por palavra, nunca inferir ação/pedido/intenção não dita
-- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportSinteseValidacao.test.ts __tests__/unit/promotorReportSintese.test.ts` (sem regressão + novos casos)
+- [x] `contemTextoVerbatim` retorna `true` só pra observação de 15+ caracteres citada literalmente (case-insensitive); ignora observações curtas (abaixo do limiar) e `null`
+- [x] `construirResumoCancelamentos` rejeita (`null`) um grupo cuja justificativa cite verbatim o OBS de qualquer cancelamento (não só os do próprio grupo — o texto pode ter vazado de qualquer item)
+- [x] `construirInsightsCampo` rejeita (`null`) um insight cujo título/descrição cite verbatim o OBS de qualquer destaque
+- [x] Prompts de `montarPromptResumoCancelamentos`/`montarPromptInsightsCampo` instruem explicitamente: nunca citar o texto original palavra por palavra, nunca inferir ação/pedido/intenção não dita
+- [x] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportSinteseValidacao.test.ts __tests__/unit/promotorReportSintese.test.ts` (34 + 19 passed, sem regressão + novos casos)
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `fix(promotor-relatorio): bloqueia vazamento de obs bruto na sintese por ia`
 
-**Status**: ⬜ Pending
+**Status**: ✅ Complete
 
 ---
 

@@ -74,6 +74,25 @@ export function numerosValidosDaSecao(secao: SecaoRelatorio, bloco: CampanhaBloc
   }
 }
 
+const LIMIAR_VERBATIM = 15;
+
+/**
+ * `true` se `textoGerado` citar, como substring (case-insensitive), o texto
+ * literal de alguma observação original de `LIMIAR_VERBATIM`+ caracteres
+ * (RELPROM-65/66) — observações curtas não entram no check, pra não gerar
+ * falso positivo em frases genéricas. OBS pode conter anotação interna de
+ * revisão de cadastro (não observação de campo); isso nunca pode vazar pro
+ * cliente através da síntese da IA, mesmo que a IA ignore a instrução do
+ * prompt — por isso o guardrail é código, não só texto do prompt.
+ */
+export function contemTextoVerbatim(textoGerado: string, observacoesOriginais: (string | null | undefined)[]): boolean {
+  const normalizado = textoGerado.toLowerCase();
+  return observacoesOriginais.some((obs) => {
+    if (!obs || obs.length < LIMIAR_VERBATIM) return false;
+    return normalizado.includes(obs.toLowerCase());
+  });
+}
+
 /** Shape cru devolvido pela IA — só agrupamento (índices) + justificativa, nunca promotor/oficina/cidade (RELPROM-54). */
 export interface GrupoCancelamentoBruto {
   indices: number[];
@@ -102,9 +121,11 @@ export function construirResumoCancelamentos(
   }
   if (cobertura.some((coberto) => !coberto)) return null;
 
+  const todasAsObs = cancelamentos.map((cancelamento) => cancelamento.obs);
   const resultado: ResumoCancelamentoGrupo[] = [];
   for (const grupo of gruposBrutos) {
     if (!validarSintese(grupo.justificativa, [grupo.indices.length])) return null;
+    if (contemTextoVerbatim(grupo.justificativa, todasAsObs)) return null;
 
     const itens = grupo.indices.map((indice) => cancelamentos[indice]);
     const promotores = new Set(itens.map((item) => item.nomePromotor));
@@ -174,10 +195,12 @@ export function construirInsightsCampo(
   }
 
   const numerosValidos = numerosValidosParaInsights(destaques, visaoGeral);
+  const todasAsObs = destaques.map((destaque) => destaque.obs);
   const resultado: InsightCampo[] = [];
   for (const insight of insightsBrutos) {
     const textoCompleto = `${insight.titulo} ${insight.descricao}`;
     if (!validarSintese(textoCompleto, numerosValidos)) return null;
+    if (contemTextoVerbatim(textoCompleto, todasAsObs)) return null;
     resultado.push({ titulo: insight.titulo, descricao: insight.descricao });
   }
 

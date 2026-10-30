@@ -63,6 +63,12 @@ function montarPromptResumoCancelamentos(cancelamentos: Cancelamento[]): string 
     "cite um número diferente da quantidade de cancelamentos daquele grupo. Todo índice tem que",
     "aparecer em exatamente 1 grupo — nenhum de fora, nenhum repetido.",
     "",
+    "IMPORTANTE: nunca cite o texto de `justificativaOriginal` palavra por palavra, nem parcialmente —",
+    "sempre parafraseie. Nunca infira uma ação, pedido ou intenção do promotor (ex.: \"pediu remarcação\")",
+    "que não esteja dita de forma explícita e inequívoca no texto original. Algumas observações podem ser",
+    "anotações internas de revisão de cadastro, não relatos de visita — se o conteúdo não parecer uma",
+    "justificativa real de cancelamento, não presuma nada sobre ela além do que está escrito.",
+    "",
     'Responda só com um objeto JSON: {"grupos": [{"indices": [0, 1], "justificativa": "..."}]}',
   ].join("\n");
 }
@@ -89,6 +95,13 @@ function montarPromptInsightsCampo(destaques: DestaqueCampo[], visaoGeral: Visao
     "padrão. Só cite números presentes nos dados acima (contagens dos destaques, por cidade, ou os",
     "contadores da visão geral) — nunca invente ou calcule um número novo. Não é preciso cobrir",
     "todos os destaques, só os temas mais notáveis.",
+    "",
+    "IMPORTANTE: nunca cite o texto de `observacao` palavra por palavra, nem parcialmente — sempre",
+    "parafraseie, descrevendo só o padrão objetivo (contagens, categorias, cidades). Nunca infira uma",
+    "ação, pedido ou intenção do promotor (ex.: \"pediu remarcação\") que não esteja dita de forma",
+    "explícita e inequívoca no texto original — observações podem estar desatualizadas ou ser anotações",
+    "internas de revisão de cadastro, não relatos de campo reais; se o conteúdo não parecer uma",
+    "observação de visita genuína, não presuma nada sobre ela além do que está escrito.",
     "",
     'Responda só com um objeto JSON: {"insights": [{"titulo": "...", "indices": [0, 1], "descricao": "..."}]}',
   ].join("\n");

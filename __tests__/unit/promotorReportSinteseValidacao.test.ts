@@ -4,6 +4,7 @@ import {
   numerosValidosDaSecao,
   construirResumoCancelamentos,
   construirInsightsCampo,
+  contemTextoVerbatim,
 } from "../../utils/promotorReportSinteseValidacao";
 import { CampanhaBlocoRelatorio } from "../../types/promotorRelatorio";
 import { Cancelamento, DestaqueCampo, VisaoGeralCampanha } from "../../utils/promotorReportCalculos";
@@ -148,6 +149,18 @@ describe("construirResumoCancelamentos", () => {
   it("retorna null quando nao ha grupo nenhum", () => {
     expect(construirResumoCancelamentos(CANCELAMENTOS, [])).toBeNull();
   });
+
+  it("retorna null quando a justificativa cita o texto literal de uma obs original — RELPROM-66", () => {
+    const cancelamentos: Cancelamento[] = [
+      { idPromotor: 2, nomePromotor: "José", nomeOficina: "Real Car", cidadeOficina: "Belo Horizonte/MG", obs: "Liberada sem confirmacao na revisao da base" },
+    ];
+
+    const resultado = construirResumoCancelamentos(cancelamentos, [
+      { indices: [0], justificativa: "Motivo: liberada sem confirmacao na revisao da base" },
+    ]);
+
+    expect(resultado).toBeNull();
+  });
 });
 
 describe("construirInsightsCampo", () => {
@@ -212,5 +225,39 @@ describe("construirInsightsCampo", () => {
     const resultado = construirInsightsCampo(DESTAQUES, VISAO_GERAL, [{ titulo: "T", indices: [0], descricao: "sem numero" }]);
 
     expect(resultado).toEqual([{ titulo: "T", descricao: "sem numero" }]);
+  });
+
+  it("retorna null quando a descricao cita o texto literal de uma observacao original — RELPROM-66", () => {
+    const destaques: DestaqueCampo[] = [
+      { status: "concluida", idPromotor: 1, nomePromotor: "A", nomeOficina: "Oficina 1", cidadeOficina: "Rio de Janeiro/RJ", obs: "Liberada sem confirmacao na revisao da base" },
+    ];
+
+    const resultado = construirInsightsCampo(destaques, VISAO_GERAL, [
+      { titulo: "T", indices: [0], descricao: "Oficina com nota: liberada sem confirmacao na revisao da base" },
+    ]);
+
+    expect(resultado).toBeNull();
+  });
+});
+
+describe("contemTextoVerbatim", () => {
+  it("retorna true quando o texto gerado cita uma observacao de 15+ caracteres literalmente", () => {
+    expect(contemTextoVerbatim("Resumo: promotor de folga essa semana toda", ["Promotor de folga essa semana toda"])).toBe(true);
+  });
+
+  it("e case-insensitive", () => {
+    expect(contemTextoVerbatim("promotor DE FOLGA essa semana toda", ["Promotor de folga essa semana toda"])).toBe(true);
+  });
+
+  it("retorna false quando nenhuma observacao aparece no texto gerado", () => {
+    expect(contemTextoVerbatim("Oficina fechada no periodo", ["Promotor de folga essa semana toda"])).toBe(false);
+  });
+
+  it("ignora observacoes curtas (abaixo do limiar) pra nao gerar falso positivo", () => {
+    expect(contemTextoVerbatim("Fechada por motivo diverso", ["Fechada"])).toBe(false);
+  });
+
+  it("ignora observacoes nulas/undefined", () => {
+    expect(contemTextoVerbatim("qualquer texto", [null, undefined])).toBe(false);
   });
 });
