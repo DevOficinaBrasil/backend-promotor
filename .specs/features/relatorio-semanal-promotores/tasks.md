@@ -9,7 +9,7 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 ---
 
 **Design**: `.specs/features/relatorio-semanal-promotores/design.md`
-**Status**: Done — 22 tasks concluídas (Phases 1-5), Verifier independente PASS (3ª iteração do ciclo fix→re-verify, `.specs/features/relatorio-semanal-promotores/validation.md`), `validate_state.py` exit 0. + Phase 6 (AD-006/SKF-only, pós-Execute) e Phase 7 (pdf-lib + gráfico por dia, pós-Execute) — ambas feitas depois do Verifier, sem nova rodada formal do Verifier (mudança de implementação com testes próprios, não revalidação de requisito novo em escopo grande). **Phase 8 e Phase 9 (P6 S3, P7 síntese IA — RELPROM-45 a 52): tasks geradas, aguardando aprovação do usuário antes do Execute.**
+**Status**: Done — 22 tasks concluídas (Phases 1-5), Verifier independente PASS (3ª iteração do ciclo fix→re-verify, `.specs/features/relatorio-semanal-promotores/validation.md`), `validate_state.py` exit 0. + Phase 6 (AD-006/SKF-only, pós-Execute) e Phase 7 (pdf-lib + gráfico por dia, pós-Execute) — ambas feitas depois do Verifier, sem nova rodada formal do Verifier (mudança de implementação com testes próprios, não revalidação de requisito novo em escopo grande). **Phase 8 e Phase 9 (P6 S3, P7 síntese IA — RELPROM-45 a 52): 9 tasks concluídas (T31-T39), sem nova rodada formal do Verifier.**
 
 **Escopo cross-repo**: Fase 2 roda inteira no repo `backend-ob-ads` (`C:\Users\AndrePereira\Documents\oficina brasil\backend-ob-ads`), já na branch `feat/relatorio-promotores-semanal` (criada a partir de `main`, confirmado limpo e sincronizado — nenhuma task de setup de branch é necessária). As demais fases rodam no `backend-promotor`, também já na branch `feat/relatorio-promotores-semanal`. Cada commit de task vai pro repo correto — os comandos de commit das tasks da Fase 2 usam `git -C "<path do ob-ads>"`, nunca o repo atual.
 
@@ -1209,17 +1209,17 @@ Adicionada depois do Verifier dar PASS (3ª iteração). 2 pedidos do usuário: 
 - Skill: NONE
 
 **Done when**:
-- [ ] Bloco com `sintesesPorSecao` populado → a frase de cada seção aparece desenhada logo após a linha de destaque, antes do conteúdo determinístico
-- [ ] Bloco sem `sintesesPorSecao` (ou seção ausente da chave) → nenhum desenho extra, sem espaço em branco sobrando, PDF não quebra
-- [ ] Teste usa o mesmo padrão de `jest.spyOn(PDFPage.prototype, "drawText")` já estabelecido no renderer, confirmando a frase desenhada na posição certa (entre a linha de destaque e o conteúdo da seção)
-- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportPdfRenderer.test.ts` (sem regressão + novos casos com/sem síntese)
+- [x] Bloco com `sintesesPorSecao` populado → a frase de cada seção aparece desenhada logo após a linha de destaque, antes do conteúdo determinístico
+- [x] Bloco sem `sintesesPorSecao` (ou seção ausente da chave) → nenhum desenho extra, sem espaço em branco sobrando, PDF não quebra
+- [x] Teste usa o mesmo padrão de `jest.spyOn(PDFPage.prototype, "drawText")` já estabelecido no renderer, confirmando a frase desenhada na posição certa (entre a linha de destaque e o conteúdo da seção)
+- [x] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportPdfRenderer.test.ts` (9 passed, sem regressão + 2 novos casos com/sem síntese)
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(promotor-relatorio): desenha sintese por secao no pdf`
 
-**Status**: ⬜ Pending
+**Status**: ✅ Complete
 
 ---
 

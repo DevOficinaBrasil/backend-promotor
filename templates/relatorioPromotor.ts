@@ -173,6 +173,16 @@ function desenharCallout(cursor: Cursor, texto: string): void {
   cursor.y -= altura + 16;
 }
 
+/**
+ * Frase curta de síntese gerada por IA (RELPROM-49/52), quando existir pra
+ * essa seção — reaproveita o visual de `desenharCallout`. Sem síntese, não
+ * desenha nada (sem espaço em branco sobrando).
+ */
+function desenharSintese(cursor: Cursor, texto: string | undefined): void {
+  if (!texto) return;
+  desenharCallout(cursor, texto);
+}
+
 function desenharSubtitulo(cursor: Cursor, titulo: string, espacoAcima = 10): void {
   garantirEspaco(cursor, 18 + espacoAcima);
   cursor.y -= espacoAcima;
@@ -320,6 +330,7 @@ function desenharVisaoGeral(cursor: Cursor, bloco: CampanhaBlocoRelatorio): void
     `${bloco.visaoGeral.concluidas} oficinas visitadas no período`
   );
   desenharLinhaDestaque(cursor);
+  desenharSintese(cursor, bloco.sintesesPorSecao?.visaoGeral);
   desenharCards(cursor, [
     { numero: String(bloco.visaoGeral.concluidas), rotulo: "Visitas concluídas" },
     { numero: String(bloco.visaoGeral.canceladas), rotulo: "Canceladas" },
@@ -332,6 +343,7 @@ function desenharAssertividade(cursor: Cursor, bloco: CampanhaBlocoRelatorio): v
   iniciarSecao(cursor, "escura");
   desenharCabecalhoSecao(cursor, `Assertividade — ${bloco.nomeCampanha}`, "Visitas concluídas sobre visitas encerradas");
   desenharLinhaDestaque(cursor);
+  desenharSintese(cursor, bloco.sintesesPorSecao?.assertividade);
 
   garantirEspaco(cursor, 80);
   const texto = bloco.assertividade === "N/A" ? "N/A" : `${bloco.assertividade}%`;
@@ -349,6 +361,7 @@ function desenharPorPromotor(cursor: Cursor, bloco: CampanhaBlocoRelatorio): voi
   iniciarSecao(cursor, "clara");
   desenharCabecalhoSecao(cursor, `Performance por promotor — ${bloco.nomeCampanha}`, `${bloco.porPromotor.length} promotores na campanha`);
   desenharLinhaDestaque(cursor);
+  desenharSintese(cursor, bloco.sintesesPorSecao?.porPromotor);
 
   const colunas: ColunaTabela[] = [
     { titulo: "Promotor", largura: 260 },
@@ -371,6 +384,7 @@ function desenharCancelamentos(cursor: Cursor, bloco: CampanhaBlocoRelatorio): v
   iniciarSecao(cursor, "clara");
   desenharCabecalhoSecao(cursor, `Cancelamentos — ${bloco.nomeCampanha}`, `${bloco.cancelamentos.length} cancelamentos no período`);
   desenharLinhaDestaque(cursor);
+  desenharSintese(cursor, bloco.sintesesPorSecao?.cancelamentos);
 
   const colunas: ColunaTabela[] = [
     { titulo: "Promotor", largura: 180 },
@@ -422,6 +436,7 @@ function desenharDestaques(cursor: Cursor, bloco: CampanhaBlocoRelatorio): void 
   iniciarSecao(cursor, "clara");
   desenharCabecalhoSecao(cursor, `Destaques do campo — ${bloco.nomeCampanha}`, "Observações registradas pelos promotores");
   desenharLinhaDestaque(cursor);
+  desenharSintese(cursor, bloco.sintesesPorSecao?.destaques);
 
   const concluidas = bloco.destaquesDeCampo.filter((destaque) => destaque.status === "concluida");
   const canceladas = bloco.destaquesDeCampo.filter((destaque) => destaque.status === "cancelada");
@@ -449,6 +464,7 @@ function desenharProximosPassos(cursor: Cursor, bloco: CampanhaBlocoRelatorio): 
   iniciarSecao(cursor, "escura");
   desenharCabecalhoSecao(cursor, `Próximos passos — ${bloco.nomeCampanha}`, "O que vem a seguir");
   desenharLinhaDestaque(cursor);
+  desenharSintese(cursor, bloco.sintesesPorSecao?.proximosPassos);
   desenharCards(cursor, [
     { numero: String(bloco.proximosPassos.abertasNaRota), rotulo: "Oficinas abertas na rota" },
     { numero: String(bloco.proximosPassos.canceladasARedistribuir), rotulo: "Canceladas a redistribuir" },

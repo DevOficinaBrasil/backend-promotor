@@ -264,10 +264,10 @@ Toda ambiguidade foi resolvida ou registrada aqui.
 | RELPROM-46 | P6: Arquivamento do PDF no S3 | Execute | Implemented |
 | RELPROM-47 | P6: Arquivamento do PDF no S3 | Execute | Implemented |
 | RELPROM-48 | P6: Arquivamento do PDF no S3 | Execute | Implemented |
-| RELPROM-49 | P7: Observações adicionais geradas por IA | Tasks | In Tasks |
-| RELPROM-50 | P7: Observações adicionais geradas por IA | Tasks | In Tasks |
-| RELPROM-51 | P7: Observações adicionais geradas por IA | Tasks | In Tasks |
-| RELPROM-52 | P7: Observações adicionais geradas por IA | Tasks | In Tasks |
+| RELPROM-49 | P7: Observações adicionais geradas por IA | Execute | Implemented |
+| RELPROM-50 | P7: Observações adicionais geradas por IA | Execute | Implemented |
+| RELPROM-51 | P7: Observações adicionais geradas por IA | Execute | Implemented |
+| RELPROM-52 | P7: Observações adicionais geradas por IA | Execute | Implemented |
 
 **ID format:** `RELPROM-NN`
 

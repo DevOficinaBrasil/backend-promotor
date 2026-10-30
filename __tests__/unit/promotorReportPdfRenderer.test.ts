@@ -143,4 +143,49 @@ describe("PromotorReportPdfRenderer.renderizarPdf", () => {
     const textosComPalavra = textosDesenhados().filter((t) => t.includes("palavra"));
     expect(textosComPalavra.length).toBeGreaterThan(1); // quebrou em mais de 1 linha
   });
+
+  it("desenha a sintese de cada secao, logo apos a linha de destaque e antes do conteudo deterministico — RELPROM-52", async () => {
+    const dados: RelatorioPromotorData = {
+      ...DADOS,
+      campanhas: [
+        {
+          ...DADOS.campanhas[0],
+          sintesesPorSecao: {
+            visaoGeral: "Sintese da visao geral",
+            assertividade: "Sintese da assertividade",
+            porPromotor: "Sintese por promotor",
+            cancelamentos: "Sintese dos cancelamentos",
+            destaques: "Sintese dos destaques",
+            proximosPassos: "Sintese dos proximos passos",
+          },
+        },
+      ],
+    };
+
+    await PromotorReportPdfRenderer.renderizarPdf(dados);
+
+    const textos = textosDesenhados();
+    for (const sintese of [
+      "Sintese da visao geral",
+      "Sintese da assertividade",
+      "Sintese por promotor",
+      "Sintese dos cancelamentos",
+      "Sintese dos destaques",
+      "Sintese dos proximos passos",
+    ]) {
+      expect(textos).toContain(sintese);
+    }
+
+    // Na visao geral, a sintese vem antes do rotulo do 1o card (conteudo deterministico).
+    const indiceSintese = textos.indexOf("Sintese da visao geral");
+    const indiceCard = textos.indexOf("Visitas concluídas");
+    expect(indiceSintese).toBeLessThan(indiceCard);
+  });
+
+  it("sem sintesesPorSecao, nao desenha nenhum texto extra nem quebra o pdf — RELPROM-51", async () => {
+    const resultado = await PromotorReportPdfRenderer.renderizarPdf(DADOS);
+
+    const doc = await PDFDocument.load(resultado);
+    expect(doc.getPageCount()).toBe(7); // 1 capa + 6 secoes, sem pagina extra por causa da sintese ausente
+  });
 });
