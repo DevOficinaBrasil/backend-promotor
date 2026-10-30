@@ -1276,19 +1276,19 @@ Adicionada depois do Verifier dar PASS (3ª iteração). 2 pedidos do usuário: 
 - Skill: NONE
 
 **Done when**:
-- [ ] `gerarResumoCancelamentos(cancelamentos: Cancelamento[]): Promise<ResumoCancelamentoGrupo[] | null>` — nunca lança
-- [ ] Prompt lista os cancelamentos por índice (0-based), pedindo só agrupamento + justificativa — nunca promotor/oficina/cidade
-- [ ] Resultado bruto passa por `construirResumoCancelamentos`; `null` em qualquer rejeição
-- [ ] Chamada falha (mock rejeita, JSON inválido, resposta vazia) → `null`, loga o erro
-- [ ] Teste mocka o módulo `openai` (mesmo padrão de T37) — nunca chama a API de verdade
-- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportSintese.test.ts` (sem regressão + novos casos)
+- [x] `gerarResumoCancelamentos(cancelamentos: Cancelamento[]): Promise<ResumoCancelamentoGrupo[] | null>` — nunca lança
+- [x] Prompt lista os cancelamentos por índice (0-based), pedindo só agrupamento + justificativa — nunca promotor/oficina/cidade
+- [x] Resultado bruto passa por `construirResumoCancelamentos`; `null` em qualquer rejeição
+- [x] Chamada falha (mock rejeita, JSON inválido, resposta vazia) → `null`, loga o erro
+- [x] Teste mocka o módulo `openai` (mesmo padrão de T37) — nunca chama a API de verdade
+- [x] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportSintese.test.ts` (12 passed, sem regressão + 6 novos casos)
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(promotor-relatorio): gera resumo de cancelamentos agrupado via openai`
 
-**Status**: ⬜ Pending
+**Status**: ✅ Complete
 
 ---
 

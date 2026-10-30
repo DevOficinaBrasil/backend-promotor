@@ -8,6 +8,7 @@ jest.mock("openai", () => {
 
 import PromotorReportSintese from "../../service/promotorReportSintese";
 import { CampanhaBlocoRelatorio } from "../../types/promotorRelatorio";
+import { Cancelamento } from "../../utils/promotorReportCalculos";
 
 const BLOCO: CampanhaBlocoRelatorio = {
   idCampanha: 1,
@@ -107,5 +108,67 @@ describe("PromotorReportSintese.gerarSinteses", () => {
     const resultado = await PromotorReportSintese.gerarSinteses(BLOCO);
 
     expect(resultado).toEqual({});
+  });
+});
+
+describe("PromotorReportSintese.gerarResumoCancelamentos", () => {
+  const CANCELAMENTOS: Cancelamento[] = [
+    { idPromotor: 2, nomePromotor: "José", nomeOficina: "Real Car", cidadeOficina: "Belo Horizonte/MG", obs: "Folga" },
+    { idPromotor: 2, nomePromotor: "José", nomeOficina: "Ricar", cidadeOficina: "Belo Horizonte/MG", obs: "Folga" },
+  ];
+
+  it("retorna os grupos validados quando a resposta cobre todos os indices — RELPROM-53", async () => {
+    mockCreate.mockResolvedValue(
+      respostaComConteudo(JSON.stringify({ grupos: [{ indices: [0, 1], justificativa: "2 oficinas canceladas por folga do promotor" }] }))
+    );
+
+    const resultado = await PromotorReportSintese.gerarResumoCancelamentos(CANCELAMENTOS);
+
+    expect(resultado).toEqual([
+      { promotor: "José", oficinas: ["Real Car", "Ricar"], cidade: "Belo Horizonte/MG", justificativa: "2 oficinas canceladas por folga do promotor" },
+    ]);
+  });
+
+  it("faz 1 unica chamada, com model e response_format corretos", async () => {
+    mockCreate.mockResolvedValue(respostaComConteudo(JSON.stringify({ grupos: [{ indices: [0, 1], justificativa: "Folga" }] })));
+
+    await PromotorReportSintese.gerarResumoCancelamentos(CANCELAMENTOS);
+
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+    const [params] = mockCreate.mock.calls[0];
+    expect(params.model).toBe("gpt-4o-mini");
+    expect(params.response_format).toEqual({ type: "json_object" });
+  });
+
+  it("retorna null quando o agrupamento nao cobre todos os indices — RELPROM-55", async () => {
+    mockCreate.mockResolvedValue(respostaComConteudo(JSON.stringify({ grupos: [{ indices: [0], justificativa: "Folga" }] })));
+
+    const resultado = await PromotorReportSintese.gerarResumoCancelamentos(CANCELAMENTOS);
+
+    expect(resultado).toBeNull();
+  });
+
+  it("retorna null quando a resposta vem sem campo grupos", async () => {
+    mockCreate.mockResolvedValue(respostaComConteudo(JSON.stringify({ outraCoisa: true })));
+
+    const resultado = await PromotorReportSintese.gerarResumoCancelamentos(CANCELAMENTOS);
+
+    expect(resultado).toBeNull();
+  });
+
+  it("retorna null quando a resposta vem sem conteudo — RELPROM-57", async () => {
+    mockCreate.mockResolvedValue(respostaComConteudo(null));
+
+    const resultado = await PromotorReportSintese.gerarResumoCancelamentos(CANCELAMENTOS);
+
+    expect(resultado).toBeNull();
+  });
+
+  it("retorna null sem lancar quando a chamada rejeita — RELPROM-57", async () => {
+    mockCreate.mockRejectedValue(new Error("timeout"));
+
+    const resultado = await PromotorReportSintese.gerarResumoCancelamentos(CANCELAMENTOS);
+
+    expect(resultado).toBeNull();
   });
 });

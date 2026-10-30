@@ -1,6 +1,7 @@
 import OpenAI from "openai";
-import { CampanhaBlocoRelatorio, SecaoRelatorio, SintesesPorSecao } from "../types/promotorRelatorio";
-import { numerosValidosDaSecao, validarSintese } from "../utils/promotorReportSinteseValidacao";
+import { CampanhaBlocoRelatorio, ResumoCancelamentoGrupo, SecaoRelatorio, SintesesPorSecao } from "../types/promotorRelatorio";
+import { Cancelamento } from "../utils/promotorReportCalculos";
+import { construirResumoCancelamentos, GrupoCancelamentoBruto, numerosValidosDaSecao, validarSintese } from "../utils/promotorReportSinteseValidacao";
 
 const SECOES: SecaoRelatorio[] = ["visaoGeral", "assertividade", "porPromotor", "cancelamentos", "destaques", "proximosPassos"];
 
@@ -30,6 +31,29 @@ function montarPrompt(bloco: CampanhaBlocoRelatorio): string {
     "",
     'Responda só com um objeto JSON: {"visaoGeral": "...", "assertividade": "...", "porPromotor": "...",',
     '"cancelamentos": "...", "destaques": "...", "proximosPassos": "..."}',
+  ].join("\n");
+}
+
+function montarPromptResumoCancelamentos(cancelamentos: Cancelamento[]): string {
+  const itens = cancelamentos.map((cancelamento, indice) => ({
+    indice,
+    promotor: cancelamento.nomePromotor,
+    oficina: cancelamento.nomeOficina,
+    cidade: cancelamento.cidadeOficina,
+    justificativaOriginal: cancelamento.obs,
+  }));
+
+  return [
+    "Cancelamentos do período (JSON, 1 por índice):",
+    JSON.stringify(itens, null, 2),
+    "",
+    "Agrupe os cancelamentos acima por motivo semelhante (ex.: folga do promotor, distância/fora",
+    "da área, oficina inexistente/fechada, fora do segmento). Pra cada grupo, escreva 1 frase curta",
+    "de justificativa resumindo o motivo comum — nunca invente promotor, oficina ou cidade, e nunca",
+    "cite um número diferente da quantidade de cancelamentos daquele grupo. Todo índice tem que",
+    "aparecer em exatamente 1 grupo — nenhum de fora, nenhum repetido.",
+    "",
+    'Responda só com um objeto JSON: {"grupos": [{"indices": [0, 1], "justificativa": "..."}]}',
   ].join("\n");
 }
 
@@ -71,6 +95,38 @@ export default class PromotorReportSintese {
         erro: (erro as Error)?.message,
       });
       return {};
+    }
+  }
+
+  /**
+   * Resumo de cancelamentos agrupado por motivo (RELPROM-53/54), via 1
+   * chamada à OpenAI que só decide o agrupamento (índices) + a justificativa
+   * de cada grupo — promotor/oficina/cidade nunca vêm da IA. Nunca lança;
+   * `null` em qualquer falha (chamada, parse, ou `construirResumoCancelamentos`
+   * rejeitar), sinalizando pro chamador usar a tabela detalhada (RELPROM-55/57).
+   */
+  static async gerarResumoCancelamentos(cancelamentos: Cancelamento[]): Promise<ResumoCancelamentoGrupo[] | null> {
+    try {
+      const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      const resposta = await client.chat.completions.create({
+        model: MODELO,
+        response_format: { type: "json_object" },
+        temperature: 0.3,
+        messages: [{ role: "user", content: montarPromptResumoCancelamentos(cancelamentos) }],
+      });
+
+      const conteudo = resposta.choices[0]?.message?.content;
+      if (!conteudo) return null;
+
+      const bruto = JSON.parse(conteudo) as { grupos?: GrupoCancelamentoBruto[] };
+      if (!Array.isArray(bruto.grupos)) return null;
+
+      return construirResumoCancelamentos(cancelamentos, bruto.grupos);
+    } catch (erro) {
+      console.error("[promotorReportSintese] falha ao gerar resumo de cancelamentos por ia", {
+        erro: (erro as Error)?.message,
+      });
+      return null;
     }
   }
 }
