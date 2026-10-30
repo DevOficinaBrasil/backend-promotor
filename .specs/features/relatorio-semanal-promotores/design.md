@@ -49,6 +49,8 @@ graph TD
 | `node-cron` + guarda `NODE_ENV==="test"` + flag `*_ENABLED==="1"` + lock de sobreposição | `schedule/outboxNotificacaoCron.ts:30-32,48-84`, registrado em `app.ts:53` | Modelo exato pro cron novo (`PROMOTOR_RELATORIO_ENABLED`) |
 | `AppDataSourceSync` / `data-source.ts` | `data-source.ts` | Acesso ao Postgres pra `ROTA_PROMOTOR`/`CAMPANHA`/`CAMPANHA_PROMOTOR` |
 | `pdf-lib` (dependência já presente, não precisa de instalação nova) | — | **Pós-Execute**: substitui Playwright — desenho direto de PDF (texto/retângulo/linha), sem navegador/binário externo, sem risco de ambiente na EC2 de produção |
+| `openai` (dependência já presente, `^5.20.3`, nunca integrada — `.specs/codebase/CONCERNS.md`) | — | **Pós-Execute (P7)**: primeiro uso real no repo — gera a síntese por seção via `chat.completions` |
+| `@aws-sdk/client-s3` (dependência já presente, `^3.864.0`, nunca integrada — `.specs/codebase/CONCERNS.md`) | — | **Pós-Execute (P6)**: primeiro uso real no repo — upload do PDF gerado |
 | `EmailService.sendEmailWithAttachment` | `backend-ob-ads/src/appplication/services/EmailService.ts:115-153` | Reaproveitado via novo endpoint interno fino, não reimplementado |
 | Padrão de guarda de rota interna (`apiKeyGuard`, header `x-api-key`) | `backend-ob-ads/src/main/config/routes/CommunityReportInternalRoutes.ts:9-19` | Modelo exato de auth pros 2 endpoints internos novos |
 | Query de resolução de `Usuario` por `idCliente` (M:N `USUARIO_X_CLIENTES` + direto) | `backend-ob-ads/src/appplication/services/communityReport/CommunityReportEmailService.ts:221-233` | Extrair pra uma função reaproveitável, invertendo `IS_ADMIN` (`=1` em vez de `IS NULL OR =0`), mantendo a exclusão de `@oficinabrasil.com.br` |
@@ -178,6 +180,9 @@ interface ClienteModuloHabilitado {
   admins: string[] // e-mails reais; backend-promotor decide se usa ou troca pela DEV_REPORT_RECIPIENTS
 }
 
+type SecaoRelatorio = "visaoGeral" | "assertividade" | "porPromotor" | "cancelamentos" | "destaques" | "proximosPassos"
+type SintesesPorSecao = Partial<Record<SecaoRelatorio, string>> // RELPROM-49/50/51, pós-Execute — só as seções com frase validada aparecem aqui
+
 interface CampanhaBlocoRelatorio {
   idCampanha: number
   nomeCampanha: string
@@ -188,6 +193,7 @@ interface CampanhaBlocoRelatorio {
   cancelamentos: { promotor: string; oficina: string; cidade: string; obs: string | null }[]
   destaquesDeCampo: { status: "concluida" | "cancelada"; promotor: string; oficina: string; obs: string }[]
   proximosPassos: { abertasNaRota: number; canceladasARedistribuir: number; promotoresSemRegistro: number }
+  sintesesPorSecao?: SintesesPorSecao // RELPROM-49, pós-Execute — opcional: ausente/parcial quando a IA falhar ou alguma frase for descartada
 }
 
 interface RelatorioPromotorData {
@@ -221,6 +227,7 @@ interface PromotorRelatorioEnvio {
   DESTINATARIOS: string[] // jsonb — o que foi efetivamente usado (lista dev ou admins reais)
   AMBIENTE: "production" | "nao-production"
   CRIADO_EM: Date
+  LINK_PDF: string | null // RELPROM-45, pós-Execute — URL pública do PDF no S3; null quando enviarEmail=false ou o upload falhou
 }
 ```
 
@@ -273,3 +280,93 @@ interface PromotorRelatorioEnvio {
 > **Project-level decisions**: a decisão sobre congelamento do SQL Server pré-migração está registrada como `AD-006` em `.specs/STATE.md` — vale pra qualquer feature futura que cogitasse escrever lá, não só esta.
 >
 > As decisões abaixo (`INTERNAL_API_KEY` compartilhado, endpoints genéricos) continuam valendo: a decisão de secret compartilhado (`INTERNAL_API_KEY`) e o padrão de endpoints internos genéricos (em vez de um por feature) são convenção pra qualquer integração cross-service futura entre backend-promotor e backend-ob-ads — registrada como `AD-005` em `.specs/STATE.md`.
+
+---
+
+## P6/P7 — Arquivamento no S3 + Síntese por IA (RELPROM-45 a 52, Design pós-Execute)
+
+Cobre só o que o `context.md` de 2026-10-30 trouxe de novo. Nem S3 nem nenhum provedor de IA têm uso hoje neste repo — `@aws-sdk/client-s3` (`^3.864.0`) e `openai` (`^5.20.3`) já estão no `package.json` (declaradas, nunca integradas, ver `.specs/codebase/CONCERNS.md`), então não entra dependência nova, só uso real da que já existe.
+
+### Architecture Overview (adendo)
+
+```mermaid
+graph TD
+    SVC["PromotorReportService.processarRelatorioCliente"] --> DADOS["gerarRelatorioCliente<br/>(dados já calculados, por campanha)"]
+    DADOS --> SINTESE["PromotorReportSintese<br/>.gerarSinteses(bloco)"]
+    SINTESE -->|1 chamada JSON por campanha| OPENAI["OpenAI<br/>chat.completions (gpt-4o-mini)"]
+    SINTESE --> VALIDA["validarSintese<br/>(por seção, contra os números do bloco)"]
+    VALIDA --> DADOS2["bloco.sintesesPorSecao<br/>(só as frases que passaram)"]
+
+    DADOS2 --> PDF["PromotorReportPdfRenderer<br/>.renderizarPdf"]
+    PDF --> S3CLIENTE["S3StorageClient<br/>.uploadPdf(idCliente, periodo, pdf)"]
+    S3CLIENTE -->|PutObjectCommand, ACL public-read| S3["S3<br/>bucket AWS_BUCKET_NAME"]
+
+    S3CLIENTE --> AUDIT[("PROMOTOR_RELATORIO_ENVIO<br/>+ coluna LINK_PDF")]
+```
+
+Falha em `SINTESE` ou em `S3CLIENTE` nunca interrompe o fluxo — cada um devolve `{}`/`null` em vez de lançar, e `processarRelatorioCliente` segue com o que conseguiu (RELPROM-46, RELPROM-51).
+
+### Componentes novos
+
+#### PromotorReportSintese
+- **Purpose**: Gera 1 frase curta de síntese por seção (6 por bloco de campanha), a partir só dos dados já calculados — nunca pede à IA pra calcular nada.
+- **Location**: `service/promotorReportSintese.ts` (novo)
+- **Interfaces**:
+  - `gerarSinteses(bloco: CampanhaBlocoRelatorio): Promise<SintesesPorSecao>` — nunca lança; retorna `{}` se a chamada à OpenAI falhar inteira, ou um objeto parcial se só algumas seções passaram na validação
+- **Dependencies**: `openai` (`OpenAI.chat.completions.create`, `response_format: {type: "json_object"}`), env `OPENAI_API_KEY` (nova)
+- **Reuses**: padrão de erro-como-união já usado em `ObAdsIntegrationClient`/`rotaService.notificarRotasCriadas` (nunca lança, degrada em vez de propagar)
+
+#### validarSintese (guardrail anti-alucinação)
+- **Purpose**: Função pura — extrai todo número presente numa frase candidata e confere contra o conjunto de números válidos daquela seção (vindos dos dados já calculados); descarta a frase se achar um número que não bate.
+- **Location**: `utils/promotorReportSinteseValidacao.ts` (novo — função pura, testável isolada sem mockar OpenAI, mesmo padrão de `utils/promotorReportCalculos.ts`)
+- **Interfaces**:
+  - `extrairNumeros(texto: string): number[]`
+  - `validarSintese(texto: string, numerosValidos: number[]): boolean`
+  - `numerosValidosDaSecao(secao: SecaoRelatorio, bloco: CampanhaBlocoRelatorio): number[]` — monta o conjunto de números "permitidos" daquela seção (ex.: visão geral → `{concluidas, canceladas, abertasNaRota}`; assertividade → `{assertividade, concluidas, canceladas, concluidas+canceladas}`; por promotor → todos os 4 contadores de cada linha + totais; cancelamentos → `{cancelamentos.length}`; destaques → `{qtdConcluidasComObs, qtdCanceladasComObs}`; próximos passos → `{abertasNaRota, canceladasARedistribuir, promotoresSemRegistro}`)
+- **Dependencies**: nenhuma (puro)
+- **Reuses**: nada — lógica nova desta adição
+
+#### S3StorageClient
+- **Purpose**: Sobe o PDF gerado pro S3 e devolve a URL pública do objeto.
+- **Location**: `service/s3StorageClient.ts` (novo)
+- **Interfaces**:
+  - `uploadPdf(params: { idCliente: number; periodo: PeriodoRelatorio; pdf: Buffer }): Promise<{ sucesso: true; url: string } | { sucesso: false; motivo: string }>` — nunca lança
+- **Dependencies**: `@aws-sdk/client-s3` (`S3Client`, `PutObjectCommand`), envs já declaradas `AWS_REGION`, `AWS_BUCKET_NAME`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`
+- **Reuses**: mesmo padrão de erro-como-união dos demais clients externos desta feature
+
+### Mudanças em componentes existentes
+
+| Componente | Mudança |
+| --- | --- |
+| `types/promotorRelatorio.ts` | `CampanhaBlocoRelatorio` ganha `sintesesPorSecao?: SintesesPorSecao` (novo tipo `SecaoRelatorio` = `"visaoGeral" \| "assertividade" \| "porPromotor" \| "cancelamentos" \| "destaques" \| "proximosPassos"`, `SintesesPorSecao = Partial<Record<SecaoRelatorio, string>>`) |
+| `service/promotorReportService.ts` | `processarRelatorioCliente`: depois de `gerarRelatorioCliente` e antes de `renderizarPdf`, chama `PromotorReportSintese.gerarSinteses` por campanha e anexa o resultado ao bloco; depois de `renderizarPdf` (só quando `enviarEmail=true`), chama `S3StorageClient.uploadPdf` e passa `linkPdf` pra `registrarAuditoria` |
+| `templates/relatorioPromotor.ts` | Cada `desenharXxx` de seção (visão geral, assertividade, por promotor, cancelamentos, destaques, próximos passos) desenha `bloco.sintesesPorSecao?.[secao]` logo após `desenharLinhaDestaque`, reaproveitando o estilo já existente de `desenharCallout` — se a chave não existir (seção sem síntese), não desenha nada, sem buraco em branco |
+| `entities/PromotorRelatorioEnvio.ts` | Nova coluna `LINK_PDF?: string \| null` (`TEXT`, nullable) |
+| `scripts/migration-promotor-relatorio-envio-link-pdf.sql` (novo) | `ALTER TABLE ... ADD COLUMN IF NOT EXISTS "LINK_PDF" TEXT` — execução manual, mesma convenção dos demais scripts desta feature |
+
+### Error Handling Strategy (adendo)
+
+| Error Scenario | Handling | User Impact |
+| --- | --- | --- |
+| Chamada à OpenAI falha (timeout/erro/resposta vazia/JSON inválido) | `gerarSinteses` devolve `{}`, loga o erro; PDF segue sem nenhuma frase de síntese | Relatório sai normal, só sem as frases curtas |
+| Frase de 1 seção cita número fora dos dados calculados | `validarSintese` descarta só aquela frase; as demais seções (se válidas) continuam com a delas | Seção específica aparece sem a frase; resto do PDF não é afetado |
+| Upload pro S3 falha (credencial, bucket, rede) | `S3StorageClient.uploadPdf` devolve `{sucesso:false}`; `registrarAuditoria` grava `LINK_PDF=null`, loga o erro | E-mail sai normal, igual hoje; só o link de arquivamento fica ausente pra aquele envio |
+| `OPENAI_API_KEY` ausente | Mesmo tratamento de chamada-falhou — `gerarSinteses` trata erro de autenticação como qualquer outra falha da chamada, devolve `{}` | PDF sai sem nenhuma frase até a chave ser configurada |
+
+### Risks & Concerns (adendo)
+
+| Concern | Location (file:line) | Impact | Mitigation |
+| --- | --- | --- | --- |
+| Bucket pode ter "Block Public Access"/ACLs desabilitadas (padrão da AWS desde 2021) — `ACL: "public-read"` por objeto falharia ou seria ignorado nesse caso | `service/s3StorageClient.ts` (novo) | Upload pode falhar 100% das vezes mesmo com credencial válida, até alguém ajustar a configuração do bucket (fora do código) | Tratado como falha isolada (não bloqueia o envio, RELPROM-46); task dedicada no Execute testa 1 upload real contra o bucket real antes de confiar no fluxo em produção — mesmo espírito do spike T01 do Playwright. Se ACL por objeto não for permitida, a alternativa é uma bucket policy pública no prefixo `promotor-relatorio/*` (mudança de infra, fora do código) |
+| Chave S3 só com `idCliente` + período (`promotor-relatorio/{idCliente}/{periodoInicio}_{periodoFim}.pdf`) é adivinhável por qualquer um que saiba o `ID_CLIENTE` e tente datas — mesmo sendo "público", a única proteção real seria a URL ser imprevisível | `service/s3StorageClient.ts` (novo) | Enumeração de URLs de outros clientes/períodos sem credencial nenhuma | Acrescentado um sufixo aleatório (`crypto.randomUUID()`) na chave: `promotor-relatorio/{idCliente}/{periodoInicio}_{periodoFim}-{uuid}.pdf` — mantém público conforme decidido, mas deixa de ser trivialmente enumerável |
+| Dados de negócio do cliente (nomes de promotor/oficina, texto livre de OBS) trafegam pra uma API de terceiro (OpenAI) | `service/promotorReportSintese.ts` (novo) | Exposição de dado de cliente a um provedor externo | Risco aceito implicitamente pelo pedido do usuário (P7); nenhuma anonimização pedida. Registrar aqui pra não ficar implícito — revisitar se algum cliente futuro tiver cláusula contratual contra isso |
+| Custo/latência de IA cresce linearmente com o número de clientes elegíveis quando a migração SQL Server→Postgres acabar e o módulo "promotores" for religado (hoje só SKF) | `service/promotorReportSintese.ts` (novo) | Nenhum hoje (1 cliente só); vira custo real na escala do módulo | 1 chamada combinada por campanha (JSON com as 6 frases), não 6 chamadas separadas; modelo econômico (`gpt-4o-mini`) — reavaliar custo quando o módulo for religado |
+
+### Tech Decisions (adendo)
+
+| Decision | Choice | Rationale |
+| --- | --- | --- |
+| Granularidade das chamadas à OpenAI | 1 chamada por campanha, pedindo as 6 frases de uma vez (`response_format: json_object`), não 6 chamadas separadas | Reduz custo/latência/chance de rate-limit em 6x; a validação (`validarSintese`) continua por seção, então 1 frase ruim não derruba as outras 5 mesmo vindo da mesma chamada |
+| Modelo da OpenAI | `gpt-4o-mini` | Tarefa é descrever em prosa números já prontos, não raciocínio complexo — modelo econômico é suficiente; documentado como decisão de Design (Agent's Discretion no `context.md`) |
+| Chave do objeto no S3 | `promotor-relatorio/{idCliente}/{periodoInicio}_{periodoFim}-{uuid}.pdf` (sufixo aleatório) | Mantém a convenção legível (dá pra saber de qual cliente/período é só olhando o path) sem deixar a URL trivialmente adivinhável, dado que o objeto é público sem expiração (RELPROM-47) |
+| Onde a síntese entra no PDF | Mesmo visual de `desenharCallout` (já existe), logo após a linha de destaque de cada seção | Reaproveita componente visual já testado em vez de criar um estilo novo só pra isso; mantém a distinção visual entre "texto gerado" e "dado determinístico" sutil mas presente |

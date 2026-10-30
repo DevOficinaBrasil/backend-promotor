@@ -9,7 +9,7 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 ---
 
 **Design**: `.specs/features/relatorio-semanal-promotores/design.md`
-**Status**: Done — 22 tasks concluídas (Phases 1-5), Verifier independente PASS (3ª iteração do ciclo fix→re-verify, `.specs/features/relatorio-semanal-promotores/validation.md`), `validate_state.py` exit 0. + Phase 6 (AD-006/SKF-only, pós-Execute) e Phase 7 (pdf-lib + gráfico por dia, pós-Execute) — ambas feitas depois do Verifier, sem nova rodada formal do Verifier (mudança de implementação com testes próprios, não revalidação de requisito novo em escopo grande)
+**Status**: Done — 22 tasks concluídas (Phases 1-5), Verifier independente PASS (3ª iteração do ciclo fix→re-verify, `.specs/features/relatorio-semanal-promotores/validation.md`), `validate_state.py` exit 0. + Phase 6 (AD-006/SKF-only, pós-Execute) e Phase 7 (pdf-lib + gráfico por dia, pós-Execute) — ambas feitas depois do Verifier, sem nova rodada formal do Verifier (mudança de implementação com testes próprios, não revalidação de requisito novo em escopo grande). **Phase 8 e Phase 9 (P6 S3, P7 síntese IA — RELPROM-45 a 52): tasks geradas, aguardando aprovação do usuário antes do Execute.**
 
 **Escopo cross-repo**: Fase 2 roda inteira no repo `backend-ob-ads` (`C:\Users\AndrePereira\Documents\oficina brasil\backend-ob-ads`), já na branch `feat/relatorio-promotores-semanal` (criada a partir de `main`, confirmado limpo e sincronizado — nenhuma task de setup de branch é necessária). As demais fases rodam no `backend-promotor`, também já na branch `feat/relatorio-promotores-semanal`. Cada commit de task vai pro repo correto — os comandos de commit das tasks da Fase 2 usam `git -C "<path do ob-ads>"`, nunca o repo atual.
 
@@ -30,6 +30,9 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 | Script SQL de migration/módulo (manual, nunca executado pelo agente) | none | - (revisão humana; execução manual pelo usuário, conforme instrução) | `scripts/*.sql` (backend-promotor) · `sql/*.sql` (backend-ob-ads) | nenhum — revisão manual, sem gate automatizado |
 | Wiring trivial (registrar rota/cron existente em `app.ts`) | none | Coberto indiretamente pelo teste unitário/integração do componente já registrado na mesma task ou numa task anterior | `app.ts` | `npx tsc --noEmit` |
 | Spike exploratório (validação do Playwright no SO real da EC2, simulado via `amazonlinux:2023`) | none | Não é código de produção coberto pela matrix — resultado documentado em prosa no próprio design.md. **Pós-Execute (T30)**: `scripts/spike-playwright-ec2.ts` apagado — Playwright substituído por `pdf-lib` (AD-007), spike virou órfão | — (arquivo removido) | — |
+| **Pós-Execute (P6/P7)**: Função pura de validação (`promotorReportSinteseValidacao`) | unit | Todos os branches; 1:1 com RELPROM-50; cada seção (`numerosValidosDaSecao`) tem teste próprio | `__tests__/unit/*.test.ts` | `npx jest --runInBand <arquivo-do-teste-da-task>` |
+| **Pós-Execute (P6/P7)**: Cliente externo mockado (`S3StorageClient`, `PromotorReportSintese`) | unit | Sucesso, falha isolada (nunca lança), parâmetros corretos passados ao SDK mockado (`jest.mock`) | `__tests__/unit/*.test.ts` | `npx jest --runInBand <arquivo-do-teste-da-task>` |
+| **Pós-Execute (P6/P7)**: Migration SQL (`ALTER TABLE` manual) | none | - (revisão humana; execução manual pelo usuário) | `scripts/*.sql` | nenhum — revisão manual |
 
 ## Gate Check Commands
 
@@ -110,6 +113,25 @@ Adicionada depois do Verifier dar PASS e depois da Phase 6, a pedido do usuário
 ```
 T28 -> T29
 T28 -> T30
+```
+
+### Phase 8: Arquivamento do PDF no S3 (RELPROM-45 a 48)
+
+Pedido do usuário pós-Execute. Nenhuma dependência nova instalada — `@aws-sdk/client-s3` já está no `package.json` (nunca integrada). `AWS_REGION`/`AWS_BUCKET_NAME`/`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` já documentadas em `.env.example`.
+
+```
+T31 -> T32
+T31 -> T34
+T33 -> T34
+```
+
+### Phase 9: Observações adicionais geradas por IA (RELPROM-49 a 52)
+
+Pedido do usuário pós-Execute. `openai` já está no `package.json` (nunca integrada); `OPENAI_API_KEY` é nova — usuário fornece quando o Execute chegar em T37.
+
+```
+T35 -> T36 -> T37 -> T38
+T35 -> T39
 ```
 
 ---
@@ -952,6 +974,255 @@ Adicionada depois do Verifier dar PASS (3ª iteração). 2 pedidos do usuário: 
 
 ---
 
+### Phase 8: Arquivamento do PDF no S3 (tasks)
+
+### T31: Coluna `LINK_PDF` na entity `PromotorRelatorioEnvio` (backend-promotor)
+
+**What**: Adiciona a coluna opcional `LINK_PDF` (texto, nulável) na entity, pra guardar a URL pública do PDF arquivado no S3.
+**Where**: `entities/PromotorRelatorioEnvio.ts` (modifica)
+**Depends on**: None
+**Reuses**: convenção `type: "text"` + nulável já usada nas demais colunas opcionais da entity (`MOTIVO_FALHA`)
+**Requirement**: RELPROM-45
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [x] `LINK_PDF?: string | null` adicionado, `type: "text"`, `nullable: true`
+- [x] Gate check passa: `npx tsc --noEmit` (zero erros novos)
+
+**Tests**: none
+**Gate**: build
+
+**Commit**: `feat(promotor-relatorio): adiciona coluna link_pdf na entity de envio`
+
+**Status**: ✅ Complete
+
+---
+
+### T32: Migration manual `ALTER TABLE ... ADD COLUMN LINK_PDF` (backend-promotor)
+
+**What**: Script idempotente (`ADD COLUMN IF NOT EXISTS`) adicionando `LINK_PDF` na tabela já existente `CAMPANHAS_OB.PROMOTOR_RELATORIO_ENVIO`. **Não executado pelo agente.**
+**Where**: `scripts/migration-promotor-relatorio-envio-link-pdf.sql` (novo)
+**Depends on**: T31
+**Reuses**: padrão de `scripts/migration-promotor-relatorio-envio.sql` (idempotência, bloco `ROLLBACK:` no cabeçalho, `COMMENT ON COLUMN`)
+**Requirement**: RELPROM-45
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [ ] `ALTER TABLE "CAMPANHAS_OB"."PROMOTOR_RELATORIO_ENVIO" ADD COLUMN IF NOT EXISTS "LINK_PDF" TEXT`
+- [ ] Cabeçalho com bloco `ROLLBACK:` (`ALTER TABLE ... DROP COLUMN "LINK_PDF"`)
+- [ ] `COMMENT ON COLUMN` documentando o propósito (URL pública do PDF no S3, nulo quando preview ou falha de upload)
+- [ ] Nenhuma execução automática — a task só cria o arquivo
+
+**Tests**: none
+**Gate**: nenhum — revisão manual, execução manual pelo usuário
+
+**Commit**: `chore(promotor-relatorio): script de migration da coluna link_pdf`
+
+**Status**: ⬜ Pending
+
+---
+
+### T33: `S3StorageClient.uploadPdf` (backend-promotor)
+
+**What**: Cliente fino sobre `@aws-sdk/client-s3`, sobe o PDF gerado pro bucket (`AWS_BUCKET_NAME`), chave `promotor-relatorio/{idCliente}/{periodoInicio}_{periodoFim}-{uuid}.pdf` (sufixo `crypto.randomUUID()` pra não ficar adivinhável), ACL `public-read`. Mesmo padrão de erro-como-união dos demais clients externos — nunca lança.
+**Where**: `service/s3StorageClient.ts` (novo)
+**Depends on**: None
+**Reuses**: padrão de erro-como-união de `ObAdsIntegrationClient`
+**Requirement**: RELPROM-45, RELPROM-46, RELPROM-47
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [ ] `uploadPdf({idCliente, periodo, pdf}): Promise<{sucesso:true; url:string} | {sucesso:false; motivo:string}>` — nunca lança
+- [ ] Chave montada com `idCliente`, período (`yyyy-MM-dd` dos 2 extremos) e um `crypto.randomUUID()`
+- [ ] `PutObjectCommand` chamado com `Bucket`, `Key`, `Body: pdf`, `ContentType: "application/pdf"`, `ACL: "public-read"`
+- [ ] Falha do SDK (`client.send` rejeita) é capturada e vira `{sucesso:false, motivo}`, nunca propaga
+- [ ] Teste mocka `@aws-sdk/client-s3` (`jest.mock`) — nunca sobe pro S3 de verdade
+- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/s3StorageClient.test.ts`
+
+**Tests**: unit
+**Gate**: quick
+
+**Commit**: `feat(promotor-relatorio): sobe pdf gerado pro s3`
+
+**Status**: ⬜ Pending
+
+---
+
+### T34: Wiring do upload S3 + `LINK_PDF` na auditoria (backend-promotor)
+
+**What**: `registrarAuditoria` ganha parâmetro opcional `linkPdf`. `processarRelatorioCliente`, só quando `enviarEmail=true` e depois do PDF já estar renderizado, chama `S3StorageClient.uploadPdf`; sucesso ou falha, segue o fluxo normalmente (RELPROM-46) e grava o que conseguiu na auditoria.
+**Where**: `service/promotorReportService.ts` (modifica)
+**Depends on**: T31, T33
+**Reuses**: `registrarAuditoria` e o fluxo de `processarRelatorioCliente` já existentes, sem reescrever a lógica de envio de e-mail
+**Requirement**: RELPROM-45, RELPROM-46, RELPROM-48
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [ ] Upload bem-sucedido → `LINK_PDF` gravado com a URL retornada
+- [ ] Upload falha → `LINK_PDF` gravado como `null`, erro logado, e-mail/fluxo seguem normalmente (RELPROM-46)
+- [ ] `enviarEmail=false` (modo preview) → `uploadPdf` não é chamado, nenhum `LINK_PDF` gravado (RELPROM-48, mesmo tratamento de RELPROM-38)
+- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportServiceEnvio.test.ts` (sem regressão + novos casos de sucesso/falha/preview do S3)
+
+**Tests**: unit
+**Gate**: quick
+
+**Commit**: `feat(promotor-relatorio): arquiva pdf no s3 e grava o link na auditoria`
+
+**Status**: ⬜ Pending
+
+---
+
+### Phase 9: Observações adicionais geradas por IA (tasks)
+
+### T35: Tipos `SecaoRelatorio`/`SintesesPorSecao` (backend-promotor)
+
+**What**: Novo tipo `SecaoRelatorio` (união das 6 seções) e `SintesesPorSecao` (`Partial<Record<SecaoRelatorio, string>>`); `CampanhaBlocoRelatorio` ganha o campo opcional `sintesesPorSecao`.
+**Where**: `types/promotorRelatorio.ts` (modifica)
+**Depends on**: None
+**Reuses**: nada — tipos novos desta adição
+**Requirement**: RELPROM-49
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [ ] `SecaoRelatorio` e `SintesesPorSecao` exportados
+- [ ] `CampanhaBlocoRelatorio.sintesesPorSecao?: SintesesPorSecao`
+- [ ] Gate check passa: `npx tsc --noEmit` (zero erros novos)
+
+**Tests**: none
+**Gate**: build
+
+**Commit**: `feat(promotor-relatorio): adiciona tipos de sintese por secao`
+
+**Status**: ⬜ Pending
+
+---
+
+### T36: `promotorReportSinteseValidacao` — guardrail anti-alucinação (backend-promotor)
+
+**What**: Funções puras: `extrairNumeros` (todo número numa string, incluindo percentuais), `validarSintese` (uma frase só é válida se todo número nela aparecer no conjunto de números válidos), `numerosValidosDaSecao` (monta esse conjunto a partir dos dados já calculados de cada uma das 6 seções, conforme o design.md).
+**Where**: `utils/promotorReportSinteseValidacao.ts` (novo)
+**Depends on**: T35
+**Reuses**: convenção do repo de isolar lógica pura em `utils/*.ts` (mesmo padrão de `utils/promotorReportCalculos.ts`)
+**Requirement**: RELPROM-50
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [ ] `extrairNumeros` pega inteiros, decimais e percentuais (ex.: "77%" vira `77`)
+- [ ] `validarSintese` retorna `true` pra frase sem nenhum número (nada a contradizer) e pra frase só com números presentes em `numerosValidos`; `false` se achar 1 número fora do conjunto
+- [ ] `numerosValidosDaSecao` tem 1 teste por seção: visão geral (`concluidas`, `canceladas`, `abertasNaRota`), assertividade (os 2 anteriores + a soma + o percentual), por promotor (os 4 contadores de cada linha + os totais), cancelamentos (`cancelamentos.length`), destaques (contagem de concluídas/canceladas com OBS), próximos passos (os 3 contadores)
+- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportSinteseValidacao.test.ts`
+
+**Tests**: unit
+**Gate**: quick
+
+**Commit**: `feat(promotor-relatorio): valida sintese de ia contra os dados calculados`
+
+**Status**: ⬜ Pending
+
+---
+
+### T37: `PromotorReportSintese.gerarSinteses` (backend-promotor)
+
+**What**: Monta 1 prompt com os dados já calculados das 6 seções de um bloco de campanha, chama a OpenAI 1 única vez (`response_format: json_object`) pedindo as 6 frases, aplica `validarSintese` (T36) em cada uma e só inclui no retorno as que passarem. Nunca lança — falha total da chamada (erro, timeout, JSON inválido) retorna `{}`.
+**Where**: `service/promotorReportSintese.ts` (novo)
+**Depends on**: T36
+**Reuses**: `numerosValidosDaSecao`/`validarSintese` (T36); padrão de erro-como-união já usado nos demais clients externos
+**Requirement**: RELPROM-49, RELPROM-50, RELPROM-51
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [ ] `gerarSinteses(bloco: CampanhaBlocoRelatorio): Promise<SintesesPorSecao>` — nunca lança
+- [ ] 1 só chamada à OpenAI por bloco (não 6), pedindo JSON com as 6 chaves de `SecaoRelatorio`
+- [ ] Prompt passa só os dados já calculados daquela seção, nunca pede pra IA calcular nada
+- [ ] Frase que falha em `validarSintese` é descartada individualmente — as demais seções da mesma resposta continuam
+- [ ] Chamada falha (mock rejeita, JSON inválido, resposta vazia) → retorna `{}`, loga o erro
+- [ ] Teste mocka o módulo `openai` inteiro (`jest.mock("openai")) — nunca chama a API de verdade
+- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportSintese.test.ts`
+- [ ] `OPENAI_API_KEY` documentada em `.env.example`/`exemple.env` (nova — usuário fornece o valor real)
+
+**Tests**: unit
+**Gate**: quick
+
+**Commit**: `feat(promotor-relatorio): gera sintese por secao via openai`
+
+**Status**: ⬜ Pending
+
+---
+
+### T38: Wiring de `gerarSinteses` em `processarRelatorioCliente` (backend-promotor)
+
+**What**: Depois de `gerarRelatorioCliente` e antes de `renderizarPdf`, chama `PromotorReportSintese.gerarSinteses` pra cada bloco de campanha e anexa o resultado em `bloco.sintesesPorSecao`.
+**Where**: `service/promotorReportService.ts` (modifica)
+**Depends on**: T37
+**Reuses**: fluxo já existente de `processarRelatorioCliente`, sem alterar a ordem de geração/envio
+**Requirement**: RELPROM-49, RELPROM-51
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [ ] Todo bloco de campanha do cliente passa por `gerarSinteses` antes do PDF ser renderizado
+- [ ] `sintesesPorSecao` (mesmo vazio/parcial) nunca impede a renderização do PDF nem o envio do e-mail
+- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportService.test.ts` (sem regressão + novo caso confirmando o wiring)
+
+**Tests**: unit
+**Gate**: quick
+
+**Commit**: `feat(promotor-relatorio): anexa sintese por secao antes de renderizar o pdf`
+
+**Status**: ⬜ Pending
+
+---
+
+### T39: Desenha a síntese no PDF (backend-promotor)
+
+**What**: Nova função `desenharSintese(cursor, texto)`, reaproveitando o visual já existente de `desenharCallout`. Cada uma das 6 funções de seção (`desenharVisaoGeral`, `desenharAssertividade`, `desenharPorPromotor`, `desenharCancelamentos`, `desenharDestaques`, `desenharProximosPassos`) chama `desenharSintese` logo após `desenharLinhaDestaque`, só quando `bloco.sintesesPorSecao` tiver a chave daquela seção.
+**Where**: `templates/relatorioPromotor.ts` (modifica)
+**Depends on**: T35
+**Reuses**: `desenharCallout` (visual), `garantirEspaco`/`quebrarLinhas` já existentes
+**Requirement**: RELPROM-52
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [ ] Bloco com `sintesesPorSecao` populado → a frase de cada seção aparece desenhada logo após a linha de destaque, antes do conteúdo determinístico
+- [ ] Bloco sem `sintesesPorSecao` (ou seção ausente da chave) → nenhum desenho extra, sem espaço em branco sobrando, PDF não quebra
+- [ ] Teste usa o mesmo padrão de `jest.spyOn(PDFPage.prototype, "drawText")` já estabelecido no renderer, confirmando a frase desenhada na posição certa (entre a linha de destaque e o conteúdo da seção)
+- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportPdfRenderer.test.ts` (sem regressão + novos casos com/sem síntese)
+
+**Tests**: unit
+**Gate**: quick
+
+**Commit**: `feat(promotor-relatorio): desenha sintese por secao no pdf`
+
+**Status**: ⬜ Pending
+
+---
+
 ## Phase Execution Map
 
 ```
@@ -976,9 +1247,14 @@ Phase 6:  T23 ------→ T24 ------→ T26
           T24 ------→ T27
 Phase 7:  T28 ------→ T29
           T28 ------→ T30
+Phase 8:  T31 ------→ T32
+          T31 ------→ T34
+          T33 ------→ T34
+Phase 9:  T35 ------→ T36 ------→ T37 ------→ T38
+          T35 ------→ T39
 ```
 
-Dependências cross-phase (não aparecem no diagrama por fase, só no `Depends on` de cada task, conforme a regra do skill): T15 depende de T01 (Phase 1) e T11 (Phase 3); T16 depende de T10 e T11 (Phase 3); T19 depende de T18 (Phase 4); T21 depende de T17 (Phase 4); T23/T25 não têm dependência cross-phase (reaproveitam T02/T04 já concluídas, sem precisar reabrir); T28 não depende de nenhuma task de fase anterior (reescreve T15 por completo, contrato de `renderizarPdf` preservado).
+Dependências cross-phase (não aparecem no diagrama por fase, só no `Depends on` de cada task, conforme a regra do skill): T15 depende de T01 (Phase 1) e T11 (Phase 3); T16 depende de T10 e T11 (Phase 3); T19 depende de T18 (Phase 4); T21 depende de T17 (Phase 4); T23/T25 não têm dependência cross-phase (reaproveitam T02/T04 já concluídas, sem precisar reabrir); T28 não depende de nenhuma task de fase anterior (reescreve T15 por completo, contrato de `renderizarPdf` preservado); T33 e T35 também não têm dependência cross-phase (cliente externo e tipos novos, sem tocar em código das fases anteriores).
 
 Execução é estritamente sequencial dentro de cada fase — sem paralelismo intra-fase.
 
@@ -1018,6 +1294,15 @@ Execução é estritamente sequencial dentro de cada fase — sem paralelismo in
 | T28 | 1 renderer + 1 template (reescrita completa) | ✅ Granular (par indissociável, mesmo motivo de T15) |
 | T29 | 1 função pura + 1 função de desenho + wiring de 1 campo novo | ✅ Granular (coeso: dado e desenho do mesmo gráfico) |
 | T30 | 1 remoção de dependência + 1 arquivo apagado | ✅ Granular |
+| T31 | 1 coluna de entity | ✅ Granular |
+| T32 | 1 script SQL | ✅ Granular |
+| T33 | 1 cliente externo | ✅ Granular |
+| T34 | 1 wiring, mesmo método/arquivo de T17/T26 | ✅ Granular |
+| T35 | 2 tipos + 1 campo, mesmo arquivo | ✅ Granular |
+| T36 | 3 funções puras correlatas (mesmo padrão de T10/T11), 1 arquivo | ✅ Granular |
+| T37 | 1 cliente externo | ✅ Granular |
+| T38 | 1 wiring, mesmo método/arquivo de T16 | ✅ Granular |
+| T39 | 1 função de desenho + 6 pontos de chamada do mesmo padrão | ✅ Granular (coeso: mesma função chamada nas 6 seções, igual ao padrão de `desenharLinhaDestaque`) |
 
 ---
 
@@ -1055,6 +1340,15 @@ Execução é estritamente sequencial dentro de cada fase — sem paralelismo in
 | T28 | None | — | ✅ Match |
 | T29 | T28 (mesma fase) | T28→T29 | ✅ Match |
 | T30 | T28 (mesma fase) | T28→T30 | ✅ Match |
+| T31 | None | — | ✅ Match |
+| T32 | T31 (mesma fase) | T31→T32 | ✅ Match |
+| T33 | None | — | ✅ Match |
+| T34 | T31, T33 (mesma fase) | T31→T34, T33→T34 | ✅ Match |
+| T35 | None | — | ✅ Match |
+| T36 | T35 (mesma fase) | T35→T36 | ✅ Match |
+| T37 | T36 (mesma fase) | T36→T37 | ✅ Match |
+| T38 | T37 (mesma fase) | T37→T38 | ✅ Match |
+| T39 | T35 (mesma fase) | T35→T39 | ✅ Match |
 
 ---
 
@@ -1092,6 +1386,15 @@ Execução é estritamente sequencial dentro de cada fase — sem paralelismo in
 | T28 | Service/domínio (renderer) | unit | unit | ✅ OK |
 | T29 | Service/domínio puro + renderer | unit | unit | ✅ OK |
 | T30 | Wiring trivial (dependência) | none | none | ✅ OK |
+| T31 | Entity | none | none | ✅ OK |
+| T32 | Script SQL manual | none | none | ✅ OK |
+| T33 | Cliente externo mockado | unit | unit | ✅ OK |
+| T34 | Service/domínio | unit | unit | ✅ OK |
+| T35 | Tipos | none | none | ✅ OK |
+| T36 | Função pura | unit | unit | ✅ OK |
+| T37 | Cliente externo mockado | unit | unit | ✅ OK |
+| T38 | Service/domínio | unit | unit | ✅ OK |
+| T39 | Service/domínio (renderer) | unit | unit | ✅ OK |
 
 ---
 

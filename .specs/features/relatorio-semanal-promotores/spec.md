@@ -20,7 +20,8 @@ Explicitamente excluído. Documentado para prevenir scope creep.
 | Feature | Reason |
 | --- | --- |
 | Dashboard self-service para o admin configurar frequência/destinatários do relatório | Ticket pede um fluxo automático fixo (semanal, admins do cliente); configuração self-service é um produto à parte |
-| Interpretação textual livre das observações (ex.: inferir "oficina fechada"/"fora do perfil" por palavra-chave) para montar cards de destaque como no relatório manual | Decidido em discuss: MVP usa listagem determinística do campo OBS, sem heurística de linguagem natural (risco de falso positivo/negativo) — ver Deferred Ideas em [context.md](context.md) |
+| Interpretação textual livre das observações pra inferir categorias automáticas (ex.: "oficina fechada"/"fora do perfil" por palavra-chave) e montar cards de destaque a partir disso | Decidido em discuss: a listagem de destaques (RELPROM-09) continua determinística, sem heurística de linguagem natural — ver Deferred Ideas em [context.md](context.md). **Revisado (P7)**: isso não impede a frase curta de síntese gerada por IA por seção (RELPROM-49 a 52), que é um recurso à parte, com validação própria contra alucinação (RELPROM-50) |
+| Texto gerado por IA mais longo que 1 frase por seção, ou cobrindo outra coisa além das 6 seções já existentes (ex.: parágrafo de análise completo como no modelo, resumo executivo na capa) | Decidido em discuss (P7): escopo inicial é 1 frase curta por cabeçalho de seção; parágrafos de análise mais longos ficam pra uma iteração futura, quando a validação anti-alucinação (RELPROM-50) tiver rodado em produção por um tempo |
 | Canais de envio além de e-mail (WhatsApp, etc.) | Ticket pede especificamente envio por e-mail ao admin |
 | Qualquer DDL/migration executada automaticamente em produção | Instrução explícita do usuário: toda alteração de schema roda manual, a partir de script gerado |
 | Escrita/alteração de dados de negócio no banco de produção via este fluxo | Este fluxo é somente leitura (SELECT) sobre dados de campanha/visita; a única escrita permitida é a própria tabela de controle de envio (dedupe/auditoria) deste feature |
@@ -48,6 +49,9 @@ Toda ambiguidade foi resolvida ou registrada aqui.
 | Onde/como a lista fixa de destinatários de teste é definida | Constante no código (ex.: `DEV_REPORT_RECIPIENTS` em um arquivo de config), não em variável de ambiente | Pedido explícito do usuário: "lista de e-mails que ficará definida em código" | y |
 | Identificador do cliente usado na rota de disparo manual (`EMPRESA_SLUG` vs `ID_CLIENT`) | Decisão de Design, a partir do que já é usado em outras rotas `/admin/*` existentes | Specify não deve inventar o formato de um path param sem checar a convenção real das rotas administrativas já existentes | n |
 | Endpoint de disparo manual: síncrono (retorna o PDF na mesma resposta) ou assíncrono (dispara e retorna 202, PDF disponível depois) | Síncrono — retorna o PDF na mesma requisição | Caso de uso é teste/depuração e preview de frontend; geração de 1 cliente é rápida o bastante pra não precisar de fila/job assíncrono no MVP | n |
+| **P7**: Bucket S3 (`AWS_BUCKET_NAME`) já existe e as credenciais `AWS_*` já têm permissão de `PutObject`/ACL de leitura pública nele | Assumido; a confirmar no Design/antes do Execute — nenhuma das duas coisas foi verificada nesta sessão | `AWS_*` está em `.env.example` desde antes desta feature (residue de projeto forkado, nunca integrado — ver `.specs/codebase/CONCERNS.md`), sem garantia de que aponta pra um bucket real com essa permissão | n |
+| **P7**: Modelo exato da OpenAI (`gpt-4o-mini` vs outro) e parâmetros (temperatura, limite de tokens) | Decisão de Design (custo/latência/qualidade do texto), não de produto | Specify captura o QUÊ (1 frase de síntese por seção), não o COMO | n |
+| **P7**: `OPENAI_API_KEY` não existe em nenhum `.env` deste repo — precisa ser provisionada pelo usuário antes do Execute rodar contra a API de verdade (testes usam mock, não dependem da chave) | Usuário fornece a chave quando o Execute chegar nessa task | Fora do alcance do agente — chave de API paga de terceiro | n |
 
 **Open questions:** none — todas resolvidas ou registradas acima.
 
@@ -163,6 +167,40 @@ Toda ambiguidade foi resolvida ou registrada aqui.
 
 ---
 
+### P6: Arquivamento do PDF no S3
+
+**User Story**: Como Oficina Brasil, quero que o PDF de cada envio fique arquivado no S3 com o link salvo no registro de auditoria, para poder consultar depois o PDF exato que foi enviado numa semana específica sem precisar regerar.
+
+**Why P6**: Hoje `PROMOTOR_RELATORIO_ENVIO` só guarda metadados (status, destinatários) — ninguém consegue abrir de novo o PDF de uma semana passada depois que ele já foi enviado, a não ser regerando (e os números podem já ter mudado, como visto na comparação do PDF de teste com o modelo).
+
+**Acceptance Criteria**:
+
+1. WHEN o relatório de um cliente é gerado com `enviarEmail=true` (cron ou manual) THEN o sistema SHALL fazer upload do PDF pro S3 (bucket `AWS_BUCKET_NAME`, chave `promotor-relatorio/{idCliente}/{periodoInicio}_{periodoFim}.pdf`) e SHALL gravar a URL pública do objeto numa coluna nova (`LINK_PDF`) do registro de auditoria daquele envio. <!-- RELPROM-45, event-driven -->
+2. IF o upload pro S3 falhar THEN o sistema SHALL continuar o envio do e-mail normalmente e SHALL gravar o registro de auditoria sem `LINK_PDF` (nulo), logando a falha — o S3 nunca bloqueia o envio. <!-- RELPROM-46, unwanted-behavior -->
+3. The system SHALL publicar o objeto no S3 com acesso público de leitura, sem autenticação e sem expiração — decisão explícita do usuário em discuss, aceitando o risco de exposição por URL (a URL não é listada publicamente, mas também não expira nem exige login). <!-- RELPROM-47, ubiquitous -->
+4. WHERE `enviarEmail=false` (modo preview, RELPROM-38) THEN o sistema SHALL NOT fazer upload pro S3 nem gravar `LINK_PDF` — mesmo tratamento já dado ao resto da auditoria nesse modo. <!-- RELPROM-48, optional-feature -->
+
+**Independent Test**: Gerar o relatório da SKF com envio de e-mail ligado, confirmar que a URL gravada em `LINK_PDF` abre o mesmo PDF que foi anexado ao e-mail, sem exigir login. Derrubar a credencial/permissão do S3 temporariamente e confirmar que o e-mail ainda sai normalmente, só sem `LINK_PDF` preenchido.
+
+---
+
+### P7: Observações adicionais geradas por IA
+
+**User Story**: Como admin do cliente, quero que cada seção do relatório traga uma frase curta de síntese (gerada por IA a partir dos números e observações já calculados daquela seção), para ter uma leitura mais rápida do que aconteceu na semana — como o relatório de exemplo do ticket já faz.
+
+**Why P7**: O relatório hoje só lista números e tabelas; o modelo do CON26-325 tem frases como "Willian lidera o período; BH e Ribeirão Preto sem visitas" que dão contexto imediato sem o leitor precisar interpretar a tabela sozinho.
+
+**Acceptance Criteria**:
+
+1. WHEN o relatório de uma campanha é gerado THEN o sistema SHALL gerar, via API da OpenAI, 1 frase curta de síntese para cada uma das 6 seções (visão geral, assertividade, performance por promotor, cancelamentos, destaques do campo, próximos passos), usando só os dados já calculados daquela seção como entrada — a IA nunca recebe a tarefa de calcular ou recontar nada, só de descrever em prosa o que os números/observações já calculados mostram. <!-- RELPROM-49, event-driven -->
+2. IF a frase gerada citar algum número que não aparece em nenhum valor presente nos dados calculados daquela seção THEN o sistema SHALL descartar a frase (a seção é exibida sem ela, só com o conteúdo determinístico) em vez de publicar um número potencialmente inventado. <!-- RELPROM-50, unwanted-behavior -->
+3. IF a chamada à OpenAI falhar (timeout, erro, resposta vazia) THEN o sistema SHALL continuar a geração do PDF normalmente, sem a frase de síntese daquela seção, e SHALL NOT bloquear o envio do e-mail nem o restante do relatório. <!-- RELPROM-51, unwanted-behavior -->
+4. The system SHALL exibir a frase de síntese (quando presente) logo abaixo do cabeçalho de cada seção, antes do conteúdo determinístico (cards/tabela/gráfico) daquela seção. <!-- RELPROM-52, ubiquitous -->
+
+**Independent Test**: Gerar o relatório da SKF e conferir que cada uma das 6 seções, em cada bloco de campanha, traz 1 frase curta logo abaixo do título, condizente com os números daquela seção. Forçar a IA a devolver um número fora dos dados calculados (ou simular a chamada fora do ar) e confirmar que a seção correspondente aparece sem a frase, sem quebrar o resto do PDF nem o envio do e-mail.
+
+---
+
 ## Edge Cases
 
 - IF a integração usada para resolver admins/enviar e-mail (backend-ob-ads) estiver indisponível THEN o sistema SHALL tratar isso como falha daquele cliente (RELPROM-17), sem derrubar a execução dos demais clientes. <!-- RELPROM-23 -->
@@ -222,12 +260,20 @@ Toda ambiguidade foi resolvida ou registrada aqui.
 | RELPROM-41 | P5: Restrição temporária a SKF | Design | Pending |
 | RELPROM-42 | P5: Restrição temporária a SKF | Design | Pending |
 | RELPROM-43 | P5: Restrição temporária a SKF | Design | Pending |
+| RELPROM-45 | P6: Arquivamento do PDF no S3 | Tasks | In Tasks |
+| RELPROM-46 | P6: Arquivamento do PDF no S3 | Tasks | In Tasks |
+| RELPROM-47 | P6: Arquivamento do PDF no S3 | Tasks | In Tasks |
+| RELPROM-48 | P6: Arquivamento do PDF no S3 | Tasks | In Tasks |
+| RELPROM-49 | P7: Observações adicionais geradas por IA | Tasks | In Tasks |
+| RELPROM-50 | P7: Observações adicionais geradas por IA | Tasks | In Tasks |
+| RELPROM-51 | P7: Observações adicionais geradas por IA | Tasks | In Tasks |
+| RELPROM-52 | P7: Observações adicionais geradas por IA | Tasks | In Tasks |
 
 **ID format:** `RELPROM-NN`
 
 **Status values:** Pending → In Design → In Tasks → Implementing → Verified
 
-**Coverage:** 44 total. RELPROM-44 adicionada pós-Execute (pedido do usuário, gráfico que faltava em relação ao modelo do ticket), implementada em `templates/relatorioPromotor.ts` (`desenharGraficoPorDia`) + `utils/promotorReportCalculos.ts` (`agruparVisitasPorDia`), ver Phase 7 em `tasks.md`.
+**Coverage:** 52 total. RELPROM-44 implementada (pós-Execute, Phase 7 em `tasks.md`). RELPROM-45 a 52 (P6 S3, P7 IA) são novas, pendentes de Design.
 
 ---
 
@@ -243,3 +289,5 @@ Como saberemos que a feature foi bem-sucedida:
 - [ ] Fora de produção, nenhum e-mail chega a um admin real de cliente — só a lista fixa de teste definida em código recebe, e os e-mails de admin que seriam os destinatários reais aparecem logados.
 - [ ] É possível gerar o relatório de um cliente sob demanda via endpoint administrativo, sem esperar o cron, com o mesmo resultado (dados e segmentação por campanha) que o fluxo agendado produziria.
 - [ ] A visão geral de cada campanha mostra o gráfico comparativo de visitas por dia, igual ao modelo do CON26-325.
+- [ ] Todo envio (cron ou manual, com e-mail) tem o PDF arquivado no S3, com o link gravado no registro de auditoria.
+- [ ] Cada seção do relatório traz 1 frase de síntese gerada por IA, sem nenhum número que não esteja nos dados já calculados daquela seção.

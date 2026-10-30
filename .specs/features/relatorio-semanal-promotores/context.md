@@ -1,6 +1,6 @@
 # Relatório Semanal de Promotores — Context
 
-**Gathered:** 2026-10-28
+**Gathered:** 2026-10-28, com adendo em 2026-10-30 (P6 arquivamento S3, P7 síntese por IA)
 **Spec:** `.specs/features/relatorio-semanal-promotores/spec.md`
 **Status:** Ready for design
 
@@ -60,10 +60,25 @@ Automatizar a geração e o envio por e-mail do relatório semanal de visitas de
 - Respeita a mesma guarda dev/produção do envio por e-mail (lista fixa em dev, admins reais em produção) — chamar o endpoint em dev nunca manda e-mail pro admin do cliente.
 - Suporta um modo somente-pré-visualização (gera e retorna o PDF sem enviar e-mail) e aceita período customizado opcional, pra depuração sem depender da janela fixa de 7 dias.
 
+### Arquivamento do PDF no S3 (P6, discuss 2026-10-30)
+- Bucket: `AWS_BUCKET_NAME` (env já declarada, nunca integrada até agora). Chave: `promotor-relatorio/{idCliente}/{periodoInicio}_{periodoFim}.pdf`.
+- Link gravado numa coluna nova (`LINK_PDF`) do registro de auditoria (`PROMOTOR_RELATORIO_ENVIO`) — só arquivamento/consulta interna, **não** substitui o PDF anexado ao e-mail (que continua indo igual hoje).
+- Acesso ao objeto: **público, sem autenticação, sem expiração** — decisão explícita do usuário, confirmada depois de eu apontar o risco (qualquer um com a URL acessa o PDF do cliente pra sempre, sem login). Segurança fica só na URL ser imprevisível, não em controle de acesso real.
+- Falha de upload pro S3 nunca bloqueia o envio do e-mail: grava a auditoria sem `LINK_PDF`, loga o erro, segue o fluxo normalmente — mesma filosofia de isolamento de falha já usada no resto da feature (RELPROM-17).
+- Modo preview (`enviarEmail:false`) não faz upload nem grava `LINK_PDF` — mesmo tratamento que já existe pro resto da auditoria nesse modo.
+
+### Observações adicionais geradas por IA (P7, discuss 2026-10-30)
+- Provedor: **OpenAI** (dependência `openai` já existe no `package.json`, nunca configurada/testada; precisa de `OPENAI_API_KEY` nova, que o usuário vai fornecer quando o Execute chegar nessa task).
+- Escopo: **1 frase curta de síntese por seção** (6 por bloco de campanha — visão geral, assertividade, por promotor, cancelamentos, destaques, próximos passos), exibida logo abaixo do cabeçalho de cada seção, antes do conteúdo determinístico. Não é um parágrafo de análise completo como no modelo (isso fica pra depois, registrado em Out of Scope no spec.md).
+- Entrada do prompt: só os dados JÁ calculados daquela seção (números +, quando fizer sentido, os textos de OBS/justificativa já coletados) — a IA nunca é instruída a calcular ou recontar nada, só a descrever em prosa o que já foi calculado.
+- Guardrail anti-alucinação: validação automática depois da resposta da IA — extrai os números citados na frase e confere contra os valores presentes nos dados daquela seção; se algum número não bater, a frase inteira é descartada (seção fica sem ela, não com um número errado).
+- Falha na chamada à OpenAI (timeout, erro, resposta vazia) nunca bloqueia o PDF nem o e-mail — a seção correspondente simplesmente não ganha a frase daquela vez.
+
 ### Agent's Discretion
 - Mecanismo exato de integração cross-service (backend-promotor chamando backend-ob-ads para resolver admins e/ou disparar o e-mail via SES já configurado lá, versus backend-promotor ganhar seu próprio client de e-mail) fica a critério da fase de Design — não é uma decisão de produto, é arquitetura de implementação.
 - Nome exato do schedule (horário do cron na sexta-feira, formato do nome do job) fica a critério da implementação, respeitando a convenção `node-cron` + flag `*_ENABLED` já usada em `schedule/outboxNotificacaoCron.ts`.
 - Deduplicação (evitar reenvio se o cron rodar duas vezes na mesma janela) e trilha de auditoria (histórico de relatórios gerados/enviados) ficam a critério do Design, mas **devem existir** — requisito funcional coberto no spec (RELPROM-09, RELPROM-10), mecanismo concreto (nova tabela vs. reaproveitar `CommunityReportConfig`-like) é decisão de Design.
+- Modelo exato da OpenAI (`gpt-4o-mini` vs outro) e parâmetros (temperatura, max tokens, timeout) ficam a critério do Design — decisão de custo/latência/qualidade, não de produto.
 
 ### Declined / Undiscussed Gray Areas → Assumptions
 - **Falha ao resolver admins ou ao enviar o e-mail de um cliente:** não derruba o processamento dos demais clientes; erro é logado com `[relatorioPromotores]` e tag do cliente, sem retry automático na mesma execução — a run seguinte (semana seguinte) cobre o próximo período normalmente. Rationale: consistente com o padrão já usado em `rotaService.notificarRotasCriadas` (nunca derruba o processo por causa de notificação) e com a convenção de logging do repo.
@@ -83,6 +98,7 @@ Automatizar a geração e o envio por e-mail do relatório semanal de visitas de
 
 - Embutir a fonte de marca (Montserrat) e o logo no PDF — exigiria a dependência `@pdf-lib/fontkit` (não instalada, diferente do `fontkit` puro já presente) pra fonte customizada, e desenho de imagem pro logo; não há AC pedindo fidelidade visual exata, o PDF atual usa as fontes padrão do `pdf-lib` (Helvetica) e a paleta de cores da marca.
 
-- Interpretação textual automática das observações (keyword matching pra gerar cards tipo "base com oficinas que não existem mais", "oficinas fora do perfil") — fica pra uma v2, fora do MVP.
+- Interpretação textual automática das observações (keyword matching pra gerar cards tipo "base com oficinas que não existem mais", "oficinas fora do perfil") — fica pra uma v2, fora do MVP. **P7 cobre um recurso diferente** (frase de síntese por seção, com validação anti-alucinação), não isso.
+- Parágrafos de análise completos gerados por IA (reproduzindo o texto narrativo inteiro do modelo, não só 1 frase por seção) — fica pra depois de validar a abordagem de 1 frase em produção.
 - Qualquer canal de envio além de e-mail (ex.: WhatsApp do admin) — fora de escopo; ticket pede e-mail.
 - Dashboard/self-service pro admin configurar frequência/destinatários — fora de escopo; ticket especifica fluxo automático fixo.
