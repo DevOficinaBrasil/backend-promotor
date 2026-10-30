@@ -74,6 +74,12 @@ Automatizar a geração e o envio por e-mail do relatório semanal de visitas de
 - Guardrail anti-alucinação: validação automática depois da resposta da IA — extrai os números citados na frase e confere contra os valores presentes nos dados daquela seção; se algum número não bater, a frase inteira é descartada (seção fica sem ela, não com um número errado).
 - Falha na chamada à OpenAI (timeout, erro, resposta vazia) nunca bloqueia o PDF nem o e-mail — a seção correspondente simplesmente não ganha a frase daquela vez.
 
+### Resumo de cancelamentos agrupado por IA (P8, discuss 2026-10-30)
+- O resumo (quando a IA acerta) **substitui** a tabela detalhada atual nessa seção — não aparecem as 2 juntas.
+- Divisão de responsabilidade: a IA só decide **quais cancelamentos vão no mesmo grupo** (por motivo semelhante) e escreve a frase de justificativa de cada grupo — nunca inventa promotor, oficina ou cidade; esses campos vêm sempre dos dados reais já existentes de cada cancelamento.
+- Guardrail: se o agrupamento não cobrir cada cancelamento exatamente 1 vez (falta, repete ou cita um índice inexistente), ou se a justificativa de algum grupo citar um número que não bate com o tamanho do grupo, o resumo inteiro é descartado.
+- Fallback em qualquer falha (validação ou chamada à IA): volta pra tabela detalhada de hoje (1 linha por cancelamento) — nunca quebra a seção nem deixa sem tabela nenhuma.
+
 ### Agent's Discretion
 - Mecanismo exato de integração cross-service (backend-promotor chamando backend-ob-ads para resolver admins e/ou disparar o e-mail via SES já configurado lá, versus backend-promotor ganhar seu próprio client de e-mail) fica a critério da fase de Design — não é uma decisão de produto, é arquitetura de implementação.
 - Nome exato do schedule (horário do cron na sexta-feira, formato do nome do job) fica a critério da implementação, respeitando a convenção `node-cron` + flag `*_ENABLED` já usada em `schedule/outboxNotificacaoCron.ts`.

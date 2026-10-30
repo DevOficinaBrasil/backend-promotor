@@ -134,6 +134,15 @@ T35 -> T36 -> T37 -> T38
 T35 -> T39
 ```
 
+### Phase 10: Resumo de cancelamentos agrupado por IA (RELPROM-53 a 57)
+
+Pedido do usuário pós-Execute. Reaproveita o client `openai` já integrado em T37 — nenhuma dependência nova.
+
+```
+T40 -> T41 -> T42
+T40 -> T43
+```
+
 ---
 
 ## Task Breakdown
@@ -938,6 +947,7 @@ Adicionada depois do Verifier dar PASS (3ª iteração). 2 pedidos do usuário: 
 - [x] Espaçamento entre as 2 sub-seções de destaques do campo ("Concluídas com observação"/"Canceladas com justificativa") aumentado — estavam coladas (feedback do usuário)
 - [x] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportCalculos.test.ts __tests__/unit/promotorReportPdfRenderer.test.ts` (35 passed)
 - [x] `npx tsc --noEmit` sem erro novo (2 erros pré-existentes, não relacionados, em `__tests__/unit/segmentacaoCampanhaPromotor.test.ts`)
+- [x] **Revisado (2026-10-30, print do modelo anexado pelo usuário)**: barras de par (lado a lado) viraram barra única empilhada (concluídas na base navy, canceladas no topo azul-lavanda `COR_GRAFICO_CANCELADAS`), igual ao modelo real. Rótulo de valor combinado ("52 + 16"), dia com mais concluídas vem em negrito + dia da semana abreviado (`PontoVisitasPorDia.diaSemana`, novo). Nova função pura `descreverDiaPico` (`utils/promotorReportCalculos.ts`) gera a frase de destaque ("A quinta-feira 15/10 concentrou 52 das 71 visitas do período.") exibida ao lado da legenda — determinístico, não usa IA
 
 **Tests**: unit
 **Gate**: quick
@@ -1223,6 +1233,119 @@ Adicionada depois do Verifier dar PASS (3ª iteração). 2 pedidos do usuário: 
 
 ---
 
+### Phase 10: Resumo de cancelamentos agrupado por IA (tasks)
+
+### T40: `construirResumoCancelamentos` — guardrail + montagem (backend-promotor)
+
+**What**: Tipos `GrupoCancelamentoBruto` (`{indices: number[], justificativa: string}`, shape cru da IA) e `ResumoCancelamentoGrupo` (`{promotor, oficinas, cidade, justificativa}`, shape pronto pra desenhar). Função pura `construirResumoCancelamentos(cancelamentos, gruposBrutos)`: valida que os índices cobrem cada cancelamento exatamente 1 vez (senão `null`), valida a justificativa de cada grupo contra `[grupo.indices.length]` (reaproveitando `validarSintese`), e monta promotor/oficina(s)/cidade sempre a partir dos dados reais — nunca da IA.
+**Where**: `utils/promotorReportSinteseValidacao.ts` (modifica — novos tipos + função), `types/promotorRelatorio.ts` (modifica — exporta `ResumoCancelamentoGrupo`, `CampanhaBlocoRelatorio` ganha `resumoCancelamentos?: ResumoCancelamentoGrupo[]`)
+**Depends on**: None
+**Reuses**: `extrairNumeros`/`validarSintese` (T36, mesmo arquivo)
+**Requirement**: RELPROM-54, RELPROM-55, RELPROM-56
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [ ] Cobertura 1:1 dos índices (falta 1, repete 1, ou índice fora do range) → `null`
+- [ ] Justificativa de 1 grupo com número que não bate com `indices.length` daquele grupo → `null` (mesmo com os demais grupos válidos — falha de 1 descarta tudo, RELPROM-56)
+- [ ] `promotor`: nome comum se todo o grupo for do mesmo promotor, `"Vários"` senão; `cidade`: mesma lógica com `"Várias"`; `oficinas`: lista de `nomeOficina` direto dos `cancelamentos` reais, nunca da IA
+- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportSinteseValidacao.test.ts` (sem regressão + novos casos)
+- [ ] `npx tsc --noEmit` sem erro novo
+
+**Tests**: unit
+**Gate**: quick
+
+**Commit**: `feat(promotor-relatorio): valida e monta resumo agrupado de cancelamentos`
+
+**Status**: ⬜ Pending
+
+---
+
+### T41: `PromotorReportSintese.gerarResumoCancelamentos` (backend-promotor)
+
+**What**: 1 chamada à OpenAI por bloco, passando a lista indexada de cancelamentos (promotor/oficina/cidade/obs), pedindo só `{grupos: [{indices, justificativa}]}` — nunca pede promotor/oficina/cidade de volta. Aplica `construirResumoCancelamentos` (T40) no resultado. Nunca lança — qualquer falha (chamada, parse, validação) retorna `null`.
+**Where**: `service/promotorReportSintese.ts` (modifica)
+**Depends on**: T40
+**Reuses**: o mesmo client `openai` já configurado em `gerarSinteses` (T37)
+**Requirement**: RELPROM-53, RELPROM-54, RELPROM-57
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [ ] `gerarResumoCancelamentos(cancelamentos: Cancelamento[]): Promise<ResumoCancelamentoGrupo[] | null>` — nunca lança
+- [ ] Prompt lista os cancelamentos por índice (0-based), pedindo só agrupamento + justificativa — nunca promotor/oficina/cidade
+- [ ] Resultado bruto passa por `construirResumoCancelamentos`; `null` em qualquer rejeição
+- [ ] Chamada falha (mock rejeita, JSON inválido, resposta vazia) → `null`, loga o erro
+- [ ] Teste mocka o módulo `openai` (mesmo padrão de T37) — nunca chama a API de verdade
+- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportSintese.test.ts` (sem regressão + novos casos)
+
+**Tests**: unit
+**Gate**: quick
+
+**Commit**: `feat(promotor-relatorio): gera resumo de cancelamentos agrupado via openai`
+
+**Status**: ⬜ Pending
+
+---
+
+### T42: Wiring de `gerarResumoCancelamentos` em `processarRelatorioCliente` (backend-promotor)
+
+**What**: Quando `bloco.cancelamentos.length > 0`, chama `gerarResumoCancelamentos` (junto com `gerarSinteses`, antes de `renderizarPdf`) e anexa o resultado em `bloco.resumoCancelamentos` só se não for `null`.
+**Where**: `service/promotorReportService.ts` (modifica)
+**Depends on**: T41
+**Reuses**: o mesmo loop de blocos já usado pra `gerarSinteses` (T38)
+**Requirement**: RELPROM-53, RELPROM-57
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [ ] Bloco com cancelamentos → `gerarResumoCancelamentos` chamado, resultado anexado quando não `null`
+- [ ] Bloco sem cancelamentos (`length === 0`) → `gerarResumoCancelamentos` não é chamado
+- [ ] `null` (falha/validação) → `bloco.resumoCancelamentos` fica ausente, PDF renderiza normalmente (tabela detalhada)
+- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportServiceEnvio.test.ts` (sem regressão + novo caso)
+
+**Tests**: unit
+**Gate**: quick
+
+**Commit**: `feat(promotor-relatorio): anexa resumo de cancelamentos antes de renderizar o pdf`
+
+**Status**: ⬜ Pending
+
+---
+
+### T43: Tabela resumo de cancelamentos no PDF, com fallback (backend-promotor)
+
+**What**: `desenharCancelamentos`: se `bloco.resumoCancelamentos` existir e não for vazio, desenha a tabela nova (colunas Promotor | Oficina(s) | Cidade | Justificativa, 1 linha por grupo, oficinas formatadas como "N oficinas: nome1, nome2, ..." quando `oficinas.length > 1`); senão, mantém a tabela detalhada de hoje (1 linha por cancelamento), sem mudança.
+**Where**: `templates/relatorioPromotor.ts` (modifica)
+**Depends on**: T40
+**Reuses**: `desenharTabela` já existente (mesmo componente, colunas diferentes)
+**Requirement**: RELPROM-53, RELPROM-55
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [ ] `resumoCancelamentos` populado → tabela resumo desenhada, 1 linha por grupo, contagem de oficinas formatada deterministicamente (nunca texto cru da IA)
+- [ ] `resumoCancelamentos` ausente/vazio → tabela detalhada de hoje, comportamento idêntico ao atual
+- [ ] Teste confirma as 2 situações via `jest.spyOn(PDFPage.prototype, "drawText")`, mesmo padrão do renderer
+- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportPdfRenderer.test.ts` (sem regressão + novos casos)
+
+**Tests**: unit
+**Gate**: quick
+
+**Commit**: `feat(promotor-relatorio): desenha tabela resumo de cancelamentos com fallback`
+
+**Status**: ⬜ Pending
+
+---
+
 ## Phase Execution Map
 
 ```
@@ -1252,9 +1375,11 @@ Phase 8:  T31 ------→ T32
           T33 ------→ T34
 Phase 9:  T35 ------→ T36 ------→ T37 ------→ T38
           T35 ------→ T39
+Phase 10: T40 ------→ T41 ------→ T42
+          T40 ------→ T43
 ```
 
-Dependências cross-phase (não aparecem no diagrama por fase, só no `Depends on` de cada task, conforme a regra do skill): T15 depende de T01 (Phase 1) e T11 (Phase 3); T16 depende de T10 e T11 (Phase 3); T19 depende de T18 (Phase 4); T21 depende de T17 (Phase 4); T23/T25 não têm dependência cross-phase (reaproveitam T02/T04 já concluídas, sem precisar reabrir); T28 não depende de nenhuma task de fase anterior (reescreve T15 por completo, contrato de `renderizarPdf` preservado); T33 e T35 também não têm dependência cross-phase (cliente externo e tipos novos, sem tocar em código das fases anteriores).
+Dependências cross-phase (não aparecem no diagrama por fase, só no `Depends on` de cada task, conforme a regra do skill): T15 depende de T01 (Phase 1) e T11 (Phase 3); T16 depende de T10 e T11 (Phase 3); T19 depende de T18 (Phase 4); T21 depende de T17 (Phase 4); T23/T25 não têm dependência cross-phase (reaproveitam T02/T04 já concluídas, sem precisar reabrir); T28 não depende de nenhuma task de fase anterior (reescreve T15 por completo, contrato de `renderizarPdf` preservado); T33, T35 e T40 também não têm dependência cross-phase (cliente externo, tipos e função pura novos, sem tocar em código das fases anteriores).
 
 Execução é estritamente sequencial dentro de cada fase — sem paralelismo intra-fase.
 
@@ -1303,6 +1428,10 @@ Execução é estritamente sequencial dentro de cada fase — sem paralelismo in
 | T37 | 1 cliente externo | ✅ Granular |
 | T38 | 1 wiring, mesmo método/arquivo de T16 | ✅ Granular |
 | T39 | 1 função de desenho + 6 pontos de chamada do mesmo padrão | ✅ Granular (coeso: mesma função chamada nas 6 seções, igual ao padrão de `desenharLinhaDestaque`) |
+| T40 | 2 tipos + 1 função pura, arquivos coesos (shape de render + validação) | ✅ Granular |
+| T41 | 1 método, mesmo arquivo de T37 | ✅ Granular |
+| T42 | 1 wiring, mesmo método/arquivo de T38 | ✅ Granular |
+| T43 | 1 função de desenho (tabela resumo) + fallback pra tabela já existente | ✅ Granular |
 
 ---
 
@@ -1349,6 +1478,10 @@ Execução é estritamente sequencial dentro de cada fase — sem paralelismo in
 | T37 | T36 (mesma fase) | T36→T37 | ✅ Match |
 | T38 | T37 (mesma fase) | T37→T38 | ✅ Match |
 | T39 | T35 (mesma fase) | T35→T39 | ✅ Match |
+| T40 | None | — | ✅ Match |
+| T41 | T40 (mesma fase) | T40→T41 | ✅ Match |
+| T42 | T41 (mesma fase) | T41→T42 | ✅ Match |
+| T43 | T40 (mesma fase) | T40→T43 | ✅ Match |
 
 ---
 
@@ -1395,6 +1528,10 @@ Execução é estritamente sequencial dentro de cada fase — sem paralelismo in
 | T37 | Cliente externo mockado | unit | unit | ✅ OK |
 | T38 | Service/domínio | unit | unit | ✅ OK |
 | T39 | Service/domínio (renderer) | unit | unit | ✅ OK |
+| T40 | Função pura | unit | unit | ✅ OK |
+| T41 | Cliente externo mockado | unit | unit | ✅ OK |
+| T42 | Service/domínio | unit | unit | ✅ OK |
+| T43 | Service/domínio (renderer) | unit | unit | ✅ OK |
 
 ---
 

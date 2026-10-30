@@ -370,3 +370,65 @@ Falha em `SINTESE` ou em `S3CLIENTE` nunca interrompe o fluxo — cada um devolv
 | Modelo da OpenAI | `gpt-4o-mini` | Tarefa é descrever em prosa números já prontos, não raciocínio complexo — modelo econômico é suficiente; documentado como decisão de Design (Agent's Discretion no `context.md`) |
 | Chave do objeto no S3 | `promotor-relatorio/{idCliente}/{periodoInicio}_{periodoFim}-{uuid}.pdf` (sufixo aleatório) | Mantém a convenção legível (dá pra saber de qual cliente/período é só olhando o path) sem deixar a URL trivialmente adivinhável, dado que o objeto é público sem expiração (RELPROM-47) |
 | Onde a síntese entra no PDF | Mesmo visual de `desenharCallout` (já existe), logo após a linha de destaque de cada seção | Reaproveita componente visual já testado em vez de criar um estilo novo só pra isso; mantém a distinção visual entre "texto gerado" e "dado determinístico" sutil mas presente |
+
+---
+
+## P8 — Resumo de cancelamentos agrupado por IA (RELPROM-53 a 57, Design pós-Execute)
+
+### Architecture Overview (adendo)
+
+```mermaid
+graph TD
+    SVC["PromotorReportService.processarRelatorioCliente"] --> CANC{"bloco.cancelamentos.length > 0?"}
+    CANC -->|sim| RESUMO["PromotorReportSintese<br/>.gerarResumoCancelamentos(cancelamentos)"]
+    RESUMO -->|1 chamada JSON por bloco| OPENAI["OpenAI<br/>chat.completions — só agrupa índices + justificativa"]
+    RESUMO --> VALIDA["construirResumoCancelamentos<br/>(cobertura 1:1 dos índices + número de cada justificativa)"]
+    VALIDA -->|valido| BLOCO["bloco.resumoCancelamentos"]
+    VALIDA -->|invalido/falha| NULO["bloco.resumoCancelamentos = undefined"]
+
+    BLOCO --> TABELA["desenharCancelamentos:<br/>tabela resumo (1 linha por grupo)"]
+    NULO --> TABELA2["desenharCancelamentos:<br/>tabela detalhada (1 linha por cancelamento, comportamento anterior)"]
+```
+
+A IA nunca decide promotor/oficina/cidade — só agrupamento (quais índices vão juntos) e a frase de justificativa de cada grupo. Promotor/oficina(s)/cidade de cada linha do resumo vêm sempre dos dados reais (RELPROM-54), montados por `construirResumoCancelamentos`.
+
+### Componentes novos/modificados
+
+#### `construirResumoCancelamentos` (guardrail + montagem, em `utils/promotorReportSinteseValidacao.ts`)
+- **Purpose**: Função pura — valida o agrupamento bruto devolvido pela IA e, se válido, monta as linhas prontas pra desenhar (promotor/oficina(s)/cidade vêm dos dados reais; só a justificativa vem da IA, já validada contra o tamanho do grupo).
+- **Interfaces**:
+  - `interface GrupoCancelamentoBruto { indices: number[]; justificativa: string }` (shape cru devolvido pela IA)
+  - `interface ResumoCancelamentoGrupo { promotor: string; oficinas: string[]; cidade: string; justificativa: string }` (shape pronto pra render)
+  - `construirResumoCancelamentos(cancelamentos: Cancelamento[], gruposBrutos: GrupoCancelamentoBruto[]): ResumoCancelamentoGrupo[] | null` — `null` quando a cobertura dos índices não for exatamente 1:1 (falta, repete, índice fora do range) ou quando alguma `justificativa` citar um número que não bate com `indices.length` daquele grupo (reaproveita `validarSintese`/`extrairNumeros` já existentes, com `numerosValidos = [grupo.indices.length]`)
+  - `promotor`: nome do cancelamento se todos do grupo forem do mesmo promotor, senão `"Vários"`; `cidade`: mesma lógica (`"Várias"` se não uniforme); `oficinas`: lista de `nomeOficina` dos índices do grupo, direto dos dados reais
+- **Dependencies**: `extrairNumeros`/`validarSintese` (já existem no mesmo arquivo)
+- **Reuses**: a mesma lógica de validação numérica de RELPROM-50, aplicada a "tamanho do grupo" em vez de "números da seção"
+
+#### PromotorReportSintese.gerarResumoCancelamentos (modifica `service/promotorReportSintese.ts`)
+- **Purpose**: 1 chamada à OpenAI por bloco, pedindo só o agrupamento (índices) + justificativa de cada grupo — nunca pede promotor/oficina/cidade (RELPROM-54).
+- **Interfaces**: `gerarResumoCancelamentos(cancelamentos: Cancelamento[]): Promise<ResumoCancelamentoGrupo[] | null>` — nunca lança; `null` em qualquer falha (chamada, parse, ou `construirResumoCancelamentos` rejeitar)
+- **Dependencies**: mesmo client `openai` já usado em `gerarSinteses`
+- **Reuses**: `construirResumoCancelamentos` pra validar/montar o resultado
+
+### Mudanças em componentes existentes (adendo)
+
+| Componente | Mudança |
+| --- | --- |
+| `types/promotorRelatorio.ts` | `CampanhaBlocoRelatorio` ganha `resumoCancelamentos?: ResumoCancelamentoGrupo[]` — ausente/undefined significa "usar a tabela detalhada" (RELPROM-55/56/57) |
+| `service/promotorReportService.ts` | `processarRelatorioCliente`: quando `bloco.cancelamentos.length > 0`, chama `gerarResumoCancelamentos` junto com `gerarSinteses` (antes de `renderizarPdf`) e anexa o resultado (ou nada, se `null`) |
+| `templates/relatorioPromotor.ts` | `desenharCancelamentos`: se `bloco.resumoCancelamentos` existir e não for vazio, desenha a tabela nova (colunas Promotor \| Oficina(s) \| Cidade \| Justificativa, 1 linha por grupo); senão, desenha a tabela detalhada de hoje, sem mudança |
+
+### Error Handling Strategy (adendo)
+
+| Error Scenario | Handling | User Impact |
+| --- | --- | --- |
+| IA não cobre todos os cancelamentos 1:1 (falta/repete/índice inválido) | `construirResumoCancelamentos` retorna `null`; seção cai pra tabela detalhada | Seção continua correta, só sem o agrupamento dessa vez |
+| Justificativa de 1 grupo cita número que não bate com o tamanho do grupo | Mesmo tratamento acima — `null`, fallback pra tabela detalhada (RELPROM-56) | Idem |
+| Chamada à OpenAI falha/timeout/JSON inválido | `gerarResumoCancelamentos` retorna `null` | Idem — nunca bloqueia o PDF nem o e-mail |
+
+### Tech Decisions (adendo)
+
+| Decision | Choice | Rationale |
+| --- | --- | --- |
+| Divisão IA vs. dados reais na tabela resumo | IA só agrupa índices + escreve a justificativa; promotor/oficina/cidade sempre vêm dos dados reais | Elimina quase todo o risco de alucinação — a IA nunca tem a chance de inventar um nome de oficina ou promotor que não existe |
+| Fallback em qualquer falha de validação/chamada | Tabela detalhada de hoje (não um estado vazio) | Pedido do usuário em discuss — a seção nunca fica sem informação, só menos resumida |

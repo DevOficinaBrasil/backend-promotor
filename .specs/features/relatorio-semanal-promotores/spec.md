@@ -201,6 +201,24 @@ Toda ambiguidade foi resolvida ou registrada aqui.
 
 ---
 
+### P8: Resumo de cancelamentos agrupado por IA
+
+**User Story**: Como admin do cliente, quero que a seção de cancelamentos mostre um resumo agrupado por motivo semelhante (gerado por IA), em vez de 1 linha por cancelamento, pra identificar padrões rápido sem rolar uma tabela longa — igual ao relatório de exemplo do ticket.
+
+**Why P8**: O modelo do CON26-325 não lista cada cancelamento isolado — agrupa por motivo (ex.: "9 oficinas: ... — Promotor de folga"). A tabela atual (1 linha por cancelamento) é correta mas verbosa pra campanhas com muitos cancelamentos parecidos.
+
+**Acceptance Criteria**:
+
+1. WHEN o relatório de uma campanha tem pelo menos 1 cancelamento no período THEN o sistema SHALL tentar gerar, via IA, um resumo agrupado dos cancelamentos por motivo semelhante — 1 linha por grupo (promotor, oficina(s), cidade, justificativa resumida) em vez de 1 linha por cancelamento. <!-- RELPROM-53, event-driven -->
+2. The system SHALL montar promotor, oficina(s) e cidade de cada linha do resumo a partir dos dados já existentes de cada cancelamento, nunca da resposta da IA — a IA só decide quais cancelamentos pertencem ao mesmo grupo e escreve a frase de justificativa de cada grupo. <!-- RELPROM-54, ubiquitous -->
+3. IF o agrupamento devolvido pela IA não cobrir exatamente todos os cancelamentos do período, 1 única vez cada (faltando algum, repetindo algum, ou citando um cancelamento inexistente) THEN o sistema SHALL descartar o resumo inteiro e exibir a tabela detalhada de hoje (1 linha por cancelamento) nessa seção, só daquela vez. <!-- RELPROM-55, unwanted-behavior -->
+4. IF a frase de justificativa de algum grupo citar um número que não bate com a quantidade de cancelamentos daquele grupo THEN o sistema SHALL aplicar o mesmo fallback de RELPROM-55 (descarta o resumo inteiro, exibe a tabela detalhada). <!-- RELPROM-56, unwanted-behavior -->
+5. IF a chamada à IA falhar (timeout, erro, resposta vazia) THEN o sistema SHALL exibir a tabela detalhada, mesmo fallback de RELPROM-55 — nunca bloqueia a geração do PDF nem o envio do e-mail. <!-- RELPROM-57, unwanted-behavior -->
+
+**Independent Test**: Gerar o relatório de um cliente com vários cancelamentos de motivos parecidos (ex.: vários por "folga do promotor") e confirmar que a seção de cancelamentos mostra 1 linha por grupo, com a contagem de oficinas batendo com o real. Forçar a IA a devolver um agrupamento que não cobre todos os cancelamentos (ou simular a chamada fora do ar) e confirmar que a seção volta a mostrar a tabela detalhada de hoje, sem quebrar o resto do PDF.
+
+---
+
 ## Edge Cases
 
 - IF a integração usada para resolver admins/enviar e-mail (backend-ob-ads) estiver indisponível THEN o sistema SHALL tratar isso como falha daquele cliente (RELPROM-17), sem derrubar a execução dos demais clientes. <!-- RELPROM-23 -->
@@ -268,12 +286,17 @@ Toda ambiguidade foi resolvida ou registrada aqui.
 | RELPROM-50 | P7: Observações adicionais geradas por IA | Execute | Implemented |
 | RELPROM-51 | P7: Observações adicionais geradas por IA | Execute | Implemented |
 | RELPROM-52 | P7: Observações adicionais geradas por IA | Execute | Implemented |
+| RELPROM-53 | P8: Resumo de cancelamentos agrupado por IA | Design | Pending |
+| RELPROM-54 | P8: Resumo de cancelamentos agrupado por IA | Design | Pending |
+| RELPROM-55 | P8: Resumo de cancelamentos agrupado por IA | Design | Pending |
+| RELPROM-56 | P8: Resumo de cancelamentos agrupado por IA | Design | Pending |
+| RELPROM-57 | P8: Resumo de cancelamentos agrupado por IA | Design | Pending |
 
 **ID format:** `RELPROM-NN`
 
 **Status values:** Pending → In Design → In Tasks → Implementing → Verified
 
-**Coverage:** 52 total. RELPROM-44 implementada (pós-Execute, Phase 7 em `tasks.md`). RELPROM-45 a 52 (P6 S3, P7 IA) são novas, pendentes de Design.
+**Coverage:** 57 total. RELPROM-44 a 52 implementadas (Phases 7-9 em `tasks.md`). RELPROM-53 a 57 (P8, resumo de cancelamentos por IA) são novas, pendentes de Design.
 
 ---
 
@@ -291,3 +314,4 @@ Como saberemos que a feature foi bem-sucedida:
 - [ ] A visão geral de cada campanha mostra o gráfico comparativo de visitas por dia, igual ao modelo do CON26-325.
 - [ ] Todo envio (cron ou manual, com e-mail) tem o PDF arquivado no S3, com o link gravado no registro de auditoria.
 - [ ] Cada seção do relatório traz 1 frase de síntese gerada por IA, sem nenhum número que não esteja nos dados já calculados daquela seção.
+- [ ] A seção de cancelamentos mostra o resumo agrupado por motivo quando a IA acerta o agrupamento, ou a tabela detalhada quando não acerta — nunca quebra nem mistura as duas.
