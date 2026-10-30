@@ -219,6 +219,25 @@ Toda ambiguidade foi resolvida ou registrada aqui.
 
 ---
 
+### P9: Resumo dos destaques do campo gerado por IA
+
+**User Story**: Como admin do cliente, quero que a seção de destaques do campo mostre até 4 insights resumindo os padrões mais notáveis das observações dos promotores (gerados por IA), em vez de 1 card por visita, pra ler rápido o que aconteceu de relevante em campo — igual ao relatório de exemplo do ticket ("O que os promotores registraram no app").
+
+**Why P9**: O modelo do CON26-325 não lista card por card — sintetiza em até 4 temas ("Base com oficinas que não existem mais", "Rotas fora da área do promotor" etc.), cada um com um título curto e 1-2 frases. A listagem atual (1 card por visita) é correta mas verbosa pra campanhas com muitas observações.
+
+**Acceptance Criteria**:
+
+1. WHEN uma campanha tiver pelo menos 1 destaque de campo com OBS no período THEN o sistema SHALL tentar gerar, via IA, até 4 insights (título curto + descrição de 1-2 frases) resumindo os padrões mais notáveis, substituindo a listagem de cards individuais por visita. <!-- RELPROM-58, event-driven -->
+2. The system SHALL exibir, no cabeçalho da seção, "O que os promotores registraram no app" no lugar do texto atual "Observações registradas pelos promotores". <!-- RELPROM-59, ubiquitous -->
+3. The system SHALL montar cada insight a partir de um subconjunto dos destaques reais da campanha — a IA só escolhe quais destaques (por índice) formam cada insight e escreve o título e a descrição; nenhum destaque pode aparecer em mais de 1 insight. <!-- RELPROM-60, ubiquitous -->
+4. IF o resultado da IA tiver mais de 4 insights, nenhum insight, um índice de destaque fora do range, ou um destaque citado em mais de 1 insight THEN o sistema SHALL descartar o resumo inteiro e exibir a listagem de cards individuais de hoje (1 card por destaque) nessa seção, só daquela vez. <!-- RELPROM-61, unwanted-behavior -->
+5. IF o título ou a descrição de algum insight citar um número que não bate com nenhuma contagem real derivável dos destaques da campanha (total, por status, por cidade) ou dos contadores já calculados da visão geral THEN o sistema SHALL aplicar o mesmo fallback de RELPROM-61. <!-- RELPROM-62, unwanted-behavior -->
+6. IF a chamada à IA falhar (timeout, erro, resposta vazia) THEN o sistema SHALL exibir a listagem de cards individuais, mesmo fallback de RELPROM-61 — nunca bloqueia a geração do PDF nem o envio do e-mail. <!-- RELPROM-63, unwanted-behavior -->
+
+**Independent Test**: Gerar o relatório de uma campanha com várias observações de temas parecidos e confirmar que a seção de destaques mostra até 4 insights com título + descrição, sem exceder 4 e sem repetir destaque em 2 insights. Forçar a IA a devolver mais de 4 insights (ou simular a chamada fora do ar) e confirmar que a seção volta a mostrar 1 card por destaque, sem quebrar o resto do PDF.
+
+---
+
 ## Edge Cases
 
 - IF a integração usada para resolver admins/enviar e-mail (backend-ob-ads) estiver indisponível THEN o sistema SHALL tratar isso como falha daquele cliente (RELPROM-17), sem derrubar a execução dos demais clientes. <!-- RELPROM-23 -->
@@ -291,12 +310,18 @@ Toda ambiguidade foi resolvida ou registrada aqui.
 | RELPROM-55 | P8: Resumo de cancelamentos agrupado por IA | Execute | Implemented |
 | RELPROM-56 | P8: Resumo de cancelamentos agrupado por IA | Execute | Implemented |
 | RELPROM-57 | P8: Resumo de cancelamentos agrupado por IA | Execute | Implemented |
+| RELPROM-58 | P9: Resumo dos destaques do campo gerado por IA | Design | Pending |
+| RELPROM-59 | P9: Resumo dos destaques do campo gerado por IA | Design | Pending |
+| RELPROM-60 | P9: Resumo dos destaques do campo gerado por IA | Design | Pending |
+| RELPROM-61 | P9: Resumo dos destaques do campo gerado por IA | Design | Pending |
+| RELPROM-62 | P9: Resumo dos destaques do campo gerado por IA | Design | Pending |
+| RELPROM-63 | P9: Resumo dos destaques do campo gerado por IA | Design | Pending |
 
 **ID format:** `RELPROM-NN`
 
 **Status values:** Pending → In Design → In Tasks → Implementing → Verified
 
-**Coverage:** 57 total, todas implementadas (Phases 1-10 em `tasks.md`).
+**Coverage:** 63 total. RELPROM-01 a 57 implementadas (Phases 1-10 em `tasks.md`). RELPROM-58 a 63 (P9, resumo de destaques por IA) são novas, pendentes de Design.
 
 ---
 
@@ -315,3 +340,4 @@ Como saberemos que a feature foi bem-sucedida:
 - [ ] Todo envio (cron ou manual, com e-mail) tem o PDF arquivado no S3, com o link gravado no registro de auditoria.
 - [ ] Cada seção do relatório traz 1 frase de síntese gerada por IA, sem nenhum número que não esteja nos dados já calculados daquela seção.
 - [ ] A seção de cancelamentos mostra o resumo agrupado por motivo quando a IA acerta o agrupamento, ou a tabela detalhada quando não acerta — nunca quebra nem mistura as duas.
+- [ ] A seção de destaques do campo mostra até 4 insights ("O que os promotores registraram no app") quando a IA acerta, ou a listagem de cards individuais quando não acerta.

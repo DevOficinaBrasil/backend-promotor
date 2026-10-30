@@ -80,6 +80,12 @@ Automatizar a geração e o envio por e-mail do relatório semanal de visitas de
 - Guardrail: se o agrupamento não cobrir cada cancelamento exatamente 1 vez (falta, repete ou cita um índice inexistente), ou se a justificativa de algum grupo citar um número que não bate com o tamanho do grupo, o resumo inteiro é descartado.
 - Fallback em qualquer falha (validação ou chamada à IA): volta pra tabela detalhada de hoje (1 linha por cancelamento) — nunca quebra a seção nem deixa sem tabela nenhuma.
 
+### Resumo dos destaques do campo gerado por IA (P9, 2026-10-30)
+- Pedido direto do usuário, mesmo padrão de decisão já validado em P8 (não repassado por novo discuss): o resumo (até 4 insights) **substitui** a listagem de cards individuais; fallback pra listagem de hoje em qualquer falha de validação ou chamada.
+- Divisão de responsabilidade igual à de P8: a IA só escolhe **quais destaques (por índice) formam cada insight** e escreve título + descrição — nunca inventa contagem fora do que é derivável dos dados reais (total de destaques, por status, por cidade, ou os contadores já calculados da visão geral).
+- Cabeçalho da seção muda de "Observações registradas pelos promotores" pra "O que os promotores registraram no app" (texto pedido explicitamente pelo usuário, igual ao modelo do CON26-325).
+- Cada destaque só pode aparecer em 1 insight (sem duplicar) — diferente de P8, não exige cobrir todos os destaques (até 4 insights é um resumo dos mais notáveis, não uma partição exaustiva).
+
 ### Agent's Discretion
 - Mecanismo exato de integração cross-service (backend-promotor chamando backend-ob-ads para resolver admins e/ou disparar o e-mail via SES já configurado lá, versus backend-promotor ganhar seu próprio client de e-mail) fica a critério da fase de Design — não é uma decisão de produto, é arquitetura de implementação.
 - Nome exato do schedule (horário do cron na sexta-feira, formato do nome do job) fica a critério da implementação, respeitando a convenção `node-cron` + flag `*_ENABLED` já usada em `schedule/outboxNotificacaoCron.ts`.

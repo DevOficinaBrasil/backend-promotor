@@ -432,3 +432,50 @@ A IA nunca decide promotor/oficina/cidade — só agrupamento (quais índices v�
 | --- | --- | --- |
 | Divisão IA vs. dados reais na tabela resumo | IA só agrupa índices + escreve a justificativa; promotor/oficina/cidade sempre vêm dos dados reais | Elimina quase todo o risco de alucinação — a IA nunca tem a chance de inventar um nome de oficina ou promotor que não existe |
 | Fallback em qualquer falha de validação/chamada | Tabela detalhada de hoje (não um estado vazio) | Pedido do usuário em discuss — a seção nunca fica sem informação, só menos resumida |
+
+---
+
+## P9 — Resumo dos destaques do campo gerado por IA (RELPROM-58 a 63, Design pós-Execute)
+
+Mesmo espírito de P8 (IA só seleciona/agrupa por índice, nunca inventa fato; fallback pra UI de hoje em qualquer falha), aplicado aos destaques do campo em vez dos cancelamentos. Diferença chave: aqui não é uma partição exaustiva — até 4 insights cobrindo só os destaques mais notáveis, cada destaque usado em no máximo 1 insight (nunca 2).
+
+### Componentes novos/modificados
+
+#### `construirInsightsCampo` (guardrail + montagem, em `utils/promotorReportSinteseValidacao.ts`)
+- **Purpose**: Valida os insights brutos da IA e monta o shape pronto pra desenhar (só título + descrição — ao contrário do resumo de cancelamentos, aqui não há coluna estruturada de promotor/oficina pra reconstruir, o insight é só prosa).
+- **Interfaces**:
+  - `interface InsightCampoBruto { titulo: string; indices: number[]; descricao: string }`
+  - `interface InsightCampo { titulo: string; descricao: string }`
+  - `construirInsightsCampo(destaques: DestaqueCampo[], visaoGeral: VisaoGeralCampanha, insightsBrutos: InsightCampoBruto[]): InsightCampo[] | null` — `null` quando: 0 ou mais de 4 insights; algum índice fora do range; o mesmo índice aparece em 2 insights; ou título/descrição de algum insight cita número que não bate com o conjunto de números válidos
+  - Números válidos = total de destaques, contagem concluída/cancelada, contagem por cidade (todos derivados de `destaques`) **+** `visaoGeral.concluidas`/`canceladas`/`abertasNaRota` — conjunto único, compartilhado entre todos os insights (não um conjunto por insight), porque um insight pode citar um contador da visão geral (como o modelo faz: "Só 6 das 71 visitas concluídas...")
+- **Dependencies**: `extrairNumeros`/`validarSintese` (já existem no mesmo arquivo)
+- **Reuses**: mesmo padrão de validação de P8, adaptado pra "cobertura parcial sem duplicata" em vez de "cobertura total exata"
+
+#### PromotorReportSintese.gerarInsightsCampo (modifica `service/promotorReportSintese.ts`)
+- **Purpose**: 1 chamada à OpenAI por bloco (só quando há destaque com OBS), pedindo até 4 insights — cada um com índices + título + descrição.
+- **Interfaces**: `gerarInsightsCampo(destaques: DestaqueCampo[], visaoGeral: VisaoGeralCampanha): Promise<InsightCampo[] | null>` — nunca lança
+- **Dependencies**: mesmo client `openai` já usado em `gerarSinteses`/`gerarResumoCancelamentos`
+- **Reuses**: `construirInsightsCampo` pra validar/montar o resultado
+
+### Mudanças em componentes existentes (adendo)
+
+| Componente | Mudança |
+| --- | --- |
+| `types/promotorRelatorio.ts` | `CampanhaBlocoRelatorio` ganha `insightsCampo?: InsightCampo[]` — ausente/undefined significa "usar a listagem de cards individuais" (comportamento de hoje) |
+| `service/promotorReportService.ts` | `processarRelatorioCliente`: quando `bloco.destaquesDeCampo.length > 0`, chama `gerarInsightsCampo` (junto com `gerarSinteses`/`gerarResumoCancelamentos`, antes de `renderizarPdf`) e anexa o resultado quando não `null` |
+| `templates/relatorioPromotor.ts` | `desenharDestaques`: cabeçalho da seção passa a "O que os promotores registraram no app" (RELPROM-59); se `bloco.insightsCampo` existir e não for vazio, desenha até 4 blocos título+parágrafo (nova função `desenharInsightCampo`); senão, mantém a listagem de cards de hoje (2 sub-seções concluídas/canceladas), sem mudança |
+
+### Error Handling Strategy (adendo)
+
+| Error Scenario | Handling | User Impact |
+| --- | --- | --- |
+| Mais de 4 insights, 0 insights, índice fora do range, ou destaque citado em 2 insights | `construirInsightsCampo` retorna `null`; seção cai pra listagem de cards de hoje | Seção continua correta, só sem o resumo dessa vez |
+| Título/descrição de algum insight cita número fora do conjunto válido | Mesmo tratamento acima — `null`, fallback (RELPROM-62) | Idem |
+| Chamada à OpenAI falha/timeout/JSON inválido | `gerarInsightsCampo` retorna `null` | Idem — nunca bloqueia o PDF nem o e-mail |
+
+### Tech Decisions (adendo)
+
+| Decision | Choice | Rationale |
+| --- | --- | --- |
+| Cobertura dos insights | Parcial, sem duplicata (não é uma partição exaustiva como em P8) | O modelo do CON26-325 resume só os temas mais notáveis — forçar cobertura total inflaria insights artificiais pra observações sem padrão em comum |
+| Conjunto de números válidos | Compartilhado entre todos os insights (total/por status/por cidade dos destaques + contadores da visão geral), não um conjunto por insight | Um insight pode legitimamente citar um contador "macro" (ex.: total de visitas concluídas da campanha), não só números do seu próprio subconjunto de destaques |

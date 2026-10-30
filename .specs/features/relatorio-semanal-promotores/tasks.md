@@ -143,6 +143,15 @@ T40 -> T41 -> T42
 T40 -> T43
 ```
 
+### Phase 11: Resumo dos destaques do campo gerado por IA (RELPROM-58 a 63)
+
+Pedido do usuário pós-Execute. Mesmo client `openai` já integrado — nenhuma dependência nova.
+
+```
+T44 -> T45 -> T46
+T44 -> T47
+```
+
 ---
 
 ## Task Breakdown
@@ -1346,6 +1355,121 @@ Adicionada depois do Verifier dar PASS (3ª iteração). 2 pedidos do usuário: 
 
 ---
 
+### Phase 11: Resumo dos destaques do campo gerado por IA (tasks)
+
+### T44: `construirInsightsCampo` — guardrail + montagem (backend-promotor)
+
+**What**: Tipos `InsightCampoBruto` (`{titulo, indices, descricao}`, shape cru da IA) e `InsightCampo` (`{titulo, descricao}`, shape pronto pra desenhar). Função pura `construirInsightsCampo(destaques, visaoGeral, insightsBrutos)`: valida no máximo 4 insights, nenhum ou mais → `null`; índices válidos e sem duplicata entre insights (destaque só pode estar em 1); título+descrição de cada insight validados contra um conjunto de números compartilhado (total/status/cidade dos destaques + contadores da visão geral).
+**Where**: `utils/promotorReportSinteseValidacao.ts` (modifica — novos tipos + função), `types/promotorRelatorio.ts` (modifica — exporta `InsightCampo`, `CampanhaBlocoRelatorio` ganha `insightsCampo?: InsightCampo[]`)
+**Depends on**: None
+**Reuses**: `extrairNumeros`/`validarSintese` (já existem no mesmo arquivo)
+**Requirement**: RELPROM-60, RELPROM-61, RELPROM-62
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [ ] 0 insights ou mais de 4 → `null`
+- [ ] Índice fora do range, ou o mesmo índice em 2 insights → `null`
+- [ ] Título/descrição de 1 insight com número fora do conjunto válido (total destaques, concluída/cancelada, por cidade, ou contadores da visão geral) → `null`
+- [ ] Insights válidos → retorna só `{titulo, descricao}`, sem os índices (detalhe interno de validação)
+- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportSinteseValidacao.test.ts` (sem regressão + novos casos)
+- [ ] `npx tsc --noEmit` sem erro novo
+
+**Tests**: unit
+**Gate**: quick
+
+**Commit**: `feat(promotor-relatorio): valida e monta insights de destaques do campo`
+
+**Status**: ⬜ Pending
+
+---
+
+### T45: `PromotorReportSintese.gerarInsightsCampo` (backend-promotor)
+
+**What**: 1 chamada à OpenAI por bloco (só quando há destaque com OBS), pedindo até 4 insights (índices + título + descrição). Aplica `construirInsightsCampo` (T44) no resultado. Nunca lança — `null` em qualquer falha.
+**Where**: `service/promotorReportSintese.ts` (modifica)
+**Depends on**: T44
+**Reuses**: mesmo client `openai` já configurado em `gerarSinteses`/`gerarResumoCancelamentos`
+**Requirement**: RELPROM-58, RELPROM-60, RELPROM-63
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [ ] `gerarInsightsCampo(destaques, visaoGeral): Promise<InsightCampo[] | null>` — nunca lança
+- [ ] Prompt lista os destaques por índice (0-based) com status/cidade/obs, pedindo no máximo 4 insights
+- [ ] Resultado bruto passa por `construirInsightsCampo`; `null` em qualquer rejeição
+- [ ] Chamada falha (mock rejeita, JSON inválido, resposta vazia) → `null`, loga o erro
+- [ ] Teste mocka o módulo `openai` (mesmo padrão de T37/T41) — nunca chama a API de verdade
+- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportSintese.test.ts` (sem regressão + novos casos)
+
+**Tests**: unit
+**Gate**: quick
+
+**Commit**: `feat(promotor-relatorio): gera insights de destaques do campo via openai`
+
+**Status**: ⬜ Pending
+
+---
+
+### T46: Wiring de `gerarInsightsCampo` em `processarRelatorioCliente` (backend-promotor)
+
+**What**: Quando `bloco.destaquesDeCampo.length > 0`, chama `gerarInsightsCampo` (junto com `gerarSinteses`/`gerarResumoCancelamentos`, antes de `renderizarPdf`) e anexa o resultado em `bloco.insightsCampo` só se não for `null`.
+**Where**: `service/promotorReportService.ts` (modifica)
+**Depends on**: T45
+**Reuses**: o mesmo loop de blocos já usado pra `gerarSinteses`/`gerarResumoCancelamentos`
+**Requirement**: RELPROM-58, RELPROM-63
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [ ] Bloco com destaques → `gerarInsightsCampo` chamado, resultado anexado quando não `null`
+- [ ] Bloco sem destaques (`length === 0`) → `gerarInsightsCampo` não é chamado
+- [ ] `null` (falha/validação) → `bloco.insightsCampo` fica ausente, PDF renderiza normalmente (cards individuais)
+- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportServiceEnvio.test.ts` (sem regressão + novo caso)
+
+**Tests**: unit
+**Gate**: quick
+
+**Commit**: `feat(promotor-relatorio): anexa insights de destaques antes de renderizar o pdf`
+
+**Status**: ⬜ Pending
+
+---
+
+### T47: Insights no PDF + novo cabeçalho, com fallback (backend-promotor)
+
+**What**: `desenharDestaques`: cabeçalho da seção passa de "Observações registradas pelos promotores" pra "O que os promotores registraram no app" (RELPROM-59). Se `bloco.insightsCampo` existir e não for vazio, desenha até 4 blocos (nova função `desenharInsightCampo`: título em negrito + parágrafo logo abaixo); senão, mantém a listagem de cards de hoje (2 sub-seções concluídas/canceladas), sem mudança.
+**Where**: `templates/relatorioPromotor.ts` (modifica)
+**Depends on**: T44
+**Reuses**: `quebrarLinhas`/`garantirEspaco` já existentes
+**Requirement**: RELPROM-58, RELPROM-59, RELPROM-61
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [ ] Cabeçalho da seção sempre mostra "O que os promotores registraram no app", com ou sem `insightsCampo`
+- [ ] `insightsCampo` populado → até 4 blocos título+parágrafo desenhados, sem os cards individuais
+- [ ] `insightsCampo` ausente/vazio → listagem de cards de hoje, comportamento idêntico ao atual
+- [ ] Teste confirma as 2 situações via `jest.spyOn(PDFPage.prototype, "drawText")`, mesmo padrão do renderer
+- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportPdfRenderer.test.ts` (sem regressão + novos casos)
+
+**Tests**: unit
+**Gate**: quick
+
+**Commit**: `feat(promotor-relatorio): desenha insights de destaques do campo com fallback`
+
+**Status**: ⬜ Pending
+
+---
+
 ## Phase Execution Map
 
 ```
@@ -1377,9 +1501,11 @@ Phase 9:  T35 ------→ T36 ------→ T37 ------→ T38
           T35 ------→ T39
 Phase 10: T40 ------→ T41 ------→ T42
           T40 ------→ T43
+Phase 11: T44 ------→ T45 ------→ T46
+          T44 ------→ T47
 ```
 
-Dependências cross-phase (não aparecem no diagrama por fase, só no `Depends on` de cada task, conforme a regra do skill): T15 depende de T01 (Phase 1) e T11 (Phase 3); T16 depende de T10 e T11 (Phase 3); T19 depende de T18 (Phase 4); T21 depende de T17 (Phase 4); T23/T25 não têm dependência cross-phase (reaproveitam T02/T04 já concluídas, sem precisar reabrir); T28 não depende de nenhuma task de fase anterior (reescreve T15 por completo, contrato de `renderizarPdf` preservado); T33, T35 e T40 também não têm dependência cross-phase (cliente externo, tipos e função pura novos, sem tocar em código das fases anteriores).
+Dependências cross-phase (não aparecem no diagrama por fase, só no `Depends on` de cada task, conforme a regra do skill): T15 depende de T01 (Phase 1) e T11 (Phase 3); T16 depende de T10 e T11 (Phase 3); T19 depende de T18 (Phase 4); T21 depende de T17 (Phase 4); T23/T25 não têm dependência cross-phase (reaproveitam T02/T04 já concluídas, sem precisar reabrir); T28 não depende de nenhuma task de fase anterior (reescreve T15 por completo, contrato de `renderizarPdf` preservado); T33, T35, T40 e T44 também não têm dependência cross-phase (cliente externo, tipos e funções puras novas, sem tocar em código das fases anteriores).
 
 Execução é estritamente sequencial dentro de cada fase — sem paralelismo intra-fase.
 
@@ -1432,6 +1558,10 @@ Execução é estritamente sequencial dentro de cada fase — sem paralelismo in
 | T41 | 1 método, mesmo arquivo de T37 | ✅ Granular |
 | T42 | 1 wiring, mesmo método/arquivo de T38 | ✅ Granular |
 | T43 | 1 função de desenho (tabela resumo) + fallback pra tabela já existente | ✅ Granular |
+| T44 | 2 tipos + 1 função pura, arquivos coesos (shape de render + validação) | ✅ Granular |
+| T45 | 1 método, mesmo arquivo de T37/T41 | ✅ Granular |
+| T46 | 1 wiring, mesmo método/arquivo de T38/T42 | ✅ Granular |
+| T47 | 1 função de desenho (insight) + fallback pra listagem já existente | ✅ Granular |
 
 ---
 
@@ -1482,6 +1612,10 @@ Execução é estritamente sequencial dentro de cada fase — sem paralelismo in
 | T41 | T40 (mesma fase) | T40→T41 | ✅ Match |
 | T42 | T41 (mesma fase) | T41→T42 | ✅ Match |
 | T43 | T40 (mesma fase) | T40→T43 | ✅ Match |
+| T44 | None | — | ✅ Match |
+| T45 | T44 (mesma fase) | T44→T45 | ✅ Match |
+| T46 | T45 (mesma fase) | T45→T46 | ✅ Match |
+| T47 | T44 (mesma fase) | T44→T47 | ✅ Match |
 
 ---
 
@@ -1532,6 +1666,10 @@ Execução é estritamente sequencial dentro de cada fase — sem paralelismo in
 | T41 | Cliente externo mockado | unit | unit | ✅ OK |
 | T42 | Service/domínio | unit | unit | ✅ OK |
 | T43 | Service/domínio (renderer) | unit | unit | ✅ OK |
+| T44 | Função pura | unit | unit | ✅ OK |
+| T45 | Cliente externo mockado | unit | unit | ✅ OK |
+| T46 | Service/domínio | unit | unit | ✅ OK |
+| T47 | Service/domínio (renderer) | unit | unit | ✅ OK |
 
 ---
 
