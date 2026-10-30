@@ -286,17 +286,17 @@ Toda ambiguidade foi resolvida ou registrada aqui.
 | RELPROM-50 | P7: Observações adicionais geradas por IA | Execute | Implemented |
 | RELPROM-51 | P7: Observações adicionais geradas por IA | Execute | Implemented |
 | RELPROM-52 | P7: Observações adicionais geradas por IA | Execute | Implemented |
-| RELPROM-53 | P8: Resumo de cancelamentos agrupado por IA | Design | Pending |
-| RELPROM-54 | P8: Resumo de cancelamentos agrupado por IA | Design | Pending |
-| RELPROM-55 | P8: Resumo de cancelamentos agrupado por IA | Design | Pending |
-| RELPROM-56 | P8: Resumo de cancelamentos agrupado por IA | Design | Pending |
-| RELPROM-57 | P8: Resumo de cancelamentos agrupado por IA | Design | Pending |
+| RELPROM-53 | P8: Resumo de cancelamentos agrupado por IA | Execute | Implemented |
+| RELPROM-54 | P8: Resumo de cancelamentos agrupado por IA | Execute | Implemented |
+| RELPROM-55 | P8: Resumo de cancelamentos agrupado por IA | Execute | Implemented |
+| RELPROM-56 | P8: Resumo de cancelamentos agrupado por IA | Execute | Implemented |
+| RELPROM-57 | P8: Resumo de cancelamentos agrupado por IA | Execute | Implemented |
 
 **ID format:** `RELPROM-NN`
 
 **Status values:** Pending → In Design → In Tasks → Implementing → Verified
 
-**Coverage:** 57 total. RELPROM-44 a 52 implementadas (Phases 7-9 em `tasks.md`). RELPROM-53 a 57 (P8, resumo de cancelamentos por IA) são novas, pendentes de Design.
+**Coverage:** 57 total, todas implementadas (Phases 1-10 em `tasks.md`).
 
 ---
 

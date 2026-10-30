@@ -12,9 +12,9 @@ const DADOS: RelatorioPromotorData = {
       nomeCampanha: "Campanha SKF",
       visaoGeral: { concluidas: 71, canceladas: 21, abertasNaRota: 132 },
       visitasPorDia: [
-        { dia: "13/10", concluidas: 2, canceladas: 0 },
-        { dia: "14/10", concluidas: 4, canceladas: 0 },
-        { dia: "15/10", concluidas: 52, canceladas: 16 },
+        { dia: "13/10", diaSemana: "ter", concluidas: 2, canceladas: 0 },
+        { dia: "14/10", diaSemana: "qua", concluidas: 4, canceladas: 0 },
+        { dia: "15/10", diaSemana: "qui", concluidas: 52, canceladas: 16 },
       ],
       assertividade: 77,
       porPromotor: [
@@ -142,6 +142,49 @@ describe("PromotorReportPdfRenderer.renderizarPdf", () => {
 
     const textosComPalavra = textosDesenhados().filter((t) => t.includes("palavra"));
     expect(textosComPalavra.length).toBeGreaterThan(1); // quebrou em mais de 1 linha
+  });
+
+  it("desenha o grafico por dia empilhado com valor combinado e o dia de pico em destaque — RELPROM-44", async () => {
+    await PromotorReportPdfRenderer.renderizarPdf(DADOS);
+
+    const textos = textosDesenhados();
+    expect(textos).toContain("52 + 16"); // dia com concluidas + canceladas combinados
+    expect(textos).toContain("2"); // dia so com concluidas, sem "+"
+    expect(textos).toContain("15/10 (qui)"); // dia de pico (mais concluidas) com dia da semana
+    expect(textos).toContain("13/10"); // dia sem destaque, sem sufixo de dia da semana
+  });
+
+  it("usa a tabela resumo agrupada quando resumoCancelamentos esta presente — RELPROM-53", async () => {
+    const dados: RelatorioPromotorData = {
+      ...DADOS,
+      campanhas: [
+        {
+          ...DADOS.campanhas[0],
+          cancelamentos: [
+            { idPromotor: 2, nomePromotor: "José", nomeOficina: "Real Car", cidadeOficina: "Belo Horizonte/MG", obs: "Folga" },
+            { idPromotor: 2, nomePromotor: "José", nomeOficina: "Ricar", cidadeOficina: "Belo Horizonte/MG", obs: "Folga" },
+          ],
+          resumoCancelamentos: [
+            { promotor: "José", oficinas: ["Real Car", "Ricar"], cidade: "Belo Horizonte/MG", justificativa: "2 oficinas canceladas por folga do promotor" },
+          ],
+        },
+      ],
+    };
+
+    await PromotorReportPdfRenderer.renderizarPdf(dados);
+
+    const textos = textosDesenhados();
+    expect(textos).toContain("2 oficinas: Real Car, Ricar"); // formatado deterministicamente, nunca texto cru
+    expect(textos).toContain("2 oficinas canceladas por folga do promotor");
+    expect(textos.filter((t) => t === "Ricar")).toHaveLength(0); // nao lista cada oficina em linha separada
+  });
+
+  it("cai pra tabela detalhada (1 linha por cancelamento) quando resumoCancelamentos esta ausente — RELPROM-55", async () => {
+    await PromotorReportPdfRenderer.renderizarPdf(DADOS);
+
+    const textos = textosDesenhados();
+    expect(textos).toContain("José Maria Jr.");
+    expect(textos).toContain("Real Car");
   });
 
   it("desenha a sintese de cada secao, logo apos a linha de destaque e antes do conteudo deterministico — RELPROM-52", async () => {

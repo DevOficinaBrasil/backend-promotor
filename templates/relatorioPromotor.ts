@@ -1,6 +1,6 @@
 import { PDFDocument, PDFFont, PDFPage, StandardFonts, rgb } from "pdf-lib";
 import { RelatorioPromotorData, CampanhaBlocoRelatorio } from "../types/promotorRelatorio";
-import { Cancelamento, DestaqueCampo, LinhaPromotor, PontoVisitasPorDia } from "../utils/promotorReportCalculos";
+import { Cancelamento, DestaqueCampo, descreverDiaPico, LinhaPromotor, PontoVisitasPorDia } from "../utils/promotorReportCalculos";
 
 /**
  * Gera o PDF do relatório desenhando direto com `pdf-lib` (sem navegador —
@@ -35,7 +35,7 @@ const COR_BRANCA = rgb(1, 1, 1);
 const COR_TEXTO = COR_NAVY; // corpo de texto em página clara usa navy, não preto puro
 const COR_TEXTO_CLARO = rgb(0.85, 0.88, 0.95); // texto secundário em página escura
 const COR_CINZA = rgb(0.4, 0.42, 0.46); // texto secundário em página clara
-const COR_VERMELHO = rgb(0.82, 0.3, 0.25); // canceladas no gráfico — menta sumia de tão clara contra o fundo branco
+const COR_GRAFICO_CANCELADAS = rgb(0.65, 0.71, 0.91); // azul-lavanda — barra empilhada de canceladas, igual ao modelo
 const COR_BORDA = rgb(0.85, 0.87, 0.9); // linha de base do gráfico
 
 type EstiloPagina = "clara" | "escura";
@@ -192,10 +192,12 @@ function desenharSubtitulo(cursor: Cursor, titulo: string, espacoAcima = 10): vo
 }
 
 /**
- * Gráfico de barras comparativo — concluídas x canceladas por dia, igual ao
- * modelo. Só pontos com atividade entram (ver `agruparVisitasPorDia`).
+ * Gráfico de barras empilhadas — concluídas (base) + canceladas (topo) por
+ * dia, igual ao modelo. Só pontos com atividade entram (ver
+ * `agruparVisitasPorDia`). O dia com mais concluídas vem com o rótulo em
+ * negrito + dia da semana, igual ao destaque do modelo.
  */
-function desenharGraficoPorDia(cursor: Cursor, pontos: PontoVisitasPorDia[]): void {
+function desenharGraficoPorDia(cursor: Cursor, pontos: PontoVisitasPorDia[], totalConcluidasPeriodo: number): void {
   desenharSubtitulo(cursor, "Visitas por dia");
 
   const alturaBarras = 90;
@@ -209,43 +211,56 @@ function desenharGraficoPorDia(cursor: Cursor, pontos: PontoVisitasPorDia[]): vo
     return;
   }
 
+  const destaque = descreverDiaPico(pontos, totalConcluidasPeriodo);
   const yBase = cursor.y - alturaBarras;
   const larguraGrupo = LARGURA_UTIL / pontos.length;
-  const larguraBarra = Math.max(10, Math.min(34, larguraGrupo / 2 - 8));
-  const maiorValor = Math.max(1, ...pontos.map((ponto) => Math.max(ponto.concluidas, ponto.canceladas)));
+  const larguraBarra = Math.max(16, Math.min(44, larguraGrupo - 28));
+  const maiorTotal = Math.max(1, ...pontos.map((ponto) => ponto.concluidas + ponto.canceladas));
 
   cursor.pagina.drawLine({ start: { x: MARGEM, y: yBase }, end: { x: MARGEM + LARGURA_UTIL, y: yBase }, thickness: 1, color: COR_BORDA });
 
   pontos.forEach((ponto, indice) => {
     const xCentro = MARGEM + indice * larguraGrupo + larguraGrupo / 2;
-    const xConcluidas = xCentro - larguraBarra - 3;
-    const xCanceladas = xCentro + 3;
-    const alturaConcluidas = (ponto.concluidas / maiorValor) * alturaBarras;
-    const alturaCanceladas = (ponto.canceladas / maiorValor) * alturaBarras;
-
-    if (ponto.concluidas > 0) cursor.pagina.drawRectangle({ x: xConcluidas, y: yBase, width: larguraBarra, height: alturaConcluidas, color: COR_NAVY });
-    if (ponto.canceladas > 0) cursor.pagina.drawRectangle({ x: xCanceladas, y: yBase, width: larguraBarra, height: alturaCanceladas, color: COR_VERMELHO });
+    const xBarra = xCentro - larguraBarra / 2;
+    const alturaConcluidas = (ponto.concluidas / maiorTotal) * alturaBarras;
+    const alturaCanceladas = (ponto.canceladas / maiorTotal) * alturaBarras;
 
     if (ponto.concluidas > 0) {
-      const texto = String(ponto.concluidas);
-      const largura = cursor.fonteNegrito.widthOfTextAtSize(texto, 8.5);
-      cursor.pagina.drawText(texto, { x: xConcluidas + larguraBarra / 2 - largura / 2, y: yBase + alturaConcluidas + 4, size: 8.5, font: cursor.fonteNegrito, color: COR_NAVY });
+      cursor.pagina.drawRectangle({ x: xBarra, y: yBase, width: larguraBarra, height: alturaConcluidas, color: COR_NAVY });
     }
     if (ponto.canceladas > 0) {
-      const texto = String(ponto.canceladas);
-      const largura = cursor.fonteNegrito.widthOfTextAtSize(texto, 8.5);
-      cursor.pagina.drawText(texto, { x: xCanceladas + larguraBarra / 2 - largura / 2, y: yBase + alturaCanceladas + 4, size: 8.5, font: cursor.fonteNegrito, color: COR_VERMELHO });
+      cursor.pagina.drawRectangle({ x: xBarra, y: yBase + alturaConcluidas, width: larguraBarra, height: alturaCanceladas, color: COR_GRAFICO_CANCELADAS });
     }
 
-    const larguraDia = cursor.fonte.widthOfTextAtSize(ponto.dia, 8.5);
-    cursor.pagina.drawText(ponto.dia, { x: xCentro - larguraDia / 2, y: yBase - 16, size: 8.5, font: cursor.fonte, color: COR_CINZA });
+    const textoValor = ponto.concluidas > 0 && ponto.canceladas > 0 ? `${ponto.concluidas} + ${ponto.canceladas}` : String(ponto.concluidas || ponto.canceladas);
+    const larguraValor = cursor.fonteNegrito.widthOfTextAtSize(textoValor, 9.5);
+    cursor.pagina.drawText(textoValor, {
+      x: xCentro - larguraValor / 2,
+      y: yBase + alturaConcluidas + alturaCanceladas + 4,
+      size: 9.5,
+      font: cursor.fonteNegrito,
+      color: COR_NAVY,
+    });
+
+    const ehDiaDestaque = destaque?.dia === ponto.dia;
+    const textoDia = ehDiaDestaque ? `${ponto.dia} (${ponto.diaSemana})` : ponto.dia;
+    const fonteDia = ehDiaDestaque ? cursor.fonteNegrito : cursor.fonte;
+    const larguraDia = fonteDia.widthOfTextAtSize(textoDia, 8.5);
+    cursor.pagina.drawText(textoDia, { x: xCentro - larguraDia / 2, y: yBase - 16, size: 8.5, font: fonteDia, color: ehDiaDestaque ? COR_NAVY : COR_CINZA });
   });
 
   const yLegenda = yBase - 38;
   cursor.pagina.drawRectangle({ x: MARGEM, y: yLegenda, width: 9, height: 9, color: COR_NAVY });
   cursor.pagina.drawText("Concluídas", { x: MARGEM + 13, y: yLegenda + 1, size: 8.5, font: cursor.fonte, color: COR_CINZA });
-  cursor.pagina.drawRectangle({ x: MARGEM + 95, y: yLegenda, width: 9, height: 9, color: COR_VERMELHO });
+  cursor.pagina.drawRectangle({ x: MARGEM + 95, y: yLegenda, width: 9, height: 9, color: COR_GRAFICO_CANCELADAS });
   cursor.pagina.drawText("Canceladas", { x: MARGEM + 108, y: yLegenda + 1, size: 8.5, font: cursor.fonte, color: COR_CINZA });
+
+  if (destaque) {
+    // 1 linha só: a legenda deixa espaço de sobra numa página widescreen.
+    const xLegendaFim = MARGEM + 108 + cursor.fonte.widthOfTextAtSize("Canceladas", 8.5) + 20;
+    const [primeiraLinha] = quebrarLinhas(destaque.texto, cursor.fonte, 8.5, MARGEM + LARGURA_UTIL - xLegendaFim);
+    cursor.pagina.drawText(primeiraLinha, { x: xLegendaFim, y: yLegenda + 1, size: 8.5, font: cursor.fonte, color: COR_CINZA });
+  }
 
   cursor.y = yLegenda - 20;
 }
@@ -336,7 +351,7 @@ function desenharVisaoGeral(cursor: Cursor, bloco: CampanhaBlocoRelatorio): void
     { numero: String(bloco.visaoGeral.canceladas), rotulo: "Canceladas" },
     { numero: String(bloco.visaoGeral.abertasNaRota), rotulo: "Abertas na rota" },
   ]);
-  desenharGraficoPorDia(cursor, bloco.visitasPorDia);
+  desenharGraficoPorDia(cursor, bloco.visitasPorDia, bloco.visaoGeral.concluidas);
 }
 
 function desenharAssertividade(cursor: Cursor, bloco: CampanhaBlocoRelatorio): void {
@@ -380,6 +395,11 @@ function desenharPorPromotor(cursor: Cursor, bloco: CampanhaBlocoRelatorio): voi
   desenharTabela(cursor, colunas, linhas, "Sem promotores nesta campanha.");
 }
 
+/** "N oficinas: nome1, nome2, ..." quando agrupado, ou só o nome quando é 1 só — nunca texto cru da IA. */
+function formatarOficinas(oficinas: string[]): string {
+  return oficinas.length === 1 ? oficinas[0] : `${oficinas.length} oficinas: ${oficinas.join(", ")}`;
+}
+
 function desenharCancelamentos(cursor: Cursor, bloco: CampanhaBlocoRelatorio): void {
   iniciarSecao(cursor, "clara");
   desenharCabecalhoSecao(cursor, `Cancelamentos — ${bloco.nomeCampanha}`, `${bloco.cancelamentos.length} cancelamentos no período`);
@@ -388,16 +408,22 @@ function desenharCancelamentos(cursor: Cursor, bloco: CampanhaBlocoRelatorio): v
 
   const colunas: ColunaTabela[] = [
     { titulo: "Promotor", largura: 180 },
-    { titulo: "Oficina", largura: 180 },
+    { titulo: "Oficina(s)", largura: 180 },
     { titulo: "Cidade", largura: 180 },
     { titulo: "Justificativa", largura: LARGURA_UTIL - 180 - 180 - 180 },
   ];
-  const linhas = bloco.cancelamentos.map((cancelamento: Cancelamento) => [
-    cancelamento.nomePromotor,
-    cancelamento.nomeOficina,
-    cancelamento.cidadeOficina,
-    cancelamento.obs ?? "—",
-  ]);
+
+  // RELPROM-53/55: usa o resumo agrupado por IA quando disponível e válido;
+  // senão cai pra tabela detalhada de hoje, 1 linha por cancelamento.
+  const linhas =
+    bloco.resumoCancelamentos && bloco.resumoCancelamentos.length > 0
+      ? bloco.resumoCancelamentos.map((grupo) => [grupo.promotor, formatarOficinas(grupo.oficinas), grupo.cidade, grupo.justificativa])
+      : bloco.cancelamentos.map((cancelamento: Cancelamento) => [
+          cancelamento.nomePromotor,
+          cancelamento.nomeOficina,
+          cancelamento.cidadeOficina,
+          cancelamento.obs ?? "—",
+        ]);
   desenharTabela(cursor, colunas, linhas, "Nenhum cancelamento no período.");
 
   if (bloco.cancelamentos.length > 0) {
