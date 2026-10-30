@@ -1,5 +1,5 @@
-import { CampanhaBlocoRelatorio, ResumoCancelamentoGrupo, SecaoRelatorio } from "../types/promotorRelatorio";
-import { Cancelamento } from "./promotorReportCalculos";
+import { CampanhaBlocoRelatorio, InsightCampo, ResumoCancelamentoGrupo, SecaoRelatorio } from "../types/promotorRelatorio";
+import { Cancelamento, DestaqueCampo, VisaoGeralCampanha } from "./promotorReportCalculos";
 
 /**
  * Guardrail anti-alucinação da síntese gerada por IA (RELPROM-50). Puro, sem
@@ -116,6 +116,69 @@ export function construirResumoCancelamentos(
       cidade: cidades.size === 1 ? itens[0].cidadeOficina : "Várias",
       justificativa: grupo.justificativa,
     });
+  }
+
+  return resultado;
+}
+
+/** Shape cru devolvido pela IA — só seleção (índices) + título/descrição, nunca contagens inventadas (RELPROM-60). */
+export interface InsightCampoBruto {
+  titulo: string;
+  indices: number[];
+  descricao: string;
+}
+
+const MAX_INSIGHTS_CAMPO = 4;
+
+/** Monta o conjunto de números que um insight de destaques pode citar — total/status/cidade dos destaques + contadores da visão geral. */
+function numerosValidosParaInsights(destaques: DestaqueCampo[], visaoGeral: VisaoGeralCampanha): number[] {
+  const porCidade = new Map<string, number>();
+  for (const destaque of destaques) {
+    porCidade.set(destaque.cidadeOficina, (porCidade.get(destaque.cidadeOficina) ?? 0) + 1);
+  }
+  const concluidas = destaques.filter((destaque) => destaque.status === "concluida").length;
+  const canceladas = destaques.filter((destaque) => destaque.status === "cancelada").length;
+
+  return [
+    destaques.length,
+    concluidas,
+    canceladas,
+    ...porCidade.values(),
+    visaoGeral.concluidas,
+    visaoGeral.canceladas,
+    visaoGeral.abertasNaRota,
+  ];
+}
+
+/**
+ * Valida os insights brutos da IA e monta o shape pronto pra desenhar
+ * (RELPROM-60 a 62). `null` quando: 0 ou mais de `MAX_INSIGHTS_CAMPO`
+ * insights; algum índice fora do range; o mesmo destaque citado em mais de 1
+ * insight; ou título/descrição de algum insight citar um número fora do
+ * conjunto válido — nessas falhas, o chamador deve cair pra listagem de
+ * cards individuais (RELPROM-61).
+ */
+export function construirInsightsCampo(
+  destaques: DestaqueCampo[],
+  visaoGeral: VisaoGeralCampanha,
+  insightsBrutos: InsightCampoBruto[]
+): InsightCampo[] | null {
+  if (insightsBrutos.length === 0 || insightsBrutos.length > MAX_INSIGHTS_CAMPO) return null;
+
+  const usados = new Set<number>();
+  for (const insight of insightsBrutos) {
+    for (const indice of insight.indices) {
+      if (indice < 0 || indice >= destaques.length || usados.has(indice)) return null;
+      usados.add(indice);
+    }
+  }
+
+  const numerosValidos = numerosValidosParaInsights(destaques, visaoGeral);
+  const resultado: InsightCampo[] = [];
+  for (const insight of insightsBrutos) {
+    const textoCompleto = `${insight.titulo} ${insight.descricao}`;
+    if (!validarSintese(textoCompleto, numerosValidos)) return null;
+    resultado.push({ titulo: insight.titulo, descricao: insight.descricao });
   }
 
   return resultado;

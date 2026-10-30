@@ -1370,19 +1370,19 @@ Adicionada depois do Verifier dar PASS (3ª iteração). 2 pedidos do usuário: 
 - Skill: NONE
 
 **Done when**:
-- [ ] 0 insights ou mais de 4 → `null`
-- [ ] Índice fora do range, ou o mesmo índice em 2 insights → `null`
-- [ ] Título/descrição de 1 insight com número fora do conjunto válido (total destaques, concluída/cancelada, por cidade, ou contadores da visão geral) → `null`
-- [ ] Insights válidos → retorna só `{titulo, descricao}`, sem os índices (detalhe interno de validação)
-- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportSinteseValidacao.test.ts` (sem regressão + novos casos)
-- [ ] `npx tsc --noEmit` sem erro novo
+- [x] 0 insights ou mais de 4 → `null`
+- [x] Índice fora do range, ou o mesmo índice em 2 insights → `null`
+- [x] Título/descrição de 1 insight com número fora do conjunto válido (total destaques, concluída/cancelada, por cidade, ou contadores da visão geral) → `null`
+- [x] Insights válidos → retorna só `{titulo, descricao}`, sem os índices (detalhe interno de validação)
+- [x] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportSinteseValidacao.test.ts` (27 passed, sem regressão + 8 novos casos)
+- [x] `npx tsc --noEmit` sem erro novo
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(promotor-relatorio): valida e monta insights de destaques do campo`
 
-**Status**: ⬜ Pending
+**Status**: ✅ Complete
 
 ---
 

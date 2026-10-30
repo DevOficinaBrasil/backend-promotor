@@ -1,6 +1,12 @@
-import { extrairNumeros, validarSintese, numerosValidosDaSecao, construirResumoCancelamentos } from "../../utils/promotorReportSinteseValidacao";
+import {
+  extrairNumeros,
+  validarSintese,
+  numerosValidosDaSecao,
+  construirResumoCancelamentos,
+  construirInsightsCampo,
+} from "../../utils/promotorReportSinteseValidacao";
 import { CampanhaBlocoRelatorio } from "../../types/promotorRelatorio";
-import { Cancelamento } from "../../utils/promotorReportCalculos";
+import { Cancelamento, DestaqueCampo, VisaoGeralCampanha } from "../../utils/promotorReportCalculos";
 
 const BLOCO: CampanhaBlocoRelatorio = {
   idCampanha: 1,
@@ -141,5 +147,70 @@ describe("construirResumoCancelamentos", () => {
 
   it("retorna null quando nao ha grupo nenhum", () => {
     expect(construirResumoCancelamentos(CANCELAMENTOS, [])).toBeNull();
+  });
+});
+
+describe("construirInsightsCampo", () => {
+  const VISAO_GERAL: VisaoGeralCampanha = { concluidas: 71, canceladas: 21, abertasNaRota: 132 };
+  const DESTAQUES: DestaqueCampo[] = [
+    { status: "concluida", idPromotor: 1, nomePromotor: "A", nomeOficina: "Oficina 1", cidadeOficina: "Rio de Janeiro/RJ", obs: "Fechada" },
+    { status: "concluida", idPromotor: 1, nomePromotor: "A", nomeOficina: "Oficina 2", cidadeOficina: "Rio de Janeiro/RJ", obs: "Fechada" },
+    { status: "cancelada", idPromotor: 2, nomePromotor: "B", nomeOficina: "Oficina 3", cidadeOficina: "Recife/PE", obs: "Fechada" },
+  ];
+
+  it("monta os insights validados quando indices e numeros batem — RELPROM-60", () => {
+    const resultado = construirInsightsCampo(DESTAQUES, VISAO_GERAL, [
+      { titulo: "Base com oficinas que não existem mais", indices: [0, 1, 2], descricao: "3 oficinas fechadas, 2 no Rio de Janeiro e 1 em Recife" },
+    ]);
+
+    expect(resultado).toEqual([
+      { titulo: "Base com oficinas que não existem mais", descricao: "3 oficinas fechadas, 2 no Rio de Janeiro e 1 em Recife" },
+    ]);
+  });
+
+  it("aceita numero da visao geral (contador macro, nao so do subconjunto do insight)", () => {
+    const resultado = construirInsightsCampo(DESTAQUES, VISAO_GERAL, [
+      { titulo: "Poucas observações", indices: [0], descricao: "Só 3 das 71 visitas concluídas têm observação" },
+    ]);
+
+    expect(resultado).not.toBeNull();
+  });
+
+  it("retorna null quando nao ha insight nenhum", () => {
+    expect(construirInsightsCampo(DESTAQUES, VISAO_GERAL, [])).toBeNull();
+  });
+
+  it("retorna null quando ha mais de 4 insights — RELPROM-61", () => {
+    const insight = { titulo: "T", indices: [0], descricao: "sem numero" };
+    expect(construirInsightsCampo(DESTAQUES, VISAO_GERAL, [insight, insight, insight, insight, insight])).toBeNull();
+  });
+
+  it("retorna null quando 1 indice esta fora do range — RELPROM-61", () => {
+    const resultado = construirInsightsCampo(DESTAQUES, VISAO_GERAL, [{ titulo: "T", indices: [99], descricao: "sem numero" }]);
+
+    expect(resultado).toBeNull();
+  });
+
+  it("retorna null quando o mesmo destaque aparece em 2 insights — RELPROM-61", () => {
+    const resultado = construirInsightsCampo(DESTAQUES, VISAO_GERAL, [
+      { titulo: "T1", indices: [0], descricao: "sem numero" },
+      { titulo: "T2", indices: [0], descricao: "sem numero" },
+    ]);
+
+    expect(resultado).toBeNull();
+  });
+
+  it("retorna null quando o titulo ou descricao cita numero que nao bate com nada real — RELPROM-62", () => {
+    const resultado = construirInsightsCampo(DESTAQUES, VISAO_GERAL, [
+      { titulo: "T", indices: [0], descricao: "999 oficinas com esse problema" },
+    ]);
+
+    expect(resultado).toBeNull();
+  });
+
+  it("nao exige cobrir todos os destaques — cobertura parcial e valida", () => {
+    const resultado = construirInsightsCampo(DESTAQUES, VISAO_GERAL, [{ titulo: "T", indices: [0], descricao: "sem numero" }]);
+
+    expect(resultado).toEqual([{ titulo: "T", descricao: "sem numero" }]);
   });
 });

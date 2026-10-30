@@ -31,6 +31,12 @@ export interface ResumoCancelamentoGrupo {
   justificativa: string;
 }
 
+/** Insight pronto pra desenhar na seção de destaques do campo (RELPROM-58 a 62). */
+export interface InsightCampo {
+  titulo: string;
+  descricao: string;
+}
+
 export interface CampanhaBlocoRelatorio {
   idCampanha: number;
   nomeCampanha: string;
@@ -43,6 +49,7 @@ export interface CampanhaBlocoRelatorio {
   proximosPassos: ProximosPassos;
   sintesesPorSecao?: SintesesPorSecao;
   resumoCancelamentos?: ResumoCancelamentoGrupo[];
+  insightsCampo?: InsightCampo[];
 }
 
 export interface RelatorioPromotorData {
