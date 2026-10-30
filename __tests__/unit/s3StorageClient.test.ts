@@ -44,7 +44,7 @@ describe("S3StorageClient.uploadPdf", () => {
     }
   });
 
-  it("chama PutObjectCommand com Bucket, Body, ContentType e ACL public-read — RELPROM-47", async () => {
+  it("chama PutObjectCommand com Bucket, Body, ContentType, sem ACL — bucket com ACL desabilitada rejeita", async () => {
     sendMock.mockResolvedValue({});
 
     await S3StorageClient.uploadPdf({ idCliente: 126, periodo: PERIODO, pdf: PDF });
@@ -54,8 +54,8 @@ describe("S3StorageClient.uploadPdf", () => {
       Bucket: "ob-relatorios",
       Body: PDF,
       ContentType: "application/pdf",
-      ACL: "public-read",
     });
+    expect(input.ACL).toBeUndefined();
     expect(input.Key).toContain("promotor-relatorio/126/");
   });
 

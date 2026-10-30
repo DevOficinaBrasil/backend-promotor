@@ -35,13 +35,16 @@ export default class S3StorageClient {
         },
       });
 
+      // Sem ACL: bucket com "Object Ownership: Bucket owner enforced" (padrão
+      // da AWS desde 2023) rejeita ACL por objeto ("the bucket does not allow
+      // ACLs") — confirmado em produção. Leitura pública, se o bucket
+      // permitir, vem de bucket policy (infra, fora do código), não de ACL.
       await client.send(
         new PutObjectCommand({
           Bucket: bucket,
           Key: chave,
           Body: params.pdf,
           ContentType: "application/pdf",
-          ACL: "public-read",
         })
       );
 
