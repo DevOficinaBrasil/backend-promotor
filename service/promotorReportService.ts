@@ -20,6 +20,7 @@ import { CampanhaBlocoRelatorio, RelatorioPromotorData } from "../types/promotor
 import PromotorReportPdfRenderer from "./promotorReportPdfRenderer";
 import ObAdsIntegrationClient from "./obAdsIntegrationClient";
 import S3StorageClient from "./s3StorageClient";
+import PromotorReportSintese from "./promotorReportSintese";
 import { resolverDestinatarios } from "../config/promotorReportRecipients";
 import { CLIENTES_PRODUCAO_HABILITADOS } from "../config/promotorReportClientesProducao";
 
@@ -205,6 +206,11 @@ export default class PromotorReportService {
     let pdf: Buffer;
     try {
       const dados = await this.gerarRelatorioCliente(cliente, periodo);
+      // RELPROM-49/51: gera a síntese por seção antes de renderizar o PDF —
+      // nunca lança, bloco sem síntese (parcial ou vazia) segue normalmente.
+      for (const bloco of dados.campanhas) {
+        bloco.sintesesPorSecao = await PromotorReportSintese.gerarSinteses(bloco);
+      }
       pdf = await PromotorReportPdfRenderer.renderizarPdf(dados);
     } catch (erro) {
       const motivoFalha = (erro as Error)?.message ?? "falha ao gerar o relatório";

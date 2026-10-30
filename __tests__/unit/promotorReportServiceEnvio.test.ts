@@ -15,6 +15,10 @@ jest.mock("../../service/s3StorageClient", () => ({
   __esModule: true,
   default: { uploadPdf: jest.fn() },
 }));
+jest.mock("../../service/promotorReportSintese", () => ({
+  __esModule: true,
+  default: { gerarSinteses: jest.fn() },
+}));
 
 import { AppDataSourceSync } from "../../data-source";
 import PromotorReportService from "../../service/promotorReportService";
@@ -23,11 +27,14 @@ import PromotorReportPdfRenderer from "../../service/promotorReportPdfRenderer";
 import ObAdsIntegrationClient from "../../service/obAdsIntegrationClient";
 import { resolverDestinatarios } from "../../config/promotorReportRecipients";
 import S3StorageClient from "../../service/s3StorageClient";
+import PromotorReportSintese from "../../service/promotorReportSintese";
 import { PeriodoRelatorio } from "../../utils/promotorReportCalculos";
+import { CampanhaBlocoRelatorio } from "../../types/promotorRelatorio";
 
 const renderizarPdf = PromotorReportPdfRenderer.renderizarPdf as jest.Mock;
 const enviarEmailComAnexo = ObAdsIntegrationClient.enviarEmailComAnexo as jest.Mock;
 const resolverDestinatariosMock = resolverDestinatarios as jest.Mock;
+const gerarSinteses = PromotorReportSintese.gerarSinteses as jest.Mock;
 const uploadPdf = S3StorageClient.uploadPdf as jest.Mock;
 
 const PERIODO: PeriodoRelatorio = {
@@ -52,6 +59,7 @@ beforeEach(() => {
   resolverDestinatariosMock.mockReturnValue({ destinatarios: ["admin@skf.com"], adminsReaisParaLog: ["admin@skf.com"] });
   enviarEmailComAnexo.mockResolvedValue({ sucesso: true });
   uploadPdf.mockResolvedValue({ sucesso: true, url: "https://bucket.s3.amazonaws.com/relatorio.pdf" });
+  gerarSinteses.mockResolvedValue({});
 
   createMock = jest.fn((data: unknown) => data);
   saveMock = jest.fn((data: unknown) => Promise.resolve(data));
@@ -179,5 +187,58 @@ describe("PromotorReportService.processarRelatorioCliente", () => {
     await PromotorReportService.processarRelatorioCliente(CLIENTE, PERIODO, OrigemRelatorioEnvio.MANUAL);
 
     expect(saveMock).toHaveBeenCalledWith(expect.objectContaining({ ORIGEM: OrigemRelatorioEnvio.MANUAL }));
+  });
+
+  it("anexa a sintese por secao em cada bloco antes de renderizar o pdf — RELPROM-49", async () => {
+    const bloco: CampanhaBlocoRelatorio = {
+      idCampanha: 1,
+      nomeCampanha: "Campanha SKF",
+      visaoGeral: { concluidas: 71, canceladas: 21, abertasNaRota: 132 },
+      visitasPorDia: [],
+      assertividade: 77,
+      porPromotor: [],
+      cancelamentos: [],
+      destaquesDeCampo: [],
+      proximosPassos: { abertasNaRota: 132, canceladasARedistribuir: 21, promotoresSemRegistro: 1 },
+    };
+    (PromotorReportService.gerarRelatorioCliente as jest.Mock).mockResolvedValue({
+      idCliente: 10,
+      nomeCliente: "SKF",
+      periodo: PERIODO,
+      campanhas: [bloco],
+    });
+    gerarSinteses.mockResolvedValue({ visaoGeral: "71 concluidas no periodo" });
+
+    await PromotorReportService.processarRelatorioCliente(CLIENTE, PERIODO, OrigemRelatorioEnvio.CRON);
+
+    expect(gerarSinteses).toHaveBeenCalledWith(expect.objectContaining({ idCampanha: 1 }));
+    const [dadosPassadosPraRenderer] = renderizarPdf.mock.calls[0];
+    expect(dadosPassadosPraRenderer.campanhas[0].sintesesPorSecao).toEqual({ visaoGeral: "71 concluidas no periodo" });
+  });
+
+  it("sintese vazia/parcial (ex.: ia fora do ar) nunca impede o pdf nem o envio — RELPROM-51", async () => {
+    const bloco: CampanhaBlocoRelatorio = {
+      idCampanha: 1,
+      nomeCampanha: "Campanha SKF",
+      visaoGeral: { concluidas: 71, canceladas: 21, abertasNaRota: 132 },
+      visitasPorDia: [],
+      assertividade: 77,
+      porPromotor: [],
+      cancelamentos: [],
+      destaquesDeCampo: [],
+      proximosPassos: { abertasNaRota: 132, canceladasARedistribuir: 21, promotoresSemRegistro: 1 },
+    };
+    (PromotorReportService.gerarRelatorioCliente as jest.Mock).mockResolvedValue({
+      idCliente: 10,
+      nomeCliente: "SKF",
+      periodo: PERIODO,
+      campanhas: [bloco],
+    });
+    gerarSinteses.mockResolvedValue({});
+
+    const resultado = await PromotorReportService.processarRelatorioCliente(CLIENTE, PERIODO, OrigemRelatorioEnvio.CRON);
+
+    expect(resultado.enviado).toBe(true);
+    expect(enviarEmailComAnexo).toHaveBeenCalled();
   });
 });

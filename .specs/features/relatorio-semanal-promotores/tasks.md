@@ -1183,16 +1183,16 @@ Adicionada depois do Verifier dar PASS (3ª iteração). 2 pedidos do usuário: 
 - Skill: NONE
 
 **Done when**:
-- [ ] Todo bloco de campanha do cliente passa por `gerarSinteses` antes do PDF ser renderizado
-- [ ] `sintesesPorSecao` (mesmo vazio/parcial) nunca impede a renderização do PDF nem o envio do e-mail
-- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportService.test.ts` (sem regressão + novo caso confirmando o wiring)
+- [x] Todo bloco de campanha do cliente passa por `gerarSinteses` antes do PDF ser renderizado
+- [x] `sintesesPorSecao` (mesmo vazio/parcial) nunca impede a renderização do PDF nem o envio do e-mail
+- [x] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportServiceEnvio.test.ts` (15 passed, sem regressão + 2 novos casos confirmando o wiring)
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(promotor-relatorio): anexa sintese por secao antes de renderizar o pdf`
 
-**Status**: ⬜ Pending
+**Status**: ✅ Complete
 
 ---
 
