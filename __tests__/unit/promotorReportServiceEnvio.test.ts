@@ -17,7 +17,7 @@ jest.mock("../../service/s3StorageClient", () => ({
 }));
 jest.mock("../../service/promotorReportSintese", () => ({
   __esModule: true,
-  default: { gerarSinteses: jest.fn() },
+  default: { gerarSinteses: jest.fn(), gerarResumoCancelamentos: jest.fn() },
 }));
 
 import { AppDataSourceSync } from "../../data-source";
@@ -35,6 +35,7 @@ const renderizarPdf = PromotorReportPdfRenderer.renderizarPdf as jest.Mock;
 const enviarEmailComAnexo = ObAdsIntegrationClient.enviarEmailComAnexo as jest.Mock;
 const resolverDestinatariosMock = resolverDestinatarios as jest.Mock;
 const gerarSinteses = PromotorReportSintese.gerarSinteses as jest.Mock;
+const gerarResumoCancelamentos = PromotorReportSintese.gerarResumoCancelamentos as jest.Mock;
 const uploadPdf = S3StorageClient.uploadPdf as jest.Mock;
 
 const PERIODO: PeriodoRelatorio = {
@@ -60,6 +61,7 @@ beforeEach(() => {
   enviarEmailComAnexo.mockResolvedValue({ sucesso: true });
   uploadPdf.mockResolvedValue({ sucesso: true, url: "https://bucket.s3.amazonaws.com/relatorio.pdf" });
   gerarSinteses.mockResolvedValue({});
+  gerarResumoCancelamentos.mockResolvedValue(null);
 
   createMock = jest.fn((data: unknown) => data);
   saveMock = jest.fn((data: unknown) => Promise.resolve(data));
@@ -240,5 +242,84 @@ describe("PromotorReportService.processarRelatorioCliente", () => {
 
     expect(resultado.enviado).toBe(true);
     expect(enviarEmailComAnexo).toHaveBeenCalled();
+  });
+
+  it("anexa o resumo de cancelamentos quando o bloco tem cancelamento e a ia valida — RELPROM-53", async () => {
+    const bloco: CampanhaBlocoRelatorio = {
+      idCampanha: 1,
+      nomeCampanha: "Campanha SKF",
+      visaoGeral: { concluidas: 71, canceladas: 21, abertasNaRota: 132 },
+      visitasPorDia: [],
+      assertividade: 77,
+      porPromotor: [],
+      cancelamentos: [{ idPromotor: 2, nomePromotor: "José", nomeOficina: "Real Car", cidadeOficina: "Belo Horizonte/MG", obs: "Folga" }],
+      destaquesDeCampo: [],
+      proximosPassos: { abertasNaRota: 132, canceladasARedistribuir: 21, promotoresSemRegistro: 1 },
+    };
+    (PromotorReportService.gerarRelatorioCliente as jest.Mock).mockResolvedValue({
+      idCliente: 10,
+      nomeCliente: "SKF",
+      periodo: PERIODO,
+      campanhas: [bloco],
+    });
+    const resumo = [{ promotor: "José", oficinas: ["Real Car"], cidade: "Belo Horizonte/MG", justificativa: "Folga do promotor" }];
+    gerarResumoCancelamentos.mockResolvedValue(resumo);
+
+    await PromotorReportService.processarRelatorioCliente(CLIENTE, PERIODO, OrigemRelatorioEnvio.CRON);
+
+    expect(gerarResumoCancelamentos).toHaveBeenCalledWith(bloco.cancelamentos);
+    const [dadosPassadosPraRenderer] = renderizarPdf.mock.calls[0];
+    expect(dadosPassadosPraRenderer.campanhas[0].resumoCancelamentos).toEqual(resumo);
+  });
+
+  it("nao chama gerarResumoCancelamentos quando o bloco nao tem cancelamento", async () => {
+    const bloco: CampanhaBlocoRelatorio = {
+      idCampanha: 1,
+      nomeCampanha: "Campanha SKF",
+      visaoGeral: { concluidas: 71, canceladas: 0, abertasNaRota: 132 },
+      visitasPorDia: [],
+      assertividade: "N/A",
+      porPromotor: [],
+      cancelamentos: [],
+      destaquesDeCampo: [],
+      proximosPassos: { abertasNaRota: 132, canceladasARedistribuir: 0, promotoresSemRegistro: 1 },
+    };
+    (PromotorReportService.gerarRelatorioCliente as jest.Mock).mockResolvedValue({
+      idCliente: 10,
+      nomeCliente: "SKF",
+      periodo: PERIODO,
+      campanhas: [bloco],
+    });
+
+    await PromotorReportService.processarRelatorioCliente(CLIENTE, PERIODO, OrigemRelatorioEnvio.CRON);
+
+    expect(gerarResumoCancelamentos).not.toHaveBeenCalled();
+  });
+
+  it("resumo nulo (falha/validacao) nao anexa resumoCancelamentos nem impede o envio — RELPROM-57", async () => {
+    const bloco: CampanhaBlocoRelatorio = {
+      idCampanha: 1,
+      nomeCampanha: "Campanha SKF",
+      visaoGeral: { concluidas: 71, canceladas: 21, abertasNaRota: 132 },
+      visitasPorDia: [],
+      assertividade: 77,
+      porPromotor: [],
+      cancelamentos: [{ idPromotor: 2, nomePromotor: "José", nomeOficina: "Real Car", cidadeOficina: "Belo Horizonte/MG", obs: "Folga" }],
+      destaquesDeCampo: [],
+      proximosPassos: { abertasNaRota: 132, canceladasARedistribuir: 21, promotoresSemRegistro: 1 },
+    };
+    (PromotorReportService.gerarRelatorioCliente as jest.Mock).mockResolvedValue({
+      idCliente: 10,
+      nomeCliente: "SKF",
+      periodo: PERIODO,
+      campanhas: [bloco],
+    });
+    gerarResumoCancelamentos.mockResolvedValue(null);
+
+    const resultado = await PromotorReportService.processarRelatorioCliente(CLIENTE, PERIODO, OrigemRelatorioEnvio.CRON);
+
+    expect(resultado.enviado).toBe(true);
+    const [dadosPassadosPraRenderer] = renderizarPdf.mock.calls[0];
+    expect(dadosPassadosPraRenderer.campanhas[0].resumoCancelamentos).toBeUndefined();
   });
 });

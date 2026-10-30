@@ -210,6 +210,13 @@ export default class PromotorReportService {
       // nunca lança, bloco sem síntese (parcial ou vazia) segue normalmente.
       for (const bloco of dados.campanhas) {
         bloco.sintesesPorSecao = await PromotorReportSintese.gerarSinteses(bloco);
+        // RELPROM-53/57: resumo agrupado de cancelamentos — só tenta quando
+        // há cancelamento; `null` (falha/validação) deixa a chave ausente, e
+        // o renderer cai pra tabela detalhada de hoje.
+        if (bloco.cancelamentos.length > 0) {
+          const resumo = await PromotorReportSintese.gerarResumoCancelamentos(bloco.cancelamentos);
+          if (resumo) bloco.resumoCancelamentos = resumo;
+        }
       }
       pdf = await PromotorReportPdfRenderer.renderizarPdf(dados);
     } catch (erro) {

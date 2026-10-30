@@ -1305,17 +1305,17 @@ Adicionada depois do Verifier dar PASS (3ª iteração). 2 pedidos do usuário: 
 - Skill: NONE
 
 **Done when**:
-- [ ] Bloco com cancelamentos → `gerarResumoCancelamentos` chamado, resultado anexado quando não `null`
-- [ ] Bloco sem cancelamentos (`length === 0`) → `gerarResumoCancelamentos` não é chamado
-- [ ] `null` (falha/validação) → `bloco.resumoCancelamentos` fica ausente, PDF renderiza normalmente (tabela detalhada)
-- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportServiceEnvio.test.ts` (sem regressão + novo caso)
+- [x] Bloco com cancelamentos → `gerarResumoCancelamentos` chamado, resultado anexado quando não `null`
+- [x] Bloco sem cancelamentos (`length === 0`) → `gerarResumoCancelamentos` não é chamado
+- [x] `null` (falha/validação) → `bloco.resumoCancelamentos` fica ausente, PDF renderiza normalmente (tabela detalhada)
+- [x] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportServiceEnvio.test.ts` (18 passed, sem regressão + 3 novos casos)
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(promotor-relatorio): anexa resumo de cancelamentos antes de renderizar o pdf`
 
-**Status**: ⬜ Pending
+**Status**: ✅ Complete
 
 ---
 
