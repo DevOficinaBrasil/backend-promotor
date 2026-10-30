@@ -67,8 +67,17 @@ export interface VisaoGeralCampanha {
 
 export interface PontoVisitasPorDia {
   dia: string; // dd/MM, America/Sao_Paulo
+  diaSemana: string; // abreviação pt-BR ("dom".."sáb"), mesmo índice de DIAS_SEMANA_ABREV
   concluidas: number;
   canceladas: number;
+}
+
+const DIAS_SEMANA_ABREV = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+const DIAS_SEMANA_EXTENSO = ["domingo", "segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado"];
+
+export interface DestaqueDiaPico {
+  dia: string; // mesmo formato de PontoVisitasPorDia.dia — pro renderer saber qual dia destacar
+  texto: string;
 }
 
 export interface LinhaPromotor {
@@ -157,8 +166,32 @@ export function agruparVisitasPorDia(rotas: RotaPromotorRow[], periodo: PeriodoR
     .sort(([chaveA], [chaveB]) => chaveA.localeCompare(chaveB))
     .map(([chave, valores]) => ({
       dia: `${chave.slice(8, 10)}/${chave.slice(5, 7)}`,
+      diaSemana: DIAS_SEMANA_ABREV[new Date(`${chave}T12:00:00Z`).getUTCDay()],
       ...valores,
     }));
+}
+
+/**
+ * Frase de destaque do dia com mais visitas concluídas no período, igual ao
+ * modelo do CON26-325 ("A quinta-feira 15/10 concentrou 52 das 71 visitas do
+ * período."). Deterministico — não usa IA, só escolhe o dia de maior
+ * `concluidas` e formata. `null` quando não há nenhuma visita concluída no
+ * período (nada a destacar).
+ */
+export function descreverDiaPico(pontos: PontoVisitasPorDia[], totalConcluidasPeriodo: number): DestaqueDiaPico | null {
+  if (totalConcluidasPeriodo <= 0 || pontos.length === 0) return null;
+
+  const pico = pontos.reduce((maior, atual) => (atual.concluidas > maior.concluidas ? atual : maior), pontos[0]);
+  if (pico.concluidas <= 0) return null;
+
+  const indice = DIAS_SEMANA_ABREV.indexOf(pico.diaSemana);
+  const extenso = DIAS_SEMANA_EXTENSO[indice];
+  const artigo = indice === 0 || indice === 6 ? "O" : "A";
+
+  return {
+    dia: pico.dia,
+    texto: `${artigo} ${extenso} ${pico.dia} concentrou ${pico.concluidas} das ${totalConcluidasPeriodo} visitas do período.`,
+  };
 }
 
 /** RELPROM-05, RELPROM-06. */

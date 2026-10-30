@@ -2,6 +2,7 @@ import { StatusRota } from "../../entities/RotaPromotor";
 import {
   agruparPorPromotor,
   agruparVisitasPorDia,
+  descreverDiaPico,
   calcularAssertividade,
   calcularPeriodoSemanal,
   calcularProximosPassos,
@@ -228,9 +229,9 @@ describe("agruparVisitasPorDia", () => {
     ];
 
     expect(agruparVisitasPorDia(rotas, PERIODO)).toEqual([
-      { dia: "14/10", concluidas: 0, canceladas: 1 },
-      { dia: "15/10", concluidas: 2, canceladas: 0 },
-      { dia: "16/10", concluidas: 1, canceladas: 0 },
+      { dia: "14/10", diaSemana: "qua", concluidas: 0, canceladas: 1 },
+      { dia: "15/10", diaSemana: "qui", concluidas: 2, canceladas: 0 },
+      { dia: "16/10", diaSemana: "sex", concluidas: 1, canceladas: 0 },
     ]);
   });
 
@@ -253,6 +254,32 @@ describe("agruparVisitasPorDia", () => {
     const rotas = [rota({ STATUS: StatusRota.FINALIZADO, DONE_AT: new Date("2026-09-01T10:00:00-03:00") })];
 
     expect(agruparVisitasPorDia(rotas, PERIODO)).toEqual([]);
+  });
+});
+
+describe("descreverDiaPico", () => {
+  const PONTOS = [
+    { dia: "13/10", diaSemana: "ter", concluidas: 2, canceladas: 0 },
+    { dia: "14/10", diaSemana: "qua", concluidas: 4, canceladas: 0 },
+    { dia: "15/10", diaSemana: "qui", concluidas: 52, canceladas: 16 },
+  ];
+
+  it("escolhe o dia com mais concluidas e formata a frase — igual ao modelo do CON26-325", () => {
+    expect(descreverDiaPico(PONTOS, 71)).toEqual({
+      dia: "15/10",
+      texto: "A quinta-feira 15/10 concentrou 52 das 71 visitas do período.",
+    });
+  });
+
+  it("usa artigo 'O' pra domingo/sabado", () => {
+    const pontos = [{ dia: "18/10", diaSemana: "sáb", concluidas: 5, canceladas: 0 }];
+
+    expect(descreverDiaPico(pontos, 5)?.texto).toBe("O sábado 18/10 concentrou 5 das 5 visitas do período.");
+  });
+
+  it("retorna null quando nao ha nenhuma visita concluida no periodo", () => {
+    expect(descreverDiaPico([], 0)).toBeNull();
+    expect(descreverDiaPico([{ dia: "13/10", diaSemana: "ter", concluidas: 0, canceladas: 3 }], 0)).toBeNull();
   });
 });
 
