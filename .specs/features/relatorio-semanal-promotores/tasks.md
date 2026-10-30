@@ -1014,17 +1014,17 @@ Adicionada depois do Verifier dar PASS (3ª iteração). 2 pedidos do usuário: 
 - Skill: NONE
 
 **Done when**:
-- [ ] `ALTER TABLE "CAMPANHAS_OB"."PROMOTOR_RELATORIO_ENVIO" ADD COLUMN IF NOT EXISTS "LINK_PDF" TEXT`
-- [ ] Cabeçalho com bloco `ROLLBACK:` (`ALTER TABLE ... DROP COLUMN "LINK_PDF"`)
-- [ ] `COMMENT ON COLUMN` documentando o propósito (URL pública do PDF no S3, nulo quando preview ou falha de upload)
-- [ ] Nenhuma execução automática — a task só cria o arquivo
+- [x] `ALTER TABLE "CAMPANHAS_OB"."PROMOTOR_RELATORIO_ENVIO" ADD COLUMN IF NOT EXISTS "LINK_PDF" TEXT`
+- [x] Cabeçalho com bloco `ROLLBACK:` (`ALTER TABLE ... DROP COLUMN "LINK_PDF"`)
+- [x] `COMMENT ON COLUMN` documentando o propósito (URL pública do PDF no S3, nulo quando preview ou falha de upload)
+- [x] Nenhuma execução automática — a task só criou o arquivo
 
 **Tests**: none
 **Gate**: nenhum — revisão manual, execução manual pelo usuário
 
 **Commit**: `chore(promotor-relatorio): script de migration da coluna link_pdf`
 
-**Status**: ⬜ Pending
+**Status**: ✅ Complete
 
 ---
 
