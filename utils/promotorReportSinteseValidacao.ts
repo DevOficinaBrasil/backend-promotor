@@ -1,4 +1,5 @@
-import { CampanhaBlocoRelatorio, SecaoRelatorio } from "../types/promotorRelatorio";
+import { CampanhaBlocoRelatorio, ResumoCancelamentoGrupo, SecaoRelatorio } from "../types/promotorRelatorio";
+import { Cancelamento } from "./promotorReportCalculos";
 
 /**
  * Guardrail anti-alucinação da síntese gerada por IA (RELPROM-50). Puro, sem
@@ -71,4 +72,51 @@ export function numerosValidosDaSecao(secao: SecaoRelatorio, bloco: CampanhaBloc
     default:
       return [];
   }
+}
+
+/** Shape cru devolvido pela IA — só agrupamento (índices) + justificativa, nunca promotor/oficina/cidade (RELPROM-54). */
+export interface GrupoCancelamentoBruto {
+  indices: number[];
+  justificativa: string;
+}
+
+/**
+ * Valida o agrupamento bruto da IA e monta as linhas prontas pra desenhar
+ * (RELPROM-54 a 56). `null` quando os índices não cobrirem cada cancelamento
+ * exatamente 1 vez, ou quando a justificativa de algum grupo citar um número
+ * que não bate com o tamanho daquele grupo — nessas falhas, o chamador deve
+ * cair pra tabela detalhada (RELPROM-55).
+ */
+export function construirResumoCancelamentos(
+  cancelamentos: Cancelamento[],
+  gruposBrutos: GrupoCancelamentoBruto[]
+): ResumoCancelamentoGrupo[] | null {
+  if (gruposBrutos.length === 0) return null;
+
+  const cobertura = new Array(cancelamentos.length).fill(false);
+  for (const grupo of gruposBrutos) {
+    for (const indice of grupo.indices) {
+      if (indice < 0 || indice >= cancelamentos.length || cobertura[indice]) return null;
+      cobertura[indice] = true;
+    }
+  }
+  if (cobertura.some((coberto) => !coberto)) return null;
+
+  const resultado: ResumoCancelamentoGrupo[] = [];
+  for (const grupo of gruposBrutos) {
+    if (!validarSintese(grupo.justificativa, [grupo.indices.length])) return null;
+
+    const itens = grupo.indices.map((indice) => cancelamentos[indice]);
+    const promotores = new Set(itens.map((item) => item.nomePromotor));
+    const cidades = new Set(itens.map((item) => item.cidadeOficina));
+
+    resultado.push({
+      promotor: promotores.size === 1 ? itens[0].nomePromotor : "Vários",
+      oficinas: itens.map((item) => item.nomeOficina),
+      cidade: cidades.size === 1 ? itens[0].cidadeOficina : "Várias",
+      justificativa: grupo.justificativa,
+    });
+  }
+
+  return resultado;
 }

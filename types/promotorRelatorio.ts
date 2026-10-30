@@ -19,6 +19,18 @@ export type SecaoRelatorio =
 /** RELPROM-49/50/51: só as seções com frase validada aparecem aqui. */
 export type SintesesPorSecao = Partial<Record<SecaoRelatorio, string>>;
 
+/**
+ * Linha pronta pra desenhar na tabela resumo de cancelamentos (RELPROM-53 a
+ * 56) — promotor/oficinas/cidade sempre vêm dos dados reais, só
+ * `justificativa` vem (validada) da IA.
+ */
+export interface ResumoCancelamentoGrupo {
+  promotor: string;
+  oficinas: string[];
+  cidade: string;
+  justificativa: string;
+}
+
 export interface CampanhaBlocoRelatorio {
   idCampanha: number;
   nomeCampanha: string;
@@ -30,6 +42,7 @@ export interface CampanhaBlocoRelatorio {
   destaquesDeCampo: DestaqueCampo[];
   proximosPassos: ProximosPassos;
   sintesesPorSecao?: SintesesPorSecao;
+  resumoCancelamentos?: ResumoCancelamentoGrupo[];
 }
 
 export interface RelatorioPromotorData {

@@ -1,5 +1,6 @@
-import { extrairNumeros, validarSintese, numerosValidosDaSecao } from "../../utils/promotorReportSinteseValidacao";
+import { extrairNumeros, validarSintese, numerosValidosDaSecao, construirResumoCancelamentos } from "../../utils/promotorReportSinteseValidacao";
 import { CampanhaBlocoRelatorio } from "../../types/promotorRelatorio";
+import { Cancelamento } from "../../utils/promotorReportCalculos";
 
 const BLOCO: CampanhaBlocoRelatorio = {
   idCampanha: 1,
@@ -75,5 +76,70 @@ describe("numerosValidosDaSecao", () => {
 
   it("proximosPassos: abertasNaRota, canceladasARedistribuir, promotoresSemRegistro", () => {
     expect(numerosValidosDaSecao("proximosPassos", BLOCO)).toEqual([132, 21, 1]);
+  });
+});
+
+describe("construirResumoCancelamentos", () => {
+  const CANCELAMENTOS: Cancelamento[] = [
+    { idPromotor: 2, nomePromotor: "José", nomeOficina: "Real Car", cidadeOficina: "Belo Horizonte/MG", obs: "Folga" },
+    { idPromotor: 2, nomePromotor: "José", nomeOficina: "Ricar", cidadeOficina: "Belo Horizonte/MG", obs: "Folga" },
+    { idPromotor: 1, nomePromotor: "Willian", nomeOficina: "Oficina Center", cidadeOficina: "Contagem/MG", obs: "Fechada" },
+  ];
+
+  it("monta 1 linha por grupo, com promotor/oficinas/cidade dos dados reais — RELPROM-54", () => {
+    const resultado = construirResumoCancelamentos(CANCELAMENTOS, [
+      { indices: [0, 1], justificativa: "2 oficinas canceladas por folga do promotor" },
+      { indices: [2], justificativa: "Oficina fechada no dia da visita" },
+    ]);
+
+    expect(resultado).toEqual([
+      { promotor: "José", oficinas: ["Real Car", "Ricar"], cidade: "Belo Horizonte/MG", justificativa: "2 oficinas canceladas por folga do promotor" },
+      { promotor: "Willian", oficinas: ["Oficina Center"], cidade: "Contagem/MG", justificativa: "Oficina fechada no dia da visita" },
+    ]);
+  });
+
+  it("usa 'Varios'/'Varias' quando o grupo mistura promotor ou cidade diferentes", () => {
+    const cancelamentos: Cancelamento[] = [
+      { idPromotor: 1, nomePromotor: "Willian", nomeOficina: "A", cidadeOficina: "São Paulo/SP", obs: null },
+      { idPromotor: 2, nomePromotor: "José", nomeOficina: "B", cidadeOficina: "Recife/PE", obs: null },
+    ];
+
+    const resultado = construirResumoCancelamentos(cancelamentos, [{ indices: [0, 1], justificativa: "Fora da area do promotor" }]);
+
+    expect(resultado).toEqual([{ promotor: "Vários", oficinas: ["A", "B"], cidade: "Várias", justificativa: "Fora da area do promotor" }]);
+  });
+
+  it("retorna null quando falta cobrir 1 cancelamento — RELPROM-55", () => {
+    const resultado = construirResumoCancelamentos(CANCELAMENTOS, [{ indices: [0, 1], justificativa: "Folga" }]);
+
+    expect(resultado).toBeNull();
+  });
+
+  it("retorna null quando 1 indice se repete em 2 grupos — RELPROM-55", () => {
+    const resultado = construirResumoCancelamentos(CANCELAMENTOS, [
+      { indices: [0, 1], justificativa: "Folga" },
+      { indices: [1, 2], justificativa: "Outro motivo" },
+    ]);
+
+    expect(resultado).toBeNull();
+  });
+
+  it("retorna null quando 1 indice esta fora do range — RELPROM-55", () => {
+    const resultado = construirResumoCancelamentos(CANCELAMENTOS, [{ indices: [0, 1, 99], justificativa: "Folga" }]);
+
+    expect(resultado).toBeNull();
+  });
+
+  it("retorna null quando a justificativa de 1 grupo cita numero que nao bate com o tamanho do grupo — RELPROM-56", () => {
+    const resultado = construirResumoCancelamentos(CANCELAMENTOS, [
+      { indices: [0, 1], justificativa: "2 oficinas canceladas" },
+      { indices: [2], justificativa: "5 oficinas canceladas por esse motivo" }, // grupo tem 1, nao 5
+    ]);
+
+    expect(resultado).toBeNull();
+  });
+
+  it("retorna null quando nao ha grupo nenhum", () => {
+    expect(construirResumoCancelamentos(CANCELAMENTOS, [])).toBeNull();
   });
 });

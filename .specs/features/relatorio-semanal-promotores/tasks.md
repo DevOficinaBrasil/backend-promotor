@@ -1248,18 +1248,18 @@ Adicionada depois do Verifier dar PASS (3ª iteração). 2 pedidos do usuário: 
 - Skill: NONE
 
 **Done when**:
-- [ ] Cobertura 1:1 dos índices (falta 1, repete 1, ou índice fora do range) → `null`
-- [ ] Justificativa de 1 grupo com número que não bate com `indices.length` daquele grupo → `null` (mesmo com os demais grupos válidos — falha de 1 descarta tudo, RELPROM-56)
-- [ ] `promotor`: nome comum se todo o grupo for do mesmo promotor, `"Vários"` senão; `cidade`: mesma lógica com `"Várias"`; `oficinas`: lista de `nomeOficina` direto dos `cancelamentos` reais, nunca da IA
-- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportSinteseValidacao.test.ts` (sem regressão + novos casos)
-- [ ] `npx tsc --noEmit` sem erro novo
+- [x] Cobertura 1:1 dos índices (falta 1, repete 1, ou índice fora do range) → `null`
+- [x] Justificativa de 1 grupo com número que não bate com `indices.length` daquele grupo → `null` (mesmo com os demais grupos válidos — falha de 1 descarta tudo, RELPROM-56)
+- [x] `promotor`: nome comum se todo o grupo for do mesmo promotor, `"Vários"` senão; `cidade`: mesma lógica com `"Várias"`; `oficinas`: lista de `nomeOficina` direto dos `cancelamentos` reais, nunca da IA
+- [x] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportSinteseValidacao.test.ts` (19 passed, sem regressão + 7 novos casos)
+- [x] `npx tsc --noEmit` sem erro novo
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(promotor-relatorio): valida e monta resumo agrupado de cancelamentos`
 
-**Status**: ⬜ Pending
+**Status**: ✅ Complete
 
 ---
 
