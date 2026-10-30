@@ -1125,17 +1125,17 @@ Adicionada depois do Verifier dar PASS (3ª iteração). 2 pedidos do usuário: 
 - Skill: NONE
 
 **Done when**:
-- [ ] `extrairNumeros` pega inteiros, decimais e percentuais (ex.: "77%" vira `77`)
-- [ ] `validarSintese` retorna `true` pra frase sem nenhum número (nada a contradizer) e pra frase só com números presentes em `numerosValidos`; `false` se achar 1 número fora do conjunto
-- [ ] `numerosValidosDaSecao` tem 1 teste por seção: visão geral (`concluidas`, `canceladas`, `abertasNaRota`), assertividade (os 2 anteriores + a soma + o percentual), por promotor (os 4 contadores de cada linha + os totais), cancelamentos (`cancelamentos.length`), destaques (contagem de concluídas/canceladas com OBS), próximos passos (os 3 contadores)
-- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportSinteseValidacao.test.ts`
+- [x] `extrairNumeros` pega inteiros, decimais e percentuais (ex.: "77%" vira `77`)
+- [x] `validarSintese` retorna `true` pra frase sem nenhum número (nada a contradizer) e pra frase só com números presentes em `numerosValidos`; `false` se achar 1 número fora do conjunto
+- [x] `numerosValidosDaSecao` tem 1 teste por seção: visão geral (`concluidas`, `canceladas`, `abertasNaRota`), assertividade (os 2 anteriores + a soma + o percentual), por promotor (os 4 contadores de cada linha + os totais), cancelamentos (`cancelamentos.length`), destaques (contagem de concluídas/canceladas com OBS), próximos passos (os 3 contadores)
+- [x] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportSinteseValidacao.test.ts` (12 passed)
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(promotor-relatorio): valida sintese de ia contra os dados calculados`
 
-**Status**: ⬜ Pending
+**Status**: ✅ Complete
 
 ---
 
