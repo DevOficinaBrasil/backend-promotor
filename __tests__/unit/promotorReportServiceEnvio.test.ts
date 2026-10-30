@@ -11,6 +11,10 @@ jest.mock("../../config/promotorReportRecipients", () => ({
   __esModule: true,
   resolverDestinatarios: jest.fn(),
 }));
+jest.mock("../../service/s3StorageClient", () => ({
+  __esModule: true,
+  default: { uploadPdf: jest.fn() },
+}));
 
 import { AppDataSourceSync } from "../../data-source";
 import PromotorReportService from "../../service/promotorReportService";
@@ -18,11 +22,13 @@ import { OrigemRelatorioEnvio, StatusRelatorioEnvio } from "../../entities/Promo
 import PromotorReportPdfRenderer from "../../service/promotorReportPdfRenderer";
 import ObAdsIntegrationClient from "../../service/obAdsIntegrationClient";
 import { resolverDestinatarios } from "../../config/promotorReportRecipients";
+import S3StorageClient from "../../service/s3StorageClient";
 import { PeriodoRelatorio } from "../../utils/promotorReportCalculos";
 
 const renderizarPdf = PromotorReportPdfRenderer.renderizarPdf as jest.Mock;
 const enviarEmailComAnexo = ObAdsIntegrationClient.enviarEmailComAnexo as jest.Mock;
 const resolverDestinatariosMock = resolverDestinatarios as jest.Mock;
+const uploadPdf = S3StorageClient.uploadPdf as jest.Mock;
 
 const PERIODO: PeriodoRelatorio = {
   inicio: new Date("2026-10-09T00:00:00-03:00"),
@@ -45,6 +51,7 @@ beforeEach(() => {
   renderizarPdf.mockResolvedValue(PDF);
   resolverDestinatariosMock.mockReturnValue({ destinatarios: ["admin@skf.com"], adminsReaisParaLog: ["admin@skf.com"] });
   enviarEmailComAnexo.mockResolvedValue({ sucesso: true });
+  uploadPdf.mockResolvedValue({ sucesso: true, url: "https://bucket.s3.amazonaws.com/relatorio.pdf" });
 
   createMock = jest.fn((data: unknown) => data);
   saveMock = jest.fn((data: unknown) => Promise.resolve(data));
@@ -76,6 +83,31 @@ describe("PromotorReportService.processarRelatorioCliente", () => {
     expect(resultado).toEqual({ idCliente: 10, pdf: PDF, enviado: false });
     expect(enviarEmailComAnexo).not.toHaveBeenCalled();
     expect(saveMock).not.toHaveBeenCalled();
+  });
+
+  it("modo preview (enviarEmail:false) nao sobe o pdf pro s3 — RELPROM-48", async () => {
+    await PromotorReportService.processarRelatorioCliente(CLIENTE, PERIODO, OrigemRelatorioEnvio.MANUAL, { enviarEmail: false });
+
+    expect(uploadPdf).not.toHaveBeenCalled();
+  });
+
+  it("sobe o pdf pro s3 e grava LINK_PDF na auditoria quando o upload da certo — RELPROM-45", async () => {
+    await PromotorReportService.processarRelatorioCliente(CLIENTE, PERIODO, OrigemRelatorioEnvio.CRON);
+
+    expect(uploadPdf).toHaveBeenCalledWith({ idCliente: 10, periodo: PERIODO, pdf: PDF });
+    expect(saveMock).toHaveBeenCalledWith(
+      expect.objectContaining({ LINK_PDF: "https://bucket.s3.amazonaws.com/relatorio.pdf" })
+    );
+  });
+
+  it("falha no upload pro s3 nao bloqueia o envio: grava LINK_PDF nulo, e-mail sai normal — RELPROM-46", async () => {
+    uploadPdf.mockResolvedValue({ sucesso: false, motivo: "AccessControlListNotSupported" });
+
+    const resultado = await PromotorReportService.processarRelatorioCliente(CLIENTE, PERIODO, OrigemRelatorioEnvio.CRON);
+
+    expect(resultado).toEqual({ idCliente: 10, pdf: PDF, enviado: true });
+    expect(enviarEmailComAnexo).toHaveBeenCalled();
+    expect(saveMock).toHaveBeenCalledWith(expect.objectContaining({ LINK_PDF: null }));
   });
 
   it("isola falha de geração/PDF: não lança, grava FALHA — RELPROM-17", async () => {

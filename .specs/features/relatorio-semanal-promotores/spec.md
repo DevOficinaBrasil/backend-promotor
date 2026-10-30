@@ -260,10 +260,10 @@ Toda ambiguidade foi resolvida ou registrada aqui.
 | RELPROM-41 | P5: Restrição temporária a SKF | Design | Pending |
 | RELPROM-42 | P5: Restrição temporária a SKF | Design | Pending |
 | RELPROM-43 | P5: Restrição temporária a SKF | Design | Pending |
-| RELPROM-45 | P6: Arquivamento do PDF no S3 | Tasks | In Tasks |
-| RELPROM-46 | P6: Arquivamento do PDF no S3 | Tasks | In Tasks |
-| RELPROM-47 | P6: Arquivamento do PDF no S3 | Tasks | In Tasks |
-| RELPROM-48 | P6: Arquivamento do PDF no S3 | Tasks | In Tasks |
+| RELPROM-45 | P6: Arquivamento do PDF no S3 | Execute | Implemented |
+| RELPROM-46 | P6: Arquivamento do PDF no S3 | Execute | Implemented |
+| RELPROM-47 | P6: Arquivamento do PDF no S3 | Execute | Implemented |
+| RELPROM-48 | P6: Arquivamento do PDF no S3 | Execute | Implemented |
 | RELPROM-49 | P7: Observações adicionais geradas por IA | Tasks | In Tasks |
 | RELPROM-50 | P7: Observações adicionais geradas por IA | Tasks | In Tasks |
 | RELPROM-51 | P7: Observações adicionais geradas por IA | Tasks | In Tasks |

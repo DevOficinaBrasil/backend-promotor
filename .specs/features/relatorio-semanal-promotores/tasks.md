@@ -1070,17 +1070,17 @@ Adicionada depois do Verifier dar PASS (3ª iteração). 2 pedidos do usuário: 
 - Skill: NONE
 
 **Done when**:
-- [ ] Upload bem-sucedido → `LINK_PDF` gravado com a URL retornada
-- [ ] Upload falha → `LINK_PDF` gravado como `null`, erro logado, e-mail/fluxo seguem normalmente (RELPROM-46)
-- [ ] `enviarEmail=false` (modo preview) → `uploadPdf` não é chamado, nenhum `LINK_PDF` gravado (RELPROM-48, mesmo tratamento de RELPROM-38)
-- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportServiceEnvio.test.ts` (sem regressão + novos casos de sucesso/falha/preview do S3)
+- [x] Upload bem-sucedido → `LINK_PDF` gravado com a URL retornada
+- [x] Upload falha → `LINK_PDF` gravado como `null`, erro logado, e-mail/fluxo seguem normalmente (RELPROM-46)
+- [x] `enviarEmail=false` (modo preview) → `uploadPdf` não é chamado, nenhum `LINK_PDF` gravado (RELPROM-48, mesmo tratamento de RELPROM-38)
+- [x] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportServiceEnvio.test.ts` (13 passed, sem regressão + 3 novos casos de sucesso/falha/preview do S3)
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(promotor-relatorio): arquiva pdf no s3 e grava o link na auditoria`
 
-**Status**: ⬜ Pending
+**Status**: ✅ Complete
 
 ---
 

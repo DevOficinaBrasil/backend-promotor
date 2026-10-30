@@ -19,6 +19,7 @@ import {
 import { CampanhaBlocoRelatorio, RelatorioPromotorData } from "../types/promotorRelatorio";
 import PromotorReportPdfRenderer from "./promotorReportPdfRenderer";
 import ObAdsIntegrationClient from "./obAdsIntegrationClient";
+import S3StorageClient from "./s3StorageClient";
 import { resolverDestinatarios } from "../config/promotorReportRecipients";
 import { CLIENTES_PRODUCAO_HABILITADOS } from "../config/promotorReportClientesProducao";
 
@@ -154,6 +155,7 @@ export default class PromotorReportService {
     status: StatusRelatorioEnvio;
     motivoFalha?: string;
     destinatarios: string[];
+    linkPdf?: string | null;
   }): Promise<void> {
     // Nunca deixa uma falha de auditoria (ex.: tabela ainda não migrada no
     // ambiente) derrubar o chamador — o PDF já foi gerado e o e-mail já foi
@@ -171,6 +173,7 @@ export default class PromotorReportService {
           STATUS: params.status,
           MOTIVO_FALHA: params.motivoFalha,
           DESTINATARIOS: params.destinatarios,
+          LINK_PDF: params.linkPdf ?? null,
           AMBIENTE:
             process.env.NODE_ENV === "production"
               ? AmbienteRelatorioEnvio.PRODUCTION
@@ -222,6 +225,17 @@ export default class PromotorReportService {
       return { idCliente: cliente.idCliente, pdf, enviado: false };
     }
 
+    // RELPROM-45/46: arquiva no S3 antes de qualquer outra decisão — falha de
+    // upload nunca bloqueia o envio, só deixa LINK_PDF nulo na auditoria.
+    const resultadoUpload = await S3StorageClient.uploadPdf({ idCliente: cliente.idCliente, periodo, pdf });
+    const linkPdf = resultadoUpload.sucesso ? resultadoUpload.url : null;
+    if (!resultadoUpload.sucesso) {
+      console.error("[promotorReportService] falha ao arquivar pdf no s3", {
+        idCliente: cliente.idCliente,
+        motivo: resultadoUpload.motivo,
+      });
+    }
+
     const { destinatarios, adminsReaisParaLog } = resolverDestinatarios(cliente.admins);
     if (destinatarios.length === 0) {
       const motivoFalha =
@@ -240,6 +254,7 @@ export default class PromotorReportService {
         status: StatusRelatorioEnvio.FALHA,
         motivoFalha,
         destinatarios: [],
+        linkPdf,
       });
       return { idCliente: cliente.idCliente, pdf, enviado: false, motivoFalha };
     }
@@ -265,6 +280,7 @@ export default class PromotorReportService {
       status: resultadoEnvio.sucesso ? StatusRelatorioEnvio.SUCESSO : StatusRelatorioEnvio.FALHA,
       motivoFalha: resultadoEnvio.sucesso ? undefined : resultadoEnvio.motivo,
       destinatarios,
+      linkPdf,
     });
 
     return resultadoEnvio.sucesso
