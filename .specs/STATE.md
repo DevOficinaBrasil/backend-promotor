@@ -58,6 +58,14 @@
 - **Date**: 2026-10-30
 - **Status**: active
 
+### AD-009
+- **Decision**: Em produção, o relatório semanal de promotores (CON26-325) envia pra uma lista fixa de e-mails por `idCliente` (`DESTINATARIOS_FIXOS_PRODUCAO_POR_CLIENTE`, `config/promotorReportRecipients.ts`) quando o cliente tiver entrada nesse mapa — hoje só a SKF (126), com 3 e-mails (`gabriel.cavalcante@skfvertevo.com`, `mauricio.valdivno@skfvertevo.com`, `oclesio.peternela@skfvertevo.com`). Cliente sem entrada no mapa continua recebendo pelos usuários reais resolvidos dinamicamente via ob-ads (RELPROM-11/AD-008).
+- **Reason**: Pedido explícito do usuário — enquanto só a SKF usa de fato o módulo (`CLIENTES_PRODUCAO_HABILITADOS = [126]`, AD-006), prefere garantir quem recebe via lista fixa já validada, em vez de depender só da resolução dinâmica de usuários do cliente.
+- **Trade-off**: Divergência entre quem está cadastrado como usuário do cliente no ob-ads e quem de fato recebe o relatório, enquanto o override estiver ativo — mitigado continuando a logar a resolução dinâmica real (`adminsReaisParaLog`) pra auditoria, mesmo sem usá-la pra enviar.
+- **Scope**: Qualquer cliente novo habilitado futuramente em `CLIENTES_PRODUCAO_HABILITADOS` sem entrada em `DESTINATARIOS_FIXOS_PRODUCAO_POR_CLIENTE` recebe automaticamente o comportamento padrão (usuários reais) — o override é por cliente, nunca global. Remover a entrada da SKF desse mapa quando o usuário confirmar que a resolução dinâmica pode voltar a ser a fonte de envio.
+- **Date**: 2026-10-30
+- **Status**: active
+
 ## Handoff
 
 - **Feature**: disparo-convite-visita-admin (`.specs/features/disparo-convite-visita-admin/`), **DONE**

@@ -560,3 +560,27 @@ A seção "Destaques do campo" saiu confusa na prática (pedido do usuário pra 
 | UF do promotor | Derivada das oficinas visitadas na campanha (moda do estado), não um campo cadastrado | Não existe dado de região no cadastro do promotor hoje; decisão confirmada com o usuário em vez de assumir |
 | Ocultar "Destaques do campo" | Remove só a chamada de render; mantém geração de dados/IA intacta | "Oculte" é reversível por natureza — menor raio de mudança, sem decidir unilateralmente descontinuar RELPROM-58 a 63 |
 | Disclaimer de observações | Texto novo (não existia no PDF); migrou pra "Performance por promotor" | Só existiam guardrails de prompt (invisíveis ao cliente) — pedido explícito do usuário de ter o aviso visível, e a seção de destaques (onde o texto de OBS aparecia) saiu do PDF |
+
+---
+
+## P12 — Destinatários fixos em produção (RELPROM-74, Design pós-Execute)
+
+Pedido explícito do usuário: enquanto só a SKF (126) usa o módulo de promotores, produção envia pra uma lista fixa de 3 e-mails, não pros usuários reais resolvidos dinamicamente via ob-ads (RELPROM-11).
+
+**Fix**: `resolverDestinatarios` ganha um 1º parâmetro `idCliente`. Novo `DESTINATARIOS_FIXOS_PRODUCAO_POR_CLIENTE: Record<number, string[]>` (hoje só `{126: [3 e-mails]}`) — em produção, se o cliente tiver entrada nesse mapa, usa a lista fixa dele; senão, cai no comportamento padrão (usuários reais, RELPROM-31). `adminsReaisParaLog` continua sempre com a resolução dinâmica real, mesmo quando não é ela quem recebe — permite comparar/auditar enquanto o override estiver ativo.
+
+Decisão de desenhar por `idCliente` (mapa), não um booleano global "produção usa lista fixa pra todo mundo": `CLIENTES_PRODUCAO_HABILITADOS` já é `[126]` hoje, mas o código existente (AD-006) já está desenhado pra crescer por allowlist quando a migração acabar — um mapa por cliente mantém esse padrão e evita que um cliente futuro herde silenciosamente o override da SKF.
+
+### Componentes modificados
+
+| Componente | Mudança |
+| --- | --- |
+| `config/promotorReportRecipients.ts` | Novo `DESTINATARIOS_FIXOS_PRODUCAO_POR_CLIENTE`; `resolverDestinatarios(idCliente, adminsReais)` — assinatura muda (1 parâmetro novo) |
+| `service/promotorReportService.ts` | `processarRelatorioCliente` passa `cliente.idCliente` pra `resolverDestinatarios` |
+
+### Tech Decisions (adendo)
+
+| Decision | Choice | Rationale |
+| --- | --- | --- |
+| Override por cliente (mapa), não flag global | `Record<idCliente, string[]>` | Hoje só a SKF está na allowlist de produção, mas o mapa evita que um cliente futuro (quando a allowlist crescer) herde a lista fixa da SKF por engano |
+| Mantém log da resolução dinâmica real | `adminsReaisParaLog` nunca muda, mesmo com override ativo | Permite auditar divergência e validar se a resolução dinâmica continua certa, sem depender dela pra enviar |

@@ -267,7 +267,7 @@ export default class PromotorReportService {
       });
     }
 
-    const { destinatarios, adminsReaisParaLog } = resolverDestinatarios(cliente.admins);
+    const { destinatarios, adminsReaisParaLog } = resolverDestinatarios(cliente.idCliente, cliente.admins);
     if (destinatarios.length === 0) {
       const motivoFalha =
         adminsReaisParaLog.length === 0

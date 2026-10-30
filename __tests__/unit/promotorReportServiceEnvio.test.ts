@@ -187,6 +187,12 @@ describe("PromotorReportService.processarRelatorioCliente", () => {
     expect(enviarEmailComAnexo).toHaveBeenCalled();
   });
 
+  it("passa idCliente e os admins reais pra resolverDestinatarios — RELPROM-74", async () => {
+    await PromotorReportService.processarRelatorioCliente(CLIENTE, PERIODO, OrigemRelatorioEnvio.CRON);
+
+    expect(resolverDestinatariosMock).toHaveBeenCalledWith(10, ["admin@skf.com"]);
+  });
+
   it("ORIGEM=MANUAL na auditoria quando chamado pelo endpoint manual", async () => {
     await PromotorReportService.processarRelatorioCliente(CLIENTE, PERIODO, OrigemRelatorioEnvio.MANUAL);
 

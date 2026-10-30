@@ -170,6 +170,14 @@ Uso real da rota manual expôs um bug de fuso na capa e motivou 3 pedidos de aju
 T52
 ```
 
+### Phase 14: Destinatários fixos em produção (RELPROM-74)
+
+Pedido do usuário: enquanto só a SKF (126) usa o módulo, produção envia pra uma lista fixa de 3 e-mails, não pros usuários reais resolvidos dinamicamente.
+
+```
+T53
+```
+
 ---
 
 ## Task Breakdown
@@ -1629,6 +1637,33 @@ Adicionada depois do Verifier dar PASS (3ª iteração). 2 pedidos do usuário: 
 
 ---
 
+### T53: Destinatários fixos em produção, por cliente (backend-promotor)
+
+**What**: `resolverDestinatarios` ganha 1º parâmetro `idCliente`; novo `DESTINATARIOS_FIXOS_PRODUCAO_POR_CLIENTE: Record<number, string[]>` (`{126: [3 e-mails da SKF]}`) — em produção, cliente com entrada no mapa recebe só a lista fixa dele; sem entrada, mantém o comportamento padrão (usuários reais, RELPROM-31). `adminsReaisParaLog` continua sempre com a resolução dinâmica real.
+**Where**: `config/promotorReportRecipients.ts`, `service/promotorReportService.ts` (modificam)
+**Depends on**: None
+**Reuses**: `REGEX_EMAIL`/padrão de filtro já usado pra `DEV_REPORT_RECIPIENTS`
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [x] Em produção, cliente 126 (SKF) recebe só os 3 e-mails fixos, nunca os usuários reais resolvidos dinamicamente
+- [x] Em produção, cliente sem entrada no mapa mantém o comportamento padrão (usuários reais, RELPROM-31) — sem regressão
+- [x] `adminsReaisParaLog` continua com a resolução dinâmica real mesmo com o override fixo ativo (auditoria)
+- [x] E-mail inválido na lista fixa é filtrado, sem derrubar os demais (mesmo padrão de `DEV_REPORT_RECIPIENTS`)
+- [x] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportRecipients.test.ts __tests__/unit/promotorReportServiceEnvio.test.ts` + `npx tsc --noEmit`, sem regressão
+
+**Tests**: unit
+**Gate**: quick
+
+**Commit**: `feat(promotor-relatorio): restringe envio em producao a destinatarios fixos por cliente`
+
+**Status**: ✅ Complete
+
+---
+
 ## Phase Execution Map
 
 ```
@@ -1666,9 +1701,10 @@ Phase 12: T48 ------→ T49
           T50
           T51
 Phase 13: T52
+Phase 14: T53
 ```
 
-Dependências cross-phase (não aparecem no diagrama por fase, só no `Depends on` de cada task, conforme a regra do skill): T15 depende de T01 (Phase 1) e T11 (Phase 3); T16 depende de T10 e T11 (Phase 3); T19 depende de T18 (Phase 4); T21 depende de T17 (Phase 4); T23/T25 não têm dependência cross-phase (reaproveitam T02/T04 já concluídas, sem precisar reabrir); T28 não depende de nenhuma task de fase anterior (reescreve T15 por completo, contrato de `renderizarPdf` preservado); T33, T35, T40, T44, T50, T51 e T52 também não têm dependência cross-phase (cliente externo, tipos, funções puras e render ajustados, sem reabrir o design das fases anteriores).
+Dependências cross-phase (não aparecem no diagrama por fase, só no `Depends on` de cada task, conforme a regra do skill): T15 depende de T01 (Phase 1) e T11 (Phase 3); T16 depende de T10 e T11 (Phase 3); T19 depende de T18 (Phase 4); T21 depende de T17 (Phase 4); T23/T25 não têm dependência cross-phase (reaproveitam T02/T04 já concluídas, sem precisar reabrir); T28 não depende de nenhuma task de fase anterior (reescreve T15 por completo, contrato de `renderizarPdf` preservado); T33, T35, T40, T44, T50, T51, T52 e T53 também não têm dependência cross-phase (cliente externo, tipos, funções puras e render ajustados, sem reabrir o design das fases anteriores).
 
 Execução é estritamente sequencial dentro de cada fase — sem paralelismo intra-fase.
 
@@ -1730,6 +1766,7 @@ Execução é estritamente sequencial dentro de cada fase — sem paralelismo in
 | T50 | 1 função pura + wiring em 2 validadores já existentes + 2 prompts | ✅ Granular (coeso: mesmo guardrail aplicado nos 2 lugares) |
 | T51 | 2 pontos de remoção de render, mesmo arquivo | ✅ Granular |
 | T52 | 4 ACs (RELPROM-68/69+70/71/72+73) em 4 arquivos | ⚠️ Bundlada de propósito — pedido do usuário como 1 rodada só de ajustes; cada AC é pequena isoladamente e as mudanças de `agruparPorPromotor` (ordenação+UF) tocam a mesma função, não compensa fatiar mais |
+| T53 | 1 mudança de assinatura + 1 config nova, 2 arquivos coesos (par indissociável) | ✅ Granular |
 
 ---
 
@@ -1789,6 +1826,7 @@ Execução é estritamente sequencial dentro de cada fase — sem paralelismo in
 | T50 | None | — | ✅ Match |
 | T51 | None | — | ✅ Match |
 | T52 | None | — | ✅ Match |
+| T53 | None | — | ✅ Match |
 
 ---
 
@@ -1848,6 +1886,7 @@ Execução é estritamente sequencial dentro de cada fase — sem paralelismo in
 | T50 | Função pura + cliente externo mockado | unit | unit | ✅ OK |
 | T51 | Service/domínio (renderer) | unit | unit | ✅ OK |
 | T52 | Função pura + service/domínio (renderer) | unit, integration | unit, integration | ✅ OK |
+| T53 | Config/domínio | unit | unit | ✅ OK |
 
 ---
 

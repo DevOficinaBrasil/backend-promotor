@@ -85,7 +85,7 @@ Toda ambiguidade foi resolvida ou registrada aqui.
 16. WHILE o ambiente de execução não for produção (`NODE_ENV !== "production"`) THEN o sistema SHALL enviar o e-mail do relatório de cada cliente apenas para a lista fixa de destinatários de teste definida em código, nunca para os admins reais resolvidos daquele cliente. <!-- RELPROM-28, state-driven -->
 17. WHILE o ambiente de execução não for produção THEN o sistema SHALL registrar em log, para cada cliente processado, a lista de e-mails de admin que teriam sido os destinatários reais, sem enviar e-mail para eles. <!-- RELPROM-29, state-driven -->
 18. IF a lista fixa de destinatários de teste estiver vazia fora de produção THEN o sistema SHALL NOT enviar nenhum e-mail para aquele cliente e SHALL registrar essa condição em log, tratando-a como falha de resolução de destinatário (mesmo tratamento de RELPROM-12). <!-- RELPROM-30, unwanted-behavior -->
-19. WHILE o ambiente de execução for produção THEN o sistema SHALL enviar exclusivamente para os admins reais resolvidos do cliente (RELPROM-11), SHALL NOT usar a lista fixa de destinatários de teste. <!-- RELPROM-31, state-driven -->
+19. WHILE o ambiente de execução for produção THEN o sistema SHALL enviar exclusivamente para os admins reais resolvidos do cliente (RELPROM-11), SHALL NOT usar a lista fixa de destinatários de teste. <!-- RELPROM-31, state-driven, **sobreposto por cliente pós-Execute**: enquanto um cliente estiver em DESTINATARIOS_FIXOS_PRODUCAO_POR_CLIENTE, prevalece a RELPROM-74 abaixo — ver AD-009 em STATE.md -->
 20. The system SHALL exibir, na seção de visão geral de cada campanha, um gráfico comparativo de visitas concluídas x canceladas por dia do período, incluindo só os dias com pelo menos 1 visita concluída ou cancelada. <!-- RELPROM-44, ubiquitous, adicionado pós-Execute: modelo do CON26-325 tem esse gráfico na página de visão geral, faltava no PDF gerado -->
 
 **Independent Test**: Disparar a geração manualmente para o cliente SKF (sem esperar o cron) e comparar o PDF resultante, seção a seção, com o modelo anexado ao CON26-325 — mesmas seções, mesma ordem, números batendo com uma consulta SELECT equivalente no banco de produção. Repetir com um cliente de teste com 2 campanhas ativas e confirmar 2 blocos de dados distintos no mesmo PDF, sem mistura de números entre eles. Rodar fora de produção e confirmar: o e-mail chega só na lista fixa de teste, nunca no admin real do cliente, e o log mostra quais e-mails de admin teriam sido os destinatários reais. Confirmar que a visão geral mostra o gráfico por dia, com barras só nos dias com atividade (RELPROM-44).
@@ -274,6 +274,22 @@ Toda ambiguidade foi resolvida ou registrada aqui.
 
 ---
 
+### P12: Destinatários fixos em produção enquanto só a SKF usa o módulo
+
+**User Story**: Como Oficina Brasil, quero que o relatório em produção vá só pra SKF (único cliente usando o módulo hoje) e pra uma lista fixa de 3 e-mails já validados, em vez de depender da resolução dinâmica de usuários do cliente, pra ter certeza de quem recebe enquanto só existe 1 cliente real no ar.
+
+**Why P12**: Pedido explícito do usuário — restringir o envio em produção à SKF (`ID_CLIENTE` 126, já é o único cliente na allowlist `CLIENTES_PRODUCAO_HABILITADOS`, RELPROM-40/AD-006) e trocar os destinatários de "usuários reais resolvidos dinamicamente" (RELPROM-11) por uma lista fixa de 3 e-mails.
+
+**Acceptance Criteria**:
+
+1. WHILE o ambiente de execução for produção AND o cliente tiver uma lista fixa de destinatários configurada (hoje, só a SKF/126) THEN o sistema SHALL enviar o e-mail do relatório exclusivamente para essa lista fixa, SHALL NOT enviar para os usuários reais resolvidos dinamicamente daquele cliente. <!-- RELPROM-74, state-driven -->
+2. WHILE o ambiente de execução for produção AND o cliente NÃO tiver lista fixa configurada THEN o sistema SHALL manter o comportamento padrão de RELPROM-31 (enviar pros usuários reais resolvidos dinamicamente). <!-- coberto por RELPROM-74 -->
+3. The system SHALL continuar registrando em log, mesmo quando a lista fixa for usada, quem seriam os destinatários reais resolvidos dinamicamente — permite auditar divergência enquanto o override estiver ativo. <!-- coberto por RELPROM-74 -->
+
+**Independent Test**: Com `NODE_ENV=production`, gerar o relatório do cliente SKF (126) e confirmar que o e-mail vai só pra `gabriel.cavalcante@skfvertevo.com`, `mauricio.valdivno@skfvertevo.com` e `oclesio.peternela@skfvertevo.com`, nunca pros usuários reais resolvidos via ob-ads. Gerar o relatório de um cliente sem override fixo e confirmar que vai pros usuários reais, comportamento inalterado.
+
+---
+
 ## Edge Cases
 
 - IF a integração usada para resolver admins/enviar e-mail (backend-ob-ads) estiver indisponível THEN o sistema SHALL tratar isso como falha daquele cliente (RELPROM-17), sem derrubar a execução dos demais clientes. <!-- RELPROM-23 -->
@@ -362,12 +378,13 @@ Toda ambiguidade foi resolvida ou registrada aqui.
 | RELPROM-71 | P11: Ajustes de uso real | Execute | Implemented |
 | RELPROM-72 | P11: Ajustes de uso real | Execute | Implemented |
 | RELPROM-73 | P11: Ajustes de uso real | Execute | Implemented |
+| RELPROM-74 | P12: Destinatários fixos em produção | Execute | Implemented |
 
 **ID format:** `RELPROM-NN`
 
 **Status values:** Pending → In Design → In Tasks → Implementing → Verified
 
-**Coverage:** 73 total. RELPROM-01 a 73 implementadas (Phases 1-13 em `tasks.md`).
+**Coverage:** 74 total. RELPROM-01 a 74 implementadas (Phases 1-14 em `tasks.md`).
 
 ---
 
