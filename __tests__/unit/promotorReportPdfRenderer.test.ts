@@ -17,8 +17,9 @@ const DADOS: RelatorioPromotorData = {
         { dia: "15/10", diaSemana: "qui", concluidas: 52, canceladas: 16 },
       ],
       assertividade: 77,
+      assertividadeAcumulada: 85,
       porPromotor: [
-        { idPromotor: 1, nomePromotor: "Willian Ferreira", concluidasPeriodo: 15, canceladasPeriodo: 0, concluidasAcumulado: 18, abertasNaRota: 11 },
+        { idPromotor: 1, nomePromotor: "Willian Ferreira", concluidasPeriodo: 15, canceladasPeriodo: 0, concluidasAcumulado: 18, abertasNaRota: 11, uf: "SP" },
       ],
       cancelamentos: [
         { idPromotor: 2, nomePromotor: "José Maria Jr.", nomeOficina: "Real Car", cidadeOficina: "Belo Horizonte/MG", obs: "Promotor de folga" },
@@ -71,7 +72,7 @@ describe("PromotorReportPdfRenderer.renderizarPdf", () => {
     expect(textos).toContain("132");
   });
 
-  it("gera 1 capa + 6 paginas de secao por campanha, 1 bloco por campanha (RELPROM-26)", async () => {
+  it("gera 1 capa + 5 paginas de secao por campanha, 1 bloco por campanha (RELPROM-26)", async () => {
     const dadosComDuasCampanhas: RelatorioPromotorData = {
       ...DADOS,
       campanhas: [DADOS.campanhas[0], { ...DADOS.campanhas[0], idCampanha: 2, nomeCampanha: "Campanha Outra" }],
@@ -80,60 +81,30 @@ describe("PromotorReportPdfRenderer.renderizarPdf", () => {
     const resultado = await PromotorReportPdfRenderer.renderizarPdf(dadosComDuasCampanhas);
 
     const doc = await PDFDocument.load(resultado);
-    expect(doc.getPageCount()).toBe(13); // 1 capa + 6 secoes x 2 campanhas
+    expect(doc.getPageCount()).toBe(11); // 1 capa + 5 secoes x 2 campanhas (RELPROM-72: destaques oculta)
     const textos = textosDesenhados().map((t) => t.toUpperCase());
     expect(textos.some((t) => t.includes("CAMPANHA SKF"))).toBe(true);
     expect(textos.some((t) => t.includes("CAMPANHA OUTRA"))).toBe(true);
   });
 
-  it("gera 1 capa + 6 paginas de secao pra 1 campanha unica (RELPROM-27)", async () => {
+  it("gera 1 capa + 5 paginas de secao pra 1 campanha unica (RELPROM-27)", async () => {
     const resultado = await PromotorReportPdfRenderer.renderizarPdf(DADOS);
 
     const doc = await PDFDocument.load(resultado);
-    expect(doc.getPageCount()).toBe(7); // 1 capa + 6 secoes
+    expect(doc.getPageCount()).toBe(6); // 1 capa + 5 secoes (RELPROM-72: destaques oculta)
   });
 
-  it("coloca cada destaque sob o titulo correto, mesmo com status misto — RELPROM-09", async () => {
-    const dadosComDestaquesMistos: RelatorioPromotorData = {
-      ...DADOS,
-      campanhas: [
-        {
-          ...DADOS.campanhas[0],
-          destaquesDeCampo: [
-            { status: "concluida", idPromotor: 1, nomePromotor: "Willian", nomeOficina: "Oficina A", cidadeOficina: "São Paulo/SP", obs: "Obs concluida unica" },
-            { status: "cancelada", idPromotor: 2, nomePromotor: "José", nomeOficina: "Oficina B", cidadeOficina: "Belo Horizonte/MG", obs: "Obs cancelada unica" },
-          ],
-        },
-      ],
-    };
-
-    await PromotorReportPdfRenderer.renderizarPdf(dadosComDestaquesMistos);
-
-    const textos = textosDesenhados();
-    const indiceConcluidas = textos.indexOf("Concluídas com observação");
-    const indiceCanceladas = textos.indexOf("Canceladas com justificativa");
-    const indiceCardConcluida = textos.findIndex((t) => t.includes("Willian — Oficina A"));
-    const indiceCardCancelada = textos.findIndex((t) => t.includes("José — Oficina B"));
-
-    expect(indiceConcluidas).toBeGreaterThanOrEqual(0);
-    expect(indiceCanceladas).toBeGreaterThan(indiceConcluidas);
-    // A ordem real de desenho (topo->baixo) é a ordem das chamadas: o card
-    // "concluida" tem de ser desenhado entre os 2 titulos.
-    expect(indiceCardConcluida).toBeGreaterThan(indiceConcluidas);
-    expect(indiceCardConcluida).toBeLessThan(indiceCanceladas);
-    expect(indiceCardCancelada).toBeGreaterThan(indiceCanceladas);
-  });
-
-  it("nunca desenha o texto do campo OBS no card de destaque (fallback) — RELPROM-65", async () => {
-    const obsSensivel = "Liberada sem confirmacao na revisao da base, anotacao interna de cadastro";
+  it("nunca desenha a secao 'destaques do campo' (oculta do pdf) — RELPROM-72", async () => {
     const dados: RelatorioPromotorData = {
       ...DADOS,
       campanhas: [
         {
           ...DADOS.campanhas[0],
           destaquesDeCampo: [
-            { status: "concluida", idPromotor: 1, nomePromotor: "P", nomeOficina: "O", cidadeOficina: "C/UF", obs: obsSensivel },
+            { status: "concluida", idPromotor: 1, nomePromotor: "Willian", nomeOficina: "Oficina A", cidadeOficina: "São Paulo/SP", obs: "Obs qualquer" },
           ],
+          insightsCampo: [{ titulo: "Titulo do insight", descricao: "Descricao do insight" }],
+          sintesesPorSecao: { destaques: "Sintese dos destaques" },
         },
       ],
     };
@@ -141,8 +112,11 @@ describe("PromotorReportPdfRenderer.renderizarPdf", () => {
     await PromotorReportPdfRenderer.renderizarPdf(dados);
 
     const textos = textosDesenhados();
-    expect(textos.some((t) => t.includes("Liberada") || t.includes("revisao da base"))).toBe(false);
-    expect(textos.some((t) => t.includes("P — O"))).toBe(true); // header estrutural continua
+    expect(textos).not.toContain("O que os promotores registraram no app");
+    expect(textos).not.toContain("Concluídas com observação");
+    expect(textos).not.toContain("Canceladas com justificativa");
+    expect(textos).not.toContain("Titulo do insight");
+    expect(textos).not.toContain("Sintese dos destaques");
   });
 
   it("desenha o grafico por dia empilhado com valor combinado e o dia de pico em destaque — RELPROM-44", async () => {
@@ -153,43 +127,6 @@ describe("PromotorReportPdfRenderer.renderizarPdf", () => {
     expect(textos).toContain("2"); // dia so com concluidas, sem "+"
     expect(textos).toContain("15/10 (qui)"); // dia de pico (mais concluidas) com dia da semana
     expect(textos).toContain("13/10"); // dia sem destaque, sem sufixo de dia da semana
-  });
-
-  it("cabecalho da secao de destaques sempre mostra 'O que os promotores registraram no app' — RELPROM-59", async () => {
-    await PromotorReportPdfRenderer.renderizarPdf(DADOS);
-
-    const textos = textosDesenhados();
-    expect(textos).toContain("O que os promotores registraram no app");
-    expect(textos).not.toContain("Observações registradas pelos promotores");
-  });
-
-  it("desenha ate 4 insights (titulo + descricao) quando insightsCampo esta presente, sem os cards — RELPROM-58", async () => {
-    const dados: RelatorioPromotorData = {
-      ...DADOS,
-      campanhas: [
-        {
-          ...DADOS.campanhas[0],
-          insightsCampo: [
-            { titulo: "Base com oficinas que não existem mais", descricao: "6 oficinas fechadas ou inexistentes no período." },
-          ],
-        },
-      ],
-    };
-
-    await PromotorReportPdfRenderer.renderizarPdf(dados);
-
-    const textos = textosDesenhados();
-    expect(textos).toContain("Base com oficinas que não existem mais");
-    expect(textos).toContain("6 oficinas fechadas ou inexistentes no período.");
-    expect(textos).not.toContain("Concluídas com observação");
-    expect(textos).not.toContain("Canceladas com justificativa");
-  });
-
-  it("cai pra listagem de cards individuais quando insightsCampo esta ausente — RELPROM-61", async () => {
-    await PromotorReportPdfRenderer.renderizarPdf(DADOS);
-
-    const textos = textosDesenhados();
-    expect(textos).toContain("Canceladas com justificativa");
   });
 
   it("usa a tabela resumo agrupada quando resumoCancelamentos esta presente — RELPROM-53", async () => {
@@ -271,11 +208,12 @@ describe("PromotorReportPdfRenderer.renderizarPdf", () => {
       "Sintese da assertividade",
       "Sintese por promotor",
       "Sintese dos cancelamentos",
-      "Sintese dos destaques",
       "Sintese dos proximos passos",
     ]) {
       expect(textos).toContain(sintese);
     }
+    // RELPROM-72: secao de destaques oculta — sintese dela nunca e desenhada.
+    expect(textos).not.toContain("Sintese dos destaques");
 
     // Na visao geral, a sintese vem antes do rotulo do 1o card (conteudo deterministico).
     const indiceSintese = textos.indexOf("Sintese da visao geral");
@@ -287,6 +225,53 @@ describe("PromotorReportPdfRenderer.renderizarPdf", () => {
     const resultado = await PromotorReportPdfRenderer.renderizarPdf(DADOS);
 
     const doc = await PDFDocument.load(resultado);
-    expect(doc.getPageCount()).toBe(7); // 1 capa + 6 secoes, sem pagina extra por causa da sintese ausente
+    expect(doc.getPageCount()).toBe(6); // 1 capa + 5 secoes, sem pagina extra por causa da sintese ausente
+  });
+
+  it("tabela de performance por promotor mostra a coluna UF — RELPROM-70", async () => {
+    await PromotorReportPdfRenderer.renderizarPdf(DADOS);
+
+    const textos = textosDesenhados();
+    expect(textos).toContain("UF");
+    expect(textos).toContain("SP");
+  });
+
+  it("desenha a tabela de performance por promotor na mesma ordem recebida — ordenar e responsabilidade de agruparPorPromotor (RELPROM-69), nao do renderer", async () => {
+    // RELPROM-69: o renderer so desenha; quem ordena por concluidasPeriodo
+    // decrescente e `agruparPorPromotor` (ver promotorReportCalculos.test.ts).
+    const dados: RelatorioPromotorData = {
+      ...DADOS,
+      campanhas: [
+        {
+          ...DADOS.campanhas[0],
+          porPromotor: [
+            { idPromotor: 2, nomePromotor: "Willian", concluidasPeriodo: 15, canceladasPeriodo: 2, concluidasAcumulado: 26, abertasNaRota: 24, uf: "SP" },
+            { idPromotor: 1, nomePromotor: "Homero", concluidasPeriodo: 2, canceladasPeriodo: 0, concluidasAcumulado: 40, abertasNaRota: 20, uf: "MG" },
+          ],
+        },
+      ],
+    };
+
+    await PromotorReportPdfRenderer.renderizarPdf(dados);
+
+    const textos = textosDesenhados();
+    const indiceWillian = textos.indexOf("Willian");
+    const indiceHomero = textos.indexOf("Homero");
+    expect(indiceWillian).toBeGreaterThanOrEqual(0);
+    expect(indiceWillian).toBeLessThan(indiceHomero);
+  });
+
+  it("mostra a assertividade acumulada da campanha, alem da do periodo — RELPROM-71", async () => {
+    await PromotorReportPdfRenderer.renderizarPdf(DADOS);
+
+    const textos = textosDesenhados();
+    expect(textos.some((t) => t.includes("Assertividade acumulada da campanha") && t.includes("85%"))).toBe(true);
+  });
+
+  it("mostra o disclaimer das observacoes junto a performance por promotor — RELPROM-73", async () => {
+    await PromotorReportPdfRenderer.renderizarPdf(DADOS);
+
+    const textos = textosDesenhados();
+    expect(textos.some((t) => t.includes("Observações registradas pelos promotores no app"))).toBe(true);
   });
 });

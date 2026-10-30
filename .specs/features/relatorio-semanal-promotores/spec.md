@@ -255,6 +255,25 @@ Toda ambiguidade foi resolvida ou registrada aqui.
 
 ---
 
+### P11: Ajustes de uso real (período, ordenação/UF, assertividade acumulada, seção de destaques)
+
+**User Story**: Como Oficina Brasil, quero que a capa mostre o período certo, a tabela de performance por promotor venha ordenada e com a região de cada um, a assertividade acumulada da campanha apareça, e a seção de destaques do campo (que hoje sai sem sentido) saia do relatório — pra o PDF refletir melhor o que o cliente precisa ver.
+
+**Why P11**: Uso real da rota manual (`/admin/promotor-relatorio/:idCliente/gerar?inicio=...&fim=...`) expôs um bug de fuso na capa (pedido 23/10 a 29/10, capa mostrou 22/10 a 29/10) e 3 pedidos de ajuste de conteúdo vindos do uso do relatório pela Oficina Brasil.
+
+**Acceptance Criteria**:
+
+1. WHEN `inicio`/`fim` da query string tiverem um horário explícito (inclusive UTC, com `Z`) THEN o sistema SHALL ignorar esse horário/fuso e ancorar o período pelo dia civil de Brasília (America/Sao_Paulo) usando só a data — mesma regra já aplicada a uma data "pura" (sem horário). <!-- RELPROM-68, event-driven -->
+2. The system SHALL ordenar a tabela "Performance por promotor" por visitas concluídas no período, decrescente (quem concluiu mais aparece no topo). <!-- RELPROM-69, ubiquitous -->
+3. The system SHALL exibir, na tabela "Performance por promotor", a UF (sigla do estado) mais frequente entre as oficinas visitadas por aquele promotor na campanha — `null`/"—" quando nenhuma oficina tiver estado resolvido. <!-- RELPROM-70, ubiquitous -->
+4. The system SHALL calcular e exibir, na seção de assertividade, a assertividade acumulada desde o início da campanha (todo o histórico de visitas concluídas/canceladas, sem filtro de período), além da assertividade do período já exibida. <!-- RELPROM-71, ubiquitous -->
+5. The system SHALL NOT exibir a seção "Destaques do campo" ("O que os promotores registraram no app") no PDF. <!-- RELPROM-72, unwanted-behavior -->
+6. The system SHALL exibir, na seção "Performance por promotor", um aviso informando que observações registradas pelos promotores no app passam por validação automática e que anotações internas/desatualizadas/sem relação com a visita não aparecem no relatório. <!-- RELPROM-73, ubiquitous -->
+
+**Independent Test**: Chamar a rota manual com `inicio=2026-10-23T00:00:00.000Z&fim=2026-10-29T23:59:59.999Z` e confirmar que a capa mostra "23/10/2026 a 29/10/2026". Gerar um relatório com promotores em UFs diferentes e concluídas variadas e confirmar que a tabela vem ordenada por concluídas (decrescente) e mostra a coluna UF. Confirmar que a seção de assertividade mostra 2 números (período e acumulado) e que a seção de destaques do campo não aparece em nenhuma página do PDF, com o aviso de observações aparecendo junto à tabela de performance por promotor.
+
+---
+
 ## Edge Cases
 
 - IF a integração usada para resolver admins/enviar e-mail (backend-ob-ads) estiver indisponível THEN o sistema SHALL tratar isso como falha daquele cliente (RELPROM-17), sem derrubar a execução dos demais clientes. <!-- RELPROM-23 -->
@@ -337,12 +356,18 @@ Toda ambiguidade foi resolvida ou registrada aqui.
 | RELPROM-65 | P10: Correções pós-revisão do PO | Execute | Implemented |
 | RELPROM-66 | P10: Correções pós-revisão do PO | Execute | Implemented |
 | RELPROM-67 | P10: Correções pós-revisão do PO | Execute | Implemented |
+| RELPROM-68 | P11: Ajustes de uso real | Execute | Implemented |
+| RELPROM-69 | P11: Ajustes de uso real | Execute | Implemented |
+| RELPROM-70 | P11: Ajustes de uso real | Execute | Implemented |
+| RELPROM-71 | P11: Ajustes de uso real | Execute | Implemented |
+| RELPROM-72 | P11: Ajustes de uso real | Execute | Implemented |
+| RELPROM-73 | P11: Ajustes de uso real | Execute | Implemented |
 
 **ID format:** `RELPROM-NN`
 
 **Status values:** Pending → In Design → In Tasks → Implementing → Verified
 
-**Coverage:** 67 total. RELPROM-01 a 67 implementadas (Phases 1-12 em `tasks.md`).
+**Coverage:** 73 total. RELPROM-01 a 73 implementadas (Phases 1-13 em `tasks.md`).
 
 ---
 

@@ -521,3 +521,42 @@ OBS pode conter anotações internas de revisão de cadastro (não observações
 | Guardrail de vazamento verbatim | Checagem de código (substring, case-insensitive, limiar 15 caracteres), não só instrução de prompt | Prompt sozinho é "pedir educadamente" — a IA pode ignorar; o código garante o resultado mesmo se o modelo não seguir a instrução |
 | Fallback "cru" sem OBS | Cards/tabela detalhada nunca mostram OBS, com ou sem IA disponível | Consistência: se a síntese da IA é bloqueada por citar OBS literal, o fallback não pode ser a porta dos fundos pro mesmo vazamento |
 | `porPromotor` sai da IA | Determinístico, 100% do tempo | Zero risco de atribuição errada — o código já tem o dado certo, não há ganho em delegar isso à IA |
+
+---
+
+## P11 — Ajustes de uso real (RELPROM-68 a 73, Design pós-Execute)
+
+Uso real da rota manual expôs 1 bug e motivou 3 pedidos de ajuste de conteúdo.
+
+### Bug de fuso no período customizado (RELPROM-68)
+
+`parseDataPeriodoQuery` (RELPROM-34) só ancorava em America/Sao_Paulo uma data "pura" (`YYYY-MM-DD`); qualquer string com horário explícito (inclusive UTC, `...Z`) passava direto por `new Date(...)`, sem reancorar. `inicio=2026-10-23T00:00:00.000Z` é 2026-10-22 21h em Brasília — a capa mostrava "22/10" em vez do "23/10" pedido. **Fix**: a função sempre extrai só os 10 primeiros caracteres (`YYYY-MM-DD`) da entrada e ancora pelo dia civil de Brasília, ignorando qualquer horário/fuso embutido — mesma regra pros 2 casos (data pura e data com horário).
+
+### UF e ordenação em "Performance por promotor" (RELPROM-69/70)
+
+Não existe campo de região/UF cadastrado no promotor (`entities/Promotor.ts` só tem CEP/lat/long). Decisão (confirmada com o usuário): UF = sigla do estado mais frequente entre as oficinas visitadas pelo promotor naquela campanha, derivada de `RotaPromotorRow.estadoOficina` (campo novo, cru, sem reparsear a string `cidadeOficina`). Empate decide pela 1ª UF encontrada (ordem de ocorrência nas rotas) — determinístico, nunca inferido por IA. A lista de `agruparPorPromotor` passa a vir ordenada por `concluidasPeriodo` decrescente; o renderer só desenha na ordem recebida, não reordena.
+
+### Assertividade acumulada (RELPROM-71)
+
+Nova função pura `calcularAssertividadeAcumulada(rotas)` — mesmo cálculo de `calcularAssertividade`, mas sobre todo o histórico de `rotas` da campanha (sem filtro de período), mesma lógica de "acumulado" já usada por promotor (`concluidasAcumulado`). Novo campo `assertividadeAcumulada` em `CampanhaBlocoRelatorio`, exibido como 2º callout na seção de assertividade.
+
+### Seção de destaques oculta + disclaimer migrado (RELPROM-72/73)
+
+A seção "Destaques do campo" saiu confusa na prática (pedido do usuário pra ocultar). **Fix**: `desenharBlocoCampanha` não chama mais `desenharDestaques` — a função e toda a geração de dados/IA por trás dela (`listarDestaquesDeCampo`, `gerarInsightsCampo`, síntese geral da chave `destaques`) continuam existindo intactas, só a página some do PDF final (decisão deliberadamente conservadora: "ocultar" ≠ remover a feature, reversível sem refazer trabalho se for reativada). O disclaimer sobre validação de observações (texto novo, não existia no PDF antes) migrou pra dentro de `desenharPorPromotor`, já que é a seção "de pessoas" que ficou mais visível com a seção de destaques oculta.
+
+### Componentes modificados
+
+| Componente | Mudança |
+| --- | --- |
+| `utils/promotorReportCalculos.ts` | `parseDataPeriodoQuery` sempre ancora pelo dia civil (ignora horário/fuso da entrada); `RotaPromotorRow.estadoOficina` (novo); `LinhaPromotor.uf` (novo); `agruparPorPromotor` ordena desc por `concluidasPeriodo` e calcula `uf`; nova `calcularAssertividadeAcumulada` |
+| `service/promotorReportService.ts` | `listarRotasDaCampanha` popula `estadoOficina`; `montarBlocoCampanha` calcula `assertividadeAcumulada` |
+| `types/promotorRelatorio.ts` | `CampanhaBlocoRelatorio.assertividadeAcumulada` (novo) |
+| `templates/relatorioPromotor.ts` | `desenharAssertividade` desenha o acumulado; `desenharPorPromotor` ganha coluna UF + disclaimer de observações; `desenharBlocoCampanha` não chama mais `desenharDestaques` |
+
+### Tech Decisions (adendo)
+
+| Decision | Choice | Rationale |
+| --- | --- | --- |
+| UF do promotor | Derivada das oficinas visitadas na campanha (moda do estado), não um campo cadastrado | Não existe dado de região no cadastro do promotor hoje; decisão confirmada com o usuário em vez de assumir |
+| Ocultar "Destaques do campo" | Remove só a chamada de render; mantém geração de dados/IA intacta | "Oculte" é reversível por natureza — menor raio de mudança, sem decidir unilateralmente descontinuar RELPROM-58 a 63 |
+| Disclaimer de observações | Texto novo (não existia no PDF); migrou pra "Performance por promotor" | Só existiam guardrails de prompt (invisíveis ao cliente) — pedido explícito do usuário de ter o aviso visível, e a seção de destaques (onde o texto de OBS aparecia) saiu do PDF |

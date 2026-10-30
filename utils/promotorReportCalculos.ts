@@ -26,17 +26,22 @@ export function calcularPeriodoSemanal(agora: Date): PeriodoRelatorio {
 
 /**
  * Converte um `inicio`/`fim` de período vindo de query string (RELPROM-34).
- * Uma data "pura" (`YYYY-MM-DD`, sem horário/fuso) é ambígua em `new
- * Date(...)`: o JS trata como meia-noite UTC, que em America/Sao_Paulo
- * (UTC-3) cai no dia anterior — a capa do PDF então exibia um dia a menos do
- * que o pedido. Ancorado em America/Sao_Paulo (início do dia / fim do dia),
- * igual a `calcularPeriodoSemanal`. Uma string com horário explícito
- * (`T hh:mm`, com ou sem fuso) passa direto por `new Date(...)`.
+ * Sempre ancora pelo dia civil de Brasília (America/Sao_Paulo) — só os 10
+ * primeiros caracteres (`YYYY-MM-DD`) da string importam, qualquer
+ * horário/fuso embutido é ignorado. Igual a `calcularPeriodoSemanal`.
+ *
+ * RELPROM-68 (correção pós-uso real): a versão anterior só ancorava uma data
+ * "pura" (sem horário — `new Date("2026-10-09")` cai no dia anterior em
+ * UTC-3) e deixava passar direto qualquer string com horário explícito,
+ * mesmo em UTC (`Z`). Isso tinha o mesmo bug: `inicio=2026-10-23T00:00:00.000Z`
+ * é 2026-10-22 21h em Brasília, então a capa exibia "22/10" em vez de "23/10"
+ * pedido. Ignorar o horário/fuso da entrada e ancorar sempre no dia civil de
+ * Brasília resolve os 2 casos com a mesma regra.
  */
 export function parseDataPeriodoQuery(dataIso: string, ponta: "inicio" | "fim"): Date {
-  if (/T\d{2}:\d{2}/.test(dataIso)) return new Date(dataIso);
+  const data = dataIso.slice(0, 10);
   const sufixo = ponta === "inicio" ? "T00:00:00.000" : "T23:59:59.999";
-  return fromZonedTime(`${dataIso}${sufixo}`, FUSO_RELATORIO);
+  return fromZonedTime(`${data}${sufixo}`, FUSO_RELATORIO);
 }
 
 /**
@@ -56,6 +61,8 @@ export interface RotaPromotorRow {
   nomePromotor: string;
   nomeOficina: string;
   cidadeOficina: string;
+  /** UF (sigla do estado) da oficina, cru — RELPROM-70, pra derivar a região do promotor. `null` quando a oficina não resolve (LEFT JOIN vazio). */
+  estadoOficina: string | null;
   OBS: string | null;
 }
 
@@ -87,6 +94,8 @@ export interface LinhaPromotor {
   canceladasPeriodo: number;
   concluidasAcumulado: number;
   abertasNaRota: number;
+  /** UF mais frequente entre as oficinas visitadas pelo promotor nessa campanha (RELPROM-70). `null` sem nenhuma oficina com estado resolvido. */
+  uf: string | null;
 }
 
 export interface Cancelamento {
@@ -218,9 +227,41 @@ export function calcularAssertividade(concluidas: number, canceladas: number): n
 }
 
 /**
+ * Assertividade acumulada da campanha inteira (RELPROM-71) — mesmo cálculo
+ * de `calcularAssertividade`, mas sobre todo o histórico de `rotas`, sem
+ * filtro de período (igual à lógica de "acumulado" já usada por promotor em
+ * `concluidasAcumulado`, aqui em nível de campanha).
+ */
+export function calcularAssertividadeAcumulada(rotas: RotaPromotorRow[]): number | "N/A" {
+  const concluidas = rotas.filter((rota) => rota.STATUS === StatusRota.FINALIZADO).length;
+  const canceladas = rotas.filter((rota) => rota.STATUS === StatusRota.CANCELADO).length;
+  return calcularAssertividade(concluidas, canceladas);
+}
+
+/** UF mais frequente entre `rotas` (RELPROM-70) — ignora rota sem estado resolvido; empate decide pela 1ª UF encontrada. `null` sem nenhum estado. */
+function ufMaisFrequente(rotas: RotaPromotorRow[]): string | null {
+  const contagemPorUf = new Map<string, number>();
+  for (const rota of rotas) {
+    if (!rota.estadoOficina) continue;
+    contagemPorUf.set(rota.estadoOficina, (contagemPorUf.get(rota.estadoOficina) ?? 0) + 1);
+  }
+
+  let melhorUf: string | null = null;
+  let maiorContagem = 0;
+  for (const [uf, contagem] of contagemPorUf) {
+    if (contagem > maiorContagem) {
+      melhorUf = uf;
+      maiorContagem = contagem;
+    }
+  }
+  return melhorUf;
+}
+
+/**
  * RELPROM-07. Uma linha por promotor que aparece em `rotas` (pelo menos 1
  * registro na campanha) — inclui promotor com tudo zerado no período, não
- * omite linha (ver edge case do spec.md).
+ * omite linha (ver edge case do spec.md). Ordenado por `concluidasPeriodo`
+ * decrescente (RELPROM-69) — quem concluiu mais no período aparece no topo.
  */
 export function agruparPorPromotor(rotas: RotaPromotorRow[], periodo: PeriodoRelatorio): LinhaPromotor[] {
   const porPromotor = new Map<number, { nomePromotor: string; rotas: RotaPromotorRow[] }>();
@@ -230,7 +271,7 @@ export function agruparPorPromotor(rotas: RotaPromotorRow[], periodo: PeriodoRel
     porPromotor.set(rota.idPromotor, grupo);
   }
 
-  return Array.from(porPromotor.entries()).map(([idPromotor, { nomePromotor, rotas: rotasDoPromotor }]) => {
+  const linhas = Array.from(porPromotor.entries()).map(([idPromotor, { nomePromotor, rotas: rotasDoPromotor }]) => {
     const visaoGeralPromotor = calcularVisaoGeral(rotasDoPromotor, periodo);
     const concluidasAcumulado = rotasDoPromotor.filter((rota) => rota.STATUS === StatusRota.FINALIZADO).length;
 
@@ -241,8 +282,11 @@ export function agruparPorPromotor(rotas: RotaPromotorRow[], periodo: PeriodoRel
       canceladasPeriodo: visaoGeralPromotor.canceladas,
       concluidasAcumulado,
       abertasNaRota: visaoGeralPromotor.abertasNaRota,
+      uf: ufMaisFrequente(rotasDoPromotor),
     };
   });
+
+  return linhas.sort((a, b) => b.concluidasPeriodo - a.concluidasPeriodo);
 }
 
 /** RELPROM-08. Todo cancelamento do período, com ou sem OBS preenchido. */

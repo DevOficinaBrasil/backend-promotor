@@ -43,6 +43,8 @@ export interface CampanhaBlocoRelatorio {
   visaoGeral: VisaoGeralCampanha;
   visitasPorDia: PontoVisitasPorDia[];
   assertividade: number | "N/A";
+  /** Assertividade desde o início da campanha, sem filtro de período (RELPROM-71). */
+  assertividadeAcumulada: number | "N/A";
   porPromotor: LinhaPromotor[];
   cancelamentos: Cancelamento[];
   destaquesDeCampo: DestaqueCampo[];

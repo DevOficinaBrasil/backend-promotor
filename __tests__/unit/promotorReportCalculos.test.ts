@@ -5,6 +5,7 @@ import {
   descreverDiaPico,
   descreverLiderPeriodo,
   calcularAssertividade,
+  calcularAssertividadeAcumulada,
   calcularPeriodoSemanal,
   calcularProximosPassos,
   calcularVisaoGeral,
@@ -29,6 +30,7 @@ function rota(partial: Partial<RotaPromotorRow>): RotaPromotorRow {
     nomePromotor: "Willian Ferreira",
     nomeOficina: "Oficina Teste",
     cidadeOficina: "São Paulo/SP",
+    estadoOficina: "SP",
     OBS: null,
     ...partial,
   };
@@ -103,6 +105,23 @@ describe("calcularAssertividade", () => {
   });
 });
 
+describe("calcularAssertividadeAcumulada", () => {
+  it("conta FINALIZADO/CANCELADO de toda a campanha, sem filtro de periodo — RELPROM-71", () => {
+    const rotas = [
+      rota({ STATUS: StatusRota.FINALIZADO, DONE_AT: new Date("2026-09-01T10:00:00-03:00") }), // fora do periodo, conta no acumulado
+      rota({ STATUS: StatusRota.FINALIZADO, DONE_AT: new Date("2026-10-15T10:00:00-03:00") }),
+      rota({ STATUS: StatusRota.CANCELADO, UPDATED_AT: new Date("2026-09-01T10:00:00-03:00") }),
+      rota({ STATUS: StatusRota.BACKLOG }),
+    ];
+
+    expect(calcularAssertividadeAcumulada(rotas)).toBe(67); // 2 de 3 encerradas
+  });
+
+  it("retorna N/A sem nenhuma FINALIZADO/CANCELADO", () => {
+    expect(calcularAssertividadeAcumulada([rota({ STATUS: StatusRota.BACKLOG })])).toBe("N/A");
+  });
+});
+
 describe("agruparPorPromotor", () => {
   it("agrupa concluidas/canceladas do periodo e acumulado por promotor — RELPROM-07", () => {
     const rotas = [
@@ -115,8 +134,8 @@ describe("agruparPorPromotor", () => {
     const resultado = agruparPorPromotor(rotas, PERIODO);
 
     expect(resultado).toEqual([
-      { idPromotor: 1, nomePromotor: "Willian", concluidasPeriodo: 1, canceladasPeriodo: 0, concluidasAcumulado: 2, abertasNaRota: 1 },
-      { idPromotor: 2, nomePromotor: "Djoni", concluidasPeriodo: 0, canceladasPeriodo: 1, concluidasAcumulado: 0, abertasNaRota: 0 },
+      { idPromotor: 1, nomePromotor: "Willian", concluidasPeriodo: 1, canceladasPeriodo: 0, concluidasAcumulado: 2, abertasNaRota: 1, uf: "SP" },
+      { idPromotor: 2, nomePromotor: "Djoni", concluidasPeriodo: 0, canceladasPeriodo: 1, concluidasAcumulado: 0, abertasNaRota: 0, uf: "SP" },
     ]);
   });
 
@@ -126,8 +145,41 @@ describe("agruparPorPromotor", () => {
     const resultado = agruparPorPromotor(rotas, PERIODO);
 
     expect(resultado).toEqual([
-      { idPromotor: 3, nomePromotor: "Vanessa", concluidasPeriodo: 0, canceladasPeriodo: 0, concluidasAcumulado: 0, abertasNaRota: 1 },
+      { idPromotor: 3, nomePromotor: "Vanessa", concluidasPeriodo: 0, canceladasPeriodo: 0, concluidasAcumulado: 0, abertasNaRota: 1, uf: "SP" },
     ]);
+  });
+
+  it("ordena por concluidasPeriodo decrescente — RELPROM-69", () => {
+    const rotas = [
+      rota({ idPromotor: 1, nomePromotor: "Homero", STATUS: StatusRota.FINALIZADO, DONE_AT: new Date("2026-10-15T10:00:00-03:00") }),
+      rota({ idPromotor: 2, nomePromotor: "Willian", STATUS: StatusRota.FINALIZADO, DONE_AT: new Date("2026-10-15T10:00:00-03:00") }),
+      rota({ idPromotor: 2, nomePromotor: "Willian", STATUS: StatusRota.FINALIZADO, DONE_AT: new Date("2026-10-16T10:00:00-03:00") }),
+      rota({ idPromotor: 3, nomePromotor: "José", STATUS: StatusRota.BACKLOG }),
+    ];
+
+    const resultado = agruparPorPromotor(rotas, PERIODO);
+
+    expect(resultado.map((linha) => linha.nomePromotor)).toEqual(["Willian", "Homero", "José"]);
+  });
+
+  it("uf e a sigla do estado mais frequente entre as oficinas do promotor na campanha — RELPROM-70", () => {
+    const rotas = [
+      rota({ idPromotor: 1, nomePromotor: "Willian", estadoOficina: "MG" }),
+      rota({ idPromotor: 1, nomePromotor: "Willian", estadoOficina: "MG" }),
+      rota({ idPromotor: 1, nomePromotor: "Willian", estadoOficina: "SP" }),
+    ];
+
+    const [promotor] = agruparPorPromotor(rotas, PERIODO);
+
+    expect(promotor.uf).toBe("MG");
+  });
+
+  it("uf e null quando nenhuma oficina do promotor tem estado resolvido", () => {
+    const rotas = [rota({ idPromotor: 1, nomePromotor: "Willian", estadoOficina: null })];
+
+    const [promotor] = agruparPorPromotor(rotas, PERIODO);
+
+    expect(promotor.uf).toBeNull();
   });
 });
 
@@ -287,8 +339,8 @@ describe("descreverDiaPico", () => {
 describe("descreverLiderPeriodo", () => {
   it("escolhe o promotor com mais concluidas no periodo e formata a frase — RELPROM-64", () => {
     const porPromotor = [
-      { idPromotor: 1, nomePromotor: "Homero", concluidasPeriodo: 9, canceladasPeriodo: 0, concluidasAcumulado: 21, abertasNaRota: 20 },
-      { idPromotor: 2, nomePromotor: "Willian", concluidasPeriodo: 15, canceladasPeriodo: 2, concluidasAcumulado: 26, abertasNaRota: 24 },
+      { idPromotor: 1, nomePromotor: "Homero", concluidasPeriodo: 9, canceladasPeriodo: 0, concluidasAcumulado: 21, abertasNaRota: 20, uf: "MG" },
+      { idPromotor: 2, nomePromotor: "Willian", concluidasPeriodo: 15, canceladasPeriodo: 2, concluidasAcumulado: 26, abertasNaRota: 24, uf: "SP" },
     ];
 
     expect(descreverLiderPeriodo(porPromotor)).toBe("Willian lidera o período com 15 visitas concluídas.");
@@ -299,15 +351,15 @@ describe("descreverLiderPeriodo", () => {
     // vida real, mas o ponto aqui e que o LIDER DO PERIODO e quem tem mais
     // concluidasPeriodo, nunca quem tem o maior concluidasAcumulado.
     const porPromotor = [
-      { idPromotor: 1, nomePromotor: "Homero", concluidasPeriodo: 2, canceladasPeriodo: 0, concluidasAcumulado: 40, abertasNaRota: 20 },
-      { idPromotor: 2, nomePromotor: "Willian", concluidasPeriodo: 15, canceladasPeriodo: 2, concluidasAcumulado: 26, abertasNaRota: 24 },
+      { idPromotor: 1, nomePromotor: "Homero", concluidasPeriodo: 2, canceladasPeriodo: 0, concluidasAcumulado: 40, abertasNaRota: 20, uf: "MG" },
+      { idPromotor: 2, nomePromotor: "Willian", concluidasPeriodo: 15, canceladasPeriodo: 2, concluidasAcumulado: 26, abertasNaRota: 24, uf: "SP" },
     ];
 
     expect(descreverLiderPeriodo(porPromotor)).toBe("Willian lidera o período com 15 visitas concluídas.");
   });
 
   it("retorna null quando ninguem concluiu nada no periodo", () => {
-    const porPromotor = [{ idPromotor: 1, nomePromotor: "Homero", concluidasPeriodo: 0, canceladasPeriodo: 3, concluidasAcumulado: 21, abertasNaRota: 20 }];
+    const porPromotor = [{ idPromotor: 1, nomePromotor: "Homero", concluidasPeriodo: 0, canceladasPeriodo: 3, concluidasAcumulado: 21, abertasNaRota: 20, uf: "MG" }];
 
     expect(descreverLiderPeriodo(porPromotor)).toBeNull();
   });
@@ -345,8 +397,15 @@ describe("parseDataPeriodoQuery", () => {
     expect(parseDataPeriodoQuery("2026-10-22", "fim").toISOString()).toBe("2026-10-23T02:59:59.999Z");
   });
 
-  it("string com horario explicito passa direto, sem reancorar fuso", () => {
-    expect(parseDataPeriodoQuery("2026-10-09T00:00:00.000Z", "inicio").toISOString()).toBe("2026-10-09T00:00:00.000Z");
+  it("string com horario UTC explicito e reancorada pelo dia civil de Brasilia, nao passa direto — RELPROM-68", () => {
+    // 2026-10-09T00:00:00.000Z seria 2026-10-08 21h em Brasilia se passasse
+    // direto (bug antigo) — o dia pedido (09) tem que ser respeitado.
+    expect(parseDataPeriodoQuery("2026-10-09T00:00:00.000Z", "inicio").toISOString()).toBe("2026-10-09T03:00:00.000Z");
+  });
+
+  it("regressao do caso real reportado: inicio=...T00:00:00.000Z e fim=...T23:59:59.999Z do mesmo dia pedido — RELPROM-68", () => {
+    expect(parseDataPeriodoQuery("2026-10-23T00:00:00.000Z", "inicio").toISOString()).toBe("2026-10-23T03:00:00.000Z");
+    expect(parseDataPeriodoQuery("2026-10-29T23:59:59.999Z", "fim").toISOString()).toBe("2026-10-30T02:59:59.999Z");
   });
 });
 
@@ -354,8 +413,8 @@ describe("calcularProximosPassos", () => {
   it("reaproveita visaoGeral (abertas/canceladas) e conta promotores sem registro — RELPROM-10", () => {
     const visaoGeral = { concluidas: 10, canceladas: 3, abertasNaRota: 7 };
     const porPromotor = [
-      { idPromotor: 1, nomePromotor: "A", concluidasPeriodo: 2, canceladasPeriodo: 0, concluidasAcumulado: 2, abertasNaRota: 1 },
-      { idPromotor: 2, nomePromotor: "B", concluidasPeriodo: 0, canceladasPeriodo: 1, concluidasAcumulado: 0, abertasNaRota: 2 },
+      { idPromotor: 1, nomePromotor: "A", concluidasPeriodo: 2, canceladasPeriodo: 0, concluidasAcumulado: 2, abertasNaRota: 1, uf: "SP" },
+      { idPromotor: 2, nomePromotor: "B", concluidasPeriodo: 0, canceladasPeriodo: 1, concluidasAcumulado: 0, abertasNaRota: 2, uf: "MG" },
     ];
 
     expect(calcularProximosPassos(visaoGeral, porPromotor)).toEqual({

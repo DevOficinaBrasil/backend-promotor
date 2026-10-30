@@ -73,14 +73,16 @@ describe("POST /admin/promotor-relatorio/:idCliente/gerar", () => {
     expect(periodo.fim.getTime() - periodo.inicio.getTime()).toBeGreaterThan(6 * 24 * 60 * 60 * 1000);
   });
 
-  it("usa o período customizado quando inicio/fim são informados — RELPROM-34", async () => {
+  it("usa o período customizado quando inicio/fim são informados, ancorado no dia civil de Brasília — RELPROM-34, RELPROM-68", async () => {
+    // RELPROM-68: mesmo com horário UTC explícito na query, o dia pedido
+    // (01 a 02/01) é respeitado — não passa direto sem reancorar o fuso.
     await request(app)
       .post("/admin/promotor-relatorio/10/gerar?inicio=2026-01-01T00:00:00.000Z&fim=2026-01-02T00:00:00.000Z")
       .set("Authorization", `Bearer ${tokenAdmin()}`);
 
     const [, periodo] = processarRelatorioCliente.mock.calls[0];
-    expect(periodo.inicio.toISOString()).toBe("2026-01-01T00:00:00.000Z");
-    expect(periodo.fim.toISOString()).toBe("2026-01-02T00:00:00.000Z");
+    expect(periodo.inicio.toISOString()).toBe("2026-01-01T03:00:00.000Z");
+    expect(periodo.fim.toISOString()).toBe("2026-01-03T02:59:59.999Z");
   });
 
   it("data pura (sem horário) é ancorada em America/Sao_Paulo, não UTC — evita exibir o dia anterior na capa", async () => {

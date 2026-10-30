@@ -370,6 +370,10 @@ function desenharAssertividade(cursor: Cursor, bloco: CampanhaBlocoRelatorio): v
     cursor,
     `${bloco.visaoGeral.concluidas} concluídas de ${encerradas} visitas encerradas no período (concluídas + canceladas).`
   );
+
+  // RELPROM-71: acumulado desde o início da campanha, não só do período.
+  const textoAcumulado = bloco.assertividadeAcumulada === "N/A" ? "N/A" : `${bloco.assertividadeAcumulada}%`;
+  desenharCallout(cursor, `Assertividade acumulada da campanha (desde o início): ${textoAcumulado}.`);
 }
 
 function desenharPorPromotor(cursor: Cursor, bloco: CampanhaBlocoRelatorio): void {
@@ -379,20 +383,32 @@ function desenharPorPromotor(cursor: Cursor, bloco: CampanhaBlocoRelatorio): voi
   desenharSintese(cursor, bloco.sintesesPorSecao?.porPromotor);
 
   const colunas: ColunaTabela[] = [
-    { titulo: "Promotor", largura: 260 },
-    { titulo: "Concl. (período)", largura: 150 },
-    { titulo: "Canc. (período)", largura: 150 },
-    { titulo: "Concl. (acum.)", largura: 150 },
-    { titulo: "Abertas", largura: LARGURA_UTIL - 260 - 150 - 150 - 150 },
+    { titulo: "Promotor", largura: 220 },
+    { titulo: "UF", largura: 50 },
+    { titulo: "Concl. (período)", largura: 140 },
+    { titulo: "Canc. (período)", largura: 140 },
+    { titulo: "Concl. (acum.)", largura: 140 },
+    { titulo: "Abertas", largura: LARGURA_UTIL - 220 - 50 - 140 - 140 - 140 },
   ];
+  // RELPROM-69: a lista já vem ordenada por concluidasPeriodo decrescente
+  // (ver `agruparPorPromotor`) — não reordena aqui.
   const linhas = bloco.porPromotor.map((promotor: LinhaPromotor) => [
     promotor.nomePromotor,
+    promotor.uf ?? "—",
     String(promotor.concluidasPeriodo),
     String(promotor.canceladasPeriodo),
     String(promotor.concluidasAcumulado),
     String(promotor.abertasNaRota),
   ]);
   desenharTabela(cursor, colunas, linhas, "Sem promotores nesta campanha.");
+
+  // RELPROM-73: disclaimer das observações migrou pra cá — a seção que
+  // mostrava o texto registrado pelos promotores no app ("Destaques do
+  // campo") foi ocultada do PDF (RELPROM-72).
+  desenharCallout(
+    cursor,
+    "Observações registradas pelos promotores no app passam por validação automática: anotações internas, desatualizadas ou sem relação direta com a visita não são exibidas neste relatório."
+  );
 }
 
 /** "N oficinas: nome1, nome2, ..." quando agrupado, ou só o nome quando é 1 só — nunca texto cru da IA. */
@@ -530,7 +546,10 @@ function desenharBlocoCampanha(cursor: Cursor, bloco: CampanhaBlocoRelatorio): v
   desenharAssertividade(cursor, bloco);
   desenharPorPromotor(cursor, bloco);
   desenharCancelamentos(cursor, bloco);
-  desenharDestaques(cursor, bloco);
+  // RELPROM-72: "Destaques do campo" ocultada do PDF — o disclaimer sobre as
+  // observações migrou pra "Performance por promotor" (RELPROM-73).
+  // `desenharDestaques` fica sem uso aqui de propósito (não removida: a
+  // geração por IA/dados continua existindo, só a página some).
   desenharProximosPassos(cursor, bloco);
 }
 

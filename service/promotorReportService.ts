@@ -9,6 +9,7 @@ import {
   agruparPorPromotor,
   agruparVisitasPorDia,
   calcularAssertividade,
+  calcularAssertividadeAcumulada,
   calcularProximosPassos,
   calcularVisaoGeral,
   descreverLiderPeriodo,
@@ -101,6 +102,9 @@ export default class PromotorReportService {
       nomePromotor: linha.nomePromotor,
       nomeOficina: linha.nomeOficina ?? "Oficina sem nome",
       cidadeOficina: linha.cidade && linha.estado ? `${linha.cidade}/${linha.estado}` : linha.cidade ?? "—",
+      // RELPROM-70: cru, sem reparsear "Cidade/UF" — pra derivar a UF mais
+      // frequente do promotor em `agruparPorPromotor`.
+      estadoOficina: linha.estado ?? null,
       OBS: linha.OBS ?? null,
     }));
   }
@@ -115,6 +119,7 @@ export default class PromotorReportService {
       visaoGeral,
       visitasPorDia: agruparVisitasPorDia(rotas, periodo),
       assertividade: calcularAssertividade(visaoGeral.concluidas, visaoGeral.canceladas),
+      assertividadeAcumulada: calcularAssertividadeAcumulada(rotas),
       porPromotor,
       cancelamentos: listarCancelamentos(rotas, periodo),
       destaquesDeCampo: listarDestaquesDeCampo(rotas, periodo),

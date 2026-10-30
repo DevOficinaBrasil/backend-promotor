@@ -162,6 +162,14 @@ T50
 T51
 ```
 
+### Phase 13: Ajustes de uso real (RELPROM-68 a 73)
+
+Uso real da rota manual expôs um bug de fuso na capa e motivou 3 pedidos de ajuste de conteúdo: ordenação/UF em "Performance por promotor", assertividade acumulada da campanha, e ocultar a seção "Destaques do campo" (movendo o disclaimer de observações pra "Performance por promotor").
+
+```
+T52
+```
+
 ---
 
 ## Task Breakdown
@@ -1592,6 +1600,35 @@ Adicionada depois do Verifier dar PASS (3ª iteração). 2 pedidos do usuário: 
 
 ---
 
+### T52: Período/fuso, ordenação+UF, assertividade acumulada, oculta destaques (backend-promotor)
+
+**What**: (1) `parseDataPeriodoQuery` sempre ancora pelo dia civil de Brasília, ignorando horário/fuso da entrada (RELPROM-68). (2) `agruparPorPromotor` ordena por `concluidasPeriodo` decrescente e calcula `LinhaPromotor.uf` (UF mais frequente das oficinas do promotor na campanha, via novo `RotaPromotorRow.estadoOficina`); tabela "Performance por promotor" ganha coluna UF (RELPROM-69/70). (3) Nova `calcularAssertividadeAcumulada` (todo o histórico, sem filtro de período); `CampanhaBlocoRelatorio.assertividadeAcumulada` exibida como 2º callout na seção de assertividade (RELPROM-71). (4) `desenharBlocoCampanha` não chama mais `desenharDestaques` (função/geração de dados por trás continuam existindo, só a página some); disclaimer de observações migra pra `desenharPorPromotor` (RELPROM-72/73).
+**Where**: `utils/promotorReportCalculos.ts`, `service/promotorReportService.ts`, `types/promotorRelatorio.ts`, `templates/relatorioPromotor.ts` (todos modificam)
+**Depends on**: None
+**Reuses**: `desenharCallout` (já existe) pro acumulado e pro disclaimer; nada novo de infra
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [x] `parseDataPeriodoQuery("2026-10-23T00:00:00.000Z", "inicio")` e `parseDataPeriodoQuery("2026-10-29T23:59:59.999Z", "fim")` (caso real reportado) resolvem pro dia pedido (23 a 29/10), não 1 dia a menos
+- [x] `agruparPorPromotor` retorna a lista ordenada por `concluidasPeriodo` decrescente, com `uf` calculado (UF mais frequente das oficinas do promotor; `null` sem nenhum estado resolvido)
+- [x] Tabela "Performance por promotor" no PDF mostra a coluna UF, na ordem recebida (sem reordenar no renderer)
+- [x] Seção de assertividade mostra o percentual do período e o percentual acumulado da campanha (desde o início, sem filtro de período)
+- [x] Nenhuma página "Destaques do campo" é gerada no PDF, mesmo com `destaquesDeCampo`/`insightsCampo`/síntese de `destaques` presentes no bloco
+- [x] Disclaimer de observações aparece na seção "Performance por promotor"
+- [x] Gate check passa: suite completa do projeto (`npx jest`) + `npx tsc --noEmit`, sem regressão
+
+**Tests**: unit, integration
+**Gate**: quick
+
+**Commit**: `fix(promotor-relatorio): corrige fuso do periodo, adiciona uf/acumulado e oculta destaques`
+
+**Status**: ✅ Complete
+
+---
+
 ## Phase Execution Map
 
 ```
@@ -1628,9 +1665,10 @@ Phase 11: T44 ------→ T45 ------→ T46
 Phase 12: T48 ------→ T49
           T50
           T51
+Phase 13: T52
 ```
 
-Dependências cross-phase (não aparecem no diagrama por fase, só no `Depends on` de cada task, conforme a regra do skill): T15 depende de T01 (Phase 1) e T11 (Phase 3); T16 depende de T10 e T11 (Phase 3); T19 depende de T18 (Phase 4); T21 depende de T17 (Phase 4); T23/T25 não têm dependência cross-phase (reaproveitam T02/T04 já concluídas, sem precisar reabrir); T28 não depende de nenhuma task de fase anterior (reescreve T15 por completo, contrato de `renderizarPdf` preservado); T33, T35, T40, T44, T50 e T51 também não têm dependência cross-phase (cliente externo, tipos, funções puras e render novos, sem tocar em código das fases anteriores).
+Dependências cross-phase (não aparecem no diagrama por fase, só no `Depends on` de cada task, conforme a regra do skill): T15 depende de T01 (Phase 1) e T11 (Phase 3); T16 depende de T10 e T11 (Phase 3); T19 depende de T18 (Phase 4); T21 depende de T17 (Phase 4); T23/T25 não têm dependência cross-phase (reaproveitam T02/T04 já concluídas, sem precisar reabrir); T28 não depende de nenhuma task de fase anterior (reescreve T15 por completo, contrato de `renderizarPdf` preservado); T33, T35, T40, T44, T50, T51 e T52 também não têm dependência cross-phase (cliente externo, tipos, funções puras e render ajustados, sem reabrir o design das fases anteriores).
 
 Execução é estritamente sequencial dentro de cada fase — sem paralelismo intra-fase.
 
@@ -1691,6 +1729,7 @@ Execução é estritamente sequencial dentro de cada fase — sem paralelismo in
 | T49 | 1 remoção de chave da IA + 1 wiring determinístico, 2 arquivos coesos (par indissociável) | ✅ Granular |
 | T50 | 1 função pura + wiring em 2 validadores já existentes + 2 prompts | ✅ Granular (coeso: mesmo guardrail aplicado nos 2 lugares) |
 | T51 | 2 pontos de remoção de render, mesmo arquivo | ✅ Granular |
+| T52 | 4 ACs (RELPROM-68/69+70/71/72+73) em 4 arquivos | ⚠️ Bundlada de propósito — pedido do usuário como 1 rodada só de ajustes; cada AC é pequena isoladamente e as mudanças de `agruparPorPromotor` (ordenação+UF) tocam a mesma função, não compensa fatiar mais |
 
 ---
 
@@ -1749,6 +1788,7 @@ Execução é estritamente sequencial dentro de cada fase — sem paralelismo in
 | T49 | T48 (mesma fase) | T48→T49 | ✅ Match |
 | T50 | None | — | ✅ Match |
 | T51 | None | — | ✅ Match |
+| T52 | None | — | ✅ Match |
 
 ---
 
@@ -1807,6 +1847,7 @@ Execução é estritamente sequencial dentro de cada fase — sem paralelismo in
 | T49 | Service/domínio | unit | unit | ✅ OK |
 | T50 | Função pura + cliente externo mockado | unit | unit | ✅ OK |
 | T51 | Service/domínio (renderer) | unit | unit | ✅ OK |
+| T52 | Função pura + service/domínio (renderer) | unit, integration | unit, integration | ✅ OK |
 
 ---
 

@@ -16,8 +16,9 @@ const BLOCO: CampanhaBlocoRelatorio = {
   visaoGeral: { concluidas: 71, canceladas: 21, abertasNaRota: 132 },
   visitasPorDia: [],
   assertividade: 77,
+  assertividadeAcumulada: 77,
   porPromotor: [
-    { idPromotor: 1, nomePromotor: "Willian", concluidasPeriodo: 15, canceladasPeriodo: 0, concluidasAcumulado: 18, abertasNaRota: 11 },
+    { idPromotor: 1, nomePromotor: "Willian", concluidasPeriodo: 15, canceladasPeriodo: 0, concluidasAcumulado: 18, abertasNaRota: 11, uf: "SP" },
   ],
   cancelamentos: [
     { idPromotor: 2, nomePromotor: "José", nomeOficina: "Real Car", cidadeOficina: "Belo Horizonte/MG", obs: "Promotor de folga" },
