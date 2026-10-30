@@ -3,6 +3,7 @@ import {
   agruparPorPromotor,
   agruparVisitasPorDia,
   descreverDiaPico,
+  descreverLiderPeriodo,
   calcularAssertividade,
   calcularPeriodoSemanal,
   calcularProximosPassos,
@@ -280,6 +281,39 @@ describe("descreverDiaPico", () => {
   it("retorna null quando nao ha nenhuma visita concluida no periodo", () => {
     expect(descreverDiaPico([], 0)).toBeNull();
     expect(descreverDiaPico([{ dia: "13/10", diaSemana: "ter", concluidas: 0, canceladas: 3 }], 0)).toBeNull();
+  });
+});
+
+describe("descreverLiderPeriodo", () => {
+  it("escolhe o promotor com mais concluidas no periodo e formata a frase — RELPROM-64", () => {
+    const porPromotor = [
+      { idPromotor: 1, nomePromotor: "Homero", concluidasPeriodo: 9, canceladasPeriodo: 0, concluidasAcumulado: 21, abertasNaRota: 20 },
+      { idPromotor: 2, nomePromotor: "Willian", concluidasPeriodo: 15, canceladasPeriodo: 2, concluidasAcumulado: 26, abertasNaRota: 24 },
+    ];
+
+    expect(descreverLiderPeriodo(porPromotor)).toBe("Willian lidera o período com 15 visitas concluídas.");
+  });
+
+  it("nunca atribui o numero de outro promotor — regressao do bug apontado pelo PO (acumulado maior nao e o lider do periodo)", () => {
+    // Homero tem o maior ACUMULADO (21 vs 26 de Willian seria o contrario na
+    // vida real, mas o ponto aqui e que o LIDER DO PERIODO e quem tem mais
+    // concluidasPeriodo, nunca quem tem o maior concluidasAcumulado.
+    const porPromotor = [
+      { idPromotor: 1, nomePromotor: "Homero", concluidasPeriodo: 2, canceladasPeriodo: 0, concluidasAcumulado: 40, abertasNaRota: 20 },
+      { idPromotor: 2, nomePromotor: "Willian", concluidasPeriodo: 15, canceladasPeriodo: 2, concluidasAcumulado: 26, abertasNaRota: 24 },
+    ];
+
+    expect(descreverLiderPeriodo(porPromotor)).toBe("Willian lidera o período com 15 visitas concluídas.");
+  });
+
+  it("retorna null quando ninguem concluiu nada no periodo", () => {
+    const porPromotor = [{ idPromotor: 1, nomePromotor: "Homero", concluidasPeriodo: 0, canceladasPeriodo: 3, concluidasAcumulado: 21, abertasNaRota: 20 }];
+
+    expect(descreverLiderPeriodo(porPromotor)).toBeNull();
+  });
+
+  it("retorna null para lista vazia", () => {
+    expect(descreverLiderPeriodo([])).toBeNull();
   });
 });
 

@@ -1495,17 +1495,17 @@ Adicionada depois do Verifier dar PASS (3ª iteração). 2 pedidos do usuário: 
 - Skill: NONE
 
 **Done when**:
-- [ ] Encontra o promotor de maior `concluidasPeriodo`; em empate, usa o primeiro da lista
-- [ ] Retorna `null` quando todos os promotores têm `concluidasPeriodo = 0` (ou lista vazia)
-- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportCalculos.test.ts`
-- [ ] `npx tsc --noEmit` sem erro novo
+- [x] Encontra o promotor de maior `concluidasPeriodo`; em empate, usa o primeiro da lista
+- [x] Retorna `null` quando todos os promotores têm `concluidasPeriodo = 0` (ou lista vazia)
+- [x] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportCalculos.test.ts` (38 passed)
+- [x] `npx tsc --noEmit` sem erro novo
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `fix(promotor-relatorio): sintese de performance por promotor deterministica`
 
-**Status**: ⬜ Pending
+**Status**: ✅ Complete
 
 ---
 
@@ -1522,16 +1522,16 @@ Adicionada depois do Verifier dar PASS (3ª iteração). 2 pedidos do usuário: 
 - Skill: NONE
 
 **Done when**:
-- [ ] `porPromotor` não aparece mais no JSON de dados nem na lista de chaves pedidas no prompt de `gerarSinteses`
-- [ ] `bloco.sintesesPorSecao.porPromotor` é sempre o resultado de `descreverLiderPeriodo`, mesmo que a IA (hipoteticamente) devolva algo pra essa chave
-- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportSintese.test.ts __tests__/unit/promotorReportServiceEnvio.test.ts` (sem regressão + novos casos)
+- [x] `porPromotor` não aparece mais no JSON de dados nem na lista de chaves pedidas no prompt de `gerarSinteses`
+- [x] `bloco.sintesesPorSecao.porPromotor` é sempre o resultado de `descreverLiderPeriodo`, mesmo que a IA (hipoteticamente) devolva algo pra essa chave
+- [x] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportSintese.test.ts __tests__/unit/promotorReportServiceEnvio.test.ts` (19 + 22 passed, sem regressão + novos casos)
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `fix(promotor-relatorio): sintese de performance por promotor deterministica` (mesmo commit de T48)
 
-**Status**: ⬜ Pending
+**Status**: ✅ Complete
 
 ---
 

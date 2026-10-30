@@ -194,6 +194,22 @@ export function descreverDiaPico(pontos: PontoVisitasPorDia[], totalConcluidasPe
   };
 }
 
+/**
+ * Frase de síntese da seção "Performance por promotor" (RELPROM-64) —
+ * determinística, nunca via IA: elimina o risco de atribuir um número real a
+ * um promotor errado (achado na revisão do PO — a validação de alucinação só
+ * confere se o número existe nos dados, não se está atribuído à pessoa
+ * certa). `null` quando ninguém concluiu nada no período (nada a destacar).
+ */
+export function descreverLiderPeriodo(porPromotor: LinhaPromotor[]): string | null {
+  if (porPromotor.length === 0) return null;
+
+  const lider = porPromotor.reduce((maior, atual) => (atual.concluidasPeriodo > maior.concluidasPeriodo ? atual : maior), porPromotor[0]);
+  if (lider.concluidasPeriodo <= 0) return null;
+
+  return `${lider.nomePromotor} lidera o período com ${lider.concluidasPeriodo} visitas concluídas.`;
+}
+
 /** RELPROM-05, RELPROM-06. */
 export function calcularAssertividade(concluidas: number, canceladas: number): number | "N/A" {
   const encerradas = concluidas + canceladas;

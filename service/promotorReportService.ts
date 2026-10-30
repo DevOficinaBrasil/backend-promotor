@@ -11,6 +11,7 @@ import {
   calcularAssertividade,
   calcularProximosPassos,
   calcularVisaoGeral,
+  descreverLiderPeriodo,
   listarCancelamentos,
   listarDestaquesDeCampo,
   PeriodoRelatorio,
@@ -210,6 +211,11 @@ export default class PromotorReportService {
       // nunca lança, bloco sem síntese (parcial ou vazia) segue normalmente.
       for (const bloco of dados.campanhas) {
         bloco.sintesesPorSecao = await PromotorReportSintese.gerarSinteses(bloco);
+        // RELPROM-64: síntese de "performance por promotor" é determinística
+        // (nunca via IA) — sempre sobrescreve, nunca depende do que a IA
+        // devolveu pra essa chave (ela nem é mais pedida, ver SECOES).
+        const liderPeriodo = descreverLiderPeriodo(bloco.porPromotor);
+        if (liderPeriodo) bloco.sintesesPorSecao.porPromotor = liderPeriodo;
         // RELPROM-53/57: resumo agrupado de cancelamentos — só tenta quando
         // há cancelamento; `null` (falha/validação) deixa a chave ausente, e
         // o renderer cai pra tabela detalhada de hoje.

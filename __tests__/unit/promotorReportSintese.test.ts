@@ -38,13 +38,12 @@ beforeEach(() => {
 });
 
 describe("PromotorReportSintese.gerarSinteses", () => {
-  it("retorna as 6 frases quando a resposta e valida — RELPROM-49", async () => {
+  it("retorna as 5 frases quando a resposta e valida — RELPROM-49", async () => {
     mockCreate.mockResolvedValue(
       respostaComConteudo(
         JSON.stringify({
           visaoGeral: "71 visitas concluidas no periodo",
           assertividade: "77% de assertividade",
-          porPromotor: "Willian concluiu 15 visitas",
           cancelamentos: "1 oficina cancelada no periodo",
           destaques: "1 destaque concluido registrado",
           proximosPassos: "132 oficinas abertas na rota",
@@ -55,8 +54,18 @@ describe("PromotorReportSintese.gerarSinteses", () => {
     const resultado = await PromotorReportSintese.gerarSinteses(BLOCO);
 
     expect(Object.keys(resultado).sort()).toEqual(
-      ["assertividade", "cancelamentos", "destaques", "porPromotor", "proximosPassos", "visaoGeral"].sort()
+      ["assertividade", "cancelamentos", "destaques", "proximosPassos", "visaoGeral"].sort()
     );
+  });
+
+  it("ignora 'porPromotor' mesmo se a ia devolver essa chave — RELPROM-64, essa secao e deterministica", async () => {
+    mockCreate.mockResolvedValue(
+      respostaComConteudo(JSON.stringify({ visaoGeral: "71 visitas concluidas no periodo", porPromotor: "Willian concluiu 15 visitas" }))
+    );
+
+    const resultado = await PromotorReportSintese.gerarSinteses(BLOCO);
+
+    expect(resultado.porPromotor).toBeUndefined();
   });
 
   it("faz 1 unica chamada por bloco, com model e response_format corretos", async () => {

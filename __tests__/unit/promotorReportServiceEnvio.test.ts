@@ -220,6 +220,38 @@ describe("PromotorReportService.processarRelatorioCliente", () => {
     expect(dadosPassadosPraRenderer.campanhas[0].sintesesPorSecao).toEqual({ visaoGeral: "71 concluidas no periodo" });
   });
 
+  it("sintese de 'porPromotor' e sempre deterministica, mesmo se a ia devolver outra coisa pra essa chave — RELPROM-64", async () => {
+    const bloco: CampanhaBlocoRelatorio = {
+      idCampanha: 1,
+      nomeCampanha: "Campanha SKF",
+      visaoGeral: { concluidas: 71, canceladas: 21, abertasNaRota: 132 },
+      visitasPorDia: [],
+      assertividade: 77,
+      porPromotor: [
+        { idPromotor: 1, nomePromotor: "Homero", concluidasPeriodo: 2, canceladasPeriodo: 0, concluidasAcumulado: 40, abertasNaRota: 20 },
+        { idPromotor: 2, nomePromotor: "Willian", concluidasPeriodo: 15, canceladasPeriodo: 2, concluidasAcumulado: 26, abertasNaRota: 24 },
+      ],
+      cancelamentos: [],
+      destaquesDeCampo: [],
+      proximosPassos: { abertasNaRota: 132, canceladasARedistribuir: 21, promotoresSemRegistro: 1 },
+    };
+    (PromotorReportService.gerarRelatorioCliente as jest.Mock).mockResolvedValue({
+      idCliente: 10,
+      nomeCliente: "SKF",
+      periodo: PERIODO,
+      campanhas: [bloco],
+    });
+    // Mesmo se a IA (hipoteticamente) devolvesse uma frase errada pra
+    // porPromotor, essa chave nem e mais pedida — mas o teste confirma que o
+    // override deterministico sempre vence.
+    gerarSinteses.mockResolvedValue({ porPromotor: "Homero lidera com 40 visitas." });
+
+    await PromotorReportService.processarRelatorioCliente(CLIENTE, PERIODO, OrigemRelatorioEnvio.CRON);
+
+    const [dadosPassadosPraRenderer] = renderizarPdf.mock.calls[0];
+    expect(dadosPassadosPraRenderer.campanhas[0].sintesesPorSecao.porPromotor).toBe("Willian lidera o período com 15 visitas concluídas.");
+  });
+
   it("sintese vazia/parcial (ex.: ia fora do ar) nunca impede o pdf nem o envio — RELPROM-51", async () => {
     const bloco: CampanhaBlocoRelatorio = {
       idCampanha: 1,

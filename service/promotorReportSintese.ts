@@ -10,7 +10,11 @@ import {
   validarSintese,
 } from "../utils/promotorReportSinteseValidacao";
 
-const SECOES: SecaoRelatorio[] = ["visaoGeral", "assertividade", "porPromotor", "cancelamentos", "destaques", "proximosPassos"];
+// RELPROM-64: "porPromotor" saiu daqui — a síntese dessa seção é
+// determinística (`descreverLiderPeriodo`), nunca via IA, desde que a
+// validação por existência de número (RELPROM-50) deixou passar uma
+// atribuição errada (número real, promotor errado) achada na revisão do PO.
+const SECOES: SecaoRelatorio[] = ["visaoGeral", "assertividade", "cancelamentos", "destaques", "proximosPassos"];
 
 const MODELO = "gpt-4o-mini";
 
@@ -20,7 +24,6 @@ function montarPrompt(bloco: CampanhaBlocoRelatorio): string {
   const dadosPorSecao = {
     visaoGeral: bloco.visaoGeral,
     assertividade: { assertividade: bloco.assertividade, ...bloco.visaoGeral },
-    porPromotor: bloco.porPromotor,
     cancelamentos: bloco.cancelamentos,
     destaques: bloco.destaquesDeCampo,
     proximosPassos: bloco.proximosPassos,
@@ -31,12 +34,12 @@ function montarPrompt(bloco: CampanhaBlocoRelatorio): string {
     "Dados já calculados, por seção (JSON):",
     JSON.stringify(dadosPorSecao, null, 2),
     "",
-    "Pra cada uma das 6 seções acima, escreva 1 frase curta (máximo ~20 palavras) em português,",
+    "Pra cada uma das seções acima, escreva 1 frase curta (máximo ~20 palavras) em português,",
     "descrevendo em prosa o que os dados dessa seção já mostram — nunca calcule, some ou invente",
     "nenhum número que não esteja explicitamente nos dados. Se não houver nada notável numa seção,",
     "pode omitir a chave dela na resposta.",
     "",
-    'Responda só com um objeto JSON: {"visaoGeral": "...", "assertividade": "...", "porPromotor": "...",',
+    'Responda só com um objeto JSON: {"visaoGeral": "...", "assertividade": "...",',
     '"cancelamentos": "...", "destaques": "...", "proximosPassos": "..."}',
   ].join("\n");
 }
