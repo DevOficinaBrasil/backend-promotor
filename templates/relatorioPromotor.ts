@@ -1,5 +1,5 @@
 import { PDFDocument, PDFFont, PDFPage, StandardFonts, rgb } from "pdf-lib";
-import { RelatorioPromotorData, CampanhaBlocoRelatorio } from "../types/promotorRelatorio";
+import { RelatorioPromotorData, CampanhaBlocoRelatorio, InsightCampo } from "../types/promotorRelatorio";
 import { Cancelamento, DestaqueCampo, descreverDiaPico, LinhaPromotor, PontoVisitasPorDia } from "../utils/promotorReportCalculos";
 
 /**
@@ -457,12 +457,39 @@ function desenharCardDestaque(cursor: Cursor, item: DestaqueCampo): void {
   cursor.y -= altura + 8;
 }
 
-/** RELPROM-09: 2 sub-seções, concluídas e canceladas, nunca 1 lista única intercalada. */
+/** Insight resumido (RELPROM-58/59) — título em negrito + parágrafo, igual ao modelo. */
+function desenharInsightCampo(cursor: Cursor, insight: InsightCampo): void {
+  const corTitulo = cursor.estilo === "escura" ? COR_BRANCA : COR_NAVY;
+  const linhasTitulo = quebrarLinhas(insight.titulo, cursor.fonteNegrito, 11, LARGURA_UTIL);
+  const linhasDescricao = quebrarLinhas(insight.descricao, cursor.fonte, 9.5, LARGURA_UTIL);
+  const altura = linhasTitulo.length * 14 + linhasDescricao.length * 13;
+
+  garantirEspaco(cursor, altura + 20);
+  let y = cursor.y;
+  for (const linha of linhasTitulo) {
+    cursor.pagina.drawText(linha, { x: MARGEM, y, size: 11, font: cursor.fonteNegrito, color: corTitulo });
+    y -= 14;
+  }
+  for (const linha of linhasDescricao) {
+    cursor.pagina.drawText(linha, { x: MARGEM, y, size: 9.5, font: cursor.fonte, color: COR_CINZA });
+    y -= 13;
+  }
+  cursor.y = y - 12;
+}
+
+/** RELPROM-09: 2 sub-seções, concluídas e canceladas, nunca 1 lista única intercalada — fallback quando não há `insightsCampo` (RELPROM-61). */
 function desenharDestaques(cursor: Cursor, bloco: CampanhaBlocoRelatorio): void {
   iniciarSecao(cursor, "clara");
-  desenharCabecalhoSecao(cursor, `Destaques do campo — ${bloco.nomeCampanha}`, "Observações registradas pelos promotores");
+  desenharCabecalhoSecao(cursor, `Destaques do campo — ${bloco.nomeCampanha}`, "O que os promotores registraram no app");
   desenharLinhaDestaque(cursor);
   desenharSintese(cursor, bloco.sintesesPorSecao?.destaques);
+
+  // RELPROM-58/61: insights resumidos por IA quando disponíveis e válidos;
+  // senão cai pra listagem de cards individuais de hoje.
+  if (bloco.insightsCampo && bloco.insightsCampo.length > 0) {
+    for (const insight of bloco.insightsCampo) desenharInsightCampo(cursor, insight);
+    return;
+  }
 
   const concluidas = bloco.destaquesDeCampo.filter((destaque) => destaque.status === "concluida");
   const canceladas = bloco.destaquesDeCampo.filter((destaque) => destaque.status === "cancelada");

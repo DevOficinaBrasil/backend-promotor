@@ -310,18 +310,18 @@ Toda ambiguidade foi resolvida ou registrada aqui.
 | RELPROM-55 | P8: Resumo de cancelamentos agrupado por IA | Execute | Implemented |
 | RELPROM-56 | P8: Resumo de cancelamentos agrupado por IA | Execute | Implemented |
 | RELPROM-57 | P8: Resumo de cancelamentos agrupado por IA | Execute | Implemented |
-| RELPROM-58 | P9: Resumo dos destaques do campo gerado por IA | Design | Pending |
-| RELPROM-59 | P9: Resumo dos destaques do campo gerado por IA | Design | Pending |
-| RELPROM-60 | P9: Resumo dos destaques do campo gerado por IA | Design | Pending |
-| RELPROM-61 | P9: Resumo dos destaques do campo gerado por IA | Design | Pending |
-| RELPROM-62 | P9: Resumo dos destaques do campo gerado por IA | Design | Pending |
-| RELPROM-63 | P9: Resumo dos destaques do campo gerado por IA | Design | Pending |
+| RELPROM-58 | P9: Resumo dos destaques do campo gerado por IA | Execute | Implemented |
+| RELPROM-59 | P9: Resumo dos destaques do campo gerado por IA | Execute | Implemented |
+| RELPROM-60 | P9: Resumo dos destaques do campo gerado por IA | Execute | Implemented |
+| RELPROM-61 | P9: Resumo dos destaques do campo gerado por IA | Execute | Implemented |
+| RELPROM-62 | P9: Resumo dos destaques do campo gerado por IA | Execute | Implemented |
+| RELPROM-63 | P9: Resumo dos destaques do campo gerado por IA | Execute | Implemented |
 
 **ID format:** `RELPROM-NN`
 
 **Status values:** Pending → In Design → In Tasks → Implementing → Verified
 
-**Coverage:** 63 total. RELPROM-01 a 57 implementadas (Phases 1-10 em `tasks.md`). RELPROM-58 a 63 (P9, resumo de destaques por IA) são novas, pendentes de Design.
+**Coverage:** 63 total, todas implementadas (Phases 1-11 em `tasks.md`).
 
 ---
 

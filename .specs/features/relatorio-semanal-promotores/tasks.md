@@ -9,7 +9,7 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 ---
 
 **Design**: `.specs/features/relatorio-semanal-promotores/design.md`
-**Status**: Done — 22 tasks concluídas (Phases 1-5), Verifier independente PASS (3ª iteração do ciclo fix→re-verify, `.specs/features/relatorio-semanal-promotores/validation.md`), `validate_state.py` exit 0. + Phase 6 (AD-006/SKF-only, pós-Execute) e Phase 7 (pdf-lib + gráfico por dia, pós-Execute) — ambas feitas depois do Verifier, sem nova rodada formal do Verifier (mudança de implementação com testes próprios, não revalidação de requisito novo em escopo grande). **Phase 8, Phase 9 e Phase 10 (P6 S3, P7 síntese IA, P8 resumo de cancelamentos — RELPROM-45 a 57): 13 tasks concluídas (T31-T43), sem nova rodada formal do Verifier.**
+**Status**: Done — 22 tasks concluídas (Phases 1-5), Verifier independente PASS (3ª iteração do ciclo fix→re-verify, `.specs/features/relatorio-semanal-promotores/validation.md`), `validate_state.py` exit 0. + Phase 6 (AD-006/SKF-only, pós-Execute) e Phase 7 (pdf-lib + gráfico por dia, pós-Execute) — ambas feitas depois do Verifier, sem nova rodada formal do Verifier (mudança de implementação com testes próprios, não revalidação de requisito novo em escopo grande). **Phases 8-11 (P6 S3, P7 síntese IA, P8 resumo de cancelamentos, P9 insights de destaques — RELPROM-45 a 63): 17 tasks concluídas (T31-T47), sem nova rodada formal do Verifier.**
 
 **Escopo cross-repo**: Fase 2 roda inteira no repo `backend-ob-ads` (`C:\Users\AndrePereira\Documents\oficina brasil\backend-ob-ads`), já na branch `feat/relatorio-promotores-semanal` (criada a partir de `main`, confirmado limpo e sincronizado — nenhuma task de setup de branch é necessária). As demais fases rodam no `backend-promotor`, também já na branch `feat/relatorio-promotores-semanal`. Cada commit de task vai pro repo correto — os comandos de commit das tasks da Fase 2 usam `git -C "<path do ob-ads>"`, nunca o repo atual.
 
@@ -1455,18 +1455,18 @@ Adicionada depois do Verifier dar PASS (3ª iteração). 2 pedidos do usuário: 
 - Skill: NONE
 
 **Done when**:
-- [ ] Cabeçalho da seção sempre mostra "O que os promotores registraram no app", com ou sem `insightsCampo`
-- [ ] `insightsCampo` populado → até 4 blocos título+parágrafo desenhados, sem os cards individuais
-- [ ] `insightsCampo` ausente/vazio → listagem de cards de hoje, comportamento idêntico ao atual
-- [ ] Teste confirma as 2 situações via `jest.spyOn(PDFPage.prototype, "drawText")`, mesmo padrão do renderer
-- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportPdfRenderer.test.ts` (sem regressão + novos casos)
+- [x] Cabeçalho da seção sempre mostra "O que os promotores registraram no app", com ou sem `insightsCampo`
+- [x] `insightsCampo` populado → até 4 blocos título+parágrafo desenhados, sem os cards individuais
+- [x] `insightsCampo` ausente/vazio → listagem de cards de hoje, comportamento idêntico ao atual
+- [x] Teste confirma as 2 situações via `jest.spyOn(PDFPage.prototype, "drawText")`, mesmo padrão do renderer
+- [x] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportPdfRenderer.test.ts` (15 passed, sem regressão + 3 novos casos)
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(promotor-relatorio): desenha insights de destaques do campo com fallback`
 
-**Status**: ⬜ Pending
+**Status**: ✅ Complete
 
 ---
 

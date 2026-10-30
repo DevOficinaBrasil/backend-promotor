@@ -154,6 +154,43 @@ describe("PromotorReportPdfRenderer.renderizarPdf", () => {
     expect(textos).toContain("13/10"); // dia sem destaque, sem sufixo de dia da semana
   });
 
+  it("cabecalho da secao de destaques sempre mostra 'O que os promotores registraram no app' — RELPROM-59", async () => {
+    await PromotorReportPdfRenderer.renderizarPdf(DADOS);
+
+    const textos = textosDesenhados();
+    expect(textos).toContain("O que os promotores registraram no app");
+    expect(textos).not.toContain("Observações registradas pelos promotores");
+  });
+
+  it("desenha ate 4 insights (titulo + descricao) quando insightsCampo esta presente, sem os cards — RELPROM-58", async () => {
+    const dados: RelatorioPromotorData = {
+      ...DADOS,
+      campanhas: [
+        {
+          ...DADOS.campanhas[0],
+          insightsCampo: [
+            { titulo: "Base com oficinas que não existem mais", descricao: "6 oficinas fechadas ou inexistentes no período." },
+          ],
+        },
+      ],
+    };
+
+    await PromotorReportPdfRenderer.renderizarPdf(dados);
+
+    const textos = textosDesenhados();
+    expect(textos).toContain("Base com oficinas que não existem mais");
+    expect(textos).toContain("6 oficinas fechadas ou inexistentes no período.");
+    expect(textos).not.toContain("Concluídas com observação");
+    expect(textos).not.toContain("Canceladas com justificativa");
+  });
+
+  it("cai pra listagem de cards individuais quando insightsCampo esta ausente — RELPROM-61", async () => {
+    await PromotorReportPdfRenderer.renderizarPdf(DADOS);
+
+    const textos = textosDesenhados();
+    expect(textos).toContain("Canceladas com justificativa");
+  });
+
   it("usa a tabela resumo agrupada quando resumoCancelamentos esta presente — RELPROM-53", async () => {
     const dados: RelatorioPromotorData = {
       ...DADOS,
