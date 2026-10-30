@@ -479,3 +479,45 @@ Mesmo espírito de P8 (IA só seleciona/agrupa por índice, nunca inventa fato; 
 | --- | --- | --- |
 | Cobertura dos insights | Parcial, sem duplicata (não é uma partição exaustiva como em P8) | O modelo do CON26-325 resume só os temas mais notáveis — forçar cobertura total inflaria insights artificiais pra observações sem padrão em comum |
 | Conjunto de números válidos | Compartilhado entre todos os insights (total/por status/por cidade dos destaques + contadores da visão geral), não um conjunto por insight | Um insight pode legitimamente citar um contador "macro" (ex.: total de visitas concluídas da campanha), não só números do seu próprio subconjunto de destaques |
+
+---
+
+## P10 — Correções pós-revisão do PO (RELPROM-64 a 67, Design pós-Execute)
+
+Comparação do PO entre o relatório gerado pelo cron e o original apontou 2 falhas reais, ambas em código já em produção (Phases 9/10).
+
+### Falha 1 — atribuição errada na síntese de "performance por promotor" (RELPROM-64)
+
+A síntese de `porPromotor` (RELPROM-49) é 1 das 5 seções restantes geradas por IA. `validarSintese` (RELPROM-50) só confere se cada número citado existe em algum lugar dos dados da seção — não confere se o número está **atribuído à pessoa certa**. Como `numerosValidosDaSecao("porPromotor", ...)` é uma lista achatada de todos os contadores de todos os promotores, a IA pode (e aconteceu) dizer "Fulano tem o maior X" citando um número real, só que de outro promotor — a validação aprova porque o número existe, mesmo a atribuição estando errada.
+
+**Fix**: tirar `porPromotor` da lista de seções pedidas à IA (`SECOES`/prompt) e calcular a frase de forma 100% determinística (`descreverLiderPeriodo`, em `utils/promotorReportCalculos.ts`, mesmo padrão de `descreverDiaPico` já existente pro gráfico) — igual à filosofia já aplicada em P8/P9 (nunca deixar a IA decidir "quem" quando o código já sabe a resposta certa com 100% de precisão).
+
+### Falha 2 — texto bruto de OBS vazando pro cliente (RELPROM-65 a 67)
+
+OBS pode conter anotações internas de revisão de cadastro (não observações de campo) e texto desatualizado reaproveitado de uma rota antiga. 2 pontos de exposição:
+
+1. **Fallbacks "crus"** (tabela detalhada de cancelamentos, cards individuais de destaques) mostravam `item.obs`/`cancelamento.obs` literalmente — sem filtro nenhum, exatamente o texto do app.
+2. **Síntese da IA** (P8 `justificativa`, P9 `descricao`) lê o OBS original como entrada; nada impedia a IA de citar um trecho literal, ou de inferir uma ação não dita (ex.: "pediu remarcação" a partir de um "estou de folga" antigo e descontextualizado).
+
+**Fix** (defesa em 2 camadas, não confia só no prompt):
+- **Render**: `desenharCardDestaque` e a tabela detalhada de `desenharCancelamentos` param de desenhar o texto do OBS — só dados estruturados (promotor/oficina/cidade/status) nos fallbacks.
+- **Guardrail de código** (não só instrução de prompt): nova função pura `contemTextoVerbatim(textoGerado, observacoesOriginais)` em `utils/promotorReportSinteseValidacao.ts` — se a justificativa/insight citar, mesmo parcialmente (15+ caracteres), o texto literal de qualquer OBS original, `construirResumoCancelamentos`/`construirInsightsCampo` rejeitam (retornam `null`), caindo pro fallback (que agora também não expõe OBS).
+- **Prompt**: `montarPromptResumoCancelamentos`/`montarPromptInsightsCampo` ganham instrução explícita — nunca citar o texto original palavra por palavra, nunca inferir ação/pedido/intenção não dita.
+
+### Componentes modificados
+
+| Componente | Mudança |
+| --- | --- |
+| `utils/promotorReportCalculos.ts` | Nova função `descreverLiderPeriodo(porPromotor: LinhaPromotor[]): string \| null` — promotor com mais `concluidasPeriodo`, `null` se ninguém concluiu nada no período |
+| `utils/promotorReportSinteseValidacao.ts` | Nova função pura `contemTextoVerbatim(textoGerado: string, observacoesOriginais: (string \| null)[]): boolean`; `construirResumoCancelamentos`/`construirInsightsCampo` chamam ela e rejeitam (`null`) se citar texto literal |
+| `service/promotorReportSintese.ts` | `SECOES`/`montarPrompt` não pedem mais `porPromotor` à IA; `montarPromptResumoCancelamentos`/`montarPromptInsightsCampo` ganham a instrução anti-verbatim/anti-inferência |
+| `service/promotorReportService.ts` | `processarRelatorioCliente` seta `bloco.sintesesPorSecao.porPromotor` com `descreverLiderPeriodo`, sempre (não depende da IA) |
+| `templates/relatorioPromotor.ts` | `desenharCardDestaque` para de desenhar `item.obs`; tabela detalhada de `desenharCancelamentos` para de desenhar `cancelamento.obs` (mostra só os outros campos) |
+
+### Tech Decisions (adendo)
+
+| Decision | Choice | Rationale |
+| --- | --- | --- |
+| Guardrail de vazamento verbatim | Checagem de código (substring, case-insensitive, limiar 15 caracteres), não só instrução de prompt | Prompt sozinho é "pedir educadamente" — a IA pode ignorar; o código garante o resultado mesmo se o modelo não seguir a instrução |
+| Fallback "cru" sem OBS | Cards/tabela detalhada nunca mostram OBS, com ou sem IA disponível | Consistência: se a síntese da IA é bloqueada por citar OBS literal, o fallback não pode ser a porta dos fundos pro mesmo vazamento |
+| `porPromotor` sai da IA | Determinístico, 100% do tempo | Zero risco de atribuição errada — o código já tem o dado certo, não há ganho em delegar isso à IA |

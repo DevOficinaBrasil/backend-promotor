@@ -192,7 +192,7 @@ Toda ambiguidade foi resolvida ou registrada aqui.
 
 **Acceptance Criteria**:
 
-1. WHEN o relatório de uma campanha é gerado THEN o sistema SHALL gerar, via API da OpenAI, 1 frase curta de síntese para cada uma das 6 seções (visão geral, assertividade, performance por promotor, cancelamentos, destaques do campo, próximos passos), usando só os dados já calculados daquela seção como entrada — a IA nunca recebe a tarefa de calcular ou recontar nada, só de descrever em prosa o que os números/observações já calculados mostram. <!-- RELPROM-49, event-driven -->
+1. WHEN o relatório de uma campanha é gerado THEN o sistema SHALL gerar 1 frase curta de síntese para cada uma das 6 seções (visão geral, assertividade, performance por promotor, cancelamentos, destaques do campo, próximos passos), usando só os dados já calculados daquela seção como entrada — a IA nunca recebe a tarefa de calcular ou recontar nada, só de descrever em prosa o que os números/observações já calculados mostram. **Revisado (RELPROM-64)**: a síntese de "performance por promotor" é calculada de forma determinística (sem IA) — as outras 5 seções continuam via API da OpenAI. <!-- RELPROM-49, event-driven -->
 2. IF a frase gerada citar algum número que não aparece em nenhum valor presente nos dados calculados daquela seção THEN o sistema SHALL descartar a frase (a seção é exibida sem ela, só com o conteúdo determinístico) em vez de publicar um número potencialmente inventado. <!-- RELPROM-50, unwanted-behavior -->
 3. IF a chamada à OpenAI falhar (timeout, erro, resposta vazia) THEN o sistema SHALL continuar a geração do PDF normalmente, sem a frase de síntese daquela seção, e SHALL NOT bloquear o envio do e-mail nem o restante do relatório. <!-- RELPROM-51, unwanted-behavior -->
 4. The system SHALL exibir a frase de síntese (quando presente) logo abaixo do cabeçalho de cada seção, antes do conteúdo determinístico (cards/tabela/gráfico) daquela seção. <!-- RELPROM-52, ubiquitous -->
@@ -235,6 +235,23 @@ Toda ambiguidade foi resolvida ou registrada aqui.
 6. IF a chamada à IA falhar (timeout, erro, resposta vazia) THEN o sistema SHALL exibir a listagem de cards individuais, mesmo fallback de RELPROM-61 — nunca bloqueia a geração do PDF nem o envio do e-mail. <!-- RELPROM-63, unwanted-behavior -->
 
 **Independent Test**: Gerar o relatório de uma campanha com várias observações de temas parecidos e confirmar que a seção de destaques mostra até 4 insights com título + descrição, sem exceder 4 e sem repetir destaque em 2 insights. Forçar a IA a devolver mais de 4 insights (ou simular a chamada fora do ar) e confirmar que a seção volta a mostrar 1 card por destaque, sem quebrar o resto do PDF.
+
+---
+
+### P10: Correções pós-revisão do PO (atribuição errada e vazamento de OBS interno)
+
+**User Story**: Como Oficina Brasil, quero que o relatório nunca atribua um número real a um promotor errado e nunca exponha o texto bruto do campo OBS (que pode conter anotações internas de revisão de cadastro, não observações de campo) pra SKF/Cibratrade, pra manter a confiança no relatório automático e não vazar informação interna.
+
+**Why P10**: Comparação feita pelo PO entre um relatório gerado pelo cron (30/10, 10h55) e o original apontou 2 problemas reais: (1) a frase de síntese de "performance por promotor" atribuiu o maior acumulado a um promotor errado (Homero, 21) quando a própria tabela mostra outro (Willian, 26) com valor maior — a validação atual só confere se o número existe nos dados da seção, não se está atribuído à pessoa certa; (2) o relatório copiava o campo OBS sem filtro, incluindo ~30 anotações internas de revisão de cadastro e textos antigos de "estou de folga" que levaram a IA a concluir (errado) que um promotor "pediu remarcação" na semana — esse texto bruto chegaria ao cliente se o relatório fosse enviado.
+
+**Acceptance Criteria**:
+
+1. The system SHALL calcular a frase de síntese da seção "Performance por promotor" de forma determinística (nome do promotor com mais visitas concluídas no período + a contagem dele), nunca via IA — elimina o risco de atribuição errada entre promotor e número. <!-- RELPROM-64, ubiquitous -->
+2. The system SHALL NOT exibir o texto bruto do campo OBS em nenhuma listagem de fallback do relatório — nem na tabela detalhada de cancelamentos (fallback de RELPROM-55), nem nos cards individuais de destaques do campo (fallback de RELPROM-61); esses fallbacks mostram só dados estruturados (promotor, oficina, cidade, status). <!-- RELPROM-65, unwanted-behavior -->
+3. IF a justificativa de um grupo de cancelamentos (RELPROM-54) ou o título/descrição de um insight de destaques (RELPROM-60) citar, mesmo parcialmente (15+ caracteres), o texto literal de uma observação original THEN o sistema SHALL descartar o resumo/insight inteiro e aplicar o fallback correspondente (RELPROM-55/61) — nunca deixa o texto bruto do OBS vazar através da síntese da IA, mesmo que a IA ignore a instrução do prompt. <!-- RELPROM-66, unwanted-behavior -->
+4. The system SHALL instruir explicitamente a IA, nos prompts de P8 e P9, a nunca citar o texto original das observações palavra por palavra e a nunca inferir ações, pedidos ou intenções dos promotores além do que está explicitamente e inequivocamente dito nos dados. <!-- RELPROM-67, ubiquitous -->
+
+**Independent Test**: Gerar o relatório de uma campanha onde o promotor com mais concluídas no período não é o mesmo com o maior acumulado — confirmar que a frase de "performance por promotor" cita corretamente quem lidera o período. Alimentar o resumo de cancelamentos/insights de destaques com uma observação que cite verbatim um trecho de 15+ caracteres do OBS original e confirmar que o resumo/insight correspondente é descartado, caindo pro fallback — e que o fallback não mostra o texto do OBS em lugar nenhum.
 
 ---
 
@@ -316,12 +333,16 @@ Toda ambiguidade foi resolvida ou registrada aqui.
 | RELPROM-61 | P9: Resumo dos destaques do campo gerado por IA | Execute | Implemented |
 | RELPROM-62 | P9: Resumo dos destaques do campo gerado por IA | Execute | Implemented |
 | RELPROM-63 | P9: Resumo dos destaques do campo gerado por IA | Execute | Implemented |
+| RELPROM-64 | P10: Correções pós-revisão do PO | Design | Pending |
+| RELPROM-65 | P10: Correções pós-revisão do PO | Design | Pending |
+| RELPROM-66 | P10: Correções pós-revisão do PO | Design | Pending |
+| RELPROM-67 | P10: Correções pós-revisão do PO | Design | Pending |
 
 **ID format:** `RELPROM-NN`
 
 **Status values:** Pending → In Design → In Tasks → Implementing → Verified
 
-**Coverage:** 63 total, todas implementadas (Phases 1-11 em `tasks.md`).
+**Coverage:** 67 total. RELPROM-01 a 63 implementadas (Phases 1-11 em `tasks.md`). RELPROM-64 a 67 (P10, correções pós-PO) são novas, pendentes de Design.
 
 ---
 
@@ -341,3 +362,5 @@ Como saberemos que a feature foi bem-sucedida:
 - [ ] Cada seção do relatório traz 1 frase de síntese gerada por IA, sem nenhum número que não esteja nos dados já calculados daquela seção.
 - [ ] A seção de cancelamentos mostra o resumo agrupado por motivo quando a IA acerta o agrupamento, ou a tabela detalhada quando não acerta — nunca quebra nem mistura as duas.
 - [ ] A seção de destaques do campo mostra até 4 insights ("O que os promotores registraram no app") quando a IA acerta, ou a listagem de cards individuais quando não acerta.
+- [ ] A frase de "performance por promotor" sempre atribui o número certo ao promotor certo (determinística, sem IA).
+- [ ] O texto bruto do campo OBS nunca aparece no relatório, nem na síntese da IA nem nos fallbacks.

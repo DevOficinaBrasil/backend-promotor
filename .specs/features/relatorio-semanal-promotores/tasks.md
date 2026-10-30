@@ -152,6 +152,16 @@ T44 -> T45 -> T46
 T44 -> T47
 ```
 
+### Phase 12: Correções pós-revisão do PO (RELPROM-64 a 67)
+
+Comparação do PO entre relatório do cron e o original apontou 2 bugs reais: atribuição errada na síntese de "performance por promotor" e vazamento de texto bruto de OBS (anotações internas) pro cliente.
+
+```
+T48 -> T49
+T50
+T51
+```
+
 ---
 
 ## Task Breakdown
@@ -1470,6 +1480,116 @@ Adicionada depois do Verifier dar PASS (3ª iteração). 2 pedidos do usuário: 
 
 ---
 
+### Phase 12: Correções pós-revisão do PO (tasks)
+
+### T48: `descreverLiderPeriodo` — síntese determinística de performance por promotor (backend-promotor)
+
+**What**: Função pura `descreverLiderPeriodo(porPromotor: LinhaPromotor[]): string | null` — encontra o promotor com mais `concluidasPeriodo` e formata a frase ("Fulano lidera o período com N visitas concluídas."); `null` se ninguém concluiu nada no período. Mesmo padrão de `descreverDiaPico` já existente.
+**Where**: `utils/promotorReportCalculos.ts` (modifica)
+**Depends on**: None
+**Reuses**: nada novo — mesma lógica de "achar o máximo e formatar" de `descreverDiaPico`
+**Requirement**: RELPROM-64
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [ ] Encontra o promotor de maior `concluidasPeriodo`; em empate, usa o primeiro da lista
+- [ ] Retorna `null` quando todos os promotores têm `concluidasPeriodo = 0` (ou lista vazia)
+- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportCalculos.test.ts`
+- [ ] `npx tsc --noEmit` sem erro novo
+
+**Tests**: unit
+**Gate**: quick
+
+**Commit**: `fix(promotor-relatorio): sintese de performance por promotor deterministica`
+
+**Status**: ⬜ Pending
+
+---
+
+### T49: Tira `porPromotor` da IA, usa `descreverLiderPeriodo` sempre (backend-promotor)
+
+**What**: `SECOES`/`montarPrompt` (`promotorReportSintese.ts`) param de pedir `porPromotor` à IA. `processarRelatorioCliente` seta `bloco.sintesesPorSecao.porPromotor` com `descreverLiderPeriodo(bloco.porPromotor)` sempre, depois da chamada a `gerarSinteses` (nunca depende da IA pra essa seção).
+**Where**: `service/promotorReportSintese.ts` (modifica), `service/promotorReportService.ts` (modifica)
+**Depends on**: T48
+**Reuses**: `descreverLiderPeriodo` (T48)
+**Requirement**: RELPROM-64
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [ ] `porPromotor` não aparece mais no JSON de dados nem na lista de chaves pedidas no prompt de `gerarSinteses`
+- [ ] `bloco.sintesesPorSecao.porPromotor` é sempre o resultado de `descreverLiderPeriodo`, mesmo que a IA (hipoteticamente) devolva algo pra essa chave
+- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportSintese.test.ts __tests__/unit/promotorReportServiceEnvio.test.ts` (sem regressão + novos casos)
+
+**Tests**: unit
+**Gate**: quick
+
+**Commit**: `fix(promotor-relatorio): sintese de performance por promotor deterministica` (mesmo commit de T48)
+
+**Status**: ⬜ Pending
+
+---
+
+### T50: `contemTextoVerbatim` — guardrail anti-vazamento de OBS (backend-promotor)
+
+**What**: Função pura `contemTextoVerbatim(textoGerado: string, observacoesOriginais: (string | null)[]): boolean` — `true` se `textoGerado` contiver, como substring (case-insensitive), qualquer observação original de 15+ caracteres. `construirResumoCancelamentos`/`construirInsightsCampo` chamam essa função pra cada justificativa/insight e retornam `null` (fallback) se detectarem citação literal. Prompts de P8/P9 ganham instrução explícita contra citação verbatim e contra inferir ação/pedido/intenção não dita.
+**Where**: `utils/promotorReportSinteseValidacao.ts` (modifica), `service/promotorReportSintese.ts` (modifica — prompts)
+**Depends on**: None
+**Reuses**: nada novo
+**Requirement**: RELPROM-65, RELPROM-66, RELPROM-67
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [ ] `contemTextoVerbatim` retorna `true` só pra observação de 15+ caracteres citada literalmente (case-insensitive); ignora observações curtas (abaixo do limiar) e `null`
+- [ ] `construirResumoCancelamentos` rejeita (`null`) um grupo cuja justificativa cite verbatim o OBS de qualquer cancelamento (não só os do próprio grupo — o texto pode ter vazado de qualquer item)
+- [ ] `construirInsightsCampo` rejeita (`null`) um insight cujo título/descrição cite verbatim o OBS de qualquer destaque
+- [ ] Prompts de `montarPromptResumoCancelamentos`/`montarPromptInsightsCampo` instruem explicitamente: nunca citar o texto original palavra por palavra, nunca inferir ação/pedido/intenção não dita
+- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportSinteseValidacao.test.ts __tests__/unit/promotorReportSintese.test.ts` (sem regressão + novos casos)
+
+**Tests**: unit
+**Gate**: quick
+
+**Commit**: `fix(promotor-relatorio): bloqueia vazamento de obs bruto na sintese por ia`
+
+**Status**: ⬜ Pending
+
+---
+
+### T51: Remove OBS bruto dos fallbacks no PDF (backend-promotor)
+
+**What**: `desenharCardDestaque` para de desenhar o texto de `item.obs`. A tabela detalhada de `desenharCancelamentos` (fallback de `resumoCancelamentos`) para de desenhar `cancelamento.obs` — mantém as outras colunas (promotor, oficina, cidade).
+**Where**: `templates/relatorioPromotor.ts` (modifica)
+**Depends on**: None
+**Reuses**: nada novo
+**Requirement**: RELPROM-65
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [ ] Card de destaque (fallback) não desenha nenhum texto do campo OBS — só promotor/oficina/cidade
+- [ ] Tabela detalhada de cancelamentos (fallback) não desenha `cancelamento.obs` — coluna "Justificativa" fica vazia/placeholder nesse modo
+- [ ] Resumo via IA (`resumoCancelamentos`/`insightsCampo`), quando presente e válido, continua mostrando a justificativa/descrição sintetizada normalmente — a mudança é só no fallback cru
+- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportPdfRenderer.test.ts` (sem regressão + novos casos)
+
+**Tests**: unit
+**Gate**: quick
+
+**Commit**: `fix(promotor-relatorio): remove obs bruto dos fallbacks no pdf`
+
+**Status**: ⬜ Pending
+
+---
+
 ## Phase Execution Map
 
 ```
@@ -1503,9 +1623,12 @@ Phase 10: T40 ------→ T41 ------→ T42
           T40 ------→ T43
 Phase 11: T44 ------→ T45 ------→ T46
           T44 ------→ T47
+Phase 12: T48 ------→ T49
+          T50
+          T51
 ```
 
-Dependências cross-phase (não aparecem no diagrama por fase, só no `Depends on` de cada task, conforme a regra do skill): T15 depende de T01 (Phase 1) e T11 (Phase 3); T16 depende de T10 e T11 (Phase 3); T19 depende de T18 (Phase 4); T21 depende de T17 (Phase 4); T23/T25 não têm dependência cross-phase (reaproveitam T02/T04 já concluídas, sem precisar reabrir); T28 não depende de nenhuma task de fase anterior (reescreve T15 por completo, contrato de `renderizarPdf` preservado); T33, T35, T40 e T44 também não têm dependência cross-phase (cliente externo, tipos e funções puras novas, sem tocar em código das fases anteriores).
+Dependências cross-phase (não aparecem no diagrama por fase, só no `Depends on` de cada task, conforme a regra do skill): T15 depende de T01 (Phase 1) e T11 (Phase 3); T16 depende de T10 e T11 (Phase 3); T19 depende de T18 (Phase 4); T21 depende de T17 (Phase 4); T23/T25 não têm dependência cross-phase (reaproveitam T02/T04 já concluídas, sem precisar reabrir); T28 não depende de nenhuma task de fase anterior (reescreve T15 por completo, contrato de `renderizarPdf` preservado); T33, T35, T40, T44, T50 e T51 também não têm dependência cross-phase (cliente externo, tipos, funções puras e render novos, sem tocar em código das fases anteriores).
 
 Execução é estritamente sequencial dentro de cada fase — sem paralelismo intra-fase.
 
@@ -1562,6 +1685,10 @@ Execução é estritamente sequencial dentro de cada fase — sem paralelismo in
 | T45 | 1 método, mesmo arquivo de T37/T41 | ✅ Granular |
 | T46 | 1 wiring, mesmo método/arquivo de T38/T42 | ✅ Granular |
 | T47 | 1 função de desenho (insight) + fallback pra listagem já existente | ✅ Granular |
+| T48 | 1 função pura | ✅ Granular |
+| T49 | 1 remoção de chave da IA + 1 wiring determinístico, 2 arquivos coesos (par indissociável) | ✅ Granular |
+| T50 | 1 função pura + wiring em 2 validadores já existentes + 2 prompts | ✅ Granular (coeso: mesmo guardrail aplicado nos 2 lugares) |
+| T51 | 2 pontos de remoção de render, mesmo arquivo | ✅ Granular |
 
 ---
 
@@ -1616,6 +1743,10 @@ Execução é estritamente sequencial dentro de cada fase — sem paralelismo in
 | T45 | T44 (mesma fase) | T44→T45 | ✅ Match |
 | T46 | T45 (mesma fase) | T45→T46 | ✅ Match |
 | T47 | T44 (mesma fase) | T44→T47 | ✅ Match |
+| T48 | None | — | ✅ Match |
+| T49 | T48 (mesma fase) | T48→T49 | ✅ Match |
+| T50 | None | — | ✅ Match |
+| T51 | None | — | ✅ Match |
 
 ---
 
@@ -1670,6 +1801,10 @@ Execução é estritamente sequencial dentro de cada fase — sem paralelismo in
 | T45 | Cliente externo mockado | unit | unit | ✅ OK |
 | T46 | Service/domínio | unit | unit | ✅ OK |
 | T47 | Service/domínio (renderer) | unit | unit | ✅ OK |
+| T48 | Função pura | unit | unit | ✅ OK |
+| T49 | Service/domínio | unit | unit | ✅ OK |
+| T50 | Função pura + cliente externo mockado | unit | unit | ✅ OK |
+| T51 | Service/domínio (renderer) | unit | unit | ✅ OK |
 
 ---
 
