@@ -1001,12 +1001,12 @@ Adicionada depois do Verifier dar PASS (3ª iteração). 2 pedidos do usuário: 
 
 ---
 
-### T32: Migration manual `ALTER TABLE ... ADD COLUMN LINK_PDF` (backend-promotor)
+### T32: Coluna `LINK_PDF` consolidada no `CREATE TABLE` original (backend-promotor)
 
-**What**: Script idempotente (`ADD COLUMN IF NOT EXISTS`) adicionando `LINK_PDF` na tabela já existente `CAMPANHAS_OB.PROMOTOR_RELATORIO_ENVIO`. **Não executado pelo agente.**
-**Where**: `scripts/migration-promotor-relatorio-envio-link-pdf.sql` (novo)
+**What**: **Revisado (pedido do usuário)**: em vez de um `ALTER TABLE` à parte (`scripts/migration-promotor-relatorio-envio-link-pdf.sql`, abordagem original desta task), `LINK_PDF TEXT` entra direto no `CREATE TABLE` de `scripts/migration-promotor-relatorio-envio.sql` (T09) — a tabela `PROMOTOR_RELATORIO_ENVIO` ainda não foi criada em nenhum ambiente, então não existe "tabela já existente" pra alterar; 2 migrations pra 1 coluna só seria complexidade sem benefício. **Não executado pelo agente.**
+**Where**: `scripts/migration-promotor-relatorio-envio.sql` (modifica — `scripts/migration-promotor-relatorio-envio-link-pdf.sql` apagado)
 **Depends on**: T31
-**Reuses**: padrão de `scripts/migration-promotor-relatorio-envio.sql` (idempotência, bloco `ROLLBACK:` no cabeçalho, `COMMENT ON COLUMN`)
+**Reuses**: o próprio `CREATE TABLE`/`COMMENT ON COLUMN` de T09, sem duplicar o padrão num script novo
 **Requirement**: RELPROM-45
 
 **Tools**:
@@ -1014,15 +1014,15 @@ Adicionada depois do Verifier dar PASS (3ª iteração). 2 pedidos do usuário: 
 - Skill: NONE
 
 **Done when**:
-- [x] `ALTER TABLE "CAMPANHAS_OB"."PROMOTOR_RELATORIO_ENVIO" ADD COLUMN IF NOT EXISTS "LINK_PDF" TEXT`
-- [x] Cabeçalho com bloco `ROLLBACK:` (`ALTER TABLE ... DROP COLUMN "LINK_PDF"`)
-- [x] `COMMENT ON COLUMN` documentando o propósito (URL pública do PDF no S3, nulo quando preview ou falha de upload)
-- [x] Nenhuma execução automática — a task só criou o arquivo
+- [x] `"LINK_PDF" TEXT` adicionado às colunas do `CREATE TABLE IF NOT EXISTS` (nulável, sem `CHECK` — mesmo padrão de `MOTIVO_FALHA`/`DESTINATARIOS`)
+- [x] `COMMENT ON COLUMN ..."LINK_PDF"` documentando o propósito (URL pública do PDF no S3, nulo quando preview ou falha de upload)
+- [x] `scripts/migration-promotor-relatorio-envio-link-pdf.sql` apagado — nenhuma referência órfã a ele em `design.md`
+- [x] Nenhuma execução automática — a task só editou o arquivo
 
 **Tests**: none
 **Gate**: nenhum — revisão manual, execução manual pelo usuário
 
-**Commit**: `chore(promotor-relatorio): script de migration da coluna link_pdf`
+**Commit**: `chore(promotor-relatorio): consolida coluna link_pdf no create table original`
 
 **Status**: ✅ Complete
 

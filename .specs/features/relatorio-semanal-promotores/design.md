@@ -342,7 +342,7 @@ Falha em `SINTESE` ou em `S3CLIENTE` nunca interrompe o fluxo — cada um devolv
 | `service/promotorReportService.ts` | `processarRelatorioCliente`: depois de `gerarRelatorioCliente` e antes de `renderizarPdf`, chama `PromotorReportSintese.gerarSinteses` por campanha e anexa o resultado ao bloco; depois de `renderizarPdf` (só quando `enviarEmail=true`), chama `S3StorageClient.uploadPdf` e passa `linkPdf` pra `registrarAuditoria` |
 | `templates/relatorioPromotor.ts` | Cada `desenharXxx` de seção (visão geral, assertividade, por promotor, cancelamentos, destaques, próximos passos) desenha `bloco.sintesesPorSecao?.[secao]` logo após `desenharLinhaDestaque`, reaproveitando o estilo já existente de `desenharCallout` — se a chave não existir (seção sem síntese), não desenha nada, sem buraco em branco |
 | `entities/PromotorRelatorioEnvio.ts` | Nova coluna `LINK_PDF?: string \| null` (`TEXT`, nullable) |
-| `scripts/migration-promotor-relatorio-envio-link-pdf.sql` (novo) | `ALTER TABLE ... ADD COLUMN IF NOT EXISTS "LINK_PDF" TEXT` — execução manual, mesma convenção dos demais scripts desta feature |
+| `scripts/migration-promotor-relatorio-envio.sql` (modifica) | **Consolidado em vez de um `ALTER TABLE` à parte**: a tabela `PROMOTOR_RELATORIO_ENVIO` ainda não foi criada em nenhum ambiente, então `LINK_PDF TEXT` entra direto no `CREATE TABLE` original — execução manual, nenhuma mudança na convenção |
 
 ### Error Handling Strategy (adendo)
 

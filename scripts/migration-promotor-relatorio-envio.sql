@@ -36,6 +36,9 @@
 --                     reais em produção, ou a lista fixa de teste fora dela).
 --   AMBIENTE          'production' ou 'nao-production' — registra em qual
 --                     ambiente aquele envio rodou, pra auditoria.
+--   LINK_PDF          URL pública do PDF arquivado no S3 (RELPROM-45). Nulo
+--                     em modo preview (enviarEmail=false) ou quando o upload
+--                     falhar — nunca bloqueia o envio do relatório.
 -- ---------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS "CAMPANHAS_OB"."PROMOTOR_RELATORIO_ENVIO" (
   "ID" SERIAL PRIMARY KEY,
@@ -47,6 +50,7 @@ CREATE TABLE IF NOT EXISTS "CAMPANHAS_OB"."PROMOTOR_RELATORIO_ENVIO" (
   "MOTIVO_FALHA" TEXT,
   "DESTINATARIOS" JSONB,
   "AMBIENTE" TEXT NOT NULL,
+  "LINK_PDF" TEXT,
   "CRIADO_EM" TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT "CHK_PROMOTOR_RELATORIO_ENVIO_ORIGEM"
     CHECK ("ORIGEM" IN ('CRON', 'MANUAL')),
@@ -83,6 +87,8 @@ COMMENT ON COLUMN "CAMPANHAS_OB"."PROMOTOR_RELATORIO_ENVIO"."DESTINATARIOS" IS
   'Lista JSON de e-mails efetivamente usada no envio — admins reais em produção, ou a lista fixa de teste (DEV_REPORT_RECIPIENTS) fora dela.';
 COMMENT ON COLUMN "CAMPANHAS_OB"."PROMOTOR_RELATORIO_ENVIO"."AMBIENTE" IS
   'Ambiente em que este envio rodou: production ou nao-production.';
+COMMENT ON COLUMN "CAMPANHAS_OB"."PROMOTOR_RELATORIO_ENVIO"."LINK_PDF" IS
+  'URL pública do PDF arquivado no S3. Nulo em modo preview (enviarEmail=false) ou quando o upload falhou — nunca bloqueia o envio do relatório.';
 COMMENT ON COLUMN "CAMPANHAS_OB"."PROMOTOR_RELATORIO_ENVIO"."CRIADO_EM" IS
   'Data/hora de criação do registro (TIMESTAMPTZ).';
 
