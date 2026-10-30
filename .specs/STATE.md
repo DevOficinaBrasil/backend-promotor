@@ -50,6 +50,14 @@
 - **Date**: 2026-10-29
 - **Status**: active
 
+### AD-008
+- **Decision**: `Usuario.IS_ADMIN` (`backend-ob-ads`, SQL Server) marca acesso ao painel administrativo interno do ob-ads — não identifica quem representa o cliente. Pra resolver os usuários reais de um cliente (destinatário de notificação, relatório, etc.), a query certa é: vinculado ao cliente (FK direto `Usuario.ID_CLIENTE` ou M:N `USUARIO_X_CLIENTES` ativo) **excluindo** `IS_ADMIN` e excluindo staff interno (`@oficinabrasil.com.br`) — exatamente o filtro que `CommunityReportEmailService.ts:221-233` já usa. Nunca filtrar por `IS_ADMIN = 1` achando que isso pega "o admin/representante do cliente".
+- **Reason**: `AdminResolverService.resolverAdminsPorCliente` (CON26-325, relatório de promotores) foi implementado invertendo esse filtro (`IS_ADMIN = 1`), assumindo que a coluna identificava o contato do cliente. Pedido do usuário corrigiu o entendimento: `IS_ADMIN` é sobre acesso ao painel do ob-ads, não sobre representar o cliente — o e-mail estava indo pra gente errada (staff com acesso de painel, não os usuários reais do cliente).
+- **Trade-off**: Nenhum — é a mesma query já usada e validada em produção por `CommunityReportEmailService`, só reaproveitada. O nome `AdminResolverService`/`resolverAdminsPorCliente`/endpoint `/internal/clientes/:idCliente/admins` ficou com "admin" por histórico; o significado real agora é "usuários do cliente" — renomear é cosmético, não bloqueante, avaliar se vale a pena numa limpeza futura.
+- **Scope**: Qualquer feature futura (neste ou noutro repo) que precise notificar/identificar "o cliente" via `Usuario` do SQL Server reaproveita esse filtro (`IS_ADMIN IS NULL OR IS_ADMIN = 0` + exclusão de `@oficinabrasil.com.br`), nunca inventa um filtro novo baseado em `IS_ADMIN = 1`.
+- **Date**: 2026-10-30
+- **Status**: active
+
 ## Handoff
 
 - **Feature**: disparo-convite-visita-admin (`.specs/features/disparo-convite-visita-admin/`), **DONE**

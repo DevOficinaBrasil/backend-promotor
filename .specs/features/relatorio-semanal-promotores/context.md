@@ -19,7 +19,7 @@ Automatizar a geração e o envio por e-mail do relatório semanal de visitas de
 - Cliente "tem o módulo" ⇔ existe linha ativa em `cliente_module` apontando pro módulo `"Promotores"`. A existência de uma `Campanha` ativa vinculada ao cliente continua sendo pré-requisito para haver dado a relatar, mas não substitui a flag.
 
 ### Destinatário do e-mail
-- Todos os `Usuario` com `IS_ADMIN = 1` vinculados ao cliente (mesma resolução de cliente→usuários do `CommunityReportEmailService`, só que **sem** o filtro que hoje exclui admins — aqui o filtro é invertido: manda só para quem é admin).
+- **Corrigido pós-Execute (ver AD-008 em STATE.md)**: todo `Usuario` vinculado ao cliente (FK direto ou M:N `USUARIO_X_CLIENTES` ativo) — **mesmo filtro** de `CommunityReportEmailService` (não invertido): exclui quem tem `IS_ADMIN` (acesso ao painel administrativo do ob-ads, uso interno, não quem representa o cliente) e staff `@oficinabrasil.com.br`. A decisão original desta feature invertia o filtro (`IS_ADMIN=1`) achando que isso selecionava "o admin do cliente" — estava errado.
 - Se o cliente tiver múltiplos admins: **um único envio** por cliente/período, com todos os e-mails de admin no `To`.
 - Se o cliente não tiver nenhum admin resolvido: não há envio possível — vira falha logada (ver Declined/Assumptions).
 

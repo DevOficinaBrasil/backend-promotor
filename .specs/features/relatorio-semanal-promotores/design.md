@@ -53,7 +53,7 @@ graph TD
 | `@aws-sdk/client-s3` (dependência já presente, `^3.864.0`, nunca integrada — `.specs/codebase/CONCERNS.md`) | — | **Pós-Execute (P6)**: primeiro uso real no repo — upload do PDF gerado |
 | `EmailService.sendEmailWithAttachment` | `backend-ob-ads/src/appplication/services/EmailService.ts:115-153` | Reaproveitado via novo endpoint interno fino, não reimplementado |
 | Padrão de guarda de rota interna (`apiKeyGuard`, header `x-api-key`) | `backend-ob-ads/src/main/config/routes/CommunityReportInternalRoutes.ts:9-19` | Modelo exato de auth pros 2 endpoints internos novos |
-| Query de resolução de `Usuario` por `idCliente` (M:N `USUARIO_X_CLIENTES` + direto) | `backend-ob-ads/src/appplication/services/communityReport/CommunityReportEmailService.ts:221-233` | Extrair pra uma função reaproveitável, invertendo `IS_ADMIN` (`=1` em vez de `IS NULL OR =0`), mantendo a exclusão de `@oficinabrasil.com.br` |
+| Query de resolução de `Usuario` por `idCliente` (M:N `USUARIO_X_CLIENTES` + direto) | `backend-ob-ads/src/appplication/services/communityReport/CommunityReportEmailService.ts:221-233` | Extrair pra uma função reaproveitável, **mesmo filtro de `IS_ADMIN` (`IS NULL OR =0`), não invertido** — corrigido pós-Execute, AD-008 em STATE.md — mantendo a exclusão de `@oficinabrasil.com.br` |
 | Padrão de leitura de env "a cada chamada" (não cachear em const de módulo) | `CommunityReportEmailService.ts:62-70,86-88` | Mesmo cuidado pro `DEV_REPORT_RECIPIENTS`/checagem de `NODE_ENV`, por causa de `dotenv.config()` tardio |
 | `Module` / `ClienteModule` | `backend-ob-ads/src/domain/entities/{Module,ClienteModule}.ts` | Existência de linha em `cliente_module` apontando pro módulo = "habilitado"; sem coluna de enabled |
 
@@ -148,7 +148,7 @@ graph TD
 - **Location**: `backend-ob-ads/src/main/config/routes/InternalModulosRoutes.ts` (novo arquivo)
 - **Interfaces**: `GET /internal/modulos/:nomeModulo/clientes-habilitados?idCliente=<opcional>` → `{ idCliente, nomeCliente, admins: string[] }[]`
 - **Dependencies**: `apiKeyGuard` (novo, reaproveitando o padrão de `CommunityReportInternalRoutes.ts:9-19`, env `INTERNAL_API_KEY`), `Module`, `ClienteModule`, `Usuario`, `USUARIO_X_CLIENTES`
-- **Reuses**: query de `CommunityReportEmailService.ts:221-233`, invertendo `IS_ADMIN`
+- **Reuses**: query de `CommunityReportEmailService.ts:221-233` — **mesmo filtro de `IS_ADMIN`, não invertido** (corrigido pós-Execute, AD-008)
 
 ### InternalEmailRoutes
 - **Purpose**: Wrapper fino e genérico sobre `EmailService.sendEmailWithAttachment`, reaproveitável por qualquer feature interna futura (não só promotores).

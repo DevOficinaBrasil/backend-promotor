@@ -263,7 +263,7 @@ T44 -> T47
 
 **Commit**: `feat(usuarios): resolve admins de um cliente para notificacao` (ob-ads `78cb356d`)
 
-**Status**: ✅ Complete
+**Status**: ✅ Complete — **Corrigido pós-Execute (pedido do usuário, AD-008 em STATE.md)**: o filtro `IS_ADMIN = 1` estava errado — essa coluna marca acesso ao painel administrativo do ob-ads (uso interno), não quem representa o cliente. Filtro trocado pra `(IS_ADMIN IS NULL OR IS_ADMIN = 0)`, igual ao de `CommunityReportEmailService` (não invertido, como a task original fez). Commit da correção: `fix(usuarios): resolve usuario do cliente em vez de admin do painel` (ob-ads `df0c9c99`).
 
 ---
 
