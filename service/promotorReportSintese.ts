@@ -1,7 +1,14 @@
 import OpenAI from "openai";
-import { CampanhaBlocoRelatorio, ResumoCancelamentoGrupo, SecaoRelatorio, SintesesPorSecao } from "../types/promotorRelatorio";
-import { Cancelamento } from "../utils/promotorReportCalculos";
-import { construirResumoCancelamentos, GrupoCancelamentoBruto, numerosValidosDaSecao, validarSintese } from "../utils/promotorReportSinteseValidacao";
+import { CampanhaBlocoRelatorio, InsightCampo, ResumoCancelamentoGrupo, SecaoRelatorio, SintesesPorSecao } from "../types/promotorRelatorio";
+import { Cancelamento, DestaqueCampo, VisaoGeralCampanha } from "../utils/promotorReportCalculos";
+import {
+  construirInsightsCampo,
+  construirResumoCancelamentos,
+  GrupoCancelamentoBruto,
+  InsightCampoBruto,
+  numerosValidosDaSecao,
+  validarSintese,
+} from "../utils/promotorReportSinteseValidacao";
 
 const SECOES: SecaoRelatorio[] = ["visaoGeral", "assertividade", "porPromotor", "cancelamentos", "destaques", "proximosPassos"];
 
@@ -54,6 +61,33 @@ function montarPromptResumoCancelamentos(cancelamentos: Cancelamento[]): string 
     "aparecer em exatamente 1 grupo — nenhum de fora, nenhum repetido.",
     "",
     'Responda só com um objeto JSON: {"grupos": [{"indices": [0, 1], "justificativa": "..."}]}',
+  ].join("\n");
+}
+
+function montarPromptInsightsCampo(destaques: DestaqueCampo[], visaoGeral: VisaoGeralCampanha): string {
+  const itens = destaques.map((destaque, indice) => ({
+    indice,
+    status: destaque.status,
+    cidade: destaque.cidadeOficina,
+    observacao: destaque.obs,
+  }));
+
+  return [
+    "Visão geral da campanha (JSON):",
+    JSON.stringify(visaoGeral, null, 2),
+    "",
+    "Destaques de campo com observação registrada, 1 por índice (JSON):",
+    JSON.stringify(itens, null, 2),
+    "",
+    "Identifique no máximo 4 padrões/temas notáveis entre as observações acima (ex.: oficinas que não",
+    "existem mais, rotas fora da área do promotor, oficinas fora do perfil do cliente, poucas",
+    "observações registradas). Pra cada tema, escolha os índices dos destaques que pertencem a ele",
+    "(um destaque só pode entrar em 1 tema) e escreva um título curto + 1-2 frases descrevendo o",
+    "padrão. Só cite números presentes nos dados acima (contagens dos destaques, por cidade, ou os",
+    "contadores da visão geral) — nunca invente ou calcule um número novo. Não é preciso cobrir",
+    "todos os destaques, só os temas mais notáveis.",
+    "",
+    'Responda só com um objeto JSON: {"insights": [{"titulo": "...", "indices": [0, 1], "descricao": "..."}]}',
   ].join("\n");
 }
 
@@ -124,6 +158,39 @@ export default class PromotorReportSintese {
       return construirResumoCancelamentos(cancelamentos, bruto.grupos);
     } catch (erro) {
       console.error("[promotorReportSintese] falha ao gerar resumo de cancelamentos por ia", {
+        erro: (erro as Error)?.message,
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Até 4 insights (título + descrição) resumindo os padrões mais notáveis
+   * dos destaques do campo (RELPROM-58/60), via 1 chamada à OpenAI que só
+   * escolhe quais destaques formam cada insight — nunca inventa contagem.
+   * Nunca lança; `null` em qualquer falha (chamada, parse, ou
+   * `construirInsightsCampo` rejeitar), sinalizando pro chamador usar a
+   * listagem de cards individuais (RELPROM-61/63).
+   */
+  static async gerarInsightsCampo(destaques: DestaqueCampo[], visaoGeral: VisaoGeralCampanha): Promise<InsightCampo[] | null> {
+    try {
+      const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+      const resposta = await client.chat.completions.create({
+        model: MODELO,
+        response_format: { type: "json_object" },
+        temperature: 0.3,
+        messages: [{ role: "user", content: montarPromptInsightsCampo(destaques, visaoGeral) }],
+      });
+
+      const conteudo = resposta.choices[0]?.message?.content;
+      if (!conteudo) return null;
+
+      const bruto = JSON.parse(conteudo) as { insights?: InsightCampoBruto[] };
+      if (!Array.isArray(bruto.insights)) return null;
+
+      return construirInsightsCampo(destaques, visaoGeral, bruto.insights);
+    } catch (erro) {
+      console.error("[promotorReportSintese] falha ao gerar insights de destaques do campo por ia", {
         erro: (erro as Error)?.message,
       });
       return null;

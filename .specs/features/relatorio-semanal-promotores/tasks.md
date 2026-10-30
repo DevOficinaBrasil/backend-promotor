@@ -1399,19 +1399,19 @@ Adicionada depois do Verifier dar PASS (3ª iteração). 2 pedidos do usuário: 
 - Skill: NONE
 
 **Done when**:
-- [ ] `gerarInsightsCampo(destaques, visaoGeral): Promise<InsightCampo[] | null>` — nunca lança
-- [ ] Prompt lista os destaques por índice (0-based) com status/cidade/obs, pedindo no máximo 4 insights
-- [ ] Resultado bruto passa por `construirInsightsCampo`; `null` em qualquer rejeição
-- [ ] Chamada falha (mock rejeita, JSON inválido, resposta vazia) → `null`, loga o erro
-- [ ] Teste mocka o módulo `openai` (mesmo padrão de T37/T41) — nunca chama a API de verdade
-- [ ] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportSintese.test.ts` (sem regressão + novos casos)
+- [x] `gerarInsightsCampo(destaques, visaoGeral): Promise<InsightCampo[] | null>` — nunca lança
+- [x] Prompt lista os destaques por índice (0-based) com status/cidade/obs, pedindo no máximo 4 insights
+- [x] Resultado bruto passa por `construirInsightsCampo`; `null` em qualquer rejeição
+- [x] Chamada falha (mock rejeita, JSON inválido, resposta vazia) → `null`, loga o erro
+- [x] Teste mocka o módulo `openai` (mesmo padrão de T37/T41) — nunca chama a API de verdade
+- [x] Gate check passa: `npx jest --runInBand __tests__/unit/promotorReportSintese.test.ts` (18 passed, sem regressão + 6 novos casos)
 
 **Tests**: unit
 **Gate**: quick
 
 **Commit**: `feat(promotor-relatorio): gera insights de destaques do campo via openai`
 
-**Status**: ⬜ Pending
+**Status**: ✅ Complete
 
 ---
 

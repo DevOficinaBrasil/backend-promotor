@@ -8,7 +8,7 @@ jest.mock("openai", () => {
 
 import PromotorReportSintese from "../../service/promotorReportSintese";
 import { CampanhaBlocoRelatorio } from "../../types/promotorRelatorio";
-import { Cancelamento } from "../../utils/promotorReportCalculos";
+import { Cancelamento, DestaqueCampo, VisaoGeralCampanha } from "../../utils/promotorReportCalculos";
 
 const BLOCO: CampanhaBlocoRelatorio = {
   idCampanha: 1,
@@ -168,6 +168,72 @@ describe("PromotorReportSintese.gerarResumoCancelamentos", () => {
     mockCreate.mockRejectedValue(new Error("timeout"));
 
     const resultado = await PromotorReportSintese.gerarResumoCancelamentos(CANCELAMENTOS);
+
+    expect(resultado).toBeNull();
+  });
+});
+
+describe("PromotorReportSintese.gerarInsightsCampo", () => {
+  const VISAO_GERAL: VisaoGeralCampanha = { concluidas: 71, canceladas: 21, abertasNaRota: 132 };
+  const DESTAQUES: DestaqueCampo[] = [
+    { status: "concluida", idPromotor: 1, nomePromotor: "A", nomeOficina: "Oficina 1", cidadeOficina: "Rio de Janeiro/RJ", obs: "Fechada" },
+    { status: "cancelada", idPromotor: 2, nomePromotor: "B", nomeOficina: "Oficina 2", cidadeOficina: "Recife/PE", obs: "Fora de área" },
+  ];
+
+  it("retorna os insights validados quando a resposta e valida — RELPROM-58", async () => {
+    mockCreate.mockResolvedValue(
+      respostaComConteudo(
+        JSON.stringify({
+          insights: [{ titulo: "Base com oficinas que não existem mais", indices: [0], descricao: "1 oficina fechada no Rio de Janeiro" }],
+        })
+      )
+    );
+
+    const resultado = await PromotorReportSintese.gerarInsightsCampo(DESTAQUES, VISAO_GERAL);
+
+    expect(resultado).toEqual([{ titulo: "Base com oficinas que não existem mais", descricao: "1 oficina fechada no Rio de Janeiro" }]);
+  });
+
+  it("faz 1 unica chamada, com model e response_format corretos", async () => {
+    mockCreate.mockResolvedValue(respostaComConteudo(JSON.stringify({ insights: [{ titulo: "T", indices: [0], descricao: "sem numero" }] })));
+
+    await PromotorReportSintese.gerarInsightsCampo(DESTAQUES, VISAO_GERAL);
+
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+    const [params] = mockCreate.mock.calls[0];
+    expect(params.model).toBe("gpt-4o-mini");
+    expect(params.response_format).toEqual({ type: "json_object" });
+  });
+
+  it("retorna null quando ha mais de 4 insights — RELPROM-61", async () => {
+    const insight = { titulo: "T", indices: [0], descricao: "sem numero" };
+    mockCreate.mockResolvedValue(respostaComConteudo(JSON.stringify({ insights: [insight, insight, insight, insight, insight] })));
+
+    const resultado = await PromotorReportSintese.gerarInsightsCampo(DESTAQUES, VISAO_GERAL);
+
+    expect(resultado).toBeNull();
+  });
+
+  it("retorna null quando a resposta vem sem campo insights", async () => {
+    mockCreate.mockResolvedValue(respostaComConteudo(JSON.stringify({ outraCoisa: true })));
+
+    const resultado = await PromotorReportSintese.gerarInsightsCampo(DESTAQUES, VISAO_GERAL);
+
+    expect(resultado).toBeNull();
+  });
+
+  it("retorna null quando a resposta vem sem conteudo — RELPROM-63", async () => {
+    mockCreate.mockResolvedValue(respostaComConteudo(null));
+
+    const resultado = await PromotorReportSintese.gerarInsightsCampo(DESTAQUES, VISAO_GERAL);
+
+    expect(resultado).toBeNull();
+  });
+
+  it("retorna null sem lancar quando a chamada rejeita — RELPROM-63", async () => {
+    mockCreate.mockRejectedValue(new Error("timeout"));
+
+    const resultado = await PromotorReportSintese.gerarInsightsCampo(DESTAQUES, VISAO_GERAL);
 
     expect(resultado).toBeNull();
   });
