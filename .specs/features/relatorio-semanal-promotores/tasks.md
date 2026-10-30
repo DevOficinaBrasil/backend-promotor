@@ -398,7 +398,7 @@ T44 -> T47
 
 **Commit**: `chore(promotor-relatorio): script de migration da tabela de controle de envio`
 
-**Status**: ✅ Complete
+**Status**: ✅ Complete — **Corrigido pós-Execute (2026-10-30)**: tabela movida em produção do schema `CAMPANHAS_OB` pro `DATA_INSIGHT`. Script e a entity (`entities/PromotorRelatorioEnvio.ts`) atualizados pra `DATA_INSIGHT`, com `CREATE SCHEMA IF NOT EXISTS` adicionado — dev ainda não tem a tabela, roda este script já apontando pro schema certo.
 
 ---
 

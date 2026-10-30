@@ -213,7 +213,7 @@ interface EnviarEmailComAnexoRequest {
 
 **Relationships**: `RelatorioPromotorData` é 1:N com `CampanhaBlocoRelatorio` (RELPROM-26). `ClienteModuloHabilitado` vem do ob-ads e alimenta tanto a lista de clientes elegíveis (cron) quanto a validação do endpoint manual (RELPROM-39).
 
-### PromotorRelatorioEnvio (entity nova, Postgres — `CAMPANHAS_OB.PROMOTOR_RELATORIO_ENVIO`)
+### PromotorRelatorioEnvio (entity nova, Postgres — `DATA_INSIGHT.PROMOTOR_RELATORIO_ENVIO`, movida pra esse schema em produção em 2026-10-30; era `CAMPANHAS_OB`)
 
 ```typescript
 interface PromotorRelatorioEnvio {

@@ -26,7 +26,7 @@ export enum AmbienteRelatorioEnvio {
  * mesmo período pro mesmo cliente (RELPROM-18); ORIGEM='MANUAL' nunca entra
  * nessa restrição, pra não bloquear o endpoint de teste (T21).
  */
-@Entity({ schema: "CAMPANHAS_OB", name: "PROMOTOR_RELATORIO_ENVIO" })
+@Entity({ schema: "DATA_INSIGHT", name: "PROMOTOR_RELATORIO_ENVIO" })
 export default class PromotorRelatorioEnvio {
   @PrimaryGeneratedColumn({ type: "int", name: "ID" })
   ID?: number;
