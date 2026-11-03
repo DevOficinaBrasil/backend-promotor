@@ -16,7 +16,14 @@ export const DEV_REPORT_RECIPIENTS: string[] = ["andre.pereira@oficinabrasil.com
  * de novo (mais clientes usando o módulo, ou pedido do usuário).
  */
 export const DESTINATARIOS_FIXOS_PRODUCAO_POR_CLIENTE: Record<number, string[]> = {
-  126: ["gabriel.cavalcante@skfvertevo.com", "mauricio.valdivno@skfvertevo.com", "oclesio.peternela@skfvertevo.com"],
+  126: [
+    "gabriel.cavalcante@skfvertevo.com", 
+    "mauricio.valdivno@skfvertevo.com", 
+    "oclesio.peternela@skfvertevo.com",
+    "andre.pereira@oficinabrasil.com.br",
+    "fabiano.cesar@oficinabrasil.com.br",
+    "julia.pimentel@oficinabrasil.com.br",
+  ],
 };
 
 export interface ResolucaoDestinatarios {
