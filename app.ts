@@ -3,6 +3,7 @@ import * as dotenv from "dotenv";
 import routes from "./api";
 import { AppDataSourceSync } from "./data-source";
 import { registrarOutboxCron } from "./schedule/outboxNotificacaoCron";
+import { registrarPromotorRelatorioCron } from "./schedule/promotorRelatorioCron";
 import cors from "cors";
 import { openAPIGenerator } from "./config/openapi";
 
@@ -51,6 +52,10 @@ AppDataSourceSync.initialize()
     // que OUTBOX_VISITA_ENABLED seja "1" — toda cópia deste servidor que subir
     // com a flag vira mais um worker, o que é seguro porque o claim é atômico.
     registrarOutboxCron();
+
+    // Mesmo raciocínio: não faz nada a menos que PROMOTOR_RELATORIO_ENABLED
+    // seja "1" (CON26-325).
+    registrarPromotorRelatorioCron();
 
     console.log(`Local: http://localhost:${process.env.PORT || 8185}`);
   })

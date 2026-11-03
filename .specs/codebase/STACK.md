@@ -61,6 +61,8 @@ No S3, email, or queue integration exists despite credentials and SDKs being pre
 
 Newly **in use** since the 2026-08-04 mapping: `axios`, `node-cron`, `date-fns-tz`, `express-rate-limit`, `supertest`.
 
-Still imported nowhere in application code: `playwright`, `openai`, `mongodb`, `mssql`, `mysql2`, `multer`, `aws-sdk`, `@aws-sdk/client-s3`, `@aws-sdk/s3-request-presigner`, `ejs`, `pdf-lib`, `pdf-parse`, `xlsx`, `node-schedule`, `sharp`, `fontkit`, `string-similarity`, `stream-json`, `undici`, `node-fetch`, `uuid`, `date-fns`, `fs-extra`, `bcrypt`, `@scalar/express-api-reference`.
+Newly **in use** since CON26-325 (relatório semanal de promotores, 2026-10-29): `pdf-lib` (`templates/relatorioPromotor.ts`, desenho direto de PDF). `playwright` foi dependência real por um tempo dessa mesma feature (renderização HTML→PDF) e foi removida do `package.json` depois — ver AD-007 em `.specs/STATE.md`.
+
+Still imported nowhere in application code: `openai`, `mongodb`, `mssql`, `mysql2`, `multer`, `aws-sdk`, `@aws-sdk/client-s3`, `@aws-sdk/s3-request-presigner`, `ejs`, `pdf-parse`, `xlsx`, `node-schedule`, `sharp`, `fontkit`, `string-similarity`, `stream-json`, `undici`, `node-fetch`, `uuid`, `date-fns`, `fs-extra`, `bcrypt`, `@scalar/express-api-reference`.
 
 Residue from a forked project (`package.json` name is still `backend-hijack`). Keep `bcrypt` — it is the intended fix for the password-hashing concern. The dead npm script entries that pointed at a nonexistent `bots/` directory were removed in `9df64f4`.

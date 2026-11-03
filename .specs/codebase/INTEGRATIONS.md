@@ -120,7 +120,8 @@ Credentials, SDKs, or configuration present with **no code path**. Inherited res
 | SQL Server / MySQL | `mssql`, `mysql2` | never imported |
 | Email | `ejs`, `templates/*.ejs` | no mail transport installed at all |
 | File uploads | `multer` | never imported |
-| PDF / image / spreadsheet | `pdf-lib`, `pdf-parse`, `sharp`, `fontkit`, `xlsx`, plus `imagemagick`/`ghostscript` in the `Dockerfile` | never imported |
-| Browser automation | `playwright` | never imported |
+| Image / spreadsheet | `pdf-parse`, `sharp`, `fontkit`, `xlsx`, plus `imagemagick`/`ghostscript` in the `Dockerfile` | never imported |
 
 The live AWS credentials in `exemple.env` grant real access regardless of whether this service uses them — see CONCERNS.md → Security Considerations.
+
+**Update (CON26-325, 2026-10-29)**: `pdf-lib` saiu dessa lista — está em uso real em `templates/relatorioPromotor.ts` (relatório semanal de promotores, desenho direto de PDF). `playwright` foi importado por um tempo pela mesma feature (renderização HTML→PDF) e depois removido do `package.json` — ver AD-007 em `.specs/STATE.md`.

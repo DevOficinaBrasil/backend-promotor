@@ -207,13 +207,14 @@ banco, e paginação via `find()` volta a se comportar como o TypeORM documenta.
 
 ## Dependencies at Risk
 
-### 25 declared dependencies are never imported
+### 24 declared dependencies are never imported
 
 - **Risk:** Each unused package is installed into the production image and contributes to the vulnerability surface without providing value. This is not hypothetical here: the `@duckdb/node-api` malware incident documented in `docs/SECURITY_SUMMARY.md` arrived through exactly this channel.
 - **Files:** `package.json`
-- **Unused:** `playwright`, `openai`, `mongodb`, `mssql`, `mysql2`, `multer`, `aws-sdk`, `@aws-sdk/client-s3`, `@aws-sdk/s3-request-presigner`, `ejs`, `pdf-lib`, `pdf-parse`, `xlsx`, `node-schedule`, `sharp`, `fontkit`, `string-similarity`, `stream-json`, `undici`, `node-fetch`, `uuid`, `date-fns`, `fs-extra`, `bcrypt`, `@scalar/express-api-reference`
-- **Now genuinely used** (remove from any cleanup list): `axios`, `node-cron`, `date-fns-tz`, `express-rate-limit`, `supertest`
-- **Impact:** Slower installs and builds, a larger image, and a much larger `npm audit` surface. `playwright` alone pulls browser binaries.
+- **Unused:** `openai`, `mongodb`, `mssql`, `mysql2`, `multer`, `aws-sdk`, `@aws-sdk/client-s3`, `@aws-sdk/s3-request-presigner`, `ejs`, `pdf-parse`, `xlsx`, `node-schedule`, `sharp`, `fontkit`, `string-similarity`, `stream-json`, `undici`, `node-fetch`, `uuid`, `date-fns`, `fs-extra`, `bcrypt`, `@scalar/express-api-reference`
+- **Now genuinely used** (remove from any cleanup list): `axios`, `node-cron`, `date-fns-tz`, `express-rate-limit`, `supertest`, `pdf-lib` (CON26-325, `templates/relatorioPromotor.ts`)
+- **Removed, not just unused**: `playwright` — foi dependência real por um tempo da mesma feature (renderização HTML→PDF), substituída por `pdf-lib` e removida do `package.json` (AD-007, `.specs/STATE.md`) por causa do risco de depender de Chromium/SO na EC2 de produção sem Docker.
+- **Impact:** Slower installs and builds, a larger image, and a much larger `npm audit` surface.
 - **Migration plan:** Remove all except `bcrypt` (the intended password-hashing fix). Note the near-duplicates now that some siblings are in use — `date-fns` is dead while `date-fns-tz` is load-bearing; `undici` and `node-fetch` are dead while `axios` is load-bearing; `node-schedule` is dead while `node-cron` is load-bearing. Do not remove by family. The `Dockerfile` also installs `imagemagick` and `ghostscript` for work that does not exist — remove those too.
 - **Lockfile drift:** `package.json`/`package-lock.json` pin `jest@29.7.0` but the working `node_modules` resolves `30.1.3`. Reinstall before trusting a local test result.
 

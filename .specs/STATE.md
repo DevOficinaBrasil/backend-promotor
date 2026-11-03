@@ -26,6 +26,46 @@
 - **Date**: 2026-09-28
 - **Status**: active
 
+### AD-005
+- **Decision**: Integração cross-service entre `backend-promotor` e `backend-ob-ads` acontece via endpoints internos **genéricos** (não um por feature) no ob-ads, atrás de um único header `x-api-key` validado contra a env `INTERNAL_API_KEY`. O backend-promotor nunca ganha client SQL Server ou SES próprio para falar com dados que já vivem no ob-ads (admins, módulos, envio de e-mail) — ele chama o ob-ads.
+- **Reason**: `backend-ob-ads` já tem SES e SQL Server configurados e testados em produção (`EmailService`, `Usuario`/`ClienteModule`). Duplicar essas credenciais/lógica no backend-promotor criaria dois pontos de divergência (ex.: definição de "admin" mudar num lado e não no outro). O padrão de guarda por header de API key já existe (`CommunityReportInternalRoutes.ts`), só que por feature (`COMMUNITY_REPORT_INTERNAL_API_KEY`); como os dois endpoints novos (`/internal/modulos/:nome/clientes-habilitados`, `/internal/email/enviar-com-anexo`) são genéricos e não específicos de uma feature, usam uma chave compartilhada em vez de criar uma chave nova a cada endpoint interno futuro.
+- **Trade-off**: Qualquer indisponibilidade do ob-ads vira falha também no backend-promotor para tudo que depender de admin/e-mail — mitigado isolando a falha por cliente (não derruba o processamento inteiro, exceto na chamada de listagem, que é única por execução). A guarda de ambiente dev/produção (quem realmente recebe o e-mail) fica sempre do lado de quem a decide por contexto de negócio — o backend-promotor — nunca do lado do ob-ads, que só manda pra lista que recebe.
+- **Scope**: Qualquer integração cross-service futura entre backend-promotor e backend-ob-ads (ou outro serviço interno) que precise ler dado do ob-ads ou disparar e-mail reaproveita esse padrão (endpoint genérico + `INTERNAL_API_KEY`), em vez de criar uma chave por feature ou duplicar credencial/lógica no chamador.
+- **Date**: 2026-10-29
+- **Status**: active
+
+### AD-006
+- **Decision**: O SQL Server (`backend-ob-ads`, `SqlConnections.SQLServerDataSource`) entra em congelamento de pré-migração: nenhuma feature nova pode acrescentar tabela, coluna ou linha de configuração nele (migrations/DDL, e também INSERTs de catálogo tipo `module`/`cliente_module`) até a migração pra Postgres terminar. Vale mesmo pra scripts marcados "execução manual" — não só código automático. Toda feature que precisaria de "habilitar algo por cliente" usa, em vez disso, uma allowlist fixa em código (backend-promotor ou backend-ob-ads), documentada como temporária, até a migração acabar e o mecanismo baseado em tabela poder ser ligado.
+- **Reason**: Pedido do DBA — toda alteração no SQL Server antes da migração aumenta o que precisa ser revalidado contra o schema novo em Postgres. Acrescentar `module`/`cliente_module` (CON26-325, relatório de promotores) seria mais uma coisa a portar/conferir na migração, mesmo sendo "só uma linha de dado".
+- **Trade-off**: Funcionalidade que dependeria do SQL Server pra escalar (ex.: módulo "promotores" habilitado por cliente via `cliente_module`) fica com o código pronto e testado, mas dormente — reativar depois da migração é trocar a fonte de dados de volta, não reescrever a feature. Até lá, "quem está habilitado" vive hardcoded em código, exigindo deploy pra mudar (aceitável: é só a SKF por enquanto).
+- **Scope**: Qualquer feature futura que cogitaria `CREATE TABLE`/`ALTER TABLE`/`INSERT` de catálogo no SQL Server do ob-ads primeiro verifica se essa decisão ainda está `active`; se estiver, usa allowlist/config em código em vez disso. Leitura (`SELECT`) no SQL Server continua liberada — a restrição é só escrita/schema.
+- **Date**: 2026-10-30
+- **Status**: active
+
+### AD-007
+- **Decision**: Geração de PDF em cron/endpoint de produção usa `pdf-lib` (desenho direto: texto, retângulo, linha), nunca um navegador headless (Playwright/Puppeteer) renderizando HTML→PDF.
+- **Reason**: O relatório semanal de promotores (CON26-325) começou com Playwright (`chromium.launch()`). Produção roda `node` direto numa EC2 (Amazon Linux 2023), sem Docker — Playwright exige Chromium + libs de sistema instaladas manualmente (`dnf`, pacote por pacote, SO não oficialmente suportado). Validado funcionando (T01, spike), mas é uma dependência de ambiente frágil: qualquer recriação da instância/imagem base exige repetir o provisionamento manual, e uma falha aí derruba o cron inteiro sem nenhuma mudança de código. `pdf-lib` já é dependência do projeto, roda em JS puro, sem binário externo.
+- **Trade-off**: Layout com `pdf-lib` é desenho manual (cursor, quebra de linha, paginação própria) em vez de CSS/HTML — mais código de baixo nível no renderer, sem flexbox/grid prontos. Fonte customizada (`assets/fonts/Montserrat-*`) exigiria a dependência separada `@pdf-lib/fontkit` (não instalada); por ora usa as fontes padrão do `pdf-lib` (Helvetica). Compensado pela ausência total de dependência de SO/navegador em produção.
+- **Scope**: Qualquer feature futura que precise gerar PDF em produção (cron ou request-time) usa `pdf-lib` por padrão; Playwright só se justificaria por uma necessidade de layout que `pdf-lib` realmente não cubra (ex. renderizar HTML arbitrário de terceiros), e mesmo assim reavaliar o custo de provisionamento na EC2 antes de adicionar de volta.
+- **Date**: 2026-10-29
+- **Status**: active
+
+### AD-008
+- **Decision**: `Usuario.IS_ADMIN` (`backend-ob-ads`, SQL Server) marca acesso ao painel administrativo interno do ob-ads — não identifica quem representa o cliente. Pra resolver os usuários reais de um cliente (destinatário de notificação, relatório, etc.), a query certa é: vinculado ao cliente (FK direto `Usuario.ID_CLIENTE` ou M:N `USUARIO_X_CLIENTES` ativo) **excluindo** `IS_ADMIN` e excluindo staff interno (`@oficinabrasil.com.br`) — exatamente o filtro que `CommunityReportEmailService.ts:221-233` já usa. Nunca filtrar por `IS_ADMIN = 1` achando que isso pega "o admin/representante do cliente".
+- **Reason**: `AdminResolverService.resolverAdminsPorCliente` (CON26-325, relatório de promotores) foi implementado invertendo esse filtro (`IS_ADMIN = 1`), assumindo que a coluna identificava o contato do cliente. Pedido do usuário corrigiu o entendimento: `IS_ADMIN` é sobre acesso ao painel do ob-ads, não sobre representar o cliente — o e-mail estava indo pra gente errada (staff com acesso de painel, não os usuários reais do cliente).
+- **Trade-off**: Nenhum — é a mesma query já usada e validada em produção por `CommunityReportEmailService`, só reaproveitada. O nome `AdminResolverService`/`resolverAdminsPorCliente`/endpoint `/internal/clientes/:idCliente/admins` ficou com "admin" por histórico; o significado real agora é "usuários do cliente" — renomear é cosmético, não bloqueante, avaliar se vale a pena numa limpeza futura.
+- **Scope**: Qualquer feature futura (neste ou noutro repo) que precise notificar/identificar "o cliente" via `Usuario` do SQL Server reaproveita esse filtro (`IS_ADMIN IS NULL OR IS_ADMIN = 0` + exclusão de `@oficinabrasil.com.br`), nunca inventa um filtro novo baseado em `IS_ADMIN = 1`.
+- **Date**: 2026-10-30
+- **Status**: active
+
+### AD-009
+- **Decision**: Em produção, o relatório semanal de promotores (CON26-325) envia pra uma lista fixa de e-mails por `idCliente` (`DESTINATARIOS_FIXOS_PRODUCAO_POR_CLIENTE`, `config/promotorReportRecipients.ts`) quando o cliente tiver entrada nesse mapa — hoje só a SKF (126), com 3 e-mails (`gabriel.cavalcante@skfvertevo.com`, `mauricio.valdivno@skfvertevo.com`, `oclesio.peternela@skfvertevo.com`). Cliente sem entrada no mapa continua recebendo pelos usuários reais resolvidos dinamicamente via ob-ads (RELPROM-11/AD-008).
+- **Reason**: Pedido explícito do usuário — enquanto só a SKF usa de fato o módulo (`CLIENTES_PRODUCAO_HABILITADOS = [126]`, AD-006), prefere garantir quem recebe via lista fixa já validada, em vez de depender só da resolução dinâmica de usuários do cliente.
+- **Trade-off**: Divergência entre quem está cadastrado como usuário do cliente no ob-ads e quem de fato recebe o relatório, enquanto o override estiver ativo — mitigado continuando a logar a resolução dinâmica real (`adminsReaisParaLog`) pra auditoria, mesmo sem usá-la pra enviar.
+- **Scope**: Qualquer cliente novo habilitado futuramente em `CLIENTES_PRODUCAO_HABILITADOS` sem entrada em `DESTINATARIOS_FIXOS_PRODUCAO_POR_CLIENTE` recebe automaticamente o comportamento padrão (usuários reais) — o override é por cliente, nunca global. Remover a entrada da SKF desse mapa quando o usuário confirmar que a resolução dinâmica pode voltar a ser a fonte de envio.
+- **Date**: 2026-10-30
+- **Status**: active
+
 ## Handoff
 
 - **Feature**: disparo-convite-visita-admin (`.specs/features/disparo-convite-visita-admin/`), **DONE**
