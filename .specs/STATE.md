@@ -66,6 +66,14 @@
 - **Date**: 2026-10-30
 - **Status**: active
 
+### AD-010
+- **Decision**: Ler `ultracar_process` (schema externo, mesmo Postgres físico de `MAIN_REGISTER`/`dw`) segue 3 regras fixas: (1) `ultracar_process.st_obads_im` nunca é consultada ao vivo por requisição — só em job batch, filtrado pelo índice existente em `dt_fechado`; (2) o match de CNPJ contra `MAIN_REGISTER.OFICINA`/`dw.cadastro_empresa` é sempre `LEFT JOIN` com CTE normalizada, nunca `EXISTS`/`OR` correlacionado; (3) um id sintético derivado de uma tabela externa (quando a linha não existe em `MAIN_REGISTER.OFICINA`) reserva a faixa a partir de `1_000_000_000` (cabe em `int4`, sem colisão com o `ID_OFICINA` serial atual).
+- **Reason**: Medido diretamente em produção (só `SELECT`) durante o design de `ultracar-oficinas-promotores`: `st_obads_im` tem ~12,69 milhões de linhas sem índice em `cnpj`/`id_oficina`/`cep` — um `COUNT(*)` nela já estourou o timeout de 10s. Reescrever o match de `EXISTS`/`OR` para `LEFT JOIN` com CTE normalizada baixou o tempo de ~timeout para ~2s, confirmando o comentário já existente em `utils/sqlCadastroEmpresa.ts` sobre o planejador desistir de hash join com `OR` no `ON`. `enterprise__tb_company.id` chega a 50 milhões mas tem 2.695 valores abaixo de 10 milhões — colide com a faixa atual (e futura, por um bom tempo) de `MAIN_REGISTER.OFICINA."ID_OFICINA"` (hoje até 426.254), então não dá pra reusar o id da origem direto.
+- **Trade-off**: Qualquer feature que precise de cidade/endereço histórico de `ultracar_process` precisa de uma tabela de cache própria, atualizada por job batch — não dá para ler o dado "fresco" por requisição. O offset de id sintético exige tradução (`id sintético - 1_000_000_000`) sempre que for preciso voltar ao id de origem.
+- **Scope**: Qualquer feature futura que leia `ultracar_process` (ou outro schema externo de volume/qualidade parecido) reaproveita essas 3 regras em vez de reavaliar do zero; qualquer novo esquema de id sintético para linha sem `MAIN_REGISTER.OFICINA` usa a mesma faixa reservada (`>= 1_000_000_000`) para não colidir entre features diferentes.
+- **Date**: 2026-11-05
+- **Status**: active
+
 ## Handoff
 
 - **Feature**: disparo-convite-visita-admin (`.specs/features/disparo-convite-visita-admin/`), **DONE**
