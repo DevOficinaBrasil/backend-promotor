@@ -4,6 +4,7 @@ import {
   decidirValorPreenchido,
   camposParaAtualizar,
   enriquecerOficinasComUltracar,
+  registrarOficinasSemMatch,
 } from '../../scripts/sincronizar-oficinas-ultracar';
 import { AppDataSourceSync } from '../../data-source';
 
@@ -12,6 +13,13 @@ jest.mock('../../data-source');
 const AGORA = new Date('2026-11-06T00:00:00Z');
 const HA_13_MESES = new Date('2025-10-06T00:00:00Z');
 const HA_1_MES = new Date('2026-10-06T00:00:00Z');
+
+function mockQueryRunner(rows: any[]) {
+  const query = jest.fn().mockResolvedValue(rows);
+  const queryRunner = { connect: jest.fn(), query, release: jest.fn() };
+  (AppDataSourceSync.createQueryRunner as jest.Mock).mockReturnValue(queryRunner);
+  return queryRunner;
+}
 
 describe('ehCandidataParaCorrecaoCep (ULTRACAR-15 a ULTRACAR-20)', () => {
   it('is not a candidate when the CEP is the same (digits), regardless of punctuation', () => {
@@ -196,13 +204,6 @@ describe('camposParaAtualizar (ULTRACAR-22/23/24/25)', () => {
 });
 
 describe('enriquecerOficinasComUltracar (ULTRACAR-21 a ULTRACAR-26)', () => {
-  function mockQueryRunner(rows: any[]) {
-    const query = jest.fn().mockResolvedValue(rows);
-    const queryRunner = { connect: jest.fn(), query, release: jest.fn() };
-    (AppDataSourceSync.createQueryRunner as jest.Mock).mockReturnValue(queryRunner);
-    return queryRunner;
-  }
-
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -318,5 +319,102 @@ describe('enriquecerOficinasComUltracar (ULTRACAR-21 a ULTRACAR-26)', () => {
 
     expect(relatorio.planejado).toHaveLength(1);
     expect(relatorio.oficinasComCampoPreenchido).toBe(2); // contagem real, não limitada
+  });
+});
+
+describe('registrarOficinasSemMatch (ULTRACAR-27 a ULTRACAR-32)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('candidate = active in enterprise__tb_company, anti-joined (LEFT JOIN ... IS NULL) against OFICINA and dw.cadastro_empresa, never EXISTS/NOT IN', async () => {
+    (AppDataSourceSync.query as jest.Mock).mockResolvedValueOnce([]);
+    mockQueryRunner([]);
+
+    await registrarOficinasSemMatch(true, 20);
+
+    const query = (AppDataSourceSync.query as jest.Mock).mock.calls[0][0] as string;
+    expect(query).toContain('ultracar_process.enterprise__tb_company');
+    expect(query).toMatch(/c\.active\s*=\s*true/);
+    expect(query).toMatch(/o\."ID_OFICINA"\s+IS NULL/);
+    expect(query).toMatch(/ce\.cnpj_int\s+IS NULL/);
+    expect(query).not.toMatch(/EXISTS\s*\(/);
+    expect(query).not.toMatch(/NOT IN\s*\(\s*SELECT/);
+  });
+
+  it('should not execute any INSERT in test mode, even with candidates found', async () => {
+    (AppDataSourceSync.query as jest.Mock).mockResolvedValueOnce([
+      { CNPJ: '12345678000199', NOME_FANTASIA: 'Oficina X', ADDR_ENDERECO: 'Rua X', ADDR_NUMERO: '10', ADDR_BAIRRO: 'Centro', ADDR_CEP: '01000-000', ADDR_LATITUDE: '-23.5', ADDR_LONGITUDE: '-46.6' },
+    ]);
+    mockQueryRunner([{ cnpj: '12345678000199', cidade: 'São Paulo', estado: 'SP' }]);
+
+    const relatorio = await registrarOficinasSemMatch(true, 20);
+
+    expect(relatorio.candidatosEncontrados).toBe(1);
+    expect(relatorio.registradas).toBe(0);
+    expect(AppDataSourceSync.query).toHaveBeenCalledTimes(1); // só o SELECT de candidatos
+  });
+
+  it('should insert NOME_FANTASIA/CNPJ/address/CIDADE/ESTADO, ORIGEM=ULTRACAR, ULTRACAR=true and TELEFONE null, in real mode', async () => {
+    (AppDataSourceSync.query as jest.Mock)
+      .mockResolvedValueOnce([
+        { CNPJ: '12345678000199', NOME_FANTASIA: 'Oficina X', ADDR_ENDERECO: 'Rua X', ADDR_NUMERO: '10', ADDR_BAIRRO: 'Centro', ADDR_CEP: '01000-000', ADDR_LATITUDE: '-23.5', ADDR_LONGITUDE: '-46.6' },
+      ])
+      .mockResolvedValue([]);
+    mockQueryRunner([{ cnpj: '12345678000199', cidade: 'São Paulo', estado: 'SP' }]);
+
+    const relatorio = await registrarOficinasSemMatch(false, 20);
+
+    expect(relatorio.registradas).toBe(1);
+    const [query, params] = (AppDataSourceSync.query as jest.Mock).mock.calls[1];
+    expect(query).toMatch(/INSERT INTO "MAIN_REGISTER"\."OFICINA"/);
+    expect(query).toContain("'ULTRACAR', true, NULL");
+    expect(params).toEqual([
+      'Oficina X', '12345678000199', 'Rua X', '10', 'Centro', '01000-000', '-23.5', '-46.6', 'São Paulo', 'SP',
+    ]);
+  });
+
+  it('should still create the oficina (identity only) when no address is resolvable', async () => {
+    (AppDataSourceSync.query as jest.Mock)
+      .mockResolvedValueOnce([
+        { CNPJ: '12345678000199', NOME_FANTASIA: 'Oficina Sem Endereço', ADDR_ENDERECO: null, ADDR_NUMERO: null, ADDR_BAIRRO: null, ADDR_CEP: null, ADDR_LATITUDE: null, ADDR_LONGITUDE: null },
+      ])
+      .mockResolvedValue([]);
+    mockQueryRunner([]);
+
+    const relatorio = await registrarOficinasSemMatch(false, 20);
+
+    expect(relatorio.registradas).toBe(1);
+    const [, params] = (AppDataSourceSync.query as jest.Mock).mock.calls[1];
+    expect(params).toEqual([
+      'Oficina Sem Endereço', '12345678000199', null, null, null, null, null, null, null, null,
+    ]);
+  });
+
+  it('should be idempotent: a CNPJ already registered by a previous run has a match, so it is excluded from the re-run candidates', async () => {
+    // Simula a 2a execução: a oficina criada na 1a já casa por CNPJ, então o
+    // anti-join (o."ID_OFICINA" IS NULL) já a exclui na própria query —
+    // aqui a query mockada simplesmente não a devolve mais.
+    (AppDataSourceSync.query as jest.Mock).mockResolvedValueOnce([]);
+    mockQueryRunner([]);
+
+    const relatorio = await registrarOficinasSemMatch(false, 20);
+
+    expect(relatorio.candidatosEncontrados).toBe(0);
+    expect(relatorio.registradas).toBe(0);
+    expect(AppDataSourceSync.query).toHaveBeenCalledTimes(1); // nenhum INSERT
+  });
+
+  it('should cap the test-mode report to the configured limit', async () => {
+    (AppDataSourceSync.query as jest.Mock).mockResolvedValueOnce([
+      { CNPJ: '111', NOME_FANTASIA: 'A', ADDR_ENDERECO: null, ADDR_NUMERO: null, ADDR_BAIRRO: null, ADDR_CEP: null, ADDR_LATITUDE: null, ADDR_LONGITUDE: null },
+      { CNPJ: '222', NOME_FANTASIA: 'B', ADDR_ENDERECO: null, ADDR_NUMERO: null, ADDR_BAIRRO: null, ADDR_CEP: null, ADDR_LATITUDE: null, ADDR_LONGITUDE: null },
+    ]);
+    mockQueryRunner([]);
+
+    const relatorio = await registrarOficinasSemMatch(true, 1);
+
+    expect(relatorio.planejado).toHaveLength(1);
+    expect(relatorio.candidatosEncontrados).toBe(2); // contagem real, não limitada
   });
 });

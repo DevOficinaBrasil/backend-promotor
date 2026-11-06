@@ -194,14 +194,14 @@ A Ultracar mantém sua própria base de oficinas (`ultracar_process.enterprise__
 |---|---|---|---|
 | ULTRACAR-01 | P1: Oficina com match aparece para qualquer cliente | Implementing | T2 done |
 | ULTRACAR-02 | P1: Oficina com match aparece para qualquer cliente | Implementing | T2 done |
-| ULTRACAR-03 | P1: Oficina com match aparece para qualquer cliente | Design | Pending |
+| ULTRACAR-03 | P1: Oficina com match aparece para qualquer cliente | Implementing | T1/T2 — ramo 3 reusa ligacaoCadastroEmpresa (mesmo dado do ramo 1), sem campo vindo de ultracar_process |
 | ULTRACAR-04 | P1: Oficina com match aparece para qualquer cliente | Implementing | T2 done |
-| ULTRACAR-05 | P1: Oficina com match aparece para qualquer cliente | Design | Pending |
+| ULTRACAR-05 | P1: Oficina com match aparece para qualquer cliente | Implementing | T2/T3/T4/T5 — assinatura pública inalterada nos 4 métodos (testado) |
 | ULTRACAR-06 | P1: Oficina com match aparece para qualquer cliente | Implementing | T1 done |
 | ULTRACAR-07 | P1: Oficina sem match não aparece nem recebe rota | Implementing | T2 done |
-| ULTRACAR-08 | P1: Oficina sem match não aparece nem recebe rota | Design | Pending |
-| ULTRACAR-09 | P1: Oficina sem match não aparece nem recebe rota | Design | Pending |
-| ULTRACAR-10 | P1: Oficina sem match não aparece nem recebe rota | Design | Pending |
+| ULTRACAR-08 | P1: Oficina sem match não aparece nem recebe rota | Implementing | Estrutural — nenhum código desta feature escreve em OFICINA/ROTA_PROMOTOR para oficina sem match (T1-T6 só leem) |
+| ULTRACAR-09 | P1: Oficina sem match não aparece nem recebe rota | Implementing | Estrutural — ramo 3 usa `ID_OFICINA` real de `MAIN_REGISTER.OFICINA`, nenhum id sintético introduzido |
+| ULTRACAR-10 | P1: Oficina sem match não aparece nem recebe rota | Implementing | T10 — tratativa entregue (registro), critério de match nas 4 consultas não mudou |
 | ULTRACAR-11 | P1: Consultas respeitam timeout de 10s | Implementing | T6 done |
 | ULTRACAR-12 | P1: Consultas respeitam timeout de 10s | Implementing | T1 done |
 | ULTRACAR-13 | P1: Consultas respeitam timeout de 10s | Implementing | T6 done |
@@ -218,12 +218,12 @@ A Ultracar mantém sua própria base de oficinas (`ultracar_process.enterprise__
 | ULTRACAR-24 | P1: Marcar também-Ultracar e completar campos vazios | Implementing | T9 done |
 | ULTRACAR-25 | P1: Marcar também-Ultracar e completar campos vazios | Implementing | T9 done |
 | ULTRACAR-26 | P1: Marcar também-Ultracar e completar campos vazios | Implementing | T9 done |
-| ULTRACAR-27 | P1: Registrar oficinas sem match (disparo único) | Design | Pending |
-| ULTRACAR-28 | P1: Registrar oficinas sem match (disparo único) | Design | Pending |
-| ULTRACAR-29 | P1: Registrar oficinas sem match (disparo único) | Design | Pending |
-| ULTRACAR-30 | P1: Registrar oficinas sem match (disparo único) | Design | Pending |
-| ULTRACAR-31 | P1: Registrar oficinas sem match (disparo único) | Design | Pending |
-| ULTRACAR-32 | P1: Registrar oficinas sem match (disparo único) | Design | Pending |
+| ULTRACAR-27 | P1: Registrar oficinas sem match (disparo único) | Implementing | T10 done |
+| ULTRACAR-28 | P1: Registrar oficinas sem match (disparo único) | Implementing | T10 done |
+| ULTRACAR-29 | P1: Registrar oficinas sem match (disparo único) | Implementing | T10 done |
+| ULTRACAR-30 | P1: Registrar oficinas sem match (disparo único) | Implementing | T10 done |
+| ULTRACAR-31 | P1: Registrar oficinas sem match (disparo único) | Implementing | T10 done |
+| ULTRACAR-32 | P1: Registrar oficinas sem match (disparo único) | Implementing | T10 done |
 
 **ID format:** `ULTRACAR-NN`
 

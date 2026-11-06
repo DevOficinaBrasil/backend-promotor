@@ -17,6 +17,13 @@
 // Ultracar (enterprise__tb_company_address para ENDERECO/NUMERO/BAIRRO/CEP/
 // LATITUDE/LONGITUDE; o registro mais recente de st_obads_im para CIDADE/
 // ESTADO), nunca sobrescrevendo um campo já preenchido.
+//
+// Responsabilidade 3 (CON26-408, disparo único): toda oficina ativa da
+// Ultracar sem CNPJ correspondente em MAIN_REGISTER.OFICINA nem em
+// dw.cadastro_empresa é criada em MAIN_REGISTER.OFICINA (ORIGEM="ULTRACAR",
+// ULTRACAR=true, TELEFONE nulo). Idempotente por construção: a oficina
+// recém-criada já casa por CNPJ, então some da lista de "sem match" na
+// próxima execução.
 import "dotenv/config";
 import { AppDataSourceSync } from "../data-source";
 import { cnpjIntDaOficina } from "../utils/sqlCadastroEmpresa";
@@ -383,6 +390,112 @@ export async function enriquecerOficinasComUltracar(
   return relatorio;
 }
 
+interface CandidatoRegistroRow {
+  CNPJ: string;
+  NOME_FANTASIA: string | null;
+  ADDR_ENDERECO: string | null;
+  ADDR_NUMERO: string | null;
+  ADDR_BAIRRO: string | null;
+  ADDR_CEP: string | null;
+  ADDR_LATITUDE: string | null;
+  ADDR_LONGITUDE: string | null;
+}
+
+/**
+ * `enterprise__tb_company` ativa sem CNPJ correspondente em
+ * `MAIN_REGISTER.OFICINA` nem em `dw.cadastro_empresa` — mesmo critério de
+ * match usado em `OficinaUltracarService`/T1, espelhado como anti-join
+ * (`LEFT JOIN ... IS NULL`, nunca `EXISTS`/`NOT IN` correlacionado, AD-010).
+ */
+async function buscarCandidatosRegistro(): Promise<CandidatoRegistroRow[]> {
+  return AppDataSourceSync.query(`
+    SELECT
+      regexp_replace(c.cnpj, '[^0-9]', '', 'g') AS "CNPJ",
+      c.nick_name::text AS "NOME_FANTASIA",
+      addr.street::text AS "ADDR_ENDERECO",
+      addr."number"::text AS "ADDR_NUMERO",
+      addr.district::text AS "ADDR_BAIRRO",
+      addr.zip_code::text AS "ADDR_CEP",
+      addr.latitude::text AS "ADDR_LATITUDE",
+      addr.longitude::text AS "ADDR_LONGITUDE"
+      FROM ultracar_process.enterprise__tb_company c
+      LEFT JOIN ultracar_process.enterprise__tb_company_address addr
+        ON addr.id = c.address_id
+      LEFT JOIN "MAIN_REGISTER"."OFICINA" o
+        ON ${cnpjIntDaOficina("o")} = (regexp_replace(c.cnpj, '[^0-9]', '', 'g'))::bigint
+      LEFT JOIN dw.cadastro_empresa ce
+        ON ce.cnpj_int = (regexp_replace(c.cnpj, '[^0-9]', '', 'g'))::bigint
+      WHERE c.active = true
+        AND length(regexp_replace(c.cnpj, '[^0-9]', '', 'g')) = 14
+        AND o."ID_OFICINA" IS NULL
+        AND ce.cnpj_int IS NULL
+  `);
+}
+
+export interface RelatorioRegistro {
+  candidatosEncontrados: number;
+  registradas: number;
+  planejado: Array<{
+    CNPJ: string;
+    NOME_FANTASIA: string | null;
+    CIDADE: string | null;
+    ESTADO: string | null;
+  }>;
+}
+
+/**
+ * Responsabilidade 3: registra, uma única vez (idempotente), as oficinas
+ * Ultracar ativas sem match. Modo teste nunca executa `INSERT`.
+ */
+export async function registrarOficinasSemMatch(
+  modoTeste: boolean,
+  limiteTeste: number
+): Promise<RelatorioRegistro> {
+  const candidatos = await buscarCandidatosRegistro();
+  const cidadeEstadoPorCnpj = await buscarCidadeEstadoMaisRecentePorCnpj(candidatos.map((c) => c.CNPJ));
+
+  const planejado = candidatos.map((candidato) => ({
+    CNPJ: candidato.CNPJ,
+    NOME_FANTASIA: candidato.NOME_FANTASIA,
+    CIDADE: cidadeEstadoPorCnpj.get(candidato.CNPJ)?.CIDADE ?? null,
+    ESTADO: cidadeEstadoPorCnpj.get(candidato.CNPJ)?.ESTADO ?? null,
+  }));
+
+  const relatorio: RelatorioRegistro = {
+    candidatosEncontrados: candidatos.length,
+    registradas: 0,
+    planejado: modoTeste ? planejado.slice(0, limiteTeste) : planejado,
+  };
+
+  if (modoTeste) return relatorio;
+
+  for (const candidato of candidatos) {
+    const cidadeEstado = cidadeEstadoPorCnpj.get(candidato.CNPJ) ?? null;
+
+    await AppDataSourceSync.query(
+      `INSERT INTO "MAIN_REGISTER"."OFICINA"
+         ("NOME_FANTASIA", "CNPJ", "ENDERECO", "NUMERO", "BAIRRO", "CEP", "LATITUDE", "LONGITUDE",
+          "CIDADE", "ESTADO", "ORIGEM", "ULTRACAR", "TELEFONE")
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'ULTRACAR', true, NULL)`,
+      [
+        candidato.NOME_FANTASIA,
+        candidato.CNPJ,
+        candidato.ADDR_ENDERECO,
+        candidato.ADDR_NUMERO,
+        candidato.ADDR_BAIRRO,
+        candidato.ADDR_CEP,
+        candidato.ADDR_LATITUDE,
+        candidato.ADDR_LONGITUDE,
+        cidadeEstado?.CIDADE ?? null,
+        cidadeEstado?.ESTADO ?? null,
+      ]
+    );
+    relatorio.registradas++;
+  }
+
+  return relatorio;
+}
+
 async function main(): Promise<void> {
   const limiteTeste = parseLimiteTeste(process.argv.slice(2));
   const modoTeste = limiteTeste !== null;
@@ -419,6 +532,17 @@ async function main(): Promise<void> {
     }
     if (!modoTeste) {
       console.log(`Oficinas marcadas/atualizadas: ${relatorioEnriquecimento.oficinasMarcadas}`);
+    }
+
+    const relatorioRegistro = await registrarOficinasSemMatch(modoTeste, limiteTeste ?? LIMITE_TESTE_PADRAO);
+
+    console.log("\n=== Relatório de sincronização Ultracar — registro de disparo único ===");
+    console.log(`Candidatas sem match encontradas: ${relatorioRegistro.candidatosEncontrados}`);
+    for (const p of relatorioRegistro.planejado) {
+      console.log(`  CNPJ ${p.CNPJ} (${p.NOME_FANTASIA ?? "sem nome"}): CIDADE ${p.CIDADE}, ESTADO ${p.ESTADO}`);
+    }
+    if (!modoTeste) {
+      console.log(`Oficinas registradas: ${relatorioRegistro.registradas}`);
     }
   } finally {
     await AppDataSourceSync.destroy();

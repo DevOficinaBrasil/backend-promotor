@@ -347,13 +347,13 @@ T10
 - Skill: NONE
 
 **Done when**:
-- [ ] Candidata de registro = `enterprise__tb_company.active = true` sem match em `OFICINA` nem `dw.cadastro_empresa` — testado com fixture
-- [ ] `INSERT` preenche `NOME_FANTASIA`/`CNPJ`/`ENDERECO`/`NUMERO`/`BAIRRO`/`CEP`/`LATITUDE`/`LONGITUDE`/`CIDADE`/`ESTADO`/`ORIGEM`/`"ULTRACAR"`; `TELEFONE` fica nulo — testado mockando a escrita
-- [ ] Reexecução não duplica: candidata já registrada (CNPJ já em `OFICINA`) não aparece mais como "sem match" — testado simulando 2 execuções
-- [ ] Oficina sem endereço resolvível em `enterprise__tb_company_address` ainda é criada (só identidade + `ORIGEM`/`ULTRACAR`), sem erro — testado
-- [ ] Modo de teste não executa nenhum `INSERT` desta responsabilidade
-- [ ] Gate check passes: `npx jest --runInBand __tests__/unit/oficinaUltracarService.test.ts __tests__/unit/oficinaService.test.ts __tests__/unit/sincronizarOficinasUltracar.test.ts`
-- [ ] Test count: ≥6 testes novos sem nenhum removido
+- [x] Candidata de registro = `enterprise__tb_company.active = true` sem match em `OFICINA` nem `dw.cadastro_empresa` — testado com fixture
+- [x] `INSERT` preenche `NOME_FANTASIA`/`CNPJ`/`ENDERECO`/`NUMERO`/`BAIRRO`/`CEP`/`LATITUDE`/`LONGITUDE`/`CIDADE`/`ESTADO`/`ORIGEM`/`"ULTRACAR"`; `TELEFONE` fica nulo — testado mockando a escrita
+- [x] Reexecução não duplica: candidata já registrada (CNPJ já em `OFICINA`) não aparece mais como "sem match" — testado simulando 2 execuções
+- [x] Oficina sem endereço resolvível em `enterprise__tb_company_address` ainda é criada (só identidade + `ORIGEM`/`ULTRACAR`), sem erro — testado
+- [x] Modo de teste não executa nenhum `INSERT` desta responsabilidade
+- [x] Gate check passes: `npx jest --runInBand __tests__/unit/oficinaUltracarService.test.ts __tests__/unit/oficinaService.test.ts __tests__/unit/sincronizarOficinasUltracar.test.ts`
+- [x] Test count: ≥6 testes novos sem nenhum removido — 6 testes novos, 70 total
 
 **Tests**: unit
 **Gate**: quick
