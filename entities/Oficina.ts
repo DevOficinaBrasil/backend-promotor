@@ -97,6 +97,12 @@ export default class Oficina {
   @Column({ type: "timestamp with time zone", nullable: true, name: "DATA_ATUALIZACAO_ENDERECO" })
   DATA_ATUALIZACAO_ENDERECO?: Date | null;
 
+  // CON26-408 (scripts/migration-ultracar-flag-oficina.sql). True quando o
+  // CNPJ já casou com ultracar_process.enterprise__tb_company em alguma
+  // execução do script batch — não exposta em nenhum DTO/resposta de API.
+  @Column({ type: "boolean", default: false, name: "ULTRACAR" })
+  ULTRACAR?: boolean;
+
   @CreateDateColumn({
     type: "timestamp with time zone",
     default: () => "CURRENT_TIMESTAMP",

@@ -292,11 +292,11 @@ T10
 - Skill: NONE
 
 **Done when**:
-- [ ] `scripts/migration-ultracar-flag-oficina.sql` existe, com `IF NOT EXISTS` e comentário "aplicar manualmente" no topo
-- [ ] Nenhum código ou teste automatizado executa esse `.sql` (DDL fica só no arquivo, pra rodar manualmente)
-- [ ] `entities/Oficina.ts` expõe `ULTRACAR?: boolean`
-- [ ] Nenhum schema/DTO de resposta de API inclui o campo novo
-- [ ] Gate check passes: `npx tsc --noEmit`
+- [x] `scripts/migration-ultracar-flag-oficina.sql` existe, com `IF NOT EXISTS` e comentário "aplicar manualmente" no topo
+- [x] Nenhum código ou teste automatizado executa esse `.sql` (DDL fica só no arquivo, pra rodar manualmente)
+- [x] `entities/Oficina.ts` expõe `ULTRACAR?: boolean`
+- [x] Nenhum schema/DTO de resposta de API inclui o campo novo
+- [x] Gate check passes: `npx tsc --noEmit` (único erro reportado é pré-existente, não relacionado — `segmentacaoCampanhaPromotor.test.ts`)
 
 **Tests**: none
 **Gate**: build
