@@ -187,12 +187,12 @@ T10
 - Skill: NONE
 
 **Done when**:
-- [ ] Assinatura pública do método inalterada
-- [ ] SQL final contém os 3 ramos e o `COUNT(DISTINCT "ID_OFICINA")` externo
-- [ ] Testes existentes do método continuam passando sem alteração de asserção
-- [ ] Novo teste cobre: contagem não duplica oficina presente em comunidade E com match Ultracar
-- [ ] Gate check passes: `npx jest --runInBand __tests__/unit/oficinaUltracarService.test.ts __tests__/unit/oficinaService.test.ts`
-- [ ] Test count: suíte cresce em pelo menos 1 teste sem nenhum removido
+- [x] Assinatura pública do método inalterada
+- [x] SQL final contém os 3 ramos e o `COUNT(DISTINCT "ID_OFICINA")` externo
+- [x] Testes existentes do método continuam passando sem alteração de asserção
+- [x] Novo teste cobre: contagem não duplica oficina presente em comunidade E com match Ultracar
+- [x] Gate check passes: `npx jest --runInBand __tests__/unit/oficinaUltracarService.test.ts __tests__/unit/oficinaService.test.ts`
+- [x] Test count: suíte cresce em pelo menos 1 teste sem nenhum removido — cresceu em 1, 27 total
 
 **Tests**: unit
 **Gate**: quick

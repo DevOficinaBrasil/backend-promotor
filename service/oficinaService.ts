@@ -575,6 +575,10 @@ export default class OficinaService {
             AND o."LATITUDE" IS NOT NULL
             AND o."LONGITUDE" IS NOT NULL
         )
+        UNION ALL
+        (
+          SELECT "ID_OFICINA" FROM (${sqlOficinasComMatchUltracar("o", false)}) ultracar_match
+        )
       ) combinado
     `;
 

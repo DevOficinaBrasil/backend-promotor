@@ -217,6 +217,18 @@ describe('OficinaService', () => {
       );
     });
 
+    it('should count the Ultracar-match branch without duplicating an oficina already in the community (ULTRACAR-01/02/07)', async () => {
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([{ total: 3 }]);
+
+      await OficinaService.countCommunityOficinas('empresa-test');
+
+      const query = (AppDataSourceSync.query as jest.Mock).mock.calls[0][0] as string;
+      const ultracarBranch = query.slice(query.indexOf('ultracar_process.enterprise__tb_company'));
+      expect(query).toContain('ultracar_process.enterprise__tb_company');
+      expect(ultracarBranch).not.toContain('EMPRESA_SLUG');
+      expect(query).toMatch(/COUNT\(DISTINCT "ID_OFICINA"\)/);
+    });
+
     it('should rethrow database errors', async () => {
       (AppDataSourceSync.query as jest.Mock).mockRejectedValue(new Error('DB error'));
 
