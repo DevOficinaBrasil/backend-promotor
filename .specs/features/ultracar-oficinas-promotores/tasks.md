@@ -318,14 +318,14 @@ T10
 - Skill: NONE
 
 **Done when**:
-- [ ] Função pura de enriquecimento decide, campo a campo, se preenche — coberta por teste para cada campo elegível vazio e para cada campo já preenchido (não sobrescreve)
-- [ ] `"ULTRACAR" = true` é aplicado a toda oficina casada, inclusive quando `enterprise__tb_company.active = false` — testado com fixture
-- [ ] `CIDADE`/`ESTADO` vêm do registro mais recente de `st_obads_im` (critério de "mais recente" testado via mock da query)
-- [ ] A consulta a `st_obads_im` roda depois de `SET statement_timeout` elevado na mesma sessão/conexão — testado verificando a chamada mockada antes da query
-- [ ] `CNPJ`, `NOME_FANTASIA`, `RAZAO_SOCIAL` e `TELEFONE` nunca são alterados por esta responsabilidade — testado
-- [ ] Modo de teste não executa nenhum `UPDATE` desta responsabilidade
-- [ ] Gate check passes: `npx jest --runInBand __tests__/unit/oficinaUltracarService.test.ts __tests__/unit/oficinaService.test.ts __tests__/unit/sincronizarOficinasUltracar.test.ts`
-- [ ] Test count: ≥6 testes novos sem nenhum removido
+- [x] Função pura de enriquecimento decide, campo a campo, se preenche — coberta por teste para cada campo elegível vazio e para cada campo já preenchido (não sobrescreve)
+- [x] `"ULTRACAR" = true` é aplicado a toda oficina casada, inclusive quando `enterprise__tb_company.active = false` — testado com fixture (SQL sem filtro `active`)
+- [x] `CIDADE`/`ESTADO` vêm do registro mais recente de `st_obads_im` (critério de "mais recente" testado via mock da query)
+- [x] A consulta a `st_obads_im` roda depois de `SET statement_timeout` elevado na mesma sessão/conexão — testado verificando a chamada mockada antes da query
+- [x] `CNPJ`, `NOME_FANTASIA`, `RAZAO_SOCIAL` e `TELEFONE` nunca são alterados por esta responsabilidade — testado
+- [x] Modo de teste não executa nenhum `UPDATE` desta responsabilidade
+- [x] Gate check passes: `npx jest --runInBand __tests__/unit/oficinaUltracarService.test.ts __tests__/unit/oficinaService.test.ts __tests__/unit/sincronizarOficinasUltracar.test.ts`
+- [x] Test count: ≥6 testes novos sem nenhum removido — 21 testes novos, 64 total
 
 **Tests**: unit
 **Gate**: quick

@@ -212,12 +212,12 @@ A Ultracar mantém sua própria base de oficinas (`ultracar_process.enterprise__
 | ULTRACAR-18 | P2: Script de correção de CEP | Implementing | T7 done |
 | ULTRACAR-19 | P2: Script de correção de CEP | Implementing | T7 done |
 | ULTRACAR-20 | P2: Script de correção de CEP | Implementing | T7 done |
-| ULTRACAR-21 | P1: Marcar também-Ultracar e completar campos vazios | Implementing | T8 done (DDL+entidade) |
-| ULTRACAR-22 | P1: Marcar também-Ultracar e completar campos vazios | Design | Pending |
-| ULTRACAR-23 | P1: Marcar também-Ultracar e completar campos vazios | Design | Pending |
-| ULTRACAR-24 | P1: Marcar também-Ultracar e completar campos vazios | Design | Pending |
-| ULTRACAR-25 | P1: Marcar também-Ultracar e completar campos vazios | Design | Pending |
-| ULTRACAR-26 | P1: Marcar também-Ultracar e completar campos vazios | Design | Pending |
+| ULTRACAR-21 | P1: Marcar também-Ultracar e completar campos vazios | Implementing | T8+T9 done |
+| ULTRACAR-22 | P1: Marcar também-Ultracar e completar campos vazios | Implementing | T9 done |
+| ULTRACAR-23 | P1: Marcar também-Ultracar e completar campos vazios | Implementing | T9 done |
+| ULTRACAR-24 | P1: Marcar também-Ultracar e completar campos vazios | Implementing | T9 done |
+| ULTRACAR-25 | P1: Marcar também-Ultracar e completar campos vazios | Implementing | T9 done |
+| ULTRACAR-26 | P1: Marcar também-Ultracar e completar campos vazios | Implementing | T9 done |
 | ULTRACAR-27 | P1: Registrar oficinas sem match (disparo único) | Design | Pending |
 | ULTRACAR-28 | P1: Registrar oficinas sem match (disparo único) | Design | Pending |
 | ULTRACAR-29 | P1: Registrar oficinas sem match (disparo único) | Design | Pending |

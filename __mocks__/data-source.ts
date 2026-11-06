@@ -1,6 +1,7 @@
 export const AppDataSourceSync = {
   getRepository: jest.fn(),
   query: jest.fn(),
+  createQueryRunner: jest.fn(),
   transaction: jest.fn((cb: Function) => cb({
     create: jest.fn((_: any, data: any) => data),
     save: jest.fn((data: any) => Promise.resolve(data)),
