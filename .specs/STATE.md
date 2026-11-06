@@ -77,26 +77,18 @@
 
 ## Handoff
 
-- **Feature**: disparo-convite-visita-admin (`.specs/features/disparo-convite-visita-admin/`), **DONE**
-- **Phase / Task**: Specify, Design, Tasks, Execute e Verify concluídos. As 36 tasks estão commitadas nos três repos. O Verifier deu **PASS**: 47/47 requisitos com evidência e 22/22 mutantes mortos. `validate_state.py` terminou com exit 0.
-- **Completed**: tudo. Depois do Verifier foram feitas mais duas coisas:
-  - as fixtures de `campanhaService*` receberam `STATUS='PUBLICADA'` (EG-1);
-  - no ob-ads, a coluna passou a se chamar "Promotores vinculados".
+- **Feature**: ultracar-oficinas-promotores (`.specs/features/ultracar-oficinas-promotores/`), **DONE**
+- **Phase / Task**: Specify, Design, Tasks, Execute e Verify concluídos. As 10 tasks (T1-T10) estão commitadas em `backend-promotor`. O Verifier deu **PASS**: 32/32 requisitos com evidência (após o usuário confirmar o escopo do match em ULTRACAR-01/06) e 3/3 mutantes mortos. `validate_state.py` terminou com exit 0.
+- **Completed**: tudo — 3º ramo de match Ultracar nas 4 consultas de comunidade (`service/oficinaService.ts`), `scripts/sincronizar-oficinas-ultracar.ts` (CEP, flag+enriquecimento, registro de disparo único), DDL manual + entidade `ULTRACAR`, 82 testes (unit+integração), `validation.md` escrito e registrado.
 - **In-progress**: nada
 - **Next step**:
-  1. Decisão do usuário sobre SPG-2. A recusa hoje só bloqueia nova rota no fluxo admin. Opções: proteger também os fluxos do cliente e o despacho, ou restringir a spec ao admin.
-  2. UAT no navegador (ob-ads admin e página do jornal).
-  3. Aplicar `scripts/migration-convite-visita-admin.sql` em homolog, com a prévia de impacto que está no cabeçalho do script. Depois validar os backfills e fazer um teste de disparo concorrente.
-  4. Configurar `OBADS_JWT_SECRET` com o mesmo valor do `JWT_SECRET` do backend-ob-ads.
-  5. `git push` e PRs nos três repos. Exigem autorização explícita.
-- **Blockers**: nenhum técnico. SPG-2 depende de decisão de produto.
-- **Uncommitted files**:
-  - `.specs/LESSONS.md`, `.specs/lessons.json`: mudanças que já existiam, mais as lições L-017..L-022 do Verifier, todas candidatas.
-  - `package-lock.json`: mudança que já existia, fora do escopo.
+  1. **Aplicar manualmente `scripts/migration-ultracar-flag-oficina.sql`** (DDL nunca executado automaticamente — decisão explícita do usuário) antes de rodar o script de sincronização fora do modo de teste.
+  2. Rodar `npx ts-node scripts/sincronizar-oficinas-ultracar.ts --teste` em produção/homolog pra validar o relatório antes do disparo real.
+  3. `git push` e PR. Exige autorização explícita.
+- **Blockers**: nenhum técnico. A DDL pendente bloqueia só a parte 2 (flag/enriquecimento/registro) do script — a parte 1 (correção de CEP) e os 3 ramos de leitura já funcionam sem ela.
+- **Uncommitted files**: nenhum (`git status` limpo no fim da sessão).
 - **Branches**:
 
   | Repo | Branch |
   | --- | --- |
-  | `backend-promotor` | `feat/disparo-convite-visita-admin` |
-  | `ob-ads` | `feat/disparo-convite-visita-admin` |
-  | `jornalOficinaBrasil` | `feat/recusar-visita`, no worktree `../jornalOficinaBrasil-recusar-visita` (com `node_modules` em junction para o checkout principal) |
+  | `backend-promotor` | `feat/ultracar-base-integration` |
