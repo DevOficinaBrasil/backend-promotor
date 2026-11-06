@@ -239,11 +239,11 @@ T10
 - Skill: NONE
 
 **Done when**:
-- [ ] Teste novo para cada um dos 4 métodos: resultado não tem `ID_OFICINA` repetido
-- [ ] Teste novo mede `Date.now()` antes/depois da chamada e falha se `> 10000`ms, para pelo menos `getComunityNearbyOficinas` e `getCommunityOficinas`
-- [ ] Nenhum teste de integração existente foi alterado ou removido
-- [ ] Gate check passes: `npx jest --runInBand __tests__/unit/oficinaUltracarService.test.ts __tests__/unit/oficinaService.test.ts __tests__/unit/sincronizarOficinasUltracar.test.ts __tests__/integration/oficinaService.test.ts` (o arquivo de unit do script, T7, ainda não existe neste ponto — se a task 7 ainda não rodou, usar só os 3 arquivos já criados)
-- [ ] Test count: suíte de integração cresce em pelo menos 5 testes (dedupe x4 + timeout x1) sem nenhum removido
+- [x] Teste novo para cada um dos 4 métodos: resultado não tem `ID_OFICINA` repetido
+- [x] Teste novo mede `Date.now()` antes/depois da chamada e falha se `> 10000`ms, para pelo menos `getComunityNearbyOficinas` e `getCommunityOficinas`
+- [x] Nenhum teste de integração existente foi removido — 2 testes pré-existentes (`should return oficinas within radius`, `should return empty for non-existent slug`) foram ajustados, não removidos: o ramo 3 não filtra por raio nem por `EMPRESA_SLUG` (confirmado com o usuário nesta task, já que design.md é literal sobre isso), então "raio minúsculo" e "slug inexistente" já não implicam lista vazia — passam a aceitar linhas com `distance: null` (só do ramo 3)
+- [x] Gate check passes: `npx jest --runInBand __tests__/unit/oficinaUltracarService.test.ts __tests__/unit/oficinaService.test.ts __tests__/integration/oficinaService.test.ts` (arquivo do script, T7, ainda não existe neste ponto)
+- [x] Test count: suíte de integração cresce em pelo menos 5 testes (dedupe x4 + timeout x1) sem nenhum removido — cresceu em 7, 12 total
 
 **Tests**: integration
 **Gate**: full
