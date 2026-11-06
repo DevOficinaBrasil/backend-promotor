@@ -237,4 +237,58 @@ describe('OficinaService', () => {
       );
     });
   });
+
+  describe('getCommunityOficinasSegmentadas', () => {
+    it('should return an empty array without querying when externalUserIds is empty', async () => {
+      const result = await OficinaService.getCommunityOficinasSegmentadas('empresa-test', []);
+
+      expect(result).toEqual([]);
+      expect(AppDataSourceSync.query).not.toHaveBeenCalled();
+    });
+
+    it('should list oficinas for the given slug and user ids (community branch)', async () => {
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([{ ID_OFICINA: 1 }]);
+
+      const result = await OficinaService.getCommunityOficinasSegmentadas('empresa-test', [10, 20]);
+
+      expect(result).toEqual([{ ID_OFICINA: 1 }]);
+      expect(AppDataSourceSync.query).toHaveBeenCalledWith(
+        expect.stringContaining('COMMUNITIES'),
+        ['empresa-test', 10, 20]
+      );
+    });
+
+    it('should include the Ultracar-match branch, wrapped with the same DISTINCT ON used by the other 3 methods (ULTRACAR-01/02/04)', async () => {
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([]);
+
+      await OficinaService.getCommunityOficinasSegmentadas('empresa-test', [10]);
+
+      const query = (AppDataSourceSync.query as jest.Mock).mock.calls[0][0] as string;
+      expect(query).toMatch(/SELECT DISTINCT ON \("ID_OFICINA"\) \* FROM/);
+      expect((query.match(/UNION ALL/g) || []).length).toBe(1);
+      const ultracarBranch = query.slice(query.indexOf('ultracar_process.enterprise__tb_company'));
+      expect(query).toContain('ultracar_process.enterprise__tb_company');
+      expect(ultracarBranch).not.toContain('EMPRESA_SLUG');
+    });
+
+    it('should dedupe an oficina seen in more than one batch (overlap across batches/branches)', async () => {
+      const ids = Array.from({ length: 1001 }, (_, i) => i + 1);
+      (AppDataSourceSync.query as jest.Mock)
+        .mockResolvedValueOnce([{ ID_OFICINA: 1 }, { ID_OFICINA: 2 }])
+        .mockResolvedValueOnce([{ ID_OFICINA: 2 }, { ID_OFICINA: 3 }]);
+
+      const result = await OficinaService.getCommunityOficinasSegmentadas('empresa-test', ids);
+
+      expect(AppDataSourceSync.query).toHaveBeenCalledTimes(2);
+      expect(result.map((r: any) => r.ID_OFICINA)).toEqual([1, 2, 3]);
+    });
+
+    it('should rethrow database errors', async () => {
+      (AppDataSourceSync.query as jest.Mock).mockRejectedValue(new Error('DB error'));
+
+      await expect(
+        OficinaService.getCommunityOficinasSegmentadas('empresa-test', [10])
+      ).rejects.toThrow('DB error');
+    });
+  });
 });

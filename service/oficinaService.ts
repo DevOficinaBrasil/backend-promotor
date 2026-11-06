@@ -630,33 +630,40 @@ export default class OficinaService {
       const placeholders = lote.map((_, idx) => `$${idx + 2}`).join(", ");
 
       const query = `
-        SELECT DISTINCT ON (us."ID_OFICINA")
-          us."ID_OFICINA" AS "ID_OFICINA",
-          ce."latitude" AS "LATITUDE",
-          ce."longitude" AS "LONGITUDE",
-          ce."razao_social" AS "NOME_FANTASIA",
-          CONCAT(ce."logradouro", ' ', ce."rua") AS "ENDERECO",
-          ce."bairro" AS "BAIRRO",
-          ce."cidade" AS "CIDADE",
-          ce."estado" AS "ESTADO",
-          ce."numero" AS "NUMERO",
-          ce."cep" AS "CEP",
-          ce."cnpj" AS "CNPJ",
-          ce."telefone" AS "TELEFONE"
-        FROM "OFICINA_PORTAL"."COMMUNITIES" cm
-        INNER JOIN "MAIN_REGISTER"."USUARIO_COMMUNITY" uc
-          ON cm."CommunityID" = uc."id_community"
-        INNER JOIN "MAIN_REGISTER"."USUARIO" us
-          ON us."ID_USUARIO" = uc."id_usuario"
-        LEFT JOIN "MAIN_REGISTER"."OFICINA" o
-          ON o."ID_OFICINA" = us."ID_OFICINA"${ligacaoCadastroEmpresa('o', 'us."ID_OFICINA"')}
-        WHERE cm."EmpresaSlug" = $1
-          AND us."ID_USUARIO" IN (${placeholders})
-          AND ce."longitude" IS NOT NULL
-          AND ce."latitude" IS NOT NULL
-          AND ce.cnpj_int IS NOT NULL
-          AND ce."status_receita" = 'ATIVA'
-        ORDER BY us."ID_OFICINA"
+        SELECT DISTINCT ON ("ID_OFICINA") * FROM (
+          (
+            SELECT DISTINCT ON (us."ID_OFICINA")
+              us."ID_OFICINA" AS "ID_OFICINA",
+              ce."latitude" AS "LATITUDE",
+              ce."longitude" AS "LONGITUDE",
+              ce."razao_social" AS "NOME_FANTASIA",
+              CONCAT(ce."logradouro", ' ', ce."rua") AS "ENDERECO",
+              ce."bairro" AS "BAIRRO",
+              ce."cidade" AS "CIDADE",
+              ce."estado" AS "ESTADO",
+              ce."numero" AS "NUMERO",
+              ce."cep" AS "CEP",
+              ce."cnpj" AS "CNPJ",
+              ce."telefone" AS "TELEFONE"
+            FROM "OFICINA_PORTAL"."COMMUNITIES" cm
+            INNER JOIN "MAIN_REGISTER"."USUARIO_COMMUNITY" uc
+              ON cm."CommunityID" = uc."id_community"
+            INNER JOIN "MAIN_REGISTER"."USUARIO" us
+              ON us."ID_USUARIO" = uc."id_usuario"
+            LEFT JOIN "MAIN_REGISTER"."OFICINA" o
+              ON o."ID_OFICINA" = us."ID_OFICINA"${ligacaoCadastroEmpresa('o', 'us."ID_OFICINA"')}
+            WHERE cm."EmpresaSlug" = $1
+              AND us."ID_USUARIO" IN (${placeholders})
+              AND ce."longitude" IS NOT NULL
+              AND ce."latitude" IS NOT NULL
+              AND ce.cnpj_int IS NOT NULL
+              AND ce."status_receita" = 'ATIVA'
+            ORDER BY us."ID_OFICINA"
+          )
+          UNION ALL
+          (${sqlOficinasComMatchUltracar("o", false)})
+        ) combinado
+        ORDER BY "ID_OFICINA"
       `;
 
       try {

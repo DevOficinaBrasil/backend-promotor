@@ -212,12 +212,12 @@ T10
 - Skill: NONE
 
 **Done when**:
-- [ ] Assinatura pública do método inalterada
-- [ ] SQL final contém os 2 ramos (comunidade + Ultracar) e o `DISTINCT ON ("ID_OFICINA")` externo novo
-- [ ] Testes existentes do método (ramo de comunidade/segmentação por lote) continuam passando sem alteração de asserção
-- [ ] Novo teste cobre o cenário de match-fora-da-comunidade para este método
-- [ ] Gate check passes: `npx jest --runInBand __tests__/unit/oficinaUltracarService.test.ts __tests__/unit/oficinaService.test.ts`
-- [ ] Test count: suíte cresce em pelo menos 2 testes sem nenhum removido
+- [x] Assinatura pública do método inalterada
+- [x] SQL final contém os 2 ramos (comunidade + Ultracar) e o `DISTINCT ON ("ID_OFICINA")` externo novo
+- [x] Testes existentes do método (ramo de comunidade/segmentação por lote) continuam passando — não havia suíte unit prévia para este método (confirmado por busca, só integração indireta via outros serviços); criada do zero nesta task
+- [x] Novo teste cobre o cenário de match-fora-da-comunidade para este método
+- [x] Gate check passes: `npx jest --runInBand __tests__/unit/oficinaUltracarService.test.ts __tests__/unit/oficinaService.test.ts`
+- [x] Test count: suíte cresce em pelo menos 2 testes sem nenhum removido — cresceu em 5, 32 total
 
 **Tests**: unit
 **Gate**: quick
