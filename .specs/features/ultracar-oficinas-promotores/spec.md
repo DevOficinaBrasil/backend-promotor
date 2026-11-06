@@ -197,13 +197,13 @@ A Ultracar mantém sua própria base de oficinas (`ultracar_process.enterprise__
 | ULTRACAR-03 | P1: Oficina com match aparece para qualquer cliente | Design | Pending |
 | ULTRACAR-04 | P1: Oficina com match aparece para qualquer cliente | Design | Pending |
 | ULTRACAR-05 | P1: Oficina com match aparece para qualquer cliente | Design | Pending |
-| ULTRACAR-06 | P1: Oficina com match aparece para qualquer cliente | Design | Pending |
+| ULTRACAR-06 | P1: Oficina com match aparece para qualquer cliente | Implementing | T1 done |
 | ULTRACAR-07 | P1: Oficina sem match não aparece nem recebe rota | Design | Pending |
 | ULTRACAR-08 | P1: Oficina sem match não aparece nem recebe rota | Design | Pending |
 | ULTRACAR-09 | P1: Oficina sem match não aparece nem recebe rota | Design | Pending |
 | ULTRACAR-10 | P1: Oficina sem match não aparece nem recebe rota | Design | Pending |
 | ULTRACAR-11 | P1: Consultas respeitam timeout de 10s | Design | Pending |
-| ULTRACAR-12 | P1: Consultas respeitam timeout de 10s | Design | Pending |
+| ULTRACAR-12 | P1: Consultas respeitam timeout de 10s | Implementing | T1 done |
 | ULTRACAR-13 | P1: Consultas respeitam timeout de 10s | Design | Pending |
 | ULTRACAR-14 | P1: Consultas respeitam timeout de 10s | Design | Pending |
 | ULTRACAR-15 | P2: Script de correção de CEP | Design | Pending |

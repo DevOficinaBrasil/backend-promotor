@@ -111,11 +111,11 @@ T10
 - Skill: NONE
 
 **Done when**:
-- [ ] `sqlOficinasComMatchUltracar()` devolve um fragmento SQL válido (string), sem placeholder de `EMPRESA_SLUG`
-- [ ] Fragmento usa `LEFT JOIN`/CTE para o match de CNPJ — nenhuma ocorrência de `EXISTS (` nem `OR` correlacionado contra `ultracar_process`
-- [ ] Fragmento filtra `active = true` em `enterprise__tb_company`
-- [ ] Gate check passes: `npx jest --runInBand __tests__/unit/oficinaUltracarService.test.ts`
-- [ ] Test count: ≥4 testes passam (fragmento contém tabela certa; contém `LEFT JOIN`; não contém `EXISTS`/`IN (SELECT`; filtra `active`)
+- [x] `sqlOficinasComMatchUltracar()` devolve um fragmento SQL válido (string), sem placeholder de `EMPRESA_SLUG`
+- [x] Fragmento usa `LEFT JOIN`/CTE para o match de CNPJ — nenhuma ocorrência de `EXISTS (` nem `OR` correlacionado contra `ultracar_process`
+- [x] Fragmento filtra `active = true` em `enterprise__tb_company`
+- [x] Gate check passes: `npx jest --runInBand __tests__/unit/oficinaUltracarService.test.ts`
+- [x] Test count: ≥4 testes passam (fragmento contém tabela certa; contém `LEFT JOIN`; não contém `EXISTS`/`IN (SELECT`; filtra `active`) — 7 testes
 
 **Tests**: unit
 **Gate**: quick
