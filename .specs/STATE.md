@@ -73,6 +73,7 @@
 - **Scope**: Qualquer feature futura que leia `ultracar_process` (ou outro schema externo de volume/qualidade parecido) reaproveita essas 3 regras em vez de reavaliar do zero; qualquer novo esquema de id sintético para linha sem `MAIN_REGISTER.OFICINA` usa a mesma faixa reservada (`>= 1_000_000_000`) para não colidir entre features diferentes.
 - **Date**: 2026-11-05
 - **Status**: active
+- **Atualização (2026-11-06, CON26-408)**: ponto 1 ("`st_obads_im` nunca ao vivo") voltou a ser exercido — o script batch de `ultracar-oficinas-promotores` (enriquecimento/registro) precisa ler `st_obads_im` para `CIDADE`/`ESTADO`. Medido nesta mesma investigação: até um `COUNT(*)` com filtro no índice de `dt_fechado` estoura o timeout padrão de 10s (testado com janela de 3 meses, 1,47M linhas). O mecanismo que resolve isso sem reintroduzir o risco: o script abre sua própria conexão e roda `SET statement_timeout = '<N>'` (testado até 600000ms, sem erro de permissão) antes de qualquer consulta a `st_obads_im` — nunca herda o timeout de 10s pensado para consulta de request. Qualquer feature futura que precise de um job batch tocando `st_obads_im` (ou tabela externa de volume parecido) reusa esse mecanismo em vez de tentar contornar o timeout de outra forma (chunking por índice, por exemplo, também funciona, mas elevar o timeout de sessão já é suficiente e mais simples para um script de disparo único/manual).
 
 ## Handoff
 

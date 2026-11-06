@@ -4,13 +4,18 @@
 
 A Ultracar mantém sua própria base de oficinas (`ultracar_process.enterprise__tb_company` + `enterprise__tb_company_address` + `st_obads_im`), fora de `MAIN_REGISTER.OFICINA`/`dw.cadastro_empresa`. Nenhuma das tabelas da Ultracar expõe telefone da oficina, então uma oficina que só existe na base da Ultracar (sem CNPJ correspondente na nossa base) não tem nenhum canal de contato hoje — mostrá-la ao cliente seria uma oficina "visível mas incontatável". Já uma oficina com CNPJ correspondente na nossa base tem usuário/telefone reais via `MAIN_REGISTER.OFICINA`/`USUARIO`, então pode ser contatada normalmente. O problema a resolver é mais estreito do que "trazer a base da Ultracar inteira": é liberar a visibilidade de oficinas que **já são nossas** (por CNPJ) para qualquer cliente, mesmo fora da comunidade dele, usando a base da Ultracar só como sinal de que aquela oficina é relevante.
 
+**Revisão (Jira [CON26-408](https://oficinabrasil.atlassian.net/browse/CON26-408))**: a "tratativa" que faltava para oficina sem match (bloqueada desde a revisão anterior desta spec) é registrá-la na nossa base — depois de criada, ela passa a ter CNPJ correspondente e a regra de match já definida (acima) passa a valer para ela normalmente, sem nenhuma lógica nova de visibilidade. O ticket também pede marcar toda oficina casada com um atributo "também é Ultracar" e completar campos de endereço vazios com dado da Ultracar — enriquecimento de dado, não mudança de regra de visibilidade.
+
 ## Goals
 
 - [ ] Oficina com CNPJ correspondente entre a base da Ultracar e `MAIN_REGISTER.OFICINA`/`dw.cadastro_empresa` aparece para **qualquer** cliente nas consultas de comunidade do módulo de promotores, mesmo sem pertencer à comunidade dele
 - [ ] Oficina da Ultracar sem CNPJ correspondente na nossa base **não aparece** em nenhuma consulta nem entra no cálculo de rota, até existir uma forma de contatá-la
 - [ ] Nenhuma oficina da Ultracar é escrita em `MAIN_REGISTER.OFICINA` — a identificação acontece por leitura (JOIN/consulta), nunca por cópia
 - [ ] As consultas que passam a considerar a base da Ultracar respeitam o timeout de 10 segundos já em vigor no banco
-- [ ] Script de correção de CEP (oficinas já vinculadas por CNPJ cujo CEP diverge do CEP da Ultracar) com modo de teste, limitado a oficinas sem atualização cadastral nos últimos 12 meses
+- [ ] Script de correção de CEP (oficinas já vinculadas por CNPJ cujo CEP diverge do CEP da Ultracar) com modo de teste, limitado a oficinas sem atualização de endereço nos últimos 12 meses
+- [ ] Sobreposição real por CNPJ medida entre `ultracar_process.st_obads_im` e a base da OB (CON26-408): **1.988 de 3.652 CNPJs distintos (54%) já têm match**; **1.664 (46%) não têm** — medido em produção, só `SELECT`, ver design.md
+- [ ] Toda oficina com CNPJ casado ganha o atributo `OFICINA."ULTRACAR" = true` e tem seus campos de endereço vazios completados com dado da Ultracar, sem nunca sobrescrever um campo já preenchido
+- [ ] Script de disparo único registra em `MAIN_REGISTER.OFICINA` as oficinas ativas da Ultracar sem match — a partir daí elas passam a aparecer pela regra de match já definida, sem mudança adicional nas consultas
 
 ## Out of Scope
 
@@ -39,12 +44,19 @@ A Ultracar mantém sua própria base de oficinas (`ultracar_process.enterprise__
 | Consultas em escopo do bypass de comunidade | Os métodos de `OficinaService` que filtram por `EMPRESA_SLUG`/comunidade: `getComunityNearbyOficinas`, `getCommunityOficinas`, `countCommunityOficinas`, `getCommunityOficinasSegmentadas`. `getSegmentedNearbyOficinas` fica fora (não tem conceito de comunidade — ver Out of Scope) | São os únicos onde "pertencer à comunidade" é literalmente uma condição da query hoje; só eles fazem sentido para "bypassar" essa condição | n |
 | Endereço exibido para oficina com match | Sempre o já cadastrado em `MAIN_REGISTER.OFICINA`/`dw.cadastro_empresa` — nunca o da Ultracar | A oficina já existe na nossa base; usar o endereço da Ultracar só criaria divergência com o que o resto do sistema já exibe para essa oficina | y (usuário, implícito na regra de não mexer em exibição) |
 | Fonte do CEP "da Ultracar" para o script de correção (P2) | `ultracar_process.enterprise__tb_company_address` (coluna `zip_code`, confirmado presente em 100% das 6.103 linhas) | Único lugar com CEP "cadastral" estável da Ultracar; `st_obads_im.cep` é por nota fiscal, pode variar/estar desatualizado | n |
-| Campo de "atualização cadastral recente" | `MAIN_REGISTER.OFICINA."DATA_ALTERACAO"` (já existe, auto-atualizado pelo TypeORM) | Único campo de data de alteração já existente na entidade `OFICINA` | n |
+| Campo de "atualização cadastral recente" (CEP) | `MAIN_REGISTER.OFICINA."DATA_ATUALIZACAO_ENDERECO"` (já existe, criado pelo backend-communities especificamente para marcar a última confirmação de endereço — não `DATA_ALTERACAO`, que é genérico e muda a qualquer edição da linha) | É o campo certo para "endereço confirmado recentemente": `DATA_ALTERACAO` dispararia falso-negativo sempre que qualquer outro campo da oficina mudasse, mesmo sem relação com endereço | n |
 | Modo de execução do script de correção de CEP | Segue a mesma convenção do script existente `scripts/atualizar-lat-long-comunidade.ts`: flag `--teste[=N]` roda em modo relatório/teto de N linhas antes de qualquer `UPDATE` real | Reaproveita um padrão já revisado e em uso no repositório para o mesmo tipo de operação | n |
 | Estratégia de otimização para respeitar o timeout de 10s | Join explícito (`LEFT JOIN` com CTE de CNPJ normalizado) contra `MAIN_REGISTER.OFICINA`/`dw.cadastro_empresa`, nunca `EXISTS`/`OR` correlacionado | Medido durante a investigação técnica desta spec: a versão com `EXISTS` estourou o timeout de 10s; a reescrita como `LEFT JOIN` rodou em ~2s para a base Ultracar inteira (ver `.specs/STATE.md` AD-010) | y (medido) |
 | `enterprise__tb_company_address`/`st_obads_im` continuam necessárias? | Só `enterprise__tb_company_address` (para o script de CEP, P2). `st_obads_im` não é mais necessária nesta spec — era usada só para endereço/cidade de oficina sem match, que não aparece mais | A inversão da regra elimina a necessidade de endereço/lat-long/cidade da Ultracar para exibição | y (consequência da regra invertida) |
 | DDL de qualquer tabela/índice novo necessário | Nunca executada automaticamente nesta funcionalidade — script `.sql` gerado, revisado e rodado manualmente pelo usuário | Restrição explícita do usuário | y (usuário) |
-| Acesso ao banco durante Design/Tasks/Execute | Somente `SELECT`, para conferência de schema/dados; nenhuma escrita fora do script de correção de CEP (que roda fora do fluxo automatizado, com confirmação do usuário) | Restrição explícita do usuário | y (usuário) |
+| Acesso ao banco durante Design/Tasks/Execute | Somente `SELECT`, para conferência de schema/dados; nenhuma escrita fora dos scripts desta spec (que rodam fora do fluxo automatizado, com confirmação do usuário) | Restrição explícita do usuário | y (usuário) |
+| Regra de prevalência pra completar campo vazio (CON26-408) | Só preenche campo da `OFICINA` que está `NULL`/vazio; nunca sobrescreve um valor já existente, de nenhum campo | Confirmado com o usuário — leitura literal do critério de aceite do ticket ("completar os campos **vazios**") | y (usuário) |
+| Campos elegíveis para o preenchimento | `ENDERECO`, `NUMERO`, `BAIRRO`, `CEP`, `LATITUDE`, `LONGITUDE` (de `enterprise__tb_company_address`) e `CIDADE`/`ESTADO` (de `st_obads_im`, único lugar com esses dois campos — `enterprise__tb_company_address` não tem coluna de cidade/estado, e `zipcode__tb_city` está vazia). `CNPJ`, `NOME_FANTASIA`, `RAZAO_SOCIAL` e `TELEFONE` nunca são preenchidos/alterados por este fluxo (identidade, não endereço; telefone não existe na origem) | Campos de endereço são os únicos que o ticket pede para "completar"; mexer em identidade ou telefone a partir de um dado que a Ultracar não tem (telefone) ou que já define o match (CNPJ) não faz sentido | n |
+| Atributo "também é Ultracar" | Coluna nova `MAIN_REGISTER.OFICINA."ULTRACAR"` (`boolean`, `NOT NULL DEFAULT false`) | Nome direto, consistente com o padrão de coluna única em maiúsculas já usado na entidade (`ATIVO`, `ROTA`, etc.) | n |
+| Quando marcar a flag "também é Ultracar" | Em qualquer match de CNPJ com `enterprise__tb_company`, **independente** do campo `active` — é um atributo histórico/descritivo, não um gatilho de visibilidade | A regra de visibilidade (match-bypass) já tem seu próprio filtro de `active`; a flag é só metadado, não precisa herdar essa restrição | n |
+| `ORIGEM` da oficina criada pelo registro de disparo único | `"ULTRACAR"` (valor novo em `MAIN_REGISTER.OFICINA."ORIGEM"`) | Confirmado com o usuário — mesmo padrão de proveniência já usado por `OFICINA.ORIGEM` (ex.: `IMPORTACAO_PLANILHA` do importador de oficinas), sem precisar de tabela nova | y (usuário) |
+| Fonte de oficina a registrar (disparo único) | `ultracar_process.enterprise__tb_company` com `active = true` sem CNPJ correspondente em `MAIN_REGISTER.OFICINA` nem `dw.cadastro_empresa` — mesmo critério de match já usado nas consultas de comunidade | Consistência: é a mesma definição de "sem match" já validada e testada nas 4 consultas de comunidade | n |
+| Idempotência do disparo único | Script é seguro de rodar mais de uma vez — re-execução não cria uma segunda linha para um CNPJ já registrado por execução anterior | "Disparo único" descreve a intenção de uso (uma vez), não uma garantia técnica de que será literalmente executado uma vez só; idempotência evita duplicata em caso de reexecução acidental | n |
 
 **Open questions:** none — todas resolvidas ou registradas acima.
 
@@ -115,12 +127,50 @@ A Ultracar mantém sua própria base de oficinas (`ultracar_process.enterprise__
 
 1. WHEN o script roda em modo de teste THEN o sistema SHALL apenas listar (sem gravar) as oficinas candidatas e o CEP atual vs. o CEP da Ultracar, limitado a um teto configurável de linhas processadas
 2. WHEN o script roda fora do modo de teste, após validação do modo de teste THEN o sistema SHALL atualizar `MAIN_REGISTER.OFICINA."CEP"` apenas das oficinas candidatas, uma a uma
-3. The sistema SHALL considerar "candidata" só a oficina que (a) tem CNPJ com match confirmado em `ultracar_process.enterprise__tb_company`, (b) tem CEP divergente (dígitos diferentes) do CEP de `ultracar_process.enterprise__tb_company_address` para esse CNPJ, e (c) não teve `DATA_ALTERACAO` nos últimos 12 meses (ou nunca teve `DATA_ALTERACAO` registrada)
-4. IF a oficina teve `DATA_ALTERACAO` dentro dos últimos 12 meses THEN o sistema SHALL excluí-la do cálculo de candidatas, mesmo que o CEP divirja
+3. The sistema SHALL considerar "candidata" só a oficina que (a) tem CNPJ com match confirmado em `ultracar_process.enterprise__tb_company`, (b) tem CEP divergente (dígitos diferentes) do CEP de `ultracar_process.enterprise__tb_company_address` para esse CNPJ, e (c) não teve `DATA_ATUALIZACAO_ENDERECO` nos últimos 12 meses (ou nunca teve `DATA_ATUALIZACAO_ENDERECO` registrada)
+4. IF a oficina teve `DATA_ATUALIZACAO_ENDERECO` dentro dos últimos 12 meses THEN o sistema SHALL excluí-la do cálculo de candidatas, mesmo que o CEP divirja
 5. IF o CEP da Ultracar para aquele CNPJ está vazio/não resolvível THEN o sistema SHALL excluir a oficina da lista de candidatas, reportando o motivo
 6. The sistema SHALL NOT executar nenhuma alteração de schema (DDL) — qualquer tabela/índice que o script precise é entregue como `.sql` separado, para execução manual
 
-**Independent Test**: Rodar o script em modo de teste contra uma oficina conhecida com CEP propositalmente divergente e `DATA_ALTERACAO` há mais de 12 meses; verificar que ela aparece no relatório sem nenhum `UPDATE` executado. Rodar fora do modo de teste e verificar que só o `CEP` dessa oficina foi alterado.
+**Independent Test**: Rodar o script em modo de teste contra uma oficina conhecida com CEP propositalmente divergente e `DATA_ATUALIZACAO_ENDERECO` há mais de 12 meses; verificar que ela aparece no relatório sem nenhum `UPDATE` executado. Rodar fora do modo de teste e verificar que só o `CEP` dessa oficina foi alterado.
+
+---
+
+### P1: Marcar oficina como também-Ultracar e completar campos vazios de endereço (CON26-408)
+
+**User Story**: Como time de operação de promotores, quero que toda oficina com CNPJ casado na Ultracar fique marcada como tal e tenha seus campos de endereço vazios completados com dado da Ultracar, para que a automação de promotores use a base mais completa possível sem depender de recadastro manual.
+
+**Why P1**: É o critério de aceite central do CON26-408 ("a automação de promotores passa a considerar esses dados") — sem o atributo e o enriquecimento, a automação continua vendo só o que a OB já tinha.
+
+**Acceptance Criteria**:
+
+1. WHEN o script de sincronização roda (fora do modo de teste) THEN o sistema SHALL marcar `MAIN_REGISTER.OFICINA."ULTRACAR" = true` para toda oficina cujo CNPJ (normalizado) exista em `ultracar_process.enterprise__tb_company`, independente do campo `active` dessa tabela
+2. WHEN uma oficina tem `"ULTRACAR" = true` e um dos campos `ENDERECO`/`NUMERO`/`BAIRRO`/`CEP`/`LATITUDE`/`LONGITUDE` está nulo ou vazio THEN o sistema SHALL preenchê-lo com o dado correspondente de `ultracar_process.enterprise__tb_company_address`, quando disponível
+3. WHEN os campos `CIDADE`/`ESTADO` da oficina estão nulos ou vazios THEN o sistema SHALL preenchê-los a partir do registro mais recente de `ultracar_process.st_obads_im` para aquele CNPJ, quando existir
+4. IF um campo da oficina já tem valor não nulo/não vazio THEN o sistema SHALL NOT sobrescrevê-lo com dado da Ultracar, para nenhum campo
+5. The sistema SHALL NOT alterar `CNPJ`, `NOME_FANTASIA`, `RAZAO_SOCIAL` ou `TELEFONE` de uma oficina existente a partir de dado da Ultracar
+6. WHEN o script roda em modo de teste THEN o sistema SHALL apenas listar quantas oficinas receberiam a flag e quais campos seriam preenchidos, sem gravar nada
+
+**Independent Test**: Tomar uma oficina com CNPJ casado e `BAIRRO` nulo, mas `ENDERECO` já preenchido; rodar o script fora do modo de teste; verificar que `"ULTRACAR"` virou `true`, `BAIRRO` foi preenchido com o dado da Ultracar, e `ENDERECO` permaneceu exatamente como estava.
+
+---
+
+### P1: Registrar, uma única vez, as oficinas Ultracar sem match (CON26-408)
+
+**User Story**: Como time de operação de promotores, quero rodar um script de disparo único que cadastre em `MAIN_REGISTER.OFICINA` as oficinas da Ultracar que ainda não existem na nossa base, para que a automação de promotores enxergue a base da Ultracar inteira — mantendo exatamente a regra de visibilidade já definida (match-bypass de comunidade).
+
+**Why P1**: É a "tratativa" que a revisão anterior desta spec deixou pendente para oficina sem match — sem ela, 1.664 oficinas (medidas via `st_obads_im`) continuam permanentemente invisíveis.
+
+**Acceptance Criteria**:
+
+1. WHEN o script de registro roda (fora do modo de teste) THEN o sistema SHALL criar uma linha em `MAIN_REGISTER.OFICINA` para cada oficina ativa (`active = true`) de `ultracar_process.enterprise__tb_company` cujo CNPJ (normalizado) não tem match em `MAIN_REGISTER.OFICINA` nem em `dw.cadastro_empresa`
+2. The sistema SHALL preencher a oficina criada com `NOME_FANTASIA`/`CNPJ` (de `enterprise__tb_company`), `ENDERECO`/`NUMERO`/`BAIRRO`/`CEP`/`LATITUDE`/`LONGITUDE` (de `enterprise__tb_company_address`, quando disponível), `CIDADE`/`ESTADO` (do registro mais recente de `st_obads_im`, quando disponível), `ORIGEM = "ULTRACAR"` e `"ULTRACAR" = true`
+3. The sistema SHALL deixar `TELEFONE` nulo na oficina criada
+4. IF o CNPJ já foi registrado por uma execução anterior do script THEN o sistema SHALL NOT criar uma segunda linha para o mesmo CNPJ
+5. WHILE as consultas de comunidade já estendidas (ver histórias anteriores) não mudam, uma oficina registrada por este script SHALL aparecer nelas assim que casar por CNPJ — nenhuma lógica adicional de visibilidade é necessária
+6. WHEN o script roda em modo de teste THEN o sistema SHALL apenas listar as oficinas que seriam criadas e com quais dados, sem gravar nada
+
+**Independent Test**: Escolher uma oficina Ultracar ativa sem CNPJ na nossa base; rodar o script fora do modo de teste; verificar que uma nova linha aparece em `MAIN_REGISTER.OFICINA` com `ORIGEM = "ULTRACAR"`, `TELEFONE` nulo, e que `getComunityNearbyOficinas` para qualquer `EMPRESA_SLUG` passa a incluí-la (dentro do raio) sem nenhuma mudança de código adicional.
 
 ---
 
@@ -132,6 +182,9 @@ A Ultracar mantém sua própria base de oficinas (`ultracar_process.enterprise__
 - IF a consulta a `ultracar_process.enterprise__tb_company` falhar (schema fora do ar, erro de conexão) THEN a consulta de comunidade inteira SHALL falhar de forma visível (erro), sem devolver resultado parcial silencioso
 - IF uma oficina Ultracar está `active = false` THEN o sistema SHALL tratá-la como se não existisse match (não libera bypass de comunidade para oficina inativa na Ultracar)
 - IF uma oficina já tem `ROTA_PROMOTOR` ativa nesta campanha THEN o sistema SHALL NOT criar uma segunda rota para a mesma oficina (idempotência), igual ao comportamento já existente
+- IF uma oficina Ultracar sem match não tem endereço resolvível em `enterprise__tb_company_address` THEN o sistema SHALL ainda criar a oficina (nome e CNPJ bastam), deixando os campos de endereço nulos e reportando o caso no relatório do script
+- IF o mesmo CNPJ aparece mais de uma vez em `enterprise__tb_company` (franquia/matriz, `matrix_id`) THEN o sistema SHALL registrar/enriquecer uma única oficina por CNPJ, com o mesmo critério de desempate já definido para o match (nunca duas linhas para o mesmo CNPJ)
+- IF a oficina a registrar não tem nenhum registro em `st_obads_im` THEN o sistema SHALL criá-la mesmo assim, com `CIDADE`/`ESTADO` nulos
 
 ---
 
@@ -159,12 +212,24 @@ A Ultracar mantém sua própria base de oficinas (`ultracar_process.enterprise__
 | ULTRACAR-18 | P2: Script de correção de CEP | Design | Pending |
 | ULTRACAR-19 | P2: Script de correção de CEP | Design | Pending |
 | ULTRACAR-20 | P2: Script de correção de CEP | Design | Pending |
+| ULTRACAR-21 | P1: Marcar também-Ultracar e completar campos vazios | Design | Pending |
+| ULTRACAR-22 | P1: Marcar também-Ultracar e completar campos vazios | Design | Pending |
+| ULTRACAR-23 | P1: Marcar também-Ultracar e completar campos vazios | Design | Pending |
+| ULTRACAR-24 | P1: Marcar também-Ultracar e completar campos vazios | Design | Pending |
+| ULTRACAR-25 | P1: Marcar também-Ultracar e completar campos vazios | Design | Pending |
+| ULTRACAR-26 | P1: Marcar também-Ultracar e completar campos vazios | Design | Pending |
+| ULTRACAR-27 | P1: Registrar oficinas sem match (disparo único) | Design | Pending |
+| ULTRACAR-28 | P1: Registrar oficinas sem match (disparo único) | Design | Pending |
+| ULTRACAR-29 | P1: Registrar oficinas sem match (disparo único) | Design | Pending |
+| ULTRACAR-30 | P1: Registrar oficinas sem match (disparo único) | Design | Pending |
+| ULTRACAR-31 | P1: Registrar oficinas sem match (disparo único) | Design | Pending |
+| ULTRACAR-32 | P1: Registrar oficinas sem match (disparo único) | Design | Pending |
 
 **ID format:** `ULTRACAR-NN`
 
 **Status values:** Pending → In Design → In Tasks → Implementing → Verified
 
-**Coverage:** 20 total, 20 mapped to design, 0 unmapped
+**Coverage:** 32 total, 32 mapped to design, 0 unmapped
 
 ---
 
@@ -175,4 +240,6 @@ A Ultracar mantém sua própria base de oficinas (`ultracar_process.enterprise__
 - [ ] Nenhuma linha nova surge em `MAIN_REGISTER.OFICINA` por efeito desta funcionalidade
 - [ ] As 4 consultas de comunidade com a verificação de match completam em até 10 segundos com volume de produção
 - [ ] O contrato (formato de request/response) dos endpoints existentes não muda
-- [ ] O script de correção de CEP, em modo de teste, reporta candidatas sem gravar nada; fora do modo de teste, altera só `CEP` de oficinas com match, CEP divergente e sem atualização cadastral nos últimos 12 meses
+- [ ] O script de correção de CEP, em modo de teste, reporta candidatas sem gravar nada; fora do modo de teste, altera só `CEP` de oficinas com match, CEP divergente e sem atualização de endereço nos últimos 12 meses
+- [ ] Toda oficina com CNPJ casado tem `"ULTRACAR" = true` e nenhum campo de endereço preenchido foi sobrescrito
+- [ ] Rodar o script de registro uma vez cadastra todas as oficinas Ultracar ativas sem match; rodar de novo não duplica nenhuma

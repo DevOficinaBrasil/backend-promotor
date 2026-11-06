@@ -9,7 +9,7 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 **Restrições deste projeto para o Execute (confirmadas pelo usuário, valem para toda esta feature):**
 - Rodar só os testes desta funcionalidade (comandos abaixo) — nunca `npm test`/`npm run test:unit` (suite inteira).
 - Rodar os testes em **um único comando/`jest`** (todas as suítes da feature juntas, `--runInBand`) — nunca um `jest` separado por task, por causa de limite de memória.
-- Nenhuma DDL é executada automaticamente — esta feature não precisa de nenhuma (nenhuma tabela nova, ver design.md).
+- Nenhuma DDL é executada automaticamente — a única desta feature (coluna `ULTRACAR` em `MAIN_REGISTER.OFICINA`, ver design.md) fica num `.sql` separado, para o usuário rodar manualmente.
 - Se precisar de sub-agente em algum passo, **nunca** usar o modelo Opus 5.5.
 - Um commit atômico por task concluída.
 
@@ -29,8 +29,10 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 | `OficinaUltracarService` (fragmento SQL novo) | unit | Fragmento contém schema/tabela corretos, `LEFT JOIN` com CTE normalizada (nunca `EXISTS`/`IN (SELECT ...)` correlacionado), filtro `active = true`, projeção de colunas igual aos outros ramos | `__tests__/unit/oficinaUltracarService.test.ts` | `npx jest --runInBand __tests__/unit/oficinaUltracarService.test.ts` |
 | `OficinaService` (4 métodos estendidos) | unit | Cada método: SQL final inclui o 3º ramo (tabela/colunas corretas, sem filtro de `EMPRESA_SLUG` nesse ramo); os ramos 1 e 2 (comunidade, importada) continuam exatamente como antes — 1:1 com ULTRACAR-01 a ULTRACAR-10 | `__tests__/unit/oficinaService.test.ts` | `npx jest --runInBand __tests__/unit/oficinaService.test.ts` |
 | `OficinaService` (smoke real-DB) | integration | Dedupe (nenhum `ID_OFICINA` duplicado no resultado combinado) e tempo de execução dentro do timeout de 10s, para os 4 métodos — ULTRACAR-11 a ULTRACAR-14 | `__tests__/integration/oficinaService.test.ts` | `npx jest --runInBand __tests__/integration/oficinaService.test.ts` |
-| `scripts/atualizar-cep-oficinas-ultracar.ts` (lógica de seleção de candidata) | unit | Todo edge case listado no spec: CEP igual/divergente, `DATA_ALTERACAO` recente/antiga/nula, CNPJ sem match, CEP da Ultracar vazio, modo teste vs. real — 1:1 com ULTRACAR-15 a ULTRACAR-20 | `__tests__/unit/atualizarCepOficinasUltracar.test.ts` | `npx jest --runInBand __tests__/unit/atualizarCepOficinasUltracar.test.ts` |
-| Entity / Config | none | — (build gate only) | — | build gate only |
+| `scripts/sincronizar-oficinas-ultracar.ts` — correção de CEP (P2) | unit | Todo edge case listado no spec: CEP igual/divergente, `DATA_ATUALIZACAO_ENDERECO` recente/antiga/nula, CNPJ sem match, CEP da Ultracar vazio, modo teste vs. real — 1:1 com ULTRACAR-15 a ULTRACAR-20 | `__tests__/unit/sincronizarOficinasUltracar.test.ts` | `npx jest --runInBand __tests__/unit/sincronizarOficinasUltracar.test.ts` |
+| `scripts/sincronizar-oficinas-ultracar.ts` — flag + enriquecimento (CON26-408) | unit | Todo campo elegível vazio/preenchido, `active` true/false na Ultracar, `CIDADE`/`ESTADO` via `st_obads_im`, modo teste vs. real — 1:1 com ULTRACAR-21 a ULTRACAR-26 | `__tests__/unit/sincronizarOficinasUltracar.test.ts` | `npx jest --runInBand __tests__/unit/sincronizarOficinasUltracar.test.ts` |
+| `scripts/sincronizar-oficinas-ultracar.ts` — registro de disparo único (CON26-408) | unit | Candidata sem match, dados preenchidos no `INSERT`, idempotência em reexecução, oficina sem endereço resolvível, modo teste vs. real — 1:1 com ULTRACAR-27 a ULTRACAR-32 | `__tests__/unit/sincronizarOficinasUltracar.test.ts` | `npx jest --runInBand __tests__/unit/sincronizarOficinasUltracar.test.ts` |
+| Entity / Config (`entities/Oficina.ts`, DDL da coluna `ULTRACAR`) | none | — (build gate only) | — | build gate only |
 
 ## Gate Check Commands
 
@@ -38,8 +40,8 @@ Implement these tasks with the `tlc-spec-driven` skill: **activate it by name an
 
 | Gate Level | When to Use | Command |
 |---|---|---|
-| Quick | Depois de task só com teste unitário | `npx jest --runInBand __tests__/unit/oficinaUltracarService.test.ts __tests__/unit/oficinaService.test.ts __tests__/unit/atualizarCepOficinasUltracar.test.ts` (roda só os arquivos já criados até a task atual) |
-| Full | Depois de fechar uma fase, ou task com teste de integração | `npx jest --runInBand __tests__/unit/oficinaUltracarService.test.ts __tests__/unit/oficinaService.test.ts __tests__/unit/atualizarCepOficinasUltracar.test.ts __tests__/integration/oficinaService.test.ts` |
+| Quick | Depois de task só com teste unitário | `npx jest --runInBand __tests__/unit/oficinaUltracarService.test.ts __tests__/unit/oficinaService.test.ts __tests__/unit/sincronizarOficinasUltracar.test.ts` (roda só os arquivos já criados até a task atual) |
+| Full | Depois de fechar uma fase, ou task com teste de integração | `npx jest --runInBand __tests__/unit/oficinaUltracarService.test.ts __tests__/unit/oficinaService.test.ts __tests__/unit/sincronizarOficinasUltracar.test.ts __tests__/integration/oficinaService.test.ts` |
 | Build | Fechamento de fase / task só de config | `npx tsc --noEmit` |
 
 ---
@@ -70,6 +72,24 @@ T6
 
 ```
 T7
+```
+
+### Phase 5: Coluna `ULTRACAR` (DDL manual + entidade)
+
+```
+T8
+```
+
+### Phase 6: Flag "também é Ultracar" + completar campos vazios (CON26-408)
+
+```
+T9
+```
+
+### Phase 7: Registro de disparo único das oficinas sem match (CON26-408)
+
+```
+T10
 ```
 
 ---
@@ -222,7 +242,7 @@ T7
 - [ ] Teste novo para cada um dos 4 métodos: resultado não tem `ID_OFICINA` repetido
 - [ ] Teste novo mede `Date.now()` antes/depois da chamada e falha se `> 10000`ms, para pelo menos `getComunityNearbyOficinas` e `getCommunityOficinas`
 - [ ] Nenhum teste de integração existente foi alterado ou removido
-- [ ] Gate check passes: `npx jest --runInBand __tests__/unit/oficinaUltracarService.test.ts __tests__/unit/oficinaService.test.ts __tests__/unit/atualizarCepOficinasUltracar.test.ts __tests__/integration/oficinaService.test.ts` (o arquivo de unit do script, T7, ainda não existe neste ponto — se a task 7 ainda não rodou, usar só os 3 arquivos já criados)
+- [ ] Gate check passes: `npx jest --runInBand __tests__/unit/oficinaUltracarService.test.ts __tests__/unit/oficinaService.test.ts __tests__/unit/sincronizarOficinasUltracar.test.ts __tests__/integration/oficinaService.test.ts` (o arquivo de unit do script, T7, ainda não existe neste ponto — se a task 7 ainda não rodou, usar só os 3 arquivos já criados)
 - [ ] Test count: suíte de integração cresce em pelo menos 5 testes (dedupe x4 + timeout x1) sem nenhum removido
 
 **Tests**: integration
@@ -232,10 +252,10 @@ T7
 
 ### Phase 4: Script de correção de CEP (P2)
 
-### T7: Script `atualizar-cep-oficinas-ultracar.ts` (P2)
+### T7: Script `sincronizar-oficinas-ultracar.ts` (P2)
 
-**What**: Novo script `scripts/atualizar-cep-oficinas-ultracar.ts`, com `--teste[=N]` (padrão do esqueleto de `atualizar-lat-long-comunidade.ts`). A lógica de seleção de candidata (match de CNPJ + CEP divergente + `DATA_ALTERACAO` nula ou com mais de 12 meses) fica numa função pura exportada (`ehCandidataParaCorrecaoCep(...)` ou equivalente), testável sem banco. Em modo teste, só lista candidatas (sem `UPDATE`); fora do modo teste, executa `UPDATE MAIN_REGISTER.OFICINA."CEP"` uma linha por vez.
-**Where**: `scripts/atualizar-cep-oficinas-ultracar.ts`
+**What**: Novo script `scripts/sincronizar-oficinas-ultracar.ts` (primeira de 3 responsabilidades que este script vai acumular — ver T9/T10), com `--teste[=N]` (padrão do esqueleto de `atualizar-lat-long-comunidade.ts`). A lógica de seleção de candidata (match de CNPJ + CEP divergente + `DATA_ATUALIZACAO_ENDERECO` nula ou com mais de 12 meses) fica numa função pura exportada (`ehCandidataParaCorrecaoCep(...)` ou equivalente), testável sem banco. Em modo teste, só lista candidatas (sem `UPDATE`); fora do modo teste, executa `UPDATE MAIN_REGISTER.OFICINA."CEP"` uma linha por vez.
+**Where**: `scripts/sincronizar-oficinas-ultracar.ts`
 **Depends on**: None
 **Reuses**: esqueleto `--teste[=N]` de `scripts/atualizar-lat-long-comunidade.ts`; `cnpjIntParaLigacao` (`utils/sqlCadastroEmpresa.ts`)
 **Requirement**: ULTRACAR-15, ULTRACAR-16, ULTRACAR-17, ULTRACAR-18, ULTRACAR-19, ULTRACAR-20
@@ -245,12 +265,95 @@ T7
 - Skill: NONE
 
 **Done when**:
-- [ ] Função de seleção de candidata é pura/exportada e coberta por teste para cada edge case: CEP igual (não candidata), CEP divergente + `DATA_ALTERACAO` há mais de 12 meses (candidata), CEP divergente + `DATA_ALTERACAO` recente (não candidata), `DATA_ALTERACAO` nula + CEP divergente (candidata), sem match de CNPJ (não candidata), CEP da Ultracar vazio (não candidata)
+- [ ] Função de seleção de candidata é pura/exportada e coberta por teste para cada edge case: CEP igual (não candidata), CEP divergente + `DATA_ATUALIZACAO_ENDERECO` há mais de 12 meses (candidata), CEP divergente + `DATA_ATUALIZACAO_ENDERECO` recente (não candidata), `DATA_ATUALIZACAO_ENDERECO` nula + CEP divergente (candidata), sem match de CNPJ (não candidata), CEP da Ultracar vazio (não candidata)
 - [ ] Modo teste (`--teste[=N]`) não executa nenhum `UPDATE` — testado mockando `AppDataSourceSync.query`/`AppDataSourceSync` e verificando zero chamadas de escrita
 - [ ] Modo real executa `UPDATE` só da coluna `CEP`, uma linha por candidata — testado mockando a mesma forma
 - [ ] Nenhuma DDL é executada pelo script (não há tabela/índice novo nesta feature)
-- [ ] Gate check passes: `npx jest --runInBand __tests__/unit/oficinaUltracarService.test.ts __tests__/unit/oficinaService.test.ts __tests__/unit/atualizarCepOficinasUltracar.test.ts`
+- [ ] Gate check passes: `npx jest --runInBand __tests__/unit/oficinaUltracarService.test.ts __tests__/unit/oficinaService.test.ts __tests__/unit/sincronizarOficinasUltracar.test.ts`
 - [ ] Test count: ≥6 testes novos (um por edge case listado acima, mínimo)
+
+**Tests**: unit
+**Gate**: quick
+
+---
+
+### Phase 5: Coluna `ULTRACAR` (DDL manual + entidade)
+
+### T8: DDL da coluna `ULTRACAR` + atualizar `entities/Oficina.ts`
+
+**What**: Novo arquivo `scripts/migration-ultracar-flag-oficina.sql` (`ALTER TABLE "MAIN_REGISTER"."OFICINA" ADD COLUMN IF NOT EXISTS "ULTRACAR" boolean NOT NULL DEFAULT false;` + índice parcial `WHERE "ULTRACAR" = true`, comentário de cabeçalho "aplicar manualmente", mesmo padrão de `scripts/migration-oficina-importada.sql`). `entities/Oficina.ts` ganha `@Column({ type: "boolean", default: false, name: "ULTRACAR" }) ULTRACAR?: boolean;`. Nenhum DTO/resposta de API é alterado (contrato continua igual).
+**Where**: `scripts/migration-ultracar-flag-oficina.sql`, `entities/Oficina.ts`
+**Depends on**: None
+**Reuses**: formato de `scripts/migration-oficina-importada.sql` (comentário "aplicar manualmente" + `IF NOT EXISTS`)
+**Requirement**: ULTRACAR-21
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [ ] `scripts/migration-ultracar-flag-oficina.sql` existe, com `IF NOT EXISTS` e comentário "aplicar manualmente" no topo
+- [ ] Nenhum código ou teste automatizado executa esse `.sql` (DDL fica só no arquivo, pra rodar manualmente)
+- [ ] `entities/Oficina.ts` expõe `ULTRACAR?: boolean`
+- [ ] Nenhum schema/DTO de resposta de API inclui o campo novo
+- [ ] Gate check passes: `npx tsc --noEmit`
+
+**Tests**: none
+**Gate**: build
+
+---
+
+### Phase 6: Flag "também é Ultracar" + completar campos vazios (CON26-408)
+
+### T9: Flag `ULTRACAR` + completar campos vazios de endereço
+
+**What**: Em `scripts/sincronizar-oficinas-ultracar.ts` (T7), adicionar a 2ª responsabilidade: toda oficina com CNPJ casado em `enterprise__tb_company` (independente de `active`) recebe `"ULTRACAR" = true`; os campos `ENDERECO`/`NUMERO`/`BAIRRO`/`CEP`/`LATITUDE`/`LONGITUDE` vazios são preenchidos a partir de `enterprise__tb_company_address` (nunca sobrescreve um campo já preenchido); `CIDADE`/`ESTADO` vazios são preenchidos a partir do registro mais recente de `ultracar_process.st_obads_im` para aquele CNPJ. Antes de qualquer consulta a `st_obads_im`, o script eleva o `statement_timeout` da própria sessão (ver design.md/AD-010). Lógica de decisão "preenche ou não" por campo fica em função pura exportada, testável sem banco.
+**Where**: `scripts/sincronizar-oficinas-ultracar.ts`
+**Depends on**: T7, T8
+**Reuses**: `cnpjIntDaOficina`/`cnpjIntParaLigacao` (`utils/sqlCadastroEmpresa.ts`); esqueleto `--teste[=N]` já existente no arquivo desde T7; coluna `ULTRACAR` de T8
+**Requirement**: ULTRACAR-21, ULTRACAR-22, ULTRACAR-23, ULTRACAR-24, ULTRACAR-25, ULTRACAR-26
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [ ] Função pura de enriquecimento decide, campo a campo, se preenche — coberta por teste para cada campo elegível vazio e para cada campo já preenchido (não sobrescreve)
+- [ ] `"ULTRACAR" = true` é aplicado a toda oficina casada, inclusive quando `enterprise__tb_company.active = false` — testado com fixture
+- [ ] `CIDADE`/`ESTADO` vêm do registro mais recente de `st_obads_im` (critério de "mais recente" testado via mock da query)
+- [ ] A consulta a `st_obads_im` roda depois de `SET statement_timeout` elevado na mesma sessão/conexão — testado verificando a chamada mockada antes da query
+- [ ] `CNPJ`, `NOME_FANTASIA`, `RAZAO_SOCIAL` e `TELEFONE` nunca são alterados por esta responsabilidade — testado
+- [ ] Modo de teste não executa nenhum `UPDATE` desta responsabilidade
+- [ ] Gate check passes: `npx jest --runInBand __tests__/unit/oficinaUltracarService.test.ts __tests__/unit/oficinaService.test.ts __tests__/unit/sincronizarOficinasUltracar.test.ts`
+- [ ] Test count: ≥6 testes novos sem nenhum removido
+
+**Tests**: unit
+**Gate**: quick
+
+---
+
+### Phase 7: Registro de disparo único das oficinas sem match (CON26-408)
+
+### T10: Registro de disparo único das oficinas Ultracar sem match
+
+**What**: Em `scripts/sincronizar-oficinas-ultracar.ts` (T7/T9), adicionar a 3ª responsabilidade: para cada `enterprise__tb_company` com `active = true` sem match de CNPJ (mesma CTE de match de `OficinaUltracarService`, T1), criar uma linha em `MAIN_REGISTER.OFICINA` com `NOME_FANTASIA`/`CNPJ` (de `enterprise__tb_company`), `ENDERECO`/`NUMERO`/`BAIRRO`/`CEP`/`LATITUDE`/`LONGITUDE` (de `enterprise__tb_company_address`, quando disponível), `CIDADE`/`ESTADO` (de `st_obads_im`, quando disponível), `ORIGEM = "ULTRACAR"`, `"ULTRACAR" = true`, `TELEFONE` nulo. Idempotente: candidata já registrada passa a ter match e some da lista de "sem match" na próxima execução.
+**Where**: `scripts/sincronizar-oficinas-ultracar.ts`
+**Depends on**: T9
+**Reuses**: mesma CTE de match de `OficinaUltracarService` (T1, critério espelhado para achar "sem match"); mesmo esqueleto `--teste[=N]`
+**Requirement**: ULTRACAR-27, ULTRACAR-28, ULTRACAR-29, ULTRACAR-30, ULTRACAR-31, ULTRACAR-32
+
+**Tools**:
+- MCP: NONE
+- Skill: NONE
+
+**Done when**:
+- [ ] Candidata de registro = `enterprise__tb_company.active = true` sem match em `OFICINA` nem `dw.cadastro_empresa` — testado com fixture
+- [ ] `INSERT` preenche `NOME_FANTASIA`/`CNPJ`/`ENDERECO`/`NUMERO`/`BAIRRO`/`CEP`/`LATITUDE`/`LONGITUDE`/`CIDADE`/`ESTADO`/`ORIGEM`/`"ULTRACAR"`; `TELEFONE` fica nulo — testado mockando a escrita
+- [ ] Reexecução não duplica: candidata já registrada (CNPJ já em `OFICINA`) não aparece mais como "sem match" — testado simulando 2 execuções
+- [ ] Oficina sem endereço resolvível em `enterprise__tb_company_address` ainda é criada (só identidade + `ORIGEM`/`ULTRACAR`), sem erro — testado
+- [ ] Modo de teste não executa nenhum `INSERT` desta responsabilidade
+- [ ] Gate check passes: `npx jest --runInBand __tests__/unit/oficinaUltracarService.test.ts __tests__/unit/oficinaService.test.ts __tests__/unit/sincronizarOficinasUltracar.test.ts`
+- [ ] Test count: ≥6 testes novos sem nenhum removido
 
 **Tests**: unit
 **Gate**: quick
@@ -260,15 +363,23 @@ T7
 ## Phase Execution Map
 
 ```
-Phase 1 → Phase 2 → Phase 3 → Phase 4
+Phase 1 → Phase 2 → Phase 3 → Phase 4 → Phase 5 → Phase 6 → Phase 7
 
 Phase 1:  T1
 Phase 2:  T2 ------→ T3 ------→ T4 ------→ T5
 Phase 3:  T6
 Phase 4:  T7
+Phase 5:  T8
+Phase 6:  T9
+Phase 7:  T10
 ```
 
-Execution is strictly sequential - there is no intra-phase parallelism. 7 tasks totais, dentro do orçamento de um único batch (~7-8 tasks) — **sem necessidade de sub-agentes**; execução inline no Execute.
+Execution is strictly sequential - there is no intra-phase parallelism. 10 tasks totais — passa do orçamento de um único batch (~7-8 tasks). Empacotamento sugerido, sem nunca cortar uma fase ao meio:
+
+- **Batch 1**: Fases 1-4 (T1-T7, 7 tasks)
+- **Batch 2**: Fases 5-7 (T8-T10, 3 tasks)
+
+Ofertar sub-agentes (offer-then-confirm) no início do Execute, já que são 2 batches; se o usuário recusar, roda tudo inline, na mesma ordem.
 
 ---
 
@@ -283,6 +394,9 @@ Execution is strictly sequential - there is no intra-phase parallelism. 7 tasks 
 | T5: Estender `getCommunityOficinasSegmentadas` | 1 método, 1 arquivo | ✅ Granular |
 | T6: Smoke de integração | 1 arquivo de teste, 4 casos do mesmo tipo (dedupe/timeout) | ✅ Granular (coesos, mesmo objetivo) |
 | T7: Script de correção de CEP | 1 arquivo novo | ✅ Granular |
+| T8: DDL + entidade `ULTRACAR` | 2 arquivos, coesos (1 DDL + 1 coluna que ela cria) | ✅ Granular (coesos) |
+| T9: Flag + completar campos vazios | 1 arquivo (extensão de T7), 1 responsabilidade | ✅ Granular |
+| T10: Registro de disparo único | 1 arquivo (extensão de T7/T9), 1 responsabilidade | ✅ Granular |
 
 ---
 
@@ -297,8 +411,11 @@ Execution is strictly sequential - there is no intra-phase parallelism. 7 tasks 
 | T5 | T4 | T4 → T5 | ✅ Match |
 | T6 | T5 | T5 → (Phase 3, T6) | ✅ Match |
 | T7 | None | (nenhuma seta de entrada; Phase 4 independente) | ✅ Match |
+| T8 | None | (nenhuma seta de entrada; Phase 5 independente) | ✅ Match |
+| T9 | T7, T8 | (cross-phase — Phase 4→6 e Phase 5→6; sem seta exigida dentro da Phase 6) | ✅ Match |
+| T10 | T9 | (cross-phase — Phase 6→7; sem seta exigida dentro da Phase 7) | ✅ Match |
 
-Nenhuma dependência aponta para uma fase posterior; todas as setas do diagrama têm um `Depends on` correspondente e vice-versa.
+Nenhuma dependência aponta para uma fase posterior; todas as setas do diagrama têm um `Depends on` correspondente e vice-versa. Dependências entre fases diferentes (T9 depende de T7/T8; T10 depende de T9) não precisam de seta no diagrama de cada fase — a paridade de setas só vale dentro da mesma fase (ver `validate_tasks.py`); a ordem entre fases já é garantida pela ordem das próprias fases.
 
 ---
 
@@ -312,9 +429,12 @@ Nenhuma dependência aponta para uma fase posterior; todas as setas do diagrama 
 | T4: `countCommunityOficinas` | Service (`OficinaService`, 4 métodos estendidos) | unit | unit | ✅ OK |
 | T5: `getCommunityOficinasSegmentadas` | Service (`OficinaService`, 4 métodos estendidos) | unit | unit | ✅ OK |
 | T6: Smoke de integração | Service (smoke real-DB) | integration | integration | ✅ OK |
-| T7: Script de correção de CEP | `scripts/atualizar-cep-oficinas-ultracar.ts` | unit | unit | ✅ OK |
+| T7: Script de correção de CEP | `scripts/sincronizar-oficinas-ultracar.ts` | unit | unit | ✅ OK |
+| T8: DDL + entidade `ULTRACAR` | Entity/Config (`entities/Oficina.ts`, DDL) | none | none | ✅ OK |
+| T9: Flag + completar campos vazios | `scripts/sincronizar-oficinas-ultracar.ts` | unit | unit | ✅ OK |
+| T10: Registro de disparo único | `scripts/sincronizar-oficinas-ultracar.ts` | unit | unit | ✅ OK |
 
-Nenhuma task usa `Tests: none` fora da camada Entity/Config (que nenhuma task cria aqui).
+`T8: Tests: none` é válido — é a única task desta feature cuja camada é Entity/Config, exatamente o caso que a matriz marca como "none" (build gate only).
 
 ---
 
