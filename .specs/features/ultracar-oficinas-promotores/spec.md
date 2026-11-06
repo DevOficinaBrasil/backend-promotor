@@ -192,13 +192,13 @@ A Ultracar mantém sua própria base de oficinas (`ultracar_process.enterprise__
 
 | Requirement ID | Story | Phase | Status |
 |---|---|---|---|
-| ULTRACAR-01 | P1: Oficina com match aparece para qualquer cliente | Design | Pending |
-| ULTRACAR-02 | P1: Oficina com match aparece para qualquer cliente | Design | Pending |
+| ULTRACAR-01 | P1: Oficina com match aparece para qualquer cliente | Implementing | T2 done |
+| ULTRACAR-02 | P1: Oficina com match aparece para qualquer cliente | Implementing | T2 done |
 | ULTRACAR-03 | P1: Oficina com match aparece para qualquer cliente | Design | Pending |
-| ULTRACAR-04 | P1: Oficina com match aparece para qualquer cliente | Design | Pending |
+| ULTRACAR-04 | P1: Oficina com match aparece para qualquer cliente | Implementing | T2 done |
 | ULTRACAR-05 | P1: Oficina com match aparece para qualquer cliente | Design | Pending |
 | ULTRACAR-06 | P1: Oficina com match aparece para qualquer cliente | Implementing | T1 done |
-| ULTRACAR-07 | P1: Oficina sem match não aparece nem recebe rota | Design | Pending |
+| ULTRACAR-07 | P1: Oficina sem match não aparece nem recebe rota | Implementing | T2 done |
 | ULTRACAR-08 | P1: Oficina sem match não aparece nem recebe rota | Design | Pending |
 | ULTRACAR-09 | P1: Oficina sem match não aparece nem recebe rota | Design | Pending |
 | ULTRACAR-10 | P1: Oficina sem match não aparece nem recebe rota | Design | Pending |

@@ -8,6 +8,7 @@ import { estadoConvite, EstadoConvite } from "../utils/statusNotificacaoVisita";
 import { StatusNotificacaoVisita } from "../entities/NotificacaoVisita";
 import { StatusRota } from "../entities/RotaPromotor";
 import { FiltrosBusca, sqlFiltrosBusca, sqlTextoNormalizado } from "../utils/filtroBuscaOficina";
+import { sqlOficinasComMatchUltracar } from "./oficinaUltracarService";
 
 // Earth's radius in kilometers (used for Haversine formula)
 const EARTH_RADIUS_KM = 6371;
@@ -334,6 +335,8 @@ export default class OficinaService {
               )
             ) <= $4
         )
+        UNION ALL
+        (${sqlOficinasComMatchUltracar("o", true)})
       ) combinado
       ORDER BY "ID_OFICINA", distance ASC
     `;

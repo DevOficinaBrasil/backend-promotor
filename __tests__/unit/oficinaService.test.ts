@@ -101,10 +101,32 @@ describe('OficinaService', () => {
       const query = (AppDataSourceSync.query as jest.Mock).mock.calls[0][0] as string;
       const castCount = (query.match(/::text/g) || []).length;
       // 9 text columns (NOME_FANTASIA, ENDERECO, BAIRRO, CIDADE, ESTADO, NUMERO,
-      // CEP, CNPJ, TELEFONE) cast on each of the 2 UNION branches = 18. A lower
-      // count means at least one column lost its cast (the exact regression a
+      // CEP, CNPJ, TELEFONE) cast on each of the 3 UNION branches (community,
+      // OFICINA_IMPORTADA, Ultracar match) = 27. A lower count means at least
+      // one column lost its cast on some branch (the exact regression a
       // discrimination-sensor mutation found before this test existed).
-      expect(castCount).toBe(18);
+      expect(castCount).toBe(27);
+    });
+
+    it('should include the Ultracar-match branch so an oficina appears even outside the slug community (ULTRACAR-01/02/04)', async () => {
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([]);
+
+      await OficinaService.getComunityNearbyOficinas(-23.55, -46.63, 20, 'empresa-test');
+
+      const query = (AppDataSourceSync.query as jest.Mock).mock.calls[0][0] as string;
+      const ultracarBranch = query.slice(query.indexOf('ultracar_process.enterprise__tb_company'));
+      expect(query).toContain('ultracar_process.enterprise__tb_company');
+      expect(ultracarBranch).not.toContain('EMPRESA_SLUG');
+    });
+
+    it('should dedupe the 3 branches by ID_OFICINA via the outer DISTINCT ON (ULTRACAR-04/07)', async () => {
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([]);
+
+      await OficinaService.getComunityNearbyOficinas(-23.55, -46.63, 20, 'empresa-test');
+
+      const query = (AppDataSourceSync.query as jest.Mock).mock.calls[0][0] as string;
+      expect(query).toMatch(/SELECT DISTINCT ON \("ID_OFICINA"\) \* FROM/);
+      expect((query.match(/UNION ALL/g) || []).length).toBe(2);
     });
   });
 
