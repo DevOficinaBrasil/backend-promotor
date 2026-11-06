@@ -162,7 +162,18 @@ describe('OficinaService', () => {
 
       const query = (AppDataSourceSync.query as jest.Mock).mock.calls[0][0] as string;
       const castCount = (query.match(/::text/g) || []).length;
-      expect(castCount).toBe(18);
+      expect(castCount).toBe(27);
+    });
+
+    it('should include the Ultracar-match branch so an oficina appears even outside the slug community (ULTRACAR-01/02/04)', async () => {
+      (AppDataSourceSync.query as jest.Mock).mockResolvedValue([]);
+
+      await OficinaService.getCommunityOficinas('empresa-test');
+
+      const query = (AppDataSourceSync.query as jest.Mock).mock.calls[0][0] as string;
+      const ultracarBranch = query.slice(query.indexOf('ultracar_process.enterprise__tb_company'));
+      expect(query).toContain('ultracar_process.enterprise__tb_company');
+      expect(ultracarBranch).not.toContain('EMPRESA_SLUG');
     });
 
     it('should rethrow database errors', async () => {

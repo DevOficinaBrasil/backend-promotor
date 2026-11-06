@@ -162,12 +162,12 @@ T10
 - Skill: NONE
 
 **Done when**:
-- [ ] Assinatura pública do método inalterada
-- [ ] SQL final contém os 3 ramos e o `DISTINCT ON ("ID_OFICINA")` externo
-- [ ] Testes existentes do método continuam passando sem alteração de asserção
-- [ ] Novo teste cobre o mesmo cenário de match-fora-da-comunidade que T2, para este método
-- [ ] Gate check passes: `npx jest --runInBand __tests__/unit/oficinaUltracarService.test.ts __tests__/unit/oficinaService.test.ts`
-- [ ] Test count: suíte cresce em pelo menos 2 testes sem nenhum removido
+- [x] Assinatura pública do método inalterada
+- [x] SQL final contém os 3 ramos e o `DISTINCT ON ("ID_OFICINA")` externo
+- [x] Testes existentes do método continuam passando — contagem `::text` atualizada de 18 para 27 (mesmo motivo de T2)
+- [x] Novo teste cobre o mesmo cenário de match-fora-da-comunidade que T2, para este método
+- [x] Gate check passes: `npx jest --runInBand __tests__/unit/oficinaUltracarService.test.ts __tests__/unit/oficinaService.test.ts`
+- [x] Test count: suíte cresce em pelo menos 2 testes sem nenhum removido — cresceu em 2, 26 total
 
 **Tests**: unit
 **Gate**: quick

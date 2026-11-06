@@ -523,6 +523,8 @@ export default class OficinaService {
             AND o."LATITUDE" IS NOT NULL
             AND o."LONGITUDE" IS NOT NULL
         )
+        UNION ALL
+        (${sqlOficinasComMatchUltracar("o", false)})
       ) combinado
       ORDER BY "ID_OFICINA"
     `;
