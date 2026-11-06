@@ -40,7 +40,7 @@ A Ultracar mantém sua própria base de oficinas (`ultracar_process.enterprise__
 |---|---|---|---|
 | Regra de visibilidade (revisão) | Oficina **com** match de CNPJ aparece para qualquer cliente, independente de comunidade. Oficina **sem** match não aparece em nenhuma consulta nem entra em cálculo de rota | Confirmado com o usuário: sem telefone, oficina sem match é incontatável — mostrá-la seria pior do que não mostrar. Substitui a regra anterior (sem match aparecia para qualquer cliente; com match seguia a regra de comunidade) | y (usuário) |
 | Escopo do "aparecer para qualquer cliente" | Vale para **todo** cliente/`EMPRESA_SLUG` — a oficina com match deixa de depender de pertencer à comunidade de quem consulta | Mantido da clarificação anterior desta spec, ainda válido com a regra invertida | y (usuário) |
-| Fonte do "match" de CNPJ | União de `MAIN_REGISTER.OFICINA."CNPJ"` (dígitos) e `dw.cadastro_empresa.cnpj_int`, reaproveitando a convenção já usada em `utils/sqlCadastroEmpresa.ts` (`cnpjIntDaOficina`/`cnpjIntParaLigacao`) | É a mesma definição de "nossa base" já usada em todo o resto do sistema para ligar CNPJ | n |
+| Fonte do "match" de CNPJ | Só `MAIN_REGISTER.OFICINA."CNPJ"` (dígitos, via `cnpjIntDaOficina`) — não inclui `dw.cadastro_empresa.cnpj_int` | O Verifier (validation.md) achou essa lacuna: ~17k oficinas sem `CNPJ` próprio (só ligadas por `id_oficina` ao dw) ficam fora do bypass mesmo com match no dw. Confirmado com o usuário no fechamento da feature: manter o escopo como implementado, sem estender — não é tratado como gap, é a definição final | y (usuário) |
 | Consultas em escopo do bypass de comunidade | Os métodos de `OficinaService` que filtram por `EMPRESA_SLUG`/comunidade: `getComunityNearbyOficinas`, `getCommunityOficinas`, `countCommunityOficinas`, `getCommunityOficinasSegmentadas`. `getSegmentedNearbyOficinas` fica fora (não tem conceito de comunidade — ver Out of Scope) | São os únicos onde "pertencer à comunidade" é literalmente uma condição da query hoje; só eles fazem sentido para "bypassar" essa condição | n |
 | Endereço exibido para oficina com match | Sempre o já cadastrado em `MAIN_REGISTER.OFICINA`/`dw.cadastro_empresa` — nunca o da Ultracar | A oficina já existe na nossa base; usar o endereço da Ultracar só criaria divergência com o que o resto do sistema já exibe para essa oficina | y (usuário, implícito na regra de não mexer em exibição) |
 | Fonte do CEP "da Ultracar" para o script de correção (P2) | `ultracar_process.enterprise__tb_company_address` (coluna `zip_code`, confirmado presente em 100% das 6.103 linhas) | Único lugar com CEP "cadastral" estável da Ultracar; `st_obads_im.cep` é por nota fiscal, pode variar/estar desatualizado | n |
@@ -192,38 +192,38 @@ A Ultracar mantém sua própria base de oficinas (`ultracar_process.enterprise__
 
 | Requirement ID | Story | Phase | Status |
 |---|---|---|---|
-| ULTRACAR-01 | P1: Oficina com match aparece para qualquer cliente | Implementing | T2 done |
-| ULTRACAR-02 | P1: Oficina com match aparece para qualquer cliente | Implementing | T2 done |
-| ULTRACAR-03 | P1: Oficina com match aparece para qualquer cliente | Implementing | T1/T2 — ramo 3 reusa ligacaoCadastroEmpresa (mesmo dado do ramo 1), sem campo vindo de ultracar_process |
-| ULTRACAR-04 | P1: Oficina com match aparece para qualquer cliente | Implementing | T2 done |
-| ULTRACAR-05 | P1: Oficina com match aparece para qualquer cliente | Implementing | T2/T3/T4/T5 — assinatura pública inalterada nos 4 métodos (testado) |
-| ULTRACAR-06 | P1: Oficina com match aparece para qualquer cliente | Implementing | T1 done |
-| ULTRACAR-07 | P1: Oficina sem match não aparece nem recebe rota | Implementing | T2 done |
-| ULTRACAR-08 | P1: Oficina sem match não aparece nem recebe rota | Implementing | Estrutural — nenhum código desta feature escreve em OFICINA/ROTA_PROMOTOR para oficina sem match (T1-T6 só leem) |
-| ULTRACAR-09 | P1: Oficina sem match não aparece nem recebe rota | Implementing | Estrutural — ramo 3 usa `ID_OFICINA` real de `MAIN_REGISTER.OFICINA`, nenhum id sintético introduzido |
-| ULTRACAR-10 | P1: Oficina sem match não aparece nem recebe rota | Implementing | T10 — tratativa entregue (registro), critério de match nas 4 consultas não mudou |
-| ULTRACAR-11 | P1: Consultas respeitam timeout de 10s | Implementing | T6 done |
-| ULTRACAR-12 | P1: Consultas respeitam timeout de 10s | Implementing | T1 done |
-| ULTRACAR-13 | P1: Consultas respeitam timeout de 10s | Implementing | T6 done |
-| ULTRACAR-14 | P1: Consultas respeitam timeout de 10s | Implementing | T6 done |
-| ULTRACAR-15 | P2: Script de correção de CEP | Implementing | T7 done |
-| ULTRACAR-16 | P2: Script de correção de CEP | Implementing | T7 done |
-| ULTRACAR-17 | P2: Script de correção de CEP | Implementing | T7 done |
-| ULTRACAR-18 | P2: Script de correção de CEP | Implementing | T7 done |
-| ULTRACAR-19 | P2: Script de correção de CEP | Implementing | T7 done |
-| ULTRACAR-20 | P2: Script de correção de CEP | Implementing | T7 done |
-| ULTRACAR-21 | P1: Marcar também-Ultracar e completar campos vazios | Implementing | T8+T9 done |
-| ULTRACAR-22 | P1: Marcar também-Ultracar e completar campos vazios | Implementing | T9 done |
-| ULTRACAR-23 | P1: Marcar também-Ultracar e completar campos vazios | Implementing | T9 done |
-| ULTRACAR-24 | P1: Marcar também-Ultracar e completar campos vazios | Implementing | T9 done |
-| ULTRACAR-25 | P1: Marcar também-Ultracar e completar campos vazios | Implementing | T9 done |
-| ULTRACAR-26 | P1: Marcar também-Ultracar e completar campos vazios | Implementing | T9 done |
-| ULTRACAR-27 | P1: Registrar oficinas sem match (disparo único) | Implementing | T10 done |
-| ULTRACAR-28 | P1: Registrar oficinas sem match (disparo único) | Implementing | T10 done |
-| ULTRACAR-29 | P1: Registrar oficinas sem match (disparo único) | Implementing | T10 done |
-| ULTRACAR-30 | P1: Registrar oficinas sem match (disparo único) | Implementing | T10 done |
-| ULTRACAR-31 | P1: Registrar oficinas sem match (disparo único) | Implementing | T10 done |
-| ULTRACAR-32 | P1: Registrar oficinas sem match (disparo único) | Implementing | T10 done |
+| ULTRACAR-01 | P1: Oficina com match aparece para qualquer cliente | Verified | T2 — escopo do match (só OFICINA.CNPJ) confirmado pelo usuário |
+| ULTRACAR-02 | P1: Oficina com match aparece para qualquer cliente | Verified | T2 |
+| ULTRACAR-03 | P1: Oficina com match aparece para qualquer cliente | Verified | T1/T2 |
+| ULTRACAR-04 | P1: Oficina com match aparece para qualquer cliente | Verified | T2 |
+| ULTRACAR-05 | P1: Oficina com match aparece para qualquer cliente | Verified | T2/T3/T4/T5 |
+| ULTRACAR-06 | P1: Oficina com match aparece para qualquer cliente | Verified | T1 — mesma nota de ULTRACAR-01 |
+| ULTRACAR-07 | P1: Oficina sem match não aparece nem recebe rota | Verified | T2 |
+| ULTRACAR-08 | P1: Oficina sem match não aparece nem recebe rota | Verified | Estrutural (T1-T6 só leem) |
+| ULTRACAR-09 | P1: Oficina sem match não aparece nem recebe rota | Verified | Estrutural (ID_OFICINA real, sem id sintético) |
+| ULTRACAR-10 | P1: Oficina sem match não aparece nem recebe rota | Verified | T10 |
+| ULTRACAR-11 | P1: Consultas respeitam timeout de 10s | Verified | T6 |
+| ULTRACAR-12 | P1: Consultas respeitam timeout de 10s | Verified | T1 |
+| ULTRACAR-13 | P1: Consultas respeitam timeout de 10s | Verified | T6 |
+| ULTRACAR-14 | P1: Consultas respeitam timeout de 10s | Verified | T6 |
+| ULTRACAR-15 | P2: Script de correção de CEP | Verified | T7 |
+| ULTRACAR-16 | P2: Script de correção de CEP | Verified | T7 |
+| ULTRACAR-17 | P2: Script de correção de CEP | Verified | T7 |
+| ULTRACAR-18 | P2: Script de correção de CEP | Verified | T7 |
+| ULTRACAR-19 | P2: Script de correção de CEP | Verified | T7 |
+| ULTRACAR-20 | P2: Script de correção de CEP | Verified | T7 |
+| ULTRACAR-21 | P1: Marcar também-Ultracar e completar campos vazios | Verified | T8+T9 |
+| ULTRACAR-22 | P1: Marcar também-Ultracar e completar campos vazios | Verified | T9 |
+| ULTRACAR-23 | P1: Marcar também-Ultracar e completar campos vazios | Verified | T9 |
+| ULTRACAR-24 | P1: Marcar também-Ultracar e completar campos vazios | Verified | T9 |
+| ULTRACAR-25 | P1: Marcar também-Ultracar e completar campos vazios | Verified | T9 |
+| ULTRACAR-26 | P1: Marcar também-Ultracar e completar campos vazios | Verified | T9 |
+| ULTRACAR-27 | P1: Registrar oficinas sem match (disparo único) | Verified | T10 |
+| ULTRACAR-28 | P1: Registrar oficinas sem match (disparo único) | Verified | T10 |
+| ULTRACAR-29 | P1: Registrar oficinas sem match (disparo único) | Verified | T10 |
+| ULTRACAR-30 | P1: Registrar oficinas sem match (disparo único) | Verified | T10 |
+| ULTRACAR-31 | P1: Registrar oficinas sem match (disparo único) | Verified | T10 |
+| ULTRACAR-32 | P1: Registrar oficinas sem match (disparo único) | Verified | T10 |
 
 **ID format:** `ULTRACAR-NN`
 

@@ -3,7 +3,7 @@
   "promote_threshold": 2,
   "window_days": 45,
   "quarantine_threshold": 2,
-  "next_id": 20,
+  "next_id": 21,
   "lessons": [
     {
       "id": "L-002",
@@ -98,6 +98,24 @@
       ],
       "created": "2026-10-29T13:23:52Z",
       "last_seen": "2026-10-29T13:23:52Z"
+    },
+    {
+      "id": "L-020",
+      "key": "spec_precision_gap::when a cross table match key has two known sources e g a local fk column and a linked external table s own key state in the spec assumption which source s the match condition must check and get it confirmed before tasks narrows it to just one",
+      "text": "When a cross-table match key has two known sources (e.g. a local FK column and a linked external table's own key), state in the spec Assumption which source(s) the match condition must check, and get it confirmed before Tasks narrows it to just one.",
+      "signal": "spec_precision_gap",
+      "scope": "sql-matching",
+      "status": "candidate",
+      "features": [
+        "ultracar-oficinas-promotores"
+      ],
+      "recurrence": 1,
+      "harmful": 0,
+      "evidence": [
+        "service/oficinaUltracarService.ts:45-47 (sql-matching)"
+      ],
+      "created": "2026-11-06T14:04:04Z",
+      "last_seen": "2026-11-06T14:04:04Z"
     }
   ]
 }

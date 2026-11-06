@@ -42,6 +42,12 @@ Seen once or not yet corroborated. Tracked, not trusted.
 - evidence: templates/relatorioPromotor.ts:112-113 (mutant: swapped concluida/cancelada filter in renderizarDestaques) (backend-promotor)
 - last seen: 2026-10-29T13:23:52Z
 
+### L-020 - When a cross-table match key has two known sources (e.g. a local FK column and a linked external table's own key), state in the spec Assumption which source(s) the match condition must check, and get it confirmed before Tasks narrows it to just one.
+- signal: `spec_precision_gap` · recurrence: 1 feature(s) · scope: `sql-matching` · harmful: 0
+- features: ultracar-oficinas-promotores
+- evidence: service/oficinaUltracarService.ts:45-47 (sql-matching)
+- last seen: 2026-11-06T14:04:04Z
+
 ## Quarantined (failed when applied - ignore)
 
 A confirmed lesson that recurred alongside failure. Kept for the maintainer to review.
