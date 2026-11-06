@@ -206,12 +206,12 @@ A Ultracar mantém sua própria base de oficinas (`ultracar_process.enterprise__
 | ULTRACAR-12 | P1: Consultas respeitam timeout de 10s | Implementing | T1 done |
 | ULTRACAR-13 | P1: Consultas respeitam timeout de 10s | Implementing | T6 done |
 | ULTRACAR-14 | P1: Consultas respeitam timeout de 10s | Implementing | T6 done |
-| ULTRACAR-15 | P2: Script de correção de CEP | Design | Pending |
-| ULTRACAR-16 | P2: Script de correção de CEP | Design | Pending |
-| ULTRACAR-17 | P2: Script de correção de CEP | Design | Pending |
-| ULTRACAR-18 | P2: Script de correção de CEP | Design | Pending |
-| ULTRACAR-19 | P2: Script de correção de CEP | Design | Pending |
-| ULTRACAR-20 | P2: Script de correção de CEP | Design | Pending |
+| ULTRACAR-15 | P2: Script de correção de CEP | Implementing | T7 done |
+| ULTRACAR-16 | P2: Script de correção de CEP | Implementing | T7 done |
+| ULTRACAR-17 | P2: Script de correção de CEP | Implementing | T7 done |
+| ULTRACAR-18 | P2: Script de correção de CEP | Implementing | T7 done |
+| ULTRACAR-19 | P2: Script de correção de CEP | Implementing | T7 done |
+| ULTRACAR-20 | P2: Script de correção de CEP | Implementing | T7 done |
 | ULTRACAR-21 | P1: Marcar também-Ultracar e completar campos vazios | Design | Pending |
 | ULTRACAR-22 | P1: Marcar também-Ultracar e completar campos vazios | Design | Pending |
 | ULTRACAR-23 | P1: Marcar também-Ultracar e completar campos vazios | Design | Pending |

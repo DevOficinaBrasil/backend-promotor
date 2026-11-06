@@ -265,12 +265,12 @@ T10
 - Skill: NONE
 
 **Done when**:
-- [ ] Função de seleção de candidata é pura/exportada e coberta por teste para cada edge case: CEP igual (não candidata), CEP divergente + `DATA_ATUALIZACAO_ENDERECO` há mais de 12 meses (candidata), CEP divergente + `DATA_ATUALIZACAO_ENDERECO` recente (não candidata), `DATA_ATUALIZACAO_ENDERECO` nula + CEP divergente (candidata), sem match de CNPJ (não candidata), CEP da Ultracar vazio (não candidata)
-- [ ] Modo teste (`--teste[=N]`) não executa nenhum `UPDATE` — testado mockando `AppDataSourceSync.query`/`AppDataSourceSync` e verificando zero chamadas de escrita
-- [ ] Modo real executa `UPDATE` só da coluna `CEP`, uma linha por candidata — testado mockando a mesma forma
-- [ ] Nenhuma DDL é executada pelo script (não há tabela/índice novo nesta feature)
-- [ ] Gate check passes: `npx jest --runInBand __tests__/unit/oficinaUltracarService.test.ts __tests__/unit/oficinaService.test.ts __tests__/unit/sincronizarOficinasUltracar.test.ts`
-- [ ] Test count: ≥6 testes novos (um por edge case listado acima, mínimo)
+- [x] Função de seleção de candidata é pura/exportada e coberta por teste para cada edge case: CEP igual (não candidata), CEP divergente + `DATA_ATUALIZACAO_ENDERECO` há mais de 12 meses (candidata), CEP divergente + `DATA_ATUALIZACAO_ENDERECO` recente (não candidata), `DATA_ATUALIZACAO_ENDERECO` nula + CEP divergente (candidata), sem match de CNPJ (não candidata), CEP da Ultracar vazio (não candidata)
+- [x] Modo teste (`--teste[=N]`) não executa nenhum `UPDATE` — testado mockando `AppDataSourceSync.query`/`AppDataSourceSync` e verificando zero chamadas de escrita
+- [x] Modo real executa `UPDATE` só da coluna `CEP`, uma linha por candidata — testado mockando a mesma forma
+- [x] Nenhuma DDL é executada pelo script (não há tabela/índice novo nesta feature) — confirmado por inspeção do arquivo (nenhum `CREATE`/`ALTER`)
+- [x] Gate check passes: `npx jest --runInBand __tests__/unit/oficinaUltracarService.test.ts __tests__/unit/oficinaService.test.ts __tests__/unit/sincronizarOficinasUltracar.test.ts`
+- [x] Test count: ≥6 testes novos (um por edge case listado acima, mínimo) — 12 testes
 
 **Tests**: unit
 **Gate**: quick
